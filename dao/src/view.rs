@@ -33,7 +33,7 @@ impl NearDaoContract {
             insiders_ft_shared: self.release_db[INDEX_RELEASED_INSIDERS as usize],
             community_ft_shared: self.release_db[INDEX_RELEASED_COMMUNITY as usize],
             foundation_ft_shared: self.release_db[INDEX_RELEASED_FOUNDATION as usize],
-            registered_user_count: self.registered_accounts_count
+            registered_user_count: self.registered_accounts_count,
         }
     }
 
@@ -63,21 +63,26 @@ impl NearDaoContract {
         }
     }
 
+    pub fn dao_config(self) -> DaoConfig {
+        DaoConfig {
+            lang: self.config.lang,
+            description: self.config.description,
+            insiders_share: self.config.insiders_share,
+            foundation_share: self.config.foundation_share,
+            community_share: self.config.community_share,
+            vote_spam_threshold: self.config.vote_spam_threshold,
+        }
+    }
+
     pub fn payments(self) -> Vec<RegularPayment> {
         self.regular_payments.to_vec()
     }
 
     pub fn group_members(self, group: MemberGroup) -> Vec<AccountId> {
         match group {
-            MemberGroup::Insiders => {
-                self.insiders.to_vec()
-            },
-            MemberGroup::Foundation => {
-                self.foundation.to_vec()
-            },
-            MemberGroup::Community => {
-                self.community.to_vec()
-            },
+            MemberGroup::Insiders => self.insiders.to_vec(),
+            MemberGroup::Foundation => self.foundation.to_vec(),
+            MemberGroup::Community => self.community.to_vec(),
             _ => unimplemented!(),
         }
     }
@@ -124,4 +129,16 @@ pub struct DaoFee {
     min_gas_finish_proposal: U128,
     min_yocto_near_add_proposal: U128,
     min_yocto_near_vote: U128,
+}
+
+#[derive(Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct DaoConfig {
+    pub lang: String,
+    pub description: String,
+    pub insiders_share: u8,
+    pub foundation_share: Option<u8>,
+    pub community_share: Option<u8>,
+    pub vote_spam_threshold: u8,
 }

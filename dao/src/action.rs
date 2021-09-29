@@ -65,6 +65,9 @@ pub enum TransactionInput {
         since: u64,
         until: u64,
         period: PaymentPeriod,
+    },
+    GeneralProposal {
+        title: String,
     }
 }
 
@@ -107,5 +110,8 @@ pub enum Action {
         since: u64,
         until: u64,
         period: PaymentPeriod,
+    },
+    GeneralProposal {
+        title: String,
     }
 }

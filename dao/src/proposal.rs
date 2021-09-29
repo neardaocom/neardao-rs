@@ -27,7 +27,8 @@ pub enum ProposalKindIdent {
     Pay,
     AddMember,
     RemoveMember,
-    RegularPayment
+    RegularPayment,
+    GeneralProposal,
 }
 
 impl ProposalKindIdent {
@@ -37,6 +38,7 @@ impl ProposalKindIdent {
             TransactionInput::AddMember { .. } => ProposalKindIdent::AddMember,
             TransactionInput::RemoveMember { .. } => ProposalKindIdent::RemoveMember,
             TransactionInput::RegularPayment { .. } => ProposalKindIdent::RegularPayment,
+            TransactionInput::GeneralProposal { .. } => ProposalKindIdent::GeneralProposal,
             _ => unimplemented!(),
         }
     }

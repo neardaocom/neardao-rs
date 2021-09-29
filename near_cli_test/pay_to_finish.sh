@@ -17,3 +17,4 @@ near state $DCID
 near state $CID4
 near view $DCID statistics_ft ''
 near view $DCID statistics_members ''
+near view $DCID proposal '{"proposal_id": '$PUUID'}'

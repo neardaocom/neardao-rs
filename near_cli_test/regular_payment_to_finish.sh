@@ -15,4 +15,5 @@ near call $DCID finish_proposal '{"proposal_id":'$PUUID'}' --gas 100000000000000
 
 near view $DCID statistics_ft ''
 near view $DCID statistics_members ''
+near view $DCID proposal '{"proposal_id": '$PUUID'}'
 near view $DCID payments ''

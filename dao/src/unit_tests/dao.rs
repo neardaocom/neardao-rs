@@ -73,6 +73,7 @@ mod test {
 
     fn get_default_dao_config() -> ConfigInput {
         ConfigInput {
+            lang: "cs".into(),
             insiders_share: Some(INSIDERS_SHARE),
             foundation_share: Some(FOUNDATION_SHARE),
             community_share: Some(COMMUNITY_SHARE),

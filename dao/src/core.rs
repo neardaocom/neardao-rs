@@ -8,7 +8,7 @@ use near_contract_standards::fungible_token::FungibleToken;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{ValidAccountId, U128};
-use near_sdk::serde::{Serialize};
+use near_sdk::serde::Serialize;
 use near_sdk::{
     env, log, near_bindgen, AccountId, Balance, BorshStorageKey, PanicOnDefault, Promise,
     PromiseOrValue,
@@ -47,7 +47,7 @@ pub const METADATA_MAX_DECIMALS: u8 = 28;
 
 pub const MAX_FT_TOTAL_SUPPLY: u32 = 1_000_000_000;
 
-pub const PROPOSAL_KIND_COUNT: u8 = 4;
+pub const PROPOSAL_KIND_COUNT: u8 = 5;
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
@@ -202,7 +202,7 @@ impl NearDaoContract {
         let tx = self
             .create_tx(
                 proposal_input.transaction.clone(),
-                env::current_account_id(),
+                env::predecessor_account_id(),
                 env::block_timestamp(),
             )
             .unwrap();
@@ -210,7 +210,7 @@ impl NearDaoContract {
         self.proposal_count += 1;
 
         let proposal = Proposal::new(
-            env::current_account_id(),
+            env::predecessor_account_id(),
             proposal_input,
             tx,
             VoteConfigActive {
@@ -464,6 +464,9 @@ impl NearDaoContract {
                         errors.push(ActionExecutionError::InvalidTimeInputs);
                     }
                 }
+                Action::GeneralProposal { title } => {
+
+                }
                 _ => unimplemented!(),
             }
         }
@@ -524,6 +527,7 @@ impl NearDaoContract {
                     period: period.to_nanos(),
                 });
             }
+            Action::GeneralProposal { title } => {}
             _ => unimplemented!(),
         }
     }
@@ -637,7 +641,10 @@ impl NearDaoContract {
                     });
                 }
             }
-
+            TransactionInput::GeneralProposal { title } => {
+                //TODO limit title length ??
+                actions.push(Action::GeneralProposal { title });
+            }
             _ => unimplemented!(),
         }
 
