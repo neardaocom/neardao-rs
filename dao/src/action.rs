@@ -3,6 +3,9 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 
+use crate::core::{Mapper, MapperKind};
+use crate::file::{FileMetadata, FileType, FileUUID};
+
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug,PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -46,7 +49,6 @@ impl PaymentPeriod {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum TransactionInput {
-    // zprovoznit pouze tohle
     Pay {
         amount_near: U128,
         account_id: AccountId,
@@ -68,6 +70,15 @@ pub enum TransactionInput {
     },
     GeneralProposal {
         title: String,
+    },
+    AddDocFile {
+        uuid: FileUUID,
+        metadata: FileMetadata,
+        new_tags: Vec<String>,
+        new_category: Option<String>
+    },
+    InvalidateFile {
+        uuid: FileUUID,
     }
 }
 
@@ -86,6 +97,7 @@ pub struct ActionTransaction {
 pub enum ActionExecutionError {
     MissingNearTokens,
     InvalidTimeInputs,
+    FileUUIDExists,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone)]
@@ -113,5 +125,19 @@ pub enum Action {
     },
     GeneralProposal {
         title: String,
-    }
+    },
+    AddFile {
+        uuid: FileUUID,
+        ftype: FileType,
+        metadata: FileMetadata,
+        new_category: Option<String>,
+        new_tags: Vec<String>
+    },
+    InvalidateFile {
+        uuid: FileUUID,
+    },
+    //ExtendMap {
+    //    kind: MapperKind,
+    //    map: Mapper
+    //}
 }

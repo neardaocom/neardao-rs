@@ -2,6 +2,7 @@ use near_sdk::serde::Serialize;
 use near_sdk::{json_types::U128, near_bindgen, AccountId};
 
 use crate::action::MemberGroup;
+use crate::file::{FileMetadata, FileUUID};
 use crate::{core::*, proposal::Proposal};
 
 #[near_bindgen]
@@ -86,6 +87,13 @@ impl NearDaoContract {
             _ => unimplemented!(),
         }
     }
+
+    pub fn doc_files(self) -> DocFileMetadata {
+        DocFileMetadata {
+            files: self.doc_metadata.to_vec(),
+            map: self.mappers.get(&MapperKind::Doc).unwrap()
+        }
+    }
 }
 #[derive(Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
@@ -141,4 +149,11 @@ pub struct DaoConfig {
     pub foundation_share: Option<u8>,
     pub community_share: Option<u8>,
     pub vote_spam_threshold: u8,
+}
+#[derive(Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct DocFileMetadata {
+    files: Vec<(FileUUID, FileMetadata)>,
+    map: Mapper,
 }

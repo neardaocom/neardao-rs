@@ -124,6 +124,33 @@ mod test {
             vote_only_once: true,
         });
 
+        vec.push(VoteConfigInput {
+            proposal_kind: ProposalKindIdent::GeneralProposal,
+            duration: DURATION_ONE_WEEK,
+            waiting_open_duration: DURATION_WAITING,
+            quorum: 50,
+            approve_threshold: 51,
+            vote_only_once: true,
+        });
+
+        vec.push(VoteConfigInput {
+            proposal_kind: ProposalKindIdent::AddDocFile,
+            duration: DURATION_ONE_WEEK,
+            waiting_open_duration: DURATION_WAITING,
+            quorum: 50,
+            approve_threshold: 51,
+            vote_only_once: true,
+        });
+
+        vec.push(VoteConfigInput {
+            proposal_kind: ProposalKindIdent::InvalidateFile,
+            duration: DURATION_ONE_WEEK,
+            waiting_open_duration: DURATION_WAITING,
+            quorum: 50,
+            approve_threshold: 51,
+            vote_only_once: true,
+        });
+
         vec
     }
 

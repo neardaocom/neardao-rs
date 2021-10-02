@@ -8,7 +8,7 @@ use near_contract_standards::fungible_token::FungibleToken;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{ValidAccountId, U128};
-use near_sdk::serde::Serialize;
+use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, log, near_bindgen, AccountId, Balance, BorshStorageKey, PanicOnDefault, Promise,
     PromiseOrValue,
@@ -23,6 +23,7 @@ use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
 
 use crate::action::*;
 use crate::config::*;
+use crate::file::{FileMetadata, FileType};
 use crate::proposal::*;
 use crate::release::{ReleaseModel, ReleaseModelInput};
 use crate::vote_policy::{VoteConfig, VoteConfigInput};
@@ -47,7 +48,9 @@ pub const METADATA_MAX_DECIMALS: u8 = 28;
 
 pub const MAX_FT_TOTAL_SUPPLY: u32 = 1_000_000_000;
 
-pub const PROPOSAL_KIND_COUNT: u8 = 5;
+pub const PROPOSAL_KIND_COUNT: u8 = 7;
+
+pub const DEFAULT_DOC_CAT: &str = "basic";
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
@@ -60,6 +63,8 @@ pub enum StorageKeys {
     Community,
     ReleaseConfig,
     RegularPayment,
+    DocMetadata,
+    Mappers,
 }
 
 #[near_bindgen]
@@ -86,6 +91,8 @@ pub struct NearDaoContract {
     pub vote_policy_config: LookupMap<ProposalKindIdent, VoteConfig>,
     pub release_config: LazyOption<ReleaseModel>,
     pub regular_payments: UnorderedSet<RegularPayment>,
+    pub doc_metadata: UnorderedMap<String, FileMetadata>,
+    pub mappers: UnorderedMap<MapperKind, Mapper>,
 }
 
 #[near_bindgen]
@@ -147,10 +154,13 @@ impl NearDaoContract {
             vote_policy_config: LookupMap::new(StorageKeys::ProposalConfig),
             release_config: LazyOption::new(StorageKeys::ReleaseConfig, None),
             regular_payments: UnorderedSet::new(StorageKeys::RegularPayment),
+            doc_metadata: UnorderedMap::new(StorageKeys::DocMetadata),
+            mappers: UnorderedMap::new(StorageKeys::Mappers),
         };
 
         contract.setup_voting_policy(vote_policy_configs);
         contract.setup_release_model(release_config, init_distribution);
+        contract.init_mappers();
 
         //register contract account and transfer all total supply of GT to it
         contract
@@ -394,6 +404,16 @@ impl NearDaoContract {
         self.release_config.set(&model);
     }
 
+    pub fn init_mappers(&mut self) {
+        self.mappers.insert(
+            &MapperKind::Doc,
+            &Mapper::Doc {
+                tags: [].into(),
+                categories: [DEFAULT_DOC_CAT.into()].into(),
+            },
+        );
+    }
+
     fn on_account_closed(&self, account_id: AccountId, balance: Balance) {
         log!("Closed @{} with {}", account_id, balance);
     }
@@ -464,9 +484,24 @@ impl NearDaoContract {
                         errors.push(ActionExecutionError::InvalidTimeInputs);
                     }
                 }
-                Action::GeneralProposal { title } => {
-
+                Action::GeneralProposal { title } => {}
+                Action::AddFile {
+                    uuid,
+                    ftype,
+                    metadata,
+                    new_category,
+                    new_tags,
+                } => {
+                    match ftype {
+                        FileType::Doc => {
+                            if self.doc_metadata.get(uuid).is_some() {
+                                errors.push(ActionExecutionError::FileUUIDExists);
+                            }
+                        }
+                        _ => unimplemented!()
+                    }
                 }
+                Action::InvalidateFile { uuid } => {}
                 _ => unimplemented!(),
             }
         }
@@ -528,6 +563,53 @@ impl NearDaoContract {
                 });
             }
             Action::GeneralProposal { title } => {}
+            Action::AddFile {
+                uuid,
+                ftype,
+                metadata,
+                new_category,
+                new_tags,
+            } => {
+                match ftype {
+                    FileType::Doc => {
+                        match self.mappers.get(&MapperKind::Doc).unwrap() {
+                            Mapper::Doc { mut tags, mut categories } => {
+                                let mut new_metadata = metadata.clone();
+                                if new_category.is_some() {
+                                    if let Some(idx) = categories.iter().enumerate().find_map(|(i,s) | s.eq(new_category.as_ref().unwrap()).then(|| i)) {
+                                        new_metadata.category = idx as u8;
+                                    } else {
+                                        categories.push(new_category.clone().unwrap());
+                                        new_metadata.category = categories.len() as u8 -1;
+                                    }
+                                }
+
+                                if new_tags.len() > 0 {
+                                    // Check any of the new tags exist
+                                    for nt in new_tags {
+                                        if tags.iter().enumerate().find_map(|(i,s) | s.eq(nt).then(|| i)).is_none() {
+                                            tags.push(nt.clone());
+                                            new_metadata.tags.push(tags.len()as u8 - 1);
+                                        }                                 
+                                    }
+                                }
+                                
+                                self.doc_metadata.insert(uuid, &new_metadata);
+                                self.mappers.insert(&MapperKind::Doc, &Mapper::Doc{ tags, categories});
+                            }
+                            _ => unsafe { unreachable_unchecked() },
+                        }
+                    }
+                    _ => unimplemented!(),
+                }
+            }
+            Action::InvalidateFile { uuid } => {
+                let mut metadata = self.doc_metadata.get(&uuid.clone()).unwrap();
+                if metadata.valid == true {
+                    metadata.valid = false;
+                    self.doc_metadata.insert(&uuid.clone(), &metadata);
+                }
+            }
             _ => unimplemented!(),
         }
     }
@@ -645,6 +727,36 @@ impl NearDaoContract {
                 //TODO limit title length ??
                 actions.push(Action::GeneralProposal { title });
             }
+            TransactionInput::AddDocFile {
+                uuid,
+                metadata,
+                new_category,
+                new_tags,
+            } => {
+                if uuid.len() != 32 {
+                    errors.push("Invalid IPFS hash");
+                } else if self.doc_metadata.get(&uuid).is_some() {
+                    errors.push("Metadata already exists");
+                } else if new_category.is_some() && new_category.as_ref().map(|s|s.len()).unwrap() == 0 {
+                    errors.push("Category cannot be empty string");
+                } else {
+                    //TODO tags check ??
+                    actions.push(Action::AddFile {
+                        uuid,
+                        metadata,
+                        ftype: FileType::Doc,
+                        new_category,
+                        new_tags,
+                    });
+                }
+            }
+            TransactionInput::InvalidateFile { uuid } => {
+                if self.doc_metadata.get(&uuid).is_none() {
+                    errors.push("Metadata does not exist");
+                } else {
+                    actions.push(Action::InvalidateFile { uuid });
+                }
+            }
             _ => unimplemented!(),
         }
 
@@ -752,4 +864,21 @@ pub struct RegularPayment {
     pub next: u64,
     pub end: u64,
     pub period: u64,
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
+#[serde(crate = "near_sdk::serde")]
+pub enum MapperKind {
+    Doc,
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
+#[serde(crate = "near_sdk::serde")]
+pub enum Mapper {
+    Doc {
+        tags: Vec<String>,
+        categories: Vec<String>,
+    },
 }

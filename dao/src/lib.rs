@@ -8,6 +8,7 @@ pub mod config;
 pub mod proposal;
 pub mod release;
 pub mod vote_policy;
+pub mod file;
 
 mod unit_tests;
 
