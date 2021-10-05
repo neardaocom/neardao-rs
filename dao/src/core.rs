@@ -50,6 +50,8 @@ pub const MAX_FT_TOTAL_SUPPLY: u32 = 1_000_000_000;
 
 pub const PROPOSAL_KIND_COUNT: u8 = 7;
 
+pub const DOC_CID_LEN: u8 = 46;
+
 pub const DEFAULT_DOC_CAT: &str = "basic";
 
 #[derive(BorshStorageKey, BorshSerialize)]
@@ -733,7 +735,7 @@ impl NearDaoContract {
                 new_category,
                 new_tags,
             } => {
-                if uuid.len() != 32 {
+                if uuid.len() as u8 != DOC_CID_LEN {
                     errors.push("Invalid IPFS hash");
                 } else if self.doc_metadata.get(&uuid).is_some() {
                     errors.push("Metadata already exists");

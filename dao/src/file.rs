@@ -10,6 +10,7 @@ pub struct FileMetadata {
     pub tags: Vec<u8>,
     pub category: u8,
     pub ext: String,
+    pub v: String,
     pub valid: bool,
 }
 
