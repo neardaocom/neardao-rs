@@ -735,9 +735,7 @@ impl NearDaoContract {
                 new_category,
                 new_tags,
             } => {
-                if uuid.len() as u8 != DOC_CID_LEN {
-                    errors.push("Invalid IPFS hash");
-                } else if self.doc_metadata.get(&uuid).is_some() {
+                 if self.doc_metadata.get(&uuid).is_some() {
                     errors.push("Metadata already exists");
                 } else if new_category.is_some() && new_category.as_ref().map(|s|s.len()).unwrap() == 0 {
                     errors.push("Category cannot be empty string");
