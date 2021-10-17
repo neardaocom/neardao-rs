@@ -16,7 +16,7 @@ mod test {
 
     use crate::action::TransactionInput;
     use crate::config::ConfigInput;
-    use crate::core::{DEPOSIT_ADD_PROPOSAL, DEPOSIT_VOTE, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, GAS_VOTE, NearDaoContract};
+    use crate::core::{DEPOSIT_ADD_PROPOSAL, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, GAS_VOTE, NearDaoContract};
     use crate::proposal::{ProposalInput, ProposalKindIdent, ProposalStatus, VoteResult};
     use crate::release::ReleaseModelInput;
     use crate::view::StatsFT;
@@ -39,7 +39,7 @@ mod test {
     const DURATION_WAITING: u64 = 10_000_000_000;
 
     //distribution percent of free tokens
-    const INSIDERS_SHARE: u8 = 25;
+    const COUNCIL_SHARE: u8 = 25;
     const FOUNDATION_SHARE: u8 = 15;
     const COMMUNITY_SHARE: u8 = 10;
 
@@ -74,7 +74,7 @@ mod test {
     fn get_default_dao_config() -> ConfigInput {
         ConfigInput {
             lang: "cs".into(),
-            insiders_share: Some(INSIDERS_SHARE),
+            council_share: Some(COUNCIL_SHARE),
             foundation_share: Some(FOUNDATION_SHARE),
             community_share: Some(COMMUNITY_SHARE),
             description: Some(DAO_DESC.into()),
@@ -224,7 +224,6 @@ mod test {
     ) -> VoteResult {
         testing_env!(context
             .predecessor_account_id(ValidAccountId::try_from(account.to_string()).unwrap())
-            .attached_deposit(DEPOSIT_VOTE)
             .prepaid_gas(GAS_VOTE)
             .build());
 
@@ -277,7 +276,7 @@ mod test {
         let contract = get_default_contract();
 
         assert_eq!(contract.registered_accounts_count, 5);
-        assert_eq!(contract.insiders.len(), 5);
+        assert_eq!(contract.council.len(), 5);
 
         let expected_stats = StatsFT {
             total_supply: TOKEN_TOTAL_SUPPLY,
@@ -286,11 +285,11 @@ mod test {
             total_released: U128::from((INIT_DISTRIBUTION) as u128 * decimal_const()),
             free: U128::from(
                 (INIT_DISTRIBUTION as u64
-                    - (INIT_DISTRIBUTION as u64 * contract.config.insiders_share as u64 / 100))
+                    - (INIT_DISTRIBUTION as u64 * contract.config.council_share as u64 / 100))
                     as u128
                     * decimal_const(),
             ),
-            insiders_ft_shared: (INIT_DISTRIBUTION as u64 * contract.config.insiders_share as u64
+            council_ft_shared: (INIT_DISTRIBUTION as u64 * contract.config.council_share as u64
                 / 100) as u32,
             community_ft_shared: 0,
             foundation_ft_shared: 0,
@@ -329,7 +328,7 @@ mod test {
         let proposal_id = contract.add_proposal(proposal);
         assert_eq!(contract.proposal_count, proposal_id);
 
-        // insiders vote
+        // council vote
         assert_eq!(vote_as_user(&mut context, &mut contract, FOUNDER_1.to_string(),proposal_id, 0), VoteResult::Ok);
         assert_eq!(vote_as_user(&mut context, &mut contract, FOUNDER_2.to_string(),proposal_id, 0), VoteResult::Ok);
         assert_eq!(vote_as_user(&mut context, &mut contract, FOUNDER_3.to_string(),proposal_id, 0), VoteResult::Ok);

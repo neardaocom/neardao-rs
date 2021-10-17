@@ -7,7 +7,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 #[serde(crate = "near_sdk::serde")]
 pub struct ConfigInput {
     pub lang: String,
-    pub insiders_share: Option<u8>,
+    pub council_share: Option<u8>,
     pub foundation_share: Option<u8>,
     pub community_share: Option<u8>,
     pub description: Option<String>,
@@ -17,7 +17,7 @@ pub struct ConfigInput {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 pub struct Config{
     pub lang: String,
-    pub insiders_share: u8,
+    pub council_share: u8,
     pub foundation_share: Option<u8>,
     pub community_share: Option<u8>,
     pub description: String,
@@ -28,7 +28,7 @@ impl From<ConfigInput> for Config {
     fn from(input: ConfigInput) -> Self {
         Config {
             lang: input.lang,
-            insiders_share: input.insiders_share.unwrap(),
+            council_share: input.council_share.unwrap(),
             foundation_share: input.foundation_share,
             community_share: input.community_share,
             description: input.description.unwrap(),

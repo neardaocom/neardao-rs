@@ -14,7 +14,7 @@ impl NearDaoContract {
             decimals: self.ft_metadata.get().unwrap().decimals,
             total_released: U128::from(self.already_released_ft),
             free: U128::from(self.free_ft),
-            insiders_ft_shared: self.release_db[INDEX_RELEASED_INSIDERS as usize],
+            council_ft_shared: self.release_db[INDEX_RELEASED_COUNCIL as usize],
             community_ft_shared: self.release_db[INDEX_RELEASED_COMMUNITY as usize],
             foundation_ft_shared: self.release_db[INDEX_RELEASED_FOUNDATION as usize],
             parent_shared: self.release_db[INDEX_RELEASED_PARENT as usize],
@@ -25,13 +25,13 @@ impl NearDaoContract {
     pub fn statistics_members(self) -> StatsMembers {
         StatsMembers {
             owner: self.owner,
-            insiders: self.insiders.to_vec(),
+            council: self.council.to_vec(),
             foundation: self.foundation.to_vec(),
             community: self.community.to_vec(),
-            insiders_share_percent: self.config.insiders_share,
+            insiders_share_percent: self.config.council_share,
             foundation_share_percent: self.config.foundation_share.unwrap_or_default(),
             community_share_percent: self.config.community_share.unwrap_or_default(),
-            insiders_ft_shared: self.release_db[INDEX_RELEASED_INSIDERS as usize],
+            council_ft_shared: self.release_db[INDEX_RELEASED_COUNCIL as usize],
             community_ft_shared: self.release_db[INDEX_RELEASED_COMMUNITY as usize],
             foundation_ft_shared: self.release_db[INDEX_RELEASED_FOUNDATION as usize],
             registered_user_count: self.registered_accounts_count,
@@ -60,7 +60,6 @@ impl NearDaoContract {
             min_gas_vote: U128::from(GAS_VOTE as u128),
             min_gas_finish_proposal: U128::from(GAS_FINISH_PROPOSAL as u128),
             min_yocto_near_add_proposal: U128::from(DEPOSIT_ADD_PROPOSAL),
-            min_yocto_near_vote: U128::from(DEPOSIT_VOTE),
         }
     }
 
@@ -68,7 +67,7 @@ impl NearDaoContract {
         DaoConfig {
             lang: self.config.lang,
             description: self.config.description,
-            insiders_share: self.config.insiders_share,
+            council_share: self.config.council_share,
             foundation_share: self.config.foundation_share,
             community_share: self.config.community_share,
             vote_spam_threshold: self.config.vote_spam_threshold,
@@ -81,7 +80,7 @@ impl NearDaoContract {
 
     pub fn group_members(self, group: MemberGroup) -> Vec<AccountId> {
         match group {
-            MemberGroup::Insiders => self.insiders.to_vec(),
+            MemberGroup::Council => self.council.to_vec(),
             MemberGroup::Foundation => self.foundation.to_vec(),
             MemberGroup::Community => self.community.to_vec(),
             _ => unimplemented!(),
@@ -104,7 +103,7 @@ pub struct StatsFT {
     pub decimals: u8,
     pub total_released: U128,
     pub free: U128,
-    pub insiders_ft_shared: u32,
+    pub council_ft_shared: u32,
     pub community_ft_shared: u32,
     pub foundation_ft_shared: u32,
     pub parent_shared: u32,
@@ -116,13 +115,13 @@ pub struct StatsFT {
 #[serde(crate = "near_sdk::serde")]
 pub struct StatsMembers {
     owner: AccountId,
-    insiders: Vec<AccountId>,
+    council: Vec<AccountId>,
     foundation: Vec<AccountId>,
     community: Vec<AccountId>,
     insiders_share_percent: u8,
     foundation_share_percent: u8,
     community_share_percent: u8,
-    insiders_ft_shared: u32,
+    council_ft_shared: u32,
     community_ft_shared: u32,
     foundation_ft_shared: u32,
     registered_user_count: u32,
@@ -136,7 +135,6 @@ pub struct DaoFee {
     min_gas_vote: U128,
     min_gas_finish_proposal: U128,
     min_yocto_near_add_proposal: U128,
-    min_yocto_near_vote: U128,
 }
 
 #[derive(Serialize)]
@@ -145,7 +143,7 @@ pub struct DaoFee {
 pub struct DaoConfig {
     pub lang: String,
     pub description: String,
-    pub insiders_share: u8,
+    pub council_share: u8,
     pub foundation_share: Option<u8>,
     pub community_share: Option<u8>,
     pub vote_spam_threshold: u8,

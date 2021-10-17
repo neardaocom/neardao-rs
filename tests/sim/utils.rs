@@ -1,4 +1,4 @@
-use dao::core::{DEPOSIT_VOTE, GAS_VOTE};
+use dao::core::{GAS_VOTE};
 use dao::{config::ConfigInput, proposal::ProposalKindIdent, release::ReleaseModelInput, vote_policy::VoteConfigInput};
 
 /// Utils / Helper module for easier simulation testing
@@ -25,7 +25,7 @@ pub const DURATION_ONE_WEEK: u64 = 7_000_000; //604_800_000_000_000; changed to 
 pub const VOTE_ONLY_ONCE: bool = true;
 pub const VOTE_SPAM_THRESHOLD: u8 = 80;
 pub const PARENT_SHARE: u8 = 10;
-pub const INSIDERS_SHARE: u8 = 25;
+pub const COUNCIL_SHARE: u8 = 25;
 pub const FOUNDATION_SHARE: u8 = 15;
 pub const COMMUNITY_SHARE: u8 = 10;
 
@@ -107,7 +107,7 @@ pub fn get_default_metadata() -> FungibleTokenMetadata {
 
 pub fn get_default_config() -> ConfigInput {
     ConfigInput {
-        insiders_share: Some(INSIDERS_SHARE),
+        council_share: Some(COUNCIL_SHARE),
         foundation_share: Some(FOUNDATION_SHARE),
         community_share: Some(COMMUNITY_SHARE),
         description: Some(DAO_DESC.to_string()),
@@ -258,7 +258,7 @@ pub fn vote_as_user(
         .to_string()
         .into_bytes(),
         GAS_VOTE,
-        DEPOSIT_VOTE,
+        0,
     );
 
     pp("User votes", &call_vote);

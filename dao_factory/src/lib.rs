@@ -25,6 +25,8 @@ const CREATE_CALL_GAS: u64 = 75_000_000_000_000;
 /// Gas allocated on the callback.
 const ON_CREATE_CALL_GAS: u64 = 10_000_000_000_000;
 
+const DEPOSIT_CREATE: u128 = 5_000_000_000_000_000_000_000_000;
+
 #[ext_contract(ext_self)]
 pub trait ExtSelf {
     fn on_create(
@@ -47,16 +49,18 @@ pub enum StorageKeys {
 pub struct NearDaoFactory {
     pub daos: UnorderedMap<AccountId, DaoInfo>,
     pub key: Base58PublicKey, //TODO vec<u8>
+    pub tags: Vec<String>,
 }
 
 #[near_bindgen]
 impl NearDaoFactory {
     
     #[init]
-    pub fn new() -> Self {
+    pub fn new(tags: Vec<String>) -> Self {
         Self {
             daos: UnorderedMap::new(StorageKeys::Daos),
-            key: Base58PublicKey::try_from(env::signer_account_pk()).unwrap(), 
+            key: Base58PublicKey::try_from(env::signer_account_pk()).unwrap(),
+            tags
         }
     }
 
@@ -82,6 +86,7 @@ impl NearDaoFactory {
         dao_info: DaoInfo,
         args: Base64VecU8,
     ) -> Promise {
+        assert!(env::attached_deposit() >= DEPOSIT_CREATE);
         let account_id = format!("{}.{}", acc_name, env::current_account_id());
         log!("Creating account: {}", account_id);
 
@@ -92,7 +97,7 @@ impl NearDaoFactory {
         );
 
         let promise = Promise::new(account_id.clone())
-            //.create_account()
+            .create_account()
             .deploy_contract(CODE.to_vec())
             .transfer(env::attached_deposit())
             .add_full_access_key(self.key.clone().into());
@@ -135,6 +140,15 @@ impl NearDaoFactory {
             false
         }
     }
+
+    pub fn get_tags(self) -> Vec<String> {
+        self.tags
+    }
+
+    #[private]
+    pub fn add_tags(&mut self, tags: Vec<String>) {
+        self.tags.extend(tags)
+    }
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
@@ -145,7 +159,7 @@ pub struct DaoInfo {
     pub description: String,
     pub ft_name: String,
     pub ft_amount: u32,
-    pub tags: Vec<String>,
+    pub tags: Vec<u8>,
 }
 
 #[cfg(test)]

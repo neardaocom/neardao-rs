@@ -10,7 +10,7 @@ use crate::file::{FileMetadata, FileType, FileUUID};
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug,PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum TokenGroup {
-    Insiders,
+    Council,
     Foundation,
     Community,
     Public,
@@ -20,7 +20,7 @@ pub enum TokenGroup {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum MemberGroup {
-    Insiders,
+    Council,
     Foundation,
     Community,
     Public,

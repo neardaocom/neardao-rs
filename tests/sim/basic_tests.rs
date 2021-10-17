@@ -198,7 +198,7 @@ fn proposal_add_insider_accept() {
             "proposal_input" :
             {
                 "description": "I want to be insider PLS",
-                "transaction": { "AddMember": { "account_id": EVA.to_string(), "group": "Insiders"} },
+                "transaction": { "AddMember": { "account_id": EVA.to_string(), "group": "Council"} },
                 "tags": ["test","proposal"]
             },
             "account_id": EVA.to_string(),
@@ -282,7 +282,7 @@ fn proposal_add_insider_accept() {
     let view_statistics_members = eva.view(
         dao.account_id(),
         "group_members",
-        &json!({"group": "Insiders"}).to_string().into_bytes(),
+        &json!({"group": "Council"}).to_string().into_bytes(),
     );
     assert!(view_statistics_members.is_ok());
     assert_eq!(

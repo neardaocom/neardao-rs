@@ -35,10 +35,9 @@ near_sdk::setup_alloc!();
 pub const GAS_ADD_PROPOSAL: u64 = 100_000_000_000_000; //gas units
 pub const GAS_FINISH_PROPOSAL: u64 = 100_000_000_000_000;
 pub const GAS_VOTE: u64 = 10_000_000_000_000;
-pub const DEPOSIT_ADD_PROPOSAL: u128 = 1_000_000_000_000_000_000_000_000; // 1 N
-pub const DEPOSIT_VOTE: u128 = 1_000_000_000_000_000_000_000_000; // 1 N
+pub const DEPOSIT_ADD_PROPOSAL: u128 = 500_000_000_000_000_000_000_000; // 0.5 N
 
-pub const INDEX_RELEASED_INSIDERS: u8 = 0;
+pub const INDEX_RELEASED_COUNCIL: u8 = 0;
 pub const INDEX_RELEASED_COMMUNITY: u8 = 1;
 pub const INDEX_RELEASED_FOUNDATION: u8 = 2;
 pub const INDEX_RELEASED_PARENT: u8 = 3;
@@ -60,7 +59,7 @@ pub enum StorageKeys {
     FTMetadata,
     Proposals,
     ProposalConfig,
-    Insiders,
+    Council,
     Foundation,
     Community,
     ReleaseConfig,
@@ -76,7 +75,7 @@ pub struct NearDaoContract {
     pub owner: AccountId,
     pub name: String,
     pub config: Config,
-    pub insiders: UnorderedSet<AccountId>,
+    pub council: UnorderedSet<AccountId>,
     pub foundation: UnorderedSet<AccountId>,
     pub community: UnorderedSet<AccountId>,
     pub registered_accounts_count: u32,
@@ -115,7 +114,7 @@ impl NearDaoContract {
         assert!(
             founders.len() > 0,
             "{}",
-            "At least one founder must be provided" // INSIDERS MUST BE UNIQUE, this invarint must be uphold by application
+            "At least one founder must be provided" // COUNCIL MEMBERS MUST BE UNIQUE, this invarint must be uphold by application
         );
         assert_eq!(vote_policy_configs.len(), PROPOSAL_KIND_COUNT as usize); //TODO check
         ft_metadata.assert_valid();
@@ -127,7 +126,7 @@ impl NearDaoContract {
         );
 
         let amount_per_founder: u32 = (init_distribution as u64
-            * config.insiders_share.unwrap_or_default() as u64
+            * config.council_share.unwrap_or_default() as u64
             / 100
             / founders.len() as u64) as u32;
 
@@ -138,7 +137,7 @@ impl NearDaoContract {
             owner: env::predecessor_account_id(),
             name: name,
             config: Config::from(config),
-            insiders: UnorderedSet::new(StorageKeys::Insiders),
+            council: UnorderedSet::new(StorageKeys::Council),
             foundation: UnorderedSet::new(StorageKeys::Foundation),
             community: UnorderedSet::new(StorageKeys::Community),
             registered_accounts_count: founders.len() as u32,
@@ -173,17 +172,17 @@ impl NearDaoContract {
             contract.total_supply as u128 * contract.decimal_const,
         );
 
-        // register insiders and distribute them their amount of the tokens
-        for insider in founders.iter() {
-            contract.ft.internal_register_account(&insider);
+        // register council and distribute them their amount of the tokens
+        for founder in founders.iter() {
+            contract.ft.internal_register_account(&founder);
 
             contract.ft.internal_transfer(
                 &env::current_account_id(),
-                &insider,
+                &founder,
                 amount_per_founder as u128 * contract.decimal_const,
                 None,
             );
-            contract.insiders.insert(insider);
+            contract.council.insert(founder);
         }
 
         contract
@@ -241,10 +240,8 @@ impl NearDaoContract {
         proposal.uuid
     }
 
-    #[payable]
     /// vote_kind values: 0 = spam, 1 = yes, 2 = no
     pub fn vote(&mut self, proposal_id: u32, vote_kind: u8) -> VoteResult {
-        assert!(env::attached_deposit() >= DEPOSIT_VOTE);
         assert!(env::prepaid_gas() >= GAS_VOTE);
         if !self
             .ft
@@ -372,7 +369,7 @@ impl NearDaoContract {
 
 pub fn assert_valid_init_config(config: &ConfigInput) {
     assert!(
-        config.insiders_share.unwrap()
+        config.council_share.unwrap()
             + config.community_share.unwrap_or_default()
             + config.foundation_share.unwrap_or_default()
             <= 100
@@ -525,8 +522,8 @@ impl NearDaoContract {
                 }
 
                 match group {
-                    TokenGroup::Insiders => {
-                        self.insiders.insert(account_id);
+                    TokenGroup::Council => {
+                        self.council.insert(account_id);
                     }
                     TokenGroup::Foundation => {
                         self.foundation.insert(account_id);
@@ -538,8 +535,8 @@ impl NearDaoContract {
                 }
             }
             Action::RemoveMember { account_id, group } => match group {
-                TokenGroup::Insiders => {
-                    self.insiders.remove(account_id);
+                TokenGroup::Council => {
+                    self.council.remove(account_id);
                 }
                 TokenGroup::Foundation => {
                     self.foundation.remove(account_id);
@@ -637,8 +634,8 @@ impl NearDaoContract {
             }
             TransactionInput::AddMember { account_id, group } => {
                 match group {
-                    TokenGroup::Insiders => {
-                        if self.insiders.contains(&account_id) {
+                    TokenGroup::Council => {
+                        if self.council.contains(&account_id) {
                             errors.push("User is already in group");
                         }
                     }
@@ -672,8 +669,8 @@ impl NearDaoContract {
             }
             TransactionInput::RemoveMember { account_id, group } => {
                 match group {
-                    TokenGroup::Insiders => {
-                        if !self.insiders.contains(&account_id) {
+                    TokenGroup::Council => {
+                        if !self.council.contains(&account_id) {
                             errors.push("User is not in group");
                         }
                     }
