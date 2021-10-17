@@ -92,7 +92,7 @@ impl NearDaoFactory {
         );
 
         let promise = Promise::new(account_id.clone())
-            .create_account()
+            //.create_account()
             .deploy_contract(CODE.to_vec())
             .transfer(env::attached_deposit())
             .add_full_access_key(self.key.clone().into());
