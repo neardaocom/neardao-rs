@@ -74,6 +74,7 @@ mod test {
     fn get_default_dao_config() -> ConfigInput {
         ConfigInput {
             lang: "cs".into(),
+            slogan: "best dao in EU".into(),
             council_share: Some(COUNCIL_SHARE),
             foundation_share: Some(FOUNDATION_SHARE),
             community_share: Some(COMMUNITY_SHARE),

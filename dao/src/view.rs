@@ -66,6 +66,7 @@ impl NearDaoContract {
     pub fn dao_config(self) -> DaoConfig {
         DaoConfig {
             lang: self.config.lang,
+            slogan: self.config.slogan,
             description: self.config.description,
             council_share: self.config.council_share,
             foundation_share: self.config.foundation_share,
@@ -142,6 +143,7 @@ pub struct DaoFee {
 #[serde(crate = "near_sdk::serde")]
 pub struct DaoConfig {
     pub lang: String,
+    pub slogan: String,
     pub description: String,
     pub council_share: u8,
     pub foundation_share: Option<u8>,
