@@ -1,10 +1,28 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 
+use crate::view::DocFileMetadata;
+
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct FileMetadata {
+pub enum VFileMetadata {
+    //Prev (FileMetadata),
+    Curr (FileMetadata),
+}
+
+impl VFileMetadata {
+    pub fn migrate(self) -> Self {
+        //TODO: implement when migrating
+        self
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct FileMetadata 
+{
     pub name: String,
     pub description: String,
     pub tags: Vec<u8>,
@@ -14,7 +32,13 @@ pub struct FileMetadata {
     pub valid: bool,
 }
 
-pub type FileUUID = String; // IPFS address
+impl From<VFileMetadata> for FileMetadata {
+    fn from(fm: VFileMetadata) -> Self {
+        match fm {
+            VFileMetadata::Curr(v) => v
+        }
+    }
+}
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]

@@ -1,6 +1,9 @@
 #!/bin/bash
 
-# WIP: Does not work yet !
+# Add key to DAO to FS storage
+cp ~/.near-credentials/testnet/$CID.json ~/.near-credentials/testnet/$DCID.json
+sed -i 's/dev-/dao.dev-/g' ~/.near-credentials/testnet/$DCID.json
+
 
 near deploy \
   --wasmFile res/dao.wasm \

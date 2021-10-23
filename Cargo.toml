@@ -1,6 +1,6 @@
 [package]
 name = "near_dao"
-version = "0.1.0"
+version = "0.3.0"
 authors = ["Petr Studýnka <studynkapetr@gmail.com>"]
 edition = "2018"
 

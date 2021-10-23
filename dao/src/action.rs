@@ -3,9 +3,10 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 
-use crate::core::{Mapper, MapperKind};
-use crate::file::{FileMetadata, FileType, FileUUID};
+use crate::CID;
+use crate::file::{FileType, VFileMetadata};
 
+//TODO: move from action.rs
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug,PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -45,10 +46,10 @@ impl PaymentPeriod {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[derive(BorshSerialize, BorshDeserialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Serialize))]
 #[serde(crate = "near_sdk::serde")]
-pub enum TransactionInput {
+pub enum TxInput {
     Pay {
         amount_near: U128,
         account_id: AccountId,
@@ -72,13 +73,13 @@ pub enum TransactionInput {
         title: String,
     },
     AddDocFile {
-        uuid: FileUUID,
-        metadata: FileMetadata,
+        cid: CID,
+        metadata: VFileMetadata,
         new_tags: Vec<String>,
         new_category: Option<String>
     },
     InvalidateFile {
-        uuid: FileUUID,
+        cid: CID,
     }
 }
 
@@ -86,18 +87,18 @@ pub enum TransactionInput {
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct ActionTransaction {
+pub struct ActionTx {
     pub actions: Vec<Action>,
 }
 
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)] //TODO Remove debug in production
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)] //TODO Remove debug in production
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum ActionExecutionError {
-    MissingNearTokens,
+    NotEnoughNears,
     InvalidTimeInputs,
-    FileUUIDExists,
+    CIDExists,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone)]
@@ -126,18 +127,15 @@ pub enum Action {
     GeneralProposal {
         title: String,
     },
+    //TODO split into two actions ?
     AddFile {
-        uuid: FileUUID,
+        cid: CID,
         ftype: FileType,
-        metadata: FileMetadata,
+        metadata: VFileMetadata,
         new_category: Option<String>,
         new_tags: Vec<String>
     },
     InvalidateFile {
-        uuid: FileUUID,
+        cid: CID,
     },
-    //ExtendMap {
-    //    kind: MapperKind,
-    //    map: Mapper
-    //}
 }

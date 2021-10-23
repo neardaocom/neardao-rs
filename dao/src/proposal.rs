@@ -1,23 +1,53 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{AccountId, PublicKey};
+use near_sdk::AccountId;
 use std::collections::HashMap;
+use std::ops::Add;
 
-use crate::{
-    action::{
-        ActionTransaction, TransactionInput,
-    },
-    vote_policy::{VoteConfigActive},
-};
+use crate::CID_MAX_LENGTH;
+use crate::action::{ActionTx, TxInput};
+use crate::vote_policy::VoteConfig;
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum VProposal {
+    //Prev(ProposalOld)
+    Curr(Proposal),
+}
+
+impl VProposal {
+    /// Migration method
+    pub fn migrate(self) -> Self {
+        //TODO: implement when migrating
+        self
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Serialize, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 /// User provided proposal type
 pub struct ProposalInput {
     pub tags: Vec<String>,
-    pub description: String,
-    pub transaction: TransactionInput, // actions for this proposal must exist and must be in order, index in first vec is vote ident
+    pub description: Option<String>,
+    pub description_cid: Option<String>,
+}
+
+impl ProposalInput {
+    /// Checks description's and cid's max lengths
+    /// Panics if above limits
+    pub(crate) fn assert_valid(&self) {
+        if let Some(desc) = self.description.as_ref() {
+            assert!(desc.len() > 0 && desc.len() <= PROPOSAL_DESC_MAX_LENGTH);
+        }
+
+        if let Some(cid) = self.description_cid.as_ref() {
+            assert!(cid.len() > 0 && cid.len() <= CID_MAX_LENGTH.into());
+        }
+    }
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
@@ -30,19 +60,19 @@ pub enum ProposalKindIdent {
     RegularPayment,
     GeneralProposal,
     AddDocFile,
-    InvalidateFile
+    InvalidateFile,
 }
 
 impl ProposalKindIdent {
-    pub fn get_ident_from(tx_input: &TransactionInput) -> Self {
+    pub fn get_ident_from(tx_input: &TxInput) -> Self {
         match tx_input {
-            TransactionInput::Pay { .. } => ProposalKindIdent::Pay,
-            TransactionInput::AddMember { .. } => ProposalKindIdent::AddMember,
-            TransactionInput::RemoveMember { .. } => ProposalKindIdent::RemoveMember,
-            TransactionInput::RegularPayment { .. } => ProposalKindIdent::RegularPayment,
-            TransactionInput::GeneralProposal { .. } => ProposalKindIdent::GeneralProposal,
-            TransactionInput::AddDocFile { .. } => ProposalKindIdent::AddDocFile,
-            TransactionInput::InvalidateFile { .. } => ProposalKindIdent::InvalidateFile,
+            TxInput::Pay { .. } => ProposalKindIdent::Pay,
+            TxInput::AddMember { .. } => ProposalKindIdent::AddMember,
+            TxInput::RemoveMember { .. } => ProposalKindIdent::RemoveMember,
+            TxInput::RegularPayment { .. } => ProposalKindIdent::RegularPayment,
+            TxInput::GeneralProposal { .. } => ProposalKindIdent::GeneralProposal,
+            TxInput::AddDocFile { .. } => ProposalKindIdent::AddDocFile,
+            TxInput::InvalidateFile { .. } => ProposalKindIdent::InvalidateFile,
             _ => unimplemented!(),
         }
     }
@@ -54,45 +84,53 @@ impl ProposalKindIdent {
 pub struct Proposal {
     pub uuid: u32,
     pub proposed_by: AccountId,
-    pub invoked_by_acc: AccountId,
-    pub invoked_by_pk: PublicKey,
-    pub description: String,
+    pub description: Option<String>,
+    pub description_cid: Option<String>,
     pub tags: Vec<String>,
     pub status: ProposalStatus,
-    pub votes: HashMap<AccountId, u8>,   // account id, vote id
-    pub transactions: ActionTransaction, // id of transaction should match vote id above
-    pub vote_config: VoteConfigActive,
+    pub votes: HashMap<AccountId, u8>, // account id, vote id
+    pub transactions: ActionTx,        // id of transaction should match vote id above
+    pub duration_to: u64,
+    pub waiting_open_duration: u64,
+    pub quorum: u8,
+    pub approve_threshold: u8,
+    pub vote_only_once: bool,
 }
 
-impl Proposal {
-
-    //TODO refactor
-    pub fn update_status(&mut self, status: ProposalStatus){
-        self.status = status;
-    }
-}
+impl Proposal {}
 
 impl Proposal {
     pub fn new(
+        uuid: u32,
         proposer: AccountId,
         input: ProposalInput,
-        tx: ActionTransaction,
-        vote_policy: VoteConfigActive,
-        uuid: u32,
-        invoker_acc: AccountId,
-        invoker_pk: PublicKey,
+        tx: ActionTx,
+        vote_policy: VoteConfig,
+        current_time: u64,
     ) -> Self {
         Proposal {
             uuid: uuid,
             proposed_by: proposer,
-            invoked_by_acc: invoker_acc,
-            invoked_by_pk: invoker_pk,
             description: input.description,
+            description_cid: input.description_cid,
             tags: input.tags,
             status: ProposalStatus::InProgress,
             votes: HashMap::new(),
             transactions: tx,
-            vote_config: vote_policy,
+            duration_to: vote_policy.duration.add(current_time),
+            waiting_open_duration: vote_policy.waiting_open_duration,
+            quorum: vote_policy.quorum,
+            approve_threshold: vote_policy.approve_threshold,
+            vote_only_once: vote_policy.vote_only_once,
+        }
+    }
+}
+
+impl From<VProposal> for Proposal {
+    fn from(fm: VProposal) -> Self {
+        match fm {
+            VProposal::Curr(p) => p,
+            _ => unimplemented!(),
         }
     }
 }

@@ -5,7 +5,7 @@ CID=$(near dev-deploy --wasmFile=res/dao_factory.wasm | sed -n 's/\(.*\Account i
 DCID="dao.$CID"; CID1="first.$CID"; CID2="second.$CID"; CID3="third.$CID"; CID4="fourth.$CID"
 
 # setup other accounts 
-near create-account $CID1 --masterAccount $CID --initialBalance 40 && \
-near create-account $CID2 --masterAccount $CID --initialBalance 40 && \
-near create-account $CID3 --masterAccount $CID --initialBalance 40 && \
-near create-account $CID4 --masterAccount $CID --initialBalance 40
+near create-account $CID1 --masterAccount $CID --initialBalance 15 && \
+near create-account $CID2 --masterAccount $CID --initialBalance 15 && \
+near create-account $CID3 --masterAccount $CID --initialBalance 15 && \
+near create-account $CID4 --masterAccount $CID --initialBalance 15

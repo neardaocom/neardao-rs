@@ -4,10 +4,35 @@ use std::convert::TryFrom;
 
 use crate::proposal::ProposalKindIdent;
 
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Clone, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
+#[serde(crate = "near_sdk::serde")]
+pub enum VVoteConfig {
+    //Prev(VoteConfigOld)
+    Curr(VoteConfig)
+}
+
+impl VVoteConfig {
+    pub fn migrate(self) -> Self {
+        //TODO: implement on migration
+        self
+    }
+}
+
+impl From<VVoteConfig> for VoteConfig {
+    fn from(config: VVoteConfig) -> Self {
+        match config {
+            VVoteConfig::Curr(c) => c,
+            _ => unimplemented!(),
+        }
+    }
+}
+
+
 #[derive(Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq, Serialize))]
 #[serde(crate = "near_sdk::serde")]
-/// User provided version
+/// User provided struct
 pub struct VoteConfigInput {
     pub proposal_kind: ProposalKindIdent,
     pub duration: u64,
@@ -17,8 +42,9 @@ pub struct VoteConfigInput {
     pub vote_only_once: bool,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq)]
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Clone, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
+#[serde(crate = "near_sdk::serde")]
 /// For DAO settings or Proposal subject
 pub struct VoteConfig {
     pub duration: u64,
@@ -27,19 +53,6 @@ pub struct VoteConfig {
     pub waiting_open_duration: u64,
     pub approve_threshold: u8,
 }
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-/// For DAO settings or Proposal subject
-pub struct VoteConfigActive {
-    pub duration_to: u64,
-    pub waiting_open_duration: u64,
-    pub quorum: u8,
-    pub approve_threshold: u8,
-    pub vote_only_once: bool,
-}
-
 
 impl TryFrom<VoteConfigInput> for VoteConfig {
     type Error = &'static str;

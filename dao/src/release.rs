@@ -9,23 +9,24 @@ pub enum ReleaseModelInput {
         Voting,
 }
 
+//TODO
 #[derive(BorshSerialize, BorshDeserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
-pub enum ReleaseModel {
+pub enum VReleaseModel {
     Voting,
 }
 
-impl ReleaseModel {
-    pub fn get_release_amount(
-        &mut self,
-        current_time: u64,
-        total_supply: u32,
-        init_distribution: u32,
-        already_released: u32,
-    ) -> u32 {
-        match self {
-            Self::Voting => 0,
-            _ => unimplemented!()
-        }
-    }
-}
+//impl VReleaseModel {
+//    pub fn get_release_amount(
+//        &mut self,
+//        current_time: u64,
+//        total_supply: u32,
+//        init_distribution: u32,
+//        already_released: u32,
+//    ) -> u32 {
+//        match self {
+//            Self::Voting => 0,
+//            _ => unimplemented!()
+//        }
+//    }
+//}

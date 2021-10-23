@@ -1,6 +1,6 @@
 # Near DAO prototype
 
-- version 0.2
+- version 0.3
 
 ## Testing
 
@@ -24,5 +24,5 @@ Run all tests:
 
 3. Via [NEAR CLI](https://docs.near.org/docs/tools/near-cli)
     - set of bash scripts located in near_cli_tests that utilises NEAR CLI tool
-    - run by `. <script-name>`
-    - please, ALWAYS clean the testnets's resources uses by running `. clean.sh`
+    - run by `. near_cli_test/<script-name>`
+    - please, ALWAYS clean the testnets's resources used by running `. clean.sh`

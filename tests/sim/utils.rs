@@ -146,7 +146,7 @@ pub fn get_default_vote_policy_config() -> Vec<VoteConfigInput> {
     });
 
     configs.push(VoteConfigInput {
-        proposal_kind: ProposalKindIdent::RegularPayment,
+        proposal_kind: ProposalKindIdent::RegularPaymentV1,
         duration: 10_000_000_000,
         waiting_open_duration: 50_000_000_000,
         quorum: 20,
