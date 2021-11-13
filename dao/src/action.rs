@@ -82,7 +82,7 @@ pub enum TxInput {
         cid: CID,
     },
     DistributeFT {
-        total_amount: u64,
+        total_amount: u32,
         from_group: TokenGroup,
         accounts: Vec<AccountId>,
     }
@@ -102,6 +102,7 @@ pub struct ActionTx {
 #[serde(crate = "near_sdk::serde")]
 pub enum ActionExecutionError {
     NotEnoughNears,
+    NotEnoughFT,
     InvalidTimeInputs,
     CIDExists,
 }
@@ -144,8 +145,8 @@ pub enum Action {
         cid: CID,
     },
     DistributeFT {
-        amount: u128,
+        amount: u32,
         from_group: TokenGroup,
-        accounts: AccountId,
+        accounts: Vec<AccountId>,
     }
 }

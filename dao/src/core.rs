@@ -53,7 +53,7 @@ pub const METADATA_MAX_DECIMALS: u8 = 28;
 pub const MAX_FT_TOTAL_SUPPLY: u32 = 1_000_000_000;
 
 // Must match count of proposal variants
-pub const PROPOSAL_KIND_COUNT: u8 = 7;
+pub const PROPOSAL_KIND_COUNT: u8 = 8;
 
 pub const DEFAULT_DOC_CAT: &str = "basic";
 
@@ -630,6 +630,13 @@ impl DaoContract {
                     _ => unimplemented!(),
                 },
                 Action::InvalidateFile { cid } => {}
+                Action::DistributeFT {amount, from_group, accounts} => {
+                    let db: ReleaseDb = self.release_db.get(&from_group).unwrap().into();
+
+                    if db.unlocked - db.distributed < *amount {
+                        errors.push(ActionExecutionError::NotEnoughFT);
+                    }
+                }
                 _ => unimplemented!(),
             }
         }
@@ -759,6 +766,27 @@ impl DaoContract {
                     self.doc_metadata
                         .insert(&cid.clone(), &VFileMetadata::Curr(metadata));
                 }
+            }
+            Action::DistributeFT { amount, from_group, accounts } => {
+                let mut db: ReleaseDb = self.release_db.get(&from_group).unwrap().into();
+                let amount_per_account = *amount / accounts.len() as u32;
+
+                for acc in accounts.iter() {
+                    if !self.ft.accounts.contains_key(acc) {
+                        self.ft.internal_register_account(acc);
+                    }
+
+                    self.ft.internal_transfer(
+                        &env::current_account_id(),
+                        &acc,
+                        amount_per_account as u128 * self.decimal_const,
+                        None,
+                    );
+                }
+
+                self.ft_total_distributed += amount_per_account * accounts.len() as u32;
+                db.distributed += amount_per_account * accounts.len() as u32;
+                self.release_db.insert(from_group,&VReleaseDb::Curr(db));
             }
             _ => unimplemented!(),
         }
@@ -909,6 +937,15 @@ impl DaoContract {
                     errors.push("Metadata does not exist");
                 } else {
                     actions.push(Action::InvalidateFile { cid });
+                }
+            }
+            TxInput::DistributeFT { total_amount, from_group, accounts } => {
+                let db: ReleaseDb = self.release_db.get(&from_group).unwrap().into();
+
+                if db.unlocked - db.distributed < total_amount {
+                    errors.push("Not enough FT in the group's treasury");
+                } else {
+                    actions.push(Action::DistributeFT{ amount: total_amount, from_group, accounts });
                 }
             }
             _ => unimplemented!(),
