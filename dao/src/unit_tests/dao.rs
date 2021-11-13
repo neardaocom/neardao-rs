@@ -14,13 +14,14 @@ mod test {
     use near_sdk::{testing_env, AccountId, MockedBlockchain};
     use near_sdk_sim::to_yocto;
 
-    use crate::action::TxInput;
+    use crate::action::{TokenGroup, TxInput};
     use crate::config::{Config, ConfigInput};
     use crate::core::{
         DaoContract, DEPOSIT_ADD_PROPOSAL, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, GAS_VOTE,
     };
     use crate::proposal::{Proposal, ProposalInput, ProposalKindIdent, ProposalStatus, VoteResult};
-    use crate::release::ReleaseModelInput;
+    use crate::release::{ReleaseDb, ReleaseModel, ReleaseModelInput};
+    use crate::unit_tests::{DURATION_2Y_S, DURATION_3Y_S, DURATION_ONE_WEEK};
     use crate::view::StatsFT;
     use crate::vote_policy::VoteConfigInput;
 
@@ -34,9 +35,6 @@ mod test {
     const TOKEN_TOTAL_SUPPLY: u32 = 1_000_000_000;
     const INIT_DISTRIBUTION: u32 = 200_000_000;
     const METADATA_DECIMALS: u8 = 24;
-
-    const RELEASE_TIME: u64 = 63_072_000_000_000_000;
-    const DURATION_ONE_WEEK: u64 = 604_800_000_000_000;
 
     const DURATION_WAITING: u64 = 10_000_000_000;
 
@@ -73,20 +71,43 @@ mod test {
         }
     }
 
-    fn get_default_dao_config() -> ConfigInput {
+    fn get_default_dao_config(council_share: Option<u8>, foundation_share: Option<u8>, community_share: Option<u8>) -> ConfigInput {
         ConfigInput {
             name: "dao".into(),
             lang: "cs".into(),
             slogan: "best dao in EU".into(),
-            council_share: Some(COUNCIL_SHARE),
-            foundation_share: Some(FOUNDATION_SHARE),
-            community_share: Some(COMMUNITY_SHARE),
+            council_share,
+            foundation_share,
+            community_share,
             description: Some(DAO_DESC.into()),
             vote_spam_threshold: Some(VOTE_SPAM_TH),
         }
     }
-    fn get_default_release_config() -> ReleaseModelInput {
-        ReleaseModelInput::Voting
+    fn get_default_release_config() -> Vec<(TokenGroup, ReleaseModelInput)> {
+        let mut vec = Vec::with_capacity(3);
+        vec.push((
+            TokenGroup::Council,
+            ReleaseModelInput::Linear {
+                from: Some(0),
+                duration: DURATION_2Y_S,
+            },
+        ));
+        vec.push((
+            TokenGroup::Foundation,
+            ReleaseModelInput::Linear {
+                from: Some(0),
+                duration: DURATION_3Y_S,
+            },
+        ));
+        vec.push((
+            TokenGroup::Community,
+            ReleaseModelInput::Linear {
+                from: Some(0),
+                duration: DURATION_3Y_S,
+            },
+        ));
+
+        vec
     }
 
     fn get_default_voting_policy() -> Vec<VoteConfigInput> {
@@ -173,16 +194,16 @@ mod test {
     /// Contract constructor
     fn get_contract(
         total_supply: u32,
-        init_distribution: u32,
+        founders_init_distribution: u32,
         metadata: FungibleTokenMetadata,
         config: ConfigInput,
-        release_config: ReleaseModelInput,
+        release_config: Vec<(TokenGroup, ReleaseModelInput)>,
         vote_policy_config: Vec<VoteConfigInput>,
         founders: Vec<AccountId>,
     ) -> DaoContract {
         DaoContract::new(
             total_supply,
-            init_distribution,
+            founders_init_distribution,
             metadata,
             config,
             release_config,
@@ -196,7 +217,28 @@ mod test {
             TOKEN_TOTAL_SUPPLY,
             INIT_DISTRIBUTION,
             get_default_metadata(),
-            get_default_dao_config(),
+            get_default_dao_config(Some(COUNCIL_SHARE), Some(FOUNDATION_SHARE), Some(COMMUNITY_SHARE)),
+            get_default_release_config(),
+            get_default_voting_policy(),
+            get_default_founders_5(),
+        )
+    }
+
+    fn get_default_contract_with(
+        total_supply: u32,
+        founders_init_distribution: u32,
+        council_share: u8,
+        foundation_share: u8,
+        community_share: u8,
+    ) -> DaoContract {
+        assert!(total_supply >= (founders_init_distribution as u64 * council_share as u64) as u32 / 100);
+        assert!(council_share + foundation_share + community_share <= 100);
+
+        get_contract(
+            total_supply,
+            founders_init_distribution,
+            get_default_metadata(),
+            get_default_dao_config(Some(council_share), Some(foundation_share), Some(community_share)),
             get_default_release_config(),
             get_default_voting_policy(),
             get_default_founders_5(),
@@ -209,7 +251,7 @@ mod test {
         account: AccountId,
     ) {
         testing_env!(context
-            .predecessor_account_id(ValidAccountId::try_from(env::current_account_id()).unwrap(),)
+            .predecessor_account_id(ValidAccountId::try_from(env::current_account_id()).unwrap())
             .attached_deposit(contract.storage_balance_bounds().min.0)
             .build());
 
@@ -282,23 +324,31 @@ mod test {
 
         let expected_stats = StatsFT {
             total_supply: TOKEN_TOTAL_SUPPLY,
-            init_distribution: INIT_DISTRIBUTION,
             decimals: METADATA_DECIMALS,
-            total_released: U128::from((INIT_DISTRIBUTION) as u128 * decimal_const()),
-            free: U128::from(
-                (INIT_DISTRIBUTION as u64
-                    - (INIT_DISTRIBUTION as u64 * config.council_share as u64 / 100))
-                    as u128
-                    * decimal_const(),
-            ),
-            council_ft_shared: (INIT_DISTRIBUTION as u64 * config.council_share as u64 / 100)
-                as u32,
-            community_ft_shared: 0,
-            foundation_ft_shared: 0,
-            parent_shared: 0,
-            owner_shared: 0,
+            total_distributed: INIT_DISTRIBUTION,
+            council_ft_stats: ReleaseDb::new(250_000_000, 200_000_000, 200_000_000),
+            council_release_model: ReleaseModel::Linear {
+                duration: DURATION_2Y_S,
+                release_end: DURATION_2Y_S,
+            },
+            foundation_ft_stats: ReleaseDb::new(150_000_000, 0, 0),
+            foundation_release_model: ReleaseModel::Linear {
+                duration: DURATION_3Y_S,
+                release_end: DURATION_3Y_S,
+            },
+            community_ft_stats: ReleaseDb::new(100_000_000, 0, 0),
+            community_release_model: ReleaseModel::Linear {
+                duration: DURATION_3Y_S,
+                release_end: DURATION_3Y_S,
+            },
+            public_ft_stats: ReleaseDb::new(500_000_000, 500_000_000, 0),
+            public_release_model: ReleaseModel::None,
         };
+
+        let expected_total_distributed = 200_000_000;
+
         assert_eq!(contract.statistics_ft(), expected_stats);
+        assert_eq!(contract.ft_total_distributed, expected_total_distributed);
     }
 
     #[test]
@@ -447,5 +497,114 @@ mod test {
         test_calc_percent_u128!(10_000_000, 50_000_000, 8, 20);
         test_calc_percent_u128!(49_500_000, 50_000_000, 24, 99);
         test_calc_percent_u128!(49_200_000, 50_000_000, 24, 98);
+    }
+
+    #[test]
+
+    fn test_unlocking_with_high_share() {
+        let mut context = get_context();
+        testing_env!(context.build());
+
+        let mut contract = get_default_contract_with(TOKEN_TOTAL_SUPPLY, (TOKEN_TOTAL_SUPPLY as u64 * 45 / 100) as u32,  90,5,3);
+
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 0);
+        
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(900_000_000, 450_000_000, 450_000_000));
+        
+        testing_env!(context
+            .block_timestamp((DURATION_2Y_S as u64 * 1 / 100) as u64 * 10u64.pow(9))
+            .build());
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 4_500_000);
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(900_000_000, 454_500_000, 450_000_000));
+
+        testing_env!(context
+            .block_timestamp((DURATION_2Y_S as u64 * 50 / 100) as u64 * 10u64.pow(9))
+            .build());
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 220_500_000);
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(900_000_000, 675_000_000, 450_000_000));
+
+        testing_env!(context
+            .block_timestamp((DURATION_2Y_S as u64 * 99 / 100) as u64 * 10u64.pow(9))
+            .build());
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 220_500_000);
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(900_000_000, 895_500_000, 450_000_000));
+
+        testing_env!(context
+            .block_timestamp((DURATION_2Y_S) as u64 * 10u64.pow(9))
+            .build());
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 4_500_000);
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(900_000_000, 900_000_000, 450_000_000));
+
+        testing_env!(context
+            .block_timestamp((DURATION_2Y_S + 1) as u64 * 10u64.pow(9))
+            .build());
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 0);
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(900_000_000, 900_000_000, 450_000_000));
+    }
+
+    #[test]
+    
+    fn test_unlocking_with_low_share() {
+        let mut context = get_context();
+        testing_env!(context.build());
+        
+        let mut contract = get_default_contract_with(TOKEN_TOTAL_SUPPLY, TOKEN_TOTAL_SUPPLY * 1 / 100,  5,10,11);
+        
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 0);
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(50_000_000, 10_000_000, 10_000_000));
+
+        testing_env!(context
+            .block_timestamp((DURATION_2Y_S as u64 * 1 / 100) as u64 * 10u64.pow(9))
+            .build());
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 400_000);
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(50_000_000, 10_400_000, 10_000_000));
+
+        testing_env!(context
+            .block_timestamp((DURATION_2Y_S as u64 * 50 / 100) as u64 * 10u64.pow(9))
+            .build());
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 19_600_000);
+
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(50_000_000, 30_000_000, 10_000_000));
+
+        testing_env!(context
+            .block_timestamp((DURATION_2Y_S as u64 * 99 / 100) as u64 * 10u64.pow(9))
+            .build());
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 19_600_000);
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(50_000_000, 49_600_000, 10_000_000));
+
+        testing_env!(context
+            .block_timestamp((DURATION_2Y_S) as u64 * 10u64.pow(9))
+            .build());
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 400_000);
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(50_000_000, 50_000_000, 10_000_000));
+
+        testing_env!(context
+            .block_timestamp((DURATION_2Y_S + 1) as u64 * 10u64.pow(9))
+            .build());
+        assert_eq!(contract.unlock_tokens(TokenGroup::Council), 0);
+
+        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
+        assert_eq!(current_db, ReleaseDb::new(50_000_000, 50_000_000, 10_000_000));
     }
 }

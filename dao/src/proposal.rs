@@ -61,6 +61,7 @@ pub enum ProposalKindIdent {
     GeneralProposal,
     AddDocFile,
     InvalidateFile,
+    DistributeFT,
 }
 
 impl ProposalKindIdent {
@@ -73,6 +74,7 @@ impl ProposalKindIdent {
             TxInput::GeneralProposal { .. } => ProposalKindIdent::GeneralProposal,
             TxInput::AddDocFile { .. } => ProposalKindIdent::AddDocFile,
             TxInput::InvalidateFile { .. } => ProposalKindIdent::InvalidateFile,
+            TxInput::DistributeFT { .. } => ProposalKindIdent::DistributeFT,
             _ => unimplemented!(),
         }
     }

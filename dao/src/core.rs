@@ -1,11 +1,11 @@
 use std::convert::TryFrom;
-use std::ops::Add;
 use std::u128;
 
 use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_contract_standards::fungible_token::FungibleToken;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
+use near_sdk::{PromiseResult, ext_contract};
 use near_sdk::json_types::{Base64VecU8, ValidAccountId, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
@@ -21,12 +21,12 @@ use near_contract_standards::storage_management::{
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
 use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
 
-use crate::{CID_MAX_LENGTH, action::*};
 use crate::config::*;
 use crate::file::{FileType, VFileMetadata};
 use crate::proposal::*;
-use crate::release::{ReleaseModelInput, VReleaseModel};
+use crate::release::{ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel};
 use crate::vote_policy::{VVoteConfig, VoteConfig, VoteConfigInput};
+use crate::{action::*, CID_MAX_LENGTH};
 
 near_sdk::setup_alloc!();
 
@@ -68,6 +68,7 @@ pub enum StorageKeys {
     Foundation,
     Community,
     ReleaseConfig,
+    ReleaseDb,
     RegularPayment,
     DocMetadata,
     Mappers,
@@ -86,16 +87,14 @@ pub struct DaoContract {
     pub registered_accounts_count: u32,
     pub ft_metadata: LazyOption<FungibleTokenMetadata>,
     pub ft: FungibleToken,
-    pub total_supply: u32,
-    pub init_distribution: u32,
-    pub free_ft: u128,
-    pub already_released_ft: u128,
+    pub ft_total_supply: u32,
+    pub ft_total_distributed: u32,
     pub decimal_const: u128,
     pub proposals: UnorderedMap<u32, VProposal>,
     pub proposal_count: u32,
-    pub release_db: [u32; 5],
+    pub release_config: LookupMap<TokenGroup, VReleaseModel>, //TODO merge with DB
+    pub release_db: LookupMap<TokenGroup, VReleaseDb>,
     pub vote_policy_config: LookupMap<ProposalKindIdent, VVoteConfig>,
-    pub release_config: LazyOption<VReleaseModel>,
     pub regular_payments: UnorderedSet<RegularPayment>,
     pub doc_metadata: UnorderedMap<String, VFileMetadata>,
     pub mappers: UnorderedMap<MapperKind, Mapper>,
@@ -142,10 +141,10 @@ impl DaoContract {
     #[init]
     pub fn new(
         total_supply: u32,
-        init_distribution: u32,
+        founders_init_distribution: u32,
         ft_metadata: FungibleTokenMetadata,
         config: ConfigInput,
-        release_config: ReleaseModelInput,
+        release_config: Vec<(TokenGroup, ReleaseModelInput)>,
         vote_policy_configs: Vec<VoteConfigInput>,
         mut founders: Vec<AccountId>,
     ) -> Self {
@@ -162,15 +161,13 @@ impl DaoContract {
         ft_metadata.assert_valid();
         assert_valid_init_config(&config);
         assert!(
-            total_supply >= init_distribution,
+            total_supply as u64 * config.council_share.unwrap_or_default() as u64 / 100
+                >= founders_init_distribution as u64,
             "{}",
-            "Init distribution cannot be larger than total supply"
+            "Founders init distribution cannot be larger than their total amount share"
         );
 
-        let amount_per_founder: u32 = (init_distribution as u64
-            * config.council_share.unwrap_or_default() as u64
-            / 100
-            / founders.len() as u64) as u32;
+        let amount_per_founder: u32 = founders_init_distribution / founders.len() as u32;
 
         let decimal_const = 10u128.pow(ft_metadata.decimals as u32);
 
@@ -183,24 +180,21 @@ impl DaoContract {
             registered_accounts_count: founders.len() as u32,
             ft_metadata: LazyOption::new(StorageKeys::FTMetadata, Some(&ft_metadata)),
             ft: FungibleToken::new(StorageKeys::FT),
-            total_supply: total_supply,
-            init_distribution: init_distribution,
-            free_ft: init_distribution as u128 * decimal_const
-                - amount_per_founder as u128 * founders.len() as u128 * decimal_const,
-            already_released_ft: init_distribution as u128 * decimal_const,
+            ft_total_supply: total_supply,
+            ft_total_distributed: founders_init_distribution,
             decimal_const: decimal_const,
             proposals: UnorderedMap::new(StorageKeys::Proposals),
             proposal_count: 0,
-            release_db: [amount_per_founder * founders.len() as u32, 0, 0, 0, 0],
+            release_config: LookupMap::new(StorageKeys::ReleaseConfig),
+            release_db: LookupMap::new(StorageKeys::ReleaseDb),
             vote_policy_config: LookupMap::new(StorageKeys::ProposalConfig),
-            release_config: LazyOption::new(StorageKeys::ReleaseConfig, None),
             regular_payments: UnorderedSet::new(StorageKeys::RegularPayment),
             doc_metadata: UnorderedMap::new(StorageKeys::DocMetadata),
             mappers: UnorderedMap::new(StorageKeys::Mappers),
         };
 
         contract.setup_voting_policy(vote_policy_configs);
-        contract.setup_release_model(release_config, init_distribution);
+        contract.setup_release_models(release_config, founders_init_distribution);
         contract.init_mappers();
 
         //register contract account and transfer all total supply of GT to it
@@ -209,7 +203,7 @@ impl DaoContract {
             .internal_register_account(&env::current_account_id());
         contract.ft.internal_deposit(
             &env::current_account_id(),
-            contract.total_supply as u128 * contract.decimal_const,
+            contract.ft_total_supply as u128 * contract.decimal_const,
         );
 
         // register council and distribute them their amount of the tokens
@@ -351,14 +345,19 @@ impl DaoContract {
                         >= config.vote_spam_threshold
                     {
                         Some(ProposalStatus::Spam)
-                    } else if 
-                    self::calc_percent_u128(total_voted_amount, self.already_released_ft - self.free_ft, self.decimal_const)
-                        < proposal.quorum
+                    } else if self::calc_percent_u128(
+                        total_voted_amount,
+                        self.ft_total_distributed as u128 * self.decimal_const,
+                        self.decimal_const,
+                    ) < proposal.quorum
                     {
                         // not enough quorum
                         Some(ProposalStatus::Invalid)
-                    } else if self::calc_percent_u128(votes[1], total_voted_amount, self.decimal_const)
-                        < proposal.approve_threshold
+                    } else if self::calc_percent_u128(
+                        votes[1],
+                        total_voted_amount,
+                        self.decimal_const,
+                    ) < proposal.approve_threshold
                     {
                         // not enough voters to accept
                         Some(ProposalStatus::Rejected)
@@ -392,6 +391,27 @@ impl DaoContract {
         }
     }
 
+    /// Returns amount of newly unlocked tokens
+    pub fn unlock_tokens(&mut self,group: TokenGroup) -> u32 {
+        let model: ReleaseModel = self.release_config.get(&group).unwrap().into();
+        let mut db: ReleaseDb = self.release_db.get(&group).unwrap().into();
+
+        if db.total == db.unlocked {
+            return 0;
+        }
+
+        let total_released_now = model.release(db.total, db.init_distribution, db.unlocked, (env::block_timestamp() / 10u64.pow(9)) as u32);
+        
+        if total_released_now > 0 {
+            let delta = total_released_now - (db.unlocked - db.init_distribution);
+            db.unlocked += delta;
+            self.release_db.insert(&group, &VReleaseDb::Curr(db));
+            delta
+        } else {
+            total_released_now
+        }
+    }
+
     /// For dev/testing purposes only
     #[private]
     pub fn clean_self(&mut self) {
@@ -401,8 +421,7 @@ impl DaoContract {
     /// For dev/testing purposes only
     #[private]
     pub fn delete_self(self) -> Promise {
-        Promise::new(env::current_account_id()).delete_account(self.factory_acc
-        )
+        Promise::new(env::current_account_id()).delete_account(self.factory_acc)
     }
 }
 
@@ -418,6 +437,7 @@ pub fn assert_valid_init_config(config: &ConfigInput) {
 }
 
 impl DaoContract {
+
     pub fn setup_voting_policy(&mut self, configs: Vec<VoteConfigInput>) {
         for p in configs.into_iter() {
             assert!(
@@ -433,17 +453,85 @@ impl DaoContract {
         }
     }
 
-    pub fn setup_release_model(
+    pub fn setup_release_models(
         &mut self,
-        release_config: ReleaseModelInput,
-        already_released_ft: u32,
+        release_config: Vec<(TokenGroup, ReleaseModelInput)>,
+        founders_distribution: u32,
     ) {
-        let model = match release_config {
-            ReleaseModelInput::Voting => VReleaseModel::Voting,
-            _ => unimplemented!(),
-        };
+        let config: Config = self.config.get().unwrap().into();
 
-        self.release_config.set(&model);
+        for (group, model) in release_config.into_iter() {
+            let release_model =
+                ReleaseModel::from_input(model, (env::block_timestamp() / 10u64.pow(9)) as u32);
+
+            let release_db;
+            match group {
+                TokenGroup::Council => {
+
+                    release_db = if release_model == ReleaseModel::None {
+                        let total = (config.council_share as u64 * self.ft_total_supply as u64 / 100) as u32;
+                        ReleaseDb::new(total, total, founders_distribution)
+                    } else {
+                        ReleaseDb::new(
+                            (config.council_share as u64 * self.ft_total_supply as u64 / 100) as u32,
+                            founders_distribution,
+                            founders_distribution,
+                        )
+                    };
+
+                }
+                TokenGroup::Foundation => {
+                    release_db = if release_model == ReleaseModel::None {
+                        let total = (config.foundation_share.unwrap_or_default() as u64 * self.ft_total_supply as u64 / 100) as u32;
+                        ReleaseDb::new(total, total, 0)
+                    } else {
+                        ReleaseDb::new(
+                            (config.foundation_share.unwrap_or_default() as u64
+                                * self.ft_total_supply as u64
+                                / 100) as u32,
+                            0,
+                            0)
+                    };
+                }
+                TokenGroup::Community => {
+                    release_db = if release_model == ReleaseModel::None {
+                        let total = (config.community_share.unwrap_or_default() as u64 * self.ft_total_supply as u64 / 100) as u32;
+                        ReleaseDb::new(total, total, 0)
+                    } else {
+                        ReleaseDb::new(
+                            (config.community_share.unwrap_or_default() as u64
+                                * self.ft_total_supply as u64
+                                / 100) as u32,
+                            0,
+                            0)
+                    };
+                }
+                _ => env::panic(b"Cannot set Release model for Public"),
+            }
+
+            self.release_db
+                .insert(&group, &VReleaseDb::Curr(release_db));
+            self.release_config
+                .insert(&group, &VReleaseModel::Curr(release_model));
+        }
+
+        // We set dao release
+        let ft_amount = ((100
+            - config.council_share as u64
+            - config.foundation_share.unwrap_or_default() as u64
+            - config.community_share.unwrap_or_default() as u64)
+            * self.ft_total_supply as u64
+            / 100) as u32;
+
+        // dao itself has all tokens unlocked from the beginning
+        self.release_db.insert(
+            &TokenGroup::Public,
+            &VReleaseDb::Curr(ReleaseDb::new(ft_amount, ft_amount, 0)),
+        );
+        self.release_config.insert(
+            &TokenGroup::Public,
+            &VReleaseModel::Curr(ReleaseModel::None),
+        );
     }
 
     pub fn init_mappers(&mut self) {
@@ -799,8 +887,7 @@ impl DaoContract {
                 //TODO check precise length, not range
                 if cid.len() > CID_MAX_LENGTH.into() {
                     errors.push("Invalid CID length");
-                }
-                else if self.doc_metadata.get(&cid).is_some() {
+                } else if self.doc_metadata.get(&cid).is_some() {
                     errors.push("Metadata already exists");
                 } else if new_category.is_some()
                     && new_category.as_ref().map(|s| s.len()).unwrap() == 0
@@ -839,17 +926,13 @@ impl DaoContract {
 /// No bound checks implemented
 #[inline]
 pub fn calc_percent_u128(value: u128, total: u128, decimal_const: u128) -> u8 {
-    ((value / decimal_const) as f64 / (total / decimal_const) as f64 * 100.0).round()
-        as u8
+    ((value / decimal_const) as f64 / (total / decimal_const) as f64 * 100.0).round() as u8
 }
 
 #[near_bindgen]
 impl FungibleTokenCore for DaoContract {
     #[payable]
     fn ft_transfer(&mut self, receiver_id: ValidAccountId, amount: U128, memo: Option<String>) {
-        if env::predecessor_account_id() == env::current_account_id() {
-            self.free_ft -= amount.0;
-        }
         self.ft.ft_transfer(receiver_id, amount, memo)
     }
 

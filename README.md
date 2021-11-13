@@ -1,6 +1,6 @@
 # Near DAO prototype
 
-- version 0.3
+- version 0.4
 
 ## Testing
 

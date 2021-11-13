@@ -80,6 +80,11 @@ pub enum TxInput {
     },
     InvalidateFile {
         cid: CID,
+    },
+    DistributeFT {
+        total_amount: u64,
+        from_group: TokenGroup,
+        accounts: Vec<AccountId>,
     }
 }
 
@@ -138,4 +143,9 @@ pub enum Action {
     InvalidateFile {
         cid: CID,
     },
+    DistributeFT {
+        amount: u128,
+        from_group: TokenGroup,
+        accounts: AccountId,
+    }
 }

@@ -4,27 +4,29 @@ use near_sdk::serde::Serialize;
 use near_sdk::{json_types::U128, near_bindgen, AccountId};
 
 use crate::CID;
-use crate::action::MemberGroup;
+use crate::action::{MemberGroup, TokenGroup};
 use crate::config::VConfig;
 use crate::file::{VFileMetadata};
 use crate::proposal::{ProposalKindIdent, VProposal};
+use crate::release::{ReleaseDb, ReleaseModel};
 use crate::vote_policy::{self, VoteConfig};
-use crate::{core::*, proposal::Proposal};
+use crate::{core::*};
 
 #[near_bindgen]
 impl DaoContract {
     pub fn statistics_ft(&self) -> StatsFT {
         StatsFT {
-            total_supply: self.total_supply,
-            init_distribution: self.init_distribution,
+            total_supply: self.ft_total_supply,
             decimals: self.ft_metadata.get().unwrap().decimals,
-            total_released: U128::from(self.already_released_ft),
-            free: U128::from(self.free_ft),
-            council_ft_shared: self.release_db[INDEX_RELEASED_COUNCIL as usize],
-            community_ft_shared: self.release_db[INDEX_RELEASED_COMMUNITY as usize],
-            foundation_ft_shared: self.release_db[INDEX_RELEASED_FOUNDATION as usize],
-            parent_shared: self.release_db[INDEX_RELEASED_PARENT as usize],
-            owner_shared: self.release_db[INDEX_RELEASED_FACTORY_ACC as usize],
+            total_distributed: self.ft_total_distributed,
+            council_ft_stats: self.release_db.get(&TokenGroup::Council).unwrap().into(),
+            council_release_model: self.release_config.get(&TokenGroup::Council).unwrap().into(),
+            foundation_ft_stats: self.release_db.get(&TokenGroup::Foundation).unwrap().into(),
+            foundation_release_model: self.release_config.get(&TokenGroup::Foundation).unwrap().into(),
+            community_ft_stats: self.release_db.get(&TokenGroup::Community).unwrap().into(),
+            community_release_model: self.release_config.get(&TokenGroup::Community).unwrap().into(),
+            public_ft_stats: self.release_db.get(&TokenGroup::Public).unwrap().into(),
+            public_release_model: self.release_config.get(&TokenGroup::Public).unwrap().into(),
         }
     }
 
@@ -43,9 +45,6 @@ impl DaoContract {
             council_share_percent: config.council_share,
             foundation_share_percent:config.foundation_share.unwrap_or_default(),
             community_share_percent: config.community_share.unwrap_or_default(),
-            council_ft_shared: self.release_db[INDEX_RELEASED_COUNCIL as usize],
-            community_ft_shared: self.release_db[INDEX_RELEASED_COMMUNITY as usize],
-            foundation_ft_shared: self.release_db[INDEX_RELEASED_FOUNDATION as usize],
             registered_user_count: self.registered_accounts_count,
         }
     }
@@ -140,15 +139,16 @@ impl DaoContract {
 #[serde(crate = "near_sdk::serde")]
 pub struct StatsFT {
     pub total_supply: u32,
-    pub init_distribution: u32,
     pub decimals: u8,
-    pub total_released: U128,
-    pub free: U128,
-    pub council_ft_shared: u32,
-    pub community_ft_shared: u32,
-    pub foundation_ft_shared: u32,
-    pub parent_shared: u32,
-    pub owner_shared: u32,
+    pub total_distributed: u32,
+    pub council_ft_stats: ReleaseDb,
+    pub council_release_model: ReleaseModel,
+    pub community_ft_stats: ReleaseDb,
+    pub community_release_model: ReleaseModel,
+    pub foundation_ft_stats: ReleaseDb,
+    pub foundation_release_model: ReleaseModel,
+    pub public_ft_stats: ReleaseDb,
+    pub public_release_model: ReleaseModel,
 }
 
 #[derive(Serialize)]
@@ -162,9 +162,6 @@ pub struct StatsMembers {
     council_share_percent: u8,
     foundation_share_percent: u8,
     community_share_percent: u8,
-    council_ft_shared: u32,
-    community_ft_shared: u32,
-    foundation_ft_shared: u32,
     registered_user_count: u32,
 }
 
