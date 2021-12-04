@@ -45,12 +45,12 @@ impl DaoContract {
             council_share_percent: config.council_share,
             foundation_share_percent:config.foundation_share.unwrap_or_default(),
             community_share_percent: config.community_share.unwrap_or_default(),
-            registered_user_count: self.registered_accounts_count,
+            registered_user_count: self.ft.registered_accounts_count,
         }
     }
 
     pub fn registered_user_count(&self) -> u32 {
-        self.registered_accounts_count
+        self.ft.registered_accounts_count
     }
 
     pub fn proposal(&self, proposal_id: u32) -> Option<VProposal> {

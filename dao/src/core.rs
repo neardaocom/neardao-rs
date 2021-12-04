@@ -1,15 +1,14 @@
 use std::convert::TryFrom;
 use std::u128;
 
-use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
-use near_contract_standards::fungible_token::FungibleToken;
+use crate::standard_impl::ft::FungibleToken;
+use crate::standard_impl::ft_metadata::FungibleTokenMetadata;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
-use near_sdk::{PromiseResult, ext_contract};
-use near_sdk::json_types::{Base64VecU8, ValidAccountId, U128};
+use near_sdk::json_types::{ValidAccountId, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env::{self, BLOCKCHAIN_INTERFACE},
+    env::{self},
     log, near_bindgen, AccountId, Balance, BorshStorageKey, IntoStorageKey, PanicOnDefault,
     Promise, PromiseOrValue,
 };
@@ -84,7 +83,6 @@ pub struct DaoContract {
     pub council: UnorderedSet<AccountId>,
     pub foundation: UnorderedSet<AccountId>,
     pub community: UnorderedSet<AccountId>,
-    pub registered_accounts_count: u32,
     pub ft_metadata: LazyOption<FungibleTokenMetadata>,
     pub ft: FungibleToken,
     pub ft_total_supply: u32,
@@ -92,7 +90,7 @@ pub struct DaoContract {
     pub decimal_const: u128,
     pub proposals: UnorderedMap<u32, VProposal>,
     pub proposal_count: u32,
-    pub release_config: LookupMap<TokenGroup, VReleaseModel>, //TODO merge with DB
+    pub release_config: LookupMap<TokenGroup, VReleaseModel>, //TODO merge with DB ?
     pub release_db: LookupMap<TokenGroup, VReleaseDb>,
     pub vote_policy_config: LookupMap<ProposalKindIdent, VVoteConfig>,
     pub regular_payments: UnorderedSet<RegularPayment>,
@@ -150,15 +148,10 @@ impl DaoContract {
     ) -> Self {
         assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
         assert!(ft_metadata.decimals <= METADATA_MAX_DECIMALS);
-
-        // Check unique founders
-        let founders_len_before_dedup = founders.len();
-        founders.sort();
-        founders.dedup();
-        assert_eq!(founders_len_before_dedup, founders.len());
-
         assert_eq!(vote_policy_configs.len(), PROPOSAL_KIND_COUNT as usize);
+
         ft_metadata.assert_valid();
+        assert_valid_founders(&mut founders);
         assert_valid_init_config(&config);
         assert!(
             total_supply as u64 * config.council_share.unwrap_or_default() as u64 / 100
@@ -177,7 +170,6 @@ impl DaoContract {
             council: UnorderedSet::new(StorageKeys::Council),
             foundation: UnorderedSet::new(StorageKeys::Foundation),
             community: UnorderedSet::new(StorageKeys::Community),
-            registered_accounts_count: founders.len() as u32,
             ft_metadata: LazyOption::new(StorageKeys::FTMetadata, Some(&ft_metadata)),
             ft: FungibleToken::new(StorageKeys::FT),
             ft_total_supply: total_supply,
@@ -219,6 +211,8 @@ impl DaoContract {
             contract.council.insert(founder);
         }
 
+        contract.ft.registered_accounts_count -= 1;
+
         // We store factory acc directly into trie so we dont have to deserialize SC when we upgrade/migrate
         env::storage_write(
             &StorageKeys::FactoryAcc.into_storage_key(),
@@ -232,6 +226,7 @@ impl DaoContract {
     pub fn add_proposal(&mut self, proposal_input: ProposalInput, tx_input: TxInput) -> u32 {
         assert!(env::attached_deposit() >= DEPOSIT_ADD_PROPOSAL);
         assert!(env::prepaid_gas() >= GAS_ADD_PROPOSAL);
+        //assert!(self.ft.accounts.contains_key(&env::predecessor_account_id())); TODO:
         if !self
             .ft
             .accounts
@@ -280,6 +275,7 @@ impl DaoContract {
     pub fn vote(&mut self, proposal_id: u32, vote_kind: u8) -> VoteResult {
         assert!(env::prepaid_gas() >= GAS_VOTE);
         assert!(env::attached_deposit() >= DEPOSIT_VOTE);
+        //assert!(self.ft.accounts.contains_key(&env::predecessor_account_id())); TODO:
         if !self
             .ft
             .accounts
@@ -392,7 +388,7 @@ impl DaoContract {
     }
 
     /// Returns amount of newly unlocked tokens
-    pub fn unlock_tokens(&mut self,group: TokenGroup) -> u32 {
+    pub fn unlock_tokens(&mut self, group: TokenGroup) -> u32 {
         let model: ReleaseModel = self.release_config.get(&group).unwrap().into();
         let mut db: ReleaseDb = self.release_db.get(&group).unwrap().into();
 
@@ -400,8 +396,13 @@ impl DaoContract {
             return 0;
         }
 
-        let total_released_now = model.release(db.total, db.init_distribution, db.unlocked, (env::block_timestamp() / 10u64.pow(9)) as u32);
-        
+        let total_released_now = model.release(
+            db.total,
+            db.init_distribution,
+            db.unlocked,
+            (env::block_timestamp() / 10u64.pow(9)) as u32,
+        );
+
         if total_released_now > 0 {
             let delta = total_released_now - (db.unlocked - db.init_distribution);
             db.unlocked += delta;
@@ -410,6 +411,14 @@ impl DaoContract {
         } else {
             total_released_now
         }
+    }
+
+    //TODO implement on receiving contract based on wanted functionality
+    // sender_id - who sent the tokens
+    // env::predeccesor_account_id - token acc that confirms sender_id transfered this amount of FT to this account
+    // receiver - this acc should register it
+    pub fn ft_on_transfer(&self, sender_id: String, amount: U128, msg: String) -> String {
+        "Not implemented yet".into()
     }
 
     /// For dev/testing purposes only
@@ -425,6 +434,7 @@ impl DaoContract {
     }
 }
 
+#[inline]
 pub fn assert_valid_init_config(config: &ConfigInput) {
     assert!(
         config.council_share.unwrap()
@@ -436,8 +446,15 @@ pub fn assert_valid_init_config(config: &ConfigInput) {
     assert!(config.description.as_ref().unwrap().len() > 0);
 }
 
-impl DaoContract {
+#[inline]
+pub fn assert_valid_founders(founders: &mut Vec<AccountId>) {
+    let founders_len_before_dedup = founders.len();
+    founders.sort();
+    founders.dedup();
+    assert_eq!(founders_len_before_dedup, founders.len());
+}
 
+impl DaoContract {
     pub fn setup_voting_policy(&mut self, configs: Vec<VoteConfigInput>) {
         for p in configs.into_iter() {
             assert!(
@@ -467,22 +484,24 @@ impl DaoContract {
             let release_db;
             match group {
                 TokenGroup::Council => {
-
                     release_db = if release_model == ReleaseModel::None {
-                        let total = (config.council_share as u64 * self.ft_total_supply as u64 / 100) as u32;
+                        let total = (config.council_share as u64 * self.ft_total_supply as u64
+                            / 100) as u32;
                         ReleaseDb::new(total, total, founders_distribution)
                     } else {
                         ReleaseDb::new(
-                            (config.council_share as u64 * self.ft_total_supply as u64 / 100) as u32,
+                            (config.council_share as u64 * self.ft_total_supply as u64 / 100)
+                                as u32,
                             founders_distribution,
                             founders_distribution,
                         )
                     };
-
                 }
                 TokenGroup::Foundation => {
                     release_db = if release_model == ReleaseModel::None {
-                        let total = (config.foundation_share.unwrap_or_default() as u64 * self.ft_total_supply as u64 / 100) as u32;
+                        let total = (config.foundation_share.unwrap_or_default() as u64
+                            * self.ft_total_supply as u64
+                            / 100) as u32;
                         ReleaseDb::new(total, total, 0)
                     } else {
                         ReleaseDb::new(
@@ -490,12 +509,15 @@ impl DaoContract {
                                 * self.ft_total_supply as u64
                                 / 100) as u32,
                             0,
-                            0)
+                            0,
+                        )
                     };
                 }
                 TokenGroup::Community => {
                     release_db = if release_model == ReleaseModel::None {
-                        let total = (config.community_share.unwrap_or_default() as u64 * self.ft_total_supply as u64 / 100) as u32;
+                        let total = (config.community_share.unwrap_or_default() as u64
+                            * self.ft_total_supply as u64
+                            / 100) as u32;
                         ReleaseDb::new(total, total, 0)
                     } else {
                         ReleaseDb::new(
@@ -503,7 +525,8 @@ impl DaoContract {
                                 * self.ft_total_supply as u64
                                 / 100) as u32,
                             0,
-                            0)
+                            0,
+                        )
                     };
                 }
                 _ => env::panic(b"Cannot set Release model for Public"),
@@ -544,12 +567,32 @@ impl DaoContract {
         );
     }
 
-    fn on_account_closed(&self, account_id: AccountId, balance: Balance) {
-        log!("Closed @{} with {}", account_id, balance);
+    // Assumed user cannot unregister with non-zero amount of FT
+    fn on_account_closed(&mut self, account_id: AccountId, balance: Balance) {
+        self.council.remove(&account_id);
+        self.community.remove(&account_id);
+        self.foundation.remove(&account_id);
+
+        log!(
+            "Closed @{} and all it's FT: {} were transfered back to the contract",
+            account_id,
+            balance
+        );
     }
 
-    fn on_tokens_burned(&self, account_id: AccountId, amount: Balance) {
-        log!("Account @{} burned {}", account_id, amount);
+    //TODO: Tests
+    fn on_tokens_burned(&mut self, account_id: AccountId, amount: Balance) {
+        self.ft.internal_deposit(&env::current_account_id(), amount);
+
+        self.council.remove(&account_id);
+        self.community.remove(&account_id);
+        self.foundation.remove(&account_id);
+
+        log!(
+            "Account @{} deleted and all it's FT: {} were transfered back to the contract",
+            account_id,
+            amount
+        );
     }
 
     /// Validates all actions and tries to execute transaction
@@ -583,6 +626,7 @@ impl DaoContract {
         Ok(())
     }
 
+    #[allow(unused)]
     pub fn validate_tx_before_execution(
         &self,
         tx: &ActionTx,
@@ -630,7 +674,11 @@ impl DaoContract {
                     _ => unimplemented!(),
                 },
                 Action::InvalidateFile { cid } => {}
-                Action::DistributeFT {amount, from_group, accounts} => {
+                Action::DistributeFT {
+                    amount,
+                    from_group,
+                    accounts,
+                } => {
                     let db: ReleaseDb = self.release_db.get(&from_group).unwrap().into();
 
                     if db.unlocked - db.distributed < *amount {
@@ -651,10 +699,8 @@ impl DaoContract {
                 Promise::new(account_id.into()).transfer(*amount_near);
             }
             Action::AddMember { account_id, group } => {
-                let is_user_registered = self.ft.accounts.contains_key(account_id);
-                if !is_user_registered {
+                if !self.ft.accounts.contains_key(account_id) {
                     self.ft.internal_register_account(account_id);
-                    self.registered_accounts_count += 1;
                 }
 
                 match group {
@@ -767,7 +813,11 @@ impl DaoContract {
                         .insert(&cid.clone(), &VFileMetadata::Curr(metadata));
                 }
             }
-            Action::DistributeFT { amount, from_group, accounts } => {
+            Action::DistributeFT {
+                amount,
+                from_group,
+                accounts,
+            } => {
                 let mut db: ReleaseDb = self.release_db.get(&from_group).unwrap().into();
                 let amount_per_account = *amount / accounts.len() as u32;
 
@@ -786,12 +836,13 @@ impl DaoContract {
 
                 self.ft_total_distributed += amount_per_account * accounts.len() as u32;
                 db.distributed += amount_per_account * accounts.len() as u32;
-                self.release_db.insert(from_group,&VReleaseDb::Curr(db));
+                self.release_db.insert(from_group, &VReleaseDb::Curr(db));
             }
             _ => unimplemented!(),
         }
     }
 
+    #[allow(unused)]
     pub fn create_tx(
         &self,
         tx_input: TxInput,
@@ -939,13 +990,21 @@ impl DaoContract {
                     actions.push(Action::InvalidateFile { cid });
                 }
             }
-            TxInput::DistributeFT { total_amount, from_group, accounts } => {
+            TxInput::DistributeFT {
+                total_amount,
+                from_group,
+                accounts,
+            } => {
                 let db: ReleaseDb = self.release_db.get(&from_group).unwrap().into();
 
                 if db.unlocked - db.distributed < total_amount {
                     errors.push("Not enough FT in the group's treasury");
                 } else {
-                    actions.push(Action::DistributeFT{ amount: total_amount, from_group, accounts });
+                    actions.push(Action::DistributeFT {
+                        amount: total_amount,
+                        from_group,
+                        accounts,
+                    });
                 }
             }
             _ => unimplemented!(),
@@ -965,6 +1024,13 @@ impl DaoContract {
 pub fn calc_percent_u128(value: u128, total: u128, decimal_const: u128) -> u8 {
     ((value / decimal_const) as f64 / (total / decimal_const) as f64 * 100.0).round() as u8
 }
+
+/******************************************************************************
+ *
+ * Fungible Token (NEP-141)
+ * https://nomicon.io/Standards/FungibleToken/Core.html
+ *
+ ******************************************************************************/
 
 #[near_bindgen]
 impl FungibleTokenCore for DaoContract {
@@ -995,6 +1061,7 @@ impl FungibleTokenCore for DaoContract {
 
 #[near_bindgen]
 impl FungibleTokenResolver for DaoContract {
+    #[private]
     fn ft_resolve_transfer(
         &mut self,
         sender_id: ValidAccountId,
@@ -1011,6 +1078,12 @@ impl FungibleTokenResolver for DaoContract {
         used_amount.into()
     }
 }
+/******************************************************************************
+ *
+ * Storage Management (NEP-145)
+ * https://nomicon.io/Standards/StorageManagement.html
+ *
+ ******************************************************************************/
 
 #[near_bindgen]
 impl StorageManagement for DaoContract {
@@ -1021,7 +1094,6 @@ impl StorageManagement for DaoContract {
         account_id: Option<ValidAccountId>,
         registration_only: Option<bool>,
     ) -> StorageBalance {
-        self.registered_accounts_count += 1;
         self.ft.storage_deposit(account_id, registration_only)
     }
 
@@ -1035,7 +1107,6 @@ impl StorageManagement for DaoContract {
         #[allow(unused_variables)]
         if let Some((account_id, balance)) = self.ft.internal_storage_unregister(force) {
             self.on_account_closed(account_id, balance);
-            self.registered_accounts_count -= 1;
             true
         } else {
             false
@@ -1055,6 +1126,8 @@ impl StorageManagement for DaoContract {
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn download_new_version() {
+    use env::BLOCKCHAIN_INTERFACE;
+
     env::setup_panic_hook();
     env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
     //assert_eq!(env::predecessor_account_id(), env::current_account_id());
@@ -1087,6 +1160,8 @@ pub extern "C" fn download_new_version() {
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn upgrade_self() {
+    use env::BLOCKCHAIN_INTERFACE;
+
     env::setup_panic_hook();
     env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
     //assert_eq!(env::predecessor_account_id(), env::current_account_id());

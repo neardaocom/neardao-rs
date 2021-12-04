@@ -4,9 +4,8 @@ mod test {
     use std::time::Duration;
     use std::u128;
 
-    use near_contract_standards::fungible_token::metadata::{
-        FungibleTokenMetadata, FT_METADATA_SPEC,
-    };
+    use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FT_METADATA_SPEC};
+
     use near_contract_standards::storage_management::StorageManagement;
     use near_sdk::env::{self, block_timestamp};
     use near_sdk::json_types::{ValidAccountId, U128};
@@ -71,7 +70,11 @@ mod test {
         }
     }
 
-    fn get_default_dao_config(council_share: Option<u8>, foundation_share: Option<u8>, community_share: Option<u8>) -> ConfigInput {
+    fn get_default_dao_config(
+        council_share: Option<u8>,
+        foundation_share: Option<u8>,
+        community_share: Option<u8>,
+    ) -> ConfigInput {
         ConfigInput {
             name: "dao".into(),
             lang: "cs".into(),
@@ -176,6 +179,15 @@ mod test {
             vote_only_once: true,
         });
 
+        vec.push(VoteConfigInput {
+            proposal_kind: ProposalKindIdent::DistributeFT,
+            duration: DURATION_ONE_WEEK,
+            waiting_open_duration: DURATION_WAITING,
+            quorum: 50,
+            approve_threshold: 51,
+            vote_only_once: true,
+        });
+
         vec
     }
 
@@ -217,7 +229,11 @@ mod test {
             TOKEN_TOTAL_SUPPLY,
             INIT_DISTRIBUTION,
             get_default_metadata(),
-            get_default_dao_config(Some(COUNCIL_SHARE), Some(FOUNDATION_SHARE), Some(COMMUNITY_SHARE)),
+            get_default_dao_config(
+                Some(COUNCIL_SHARE),
+                Some(FOUNDATION_SHARE),
+                Some(COMMUNITY_SHARE),
+            ),
             get_default_release_config(),
             get_default_voting_policy(),
             get_default_founders_5(),
@@ -231,14 +247,20 @@ mod test {
         foundation_share: u8,
         community_share: u8,
     ) -> DaoContract {
-        assert!(total_supply >= (founders_init_distribution as u64 * council_share as u64) as u32 / 100);
+        assert!(
+            total_supply >= (founders_init_distribution as u64 * council_share as u64) as u32 / 100
+        );
         assert!(council_share + foundation_share + community_share <= 100);
 
         get_contract(
             total_supply,
             founders_init_distribution,
             get_default_metadata(),
-            get_default_dao_config(Some(council_share), Some(foundation_share), Some(community_share)),
+            get_default_dao_config(
+                Some(council_share),
+                Some(foundation_share),
+                Some(community_share),
+            ),
             get_default_release_config(),
             get_default_voting_policy(),
             get_default_founders_5(),
@@ -319,7 +341,7 @@ mod test {
         let contract = get_default_contract();
         let config = Config::from(contract.config.get().unwrap());
 
-        assert_eq!(contract.registered_accounts_count, 5);
+        assert_eq!(contract.ft.registered_accounts_count, 5);
         assert_eq!(contract.council.len(), 5);
 
         let expected_stats = StatsFT {
@@ -505,106 +527,196 @@ mod test {
         let mut context = get_context();
         testing_env!(context.build());
 
-        let mut contract = get_default_contract_with(TOKEN_TOTAL_SUPPLY, (TOKEN_TOTAL_SUPPLY as u64 * 45 / 100) as u32,  90,5,3);
+        let mut contract = get_default_contract_with(
+            TOKEN_TOTAL_SUPPLY,
+            (TOKEN_TOTAL_SUPPLY as u64 * 45 / 100) as u32,
+            90,
+            5,
+            3,
+        );
 
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 0);
-        
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(900_000_000, 450_000_000, 450_000_000));
-        
+
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(900_000_000, 450_000_000, 450_000_000)
+        );
+
         testing_env!(context
             .block_timestamp((DURATION_2Y_S as u64 * 1 / 100) as u64 * 10u64.pow(9))
             .build());
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 4_500_000);
 
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(900_000_000, 454_500_000, 450_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(900_000_000, 454_500_000, 450_000_000)
+        );
 
         testing_env!(context
             .block_timestamp((DURATION_2Y_S as u64 * 50 / 100) as u64 * 10u64.pow(9))
             .build());
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 220_500_000);
 
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(900_000_000, 675_000_000, 450_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(900_000_000, 675_000_000, 450_000_000)
+        );
 
         testing_env!(context
             .block_timestamp((DURATION_2Y_S as u64 * 99 / 100) as u64 * 10u64.pow(9))
             .build());
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 220_500_000);
 
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(900_000_000, 895_500_000, 450_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(900_000_000, 895_500_000, 450_000_000)
+        );
 
         testing_env!(context
             .block_timestamp((DURATION_2Y_S) as u64 * 10u64.pow(9))
             .build());
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 4_500_000);
 
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(900_000_000, 900_000_000, 450_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(900_000_000, 900_000_000, 450_000_000)
+        );
 
         testing_env!(context
             .block_timestamp((DURATION_2Y_S + 1) as u64 * 10u64.pow(9))
             .build());
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 0);
 
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(900_000_000, 900_000_000, 450_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(900_000_000, 900_000_000, 450_000_000)
+        );
     }
 
     #[test]
-    
+
     fn test_unlocking_with_low_share() {
         let mut context = get_context();
         testing_env!(context.build());
-        
-        let mut contract = get_default_contract_with(TOKEN_TOTAL_SUPPLY, TOKEN_TOTAL_SUPPLY * 1 / 100,  5,10,11);
-        
+
+        let mut contract =
+            get_default_contract_with(TOKEN_TOTAL_SUPPLY, TOKEN_TOTAL_SUPPLY * 1 / 100, 5, 10, 11);
+
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 0);
 
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(50_000_000, 10_000_000, 10_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(50_000_000, 10_000_000, 10_000_000)
+        );
 
         testing_env!(context
             .block_timestamp((DURATION_2Y_S as u64 * 1 / 100) as u64 * 10u64.pow(9))
             .build());
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 400_000);
 
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(50_000_000, 10_400_000, 10_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(50_000_000, 10_400_000, 10_000_000)
+        );
 
         testing_env!(context
             .block_timestamp((DURATION_2Y_S as u64 * 50 / 100) as u64 * 10u64.pow(9))
             .build());
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 19_600_000);
 
-
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(50_000_000, 30_000_000, 10_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(50_000_000, 30_000_000, 10_000_000)
+        );
 
         testing_env!(context
             .block_timestamp((DURATION_2Y_S as u64 * 99 / 100) as u64 * 10u64.pow(9))
             .build());
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 19_600_000);
 
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(50_000_000, 49_600_000, 10_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(50_000_000, 49_600_000, 10_000_000)
+        );
 
         testing_env!(context
             .block_timestamp((DURATION_2Y_S) as u64 * 10u64.pow(9))
             .build());
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 400_000);
 
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(50_000_000, 50_000_000, 10_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(50_000_000, 50_000_000, 10_000_000)
+        );
 
         testing_env!(context
             .block_timestamp((DURATION_2Y_S + 1) as u64 * 10u64.pow(9))
             .build());
         assert_eq!(contract.unlock_tokens(TokenGroup::Council), 0);
 
-        let current_db: ReleaseDb = contract.release_db.get(&TokenGroup::Council).unwrap().into();
-        assert_eq!(current_db, ReleaseDb::new(50_000_000, 50_000_000, 10_000_000));
+        let current_db: ReleaseDb = contract
+            .release_db
+            .get(&TokenGroup::Council)
+            .unwrap()
+            .into();
+        assert_eq!(
+            current_db,
+            ReleaseDb::new(50_000_000, 50_000_000, 10_000_000)
+        );
     }
 }

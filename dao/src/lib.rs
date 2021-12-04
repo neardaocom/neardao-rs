@@ -1,4 +1,8 @@
+#![allow(unreachable_patterns)]
+
 use near_sdk::{env::sha256, CryptoHash};
+
+mod standard_impl;
 
 pub mod core;
 pub mod view;

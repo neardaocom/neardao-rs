@@ -19,3 +19,9 @@ near view $DCID vote_policies ''
 #near view $CID get_tags ''
 near view $CID get_dao_list '{"from_index":0, "limit": 100}'
 near view $DCID proposals '{"from_index":0, "limit": 100}'
+
+##### MIGRATION VIEWS #####
+
+#near view $DCID dao_config ''
+#near view $CID get_stats
+#near view $CID version_hash '{"version":0}'

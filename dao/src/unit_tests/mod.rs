@@ -1,3 +1,5 @@
+#![allow(unused, dead_code)]
+
 mod dao;
 mod release;
 

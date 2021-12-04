@@ -57,6 +57,7 @@ impl ReleaseModel {
 
     /// Calculates amount of tokens to be released when called.
     /// No checks included.
+    #[allow(unused)]
     pub fn release(&self, total: u32, init_distribution: u32, unlocked: u32, current_time: u32) -> u32 {
         match self {
             ReleaseModel::None => 0,

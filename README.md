@@ -1,6 +1,11 @@
 # Near DAO prototype
 
-- version 0.4
+- version 0.4.1
+
+## Compiling
+- via contract-builder
+- requires Docker  
+- uses `build.sh` script
 
 ## Testing
 

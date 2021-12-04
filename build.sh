@@ -5,16 +5,16 @@
 # B) Or with lib name you want to build
 #################
 
-set -e 
+set -xe 
 
-declare -a libs=(dao dao_factory)
+CRATES=(dao dao_factory)
 ABS_BASEDIR=$(dirname $(readlink -f "$0"))
 
 if [ ! -z "$1" -a -d "${ABS_BASEDIR}/${1}" ]; then      # Build required lib
 
     LIB_DIR="${ABS_BASEDIR}/${1}"
     cd $LIB_DIR
-    RUSTFLAGS='-C link-arg=-s' cargo +stable build --target wasm32-unknown-unknown --release
+    RUSTFLAGS='-C link-arg=-s' cargo build --target wasm32-unknown-unknown --release
 
     if [ ! -e "${ABS_BASEDIR}/res" ]; then
         mkdir "${ABS_BASEDIR}/res"
@@ -23,9 +23,9 @@ if [ ! -z "$1" -a -d "${ABS_BASEDIR}/${1}" ]; then      # Build required lib
 else
     echo "BUILD SCRIPT: Building all libs into res dir"
 
-    RUSTFLAGS='-C link-arg=-s' cargo +stable build --all --target wasm32-unknown-unknown --release
+    RUSTFLAGS='-C link-arg=-s' cargo build --all --target wasm32-unknown-unknown --release
 
-    for lib in "${libs[@]}"
+    for lib in "${CRATES[@]}"
     do
     :         
         cp "${ABS_BASEDIR}/target/wasm32-unknown-unknown/release/${lib}.wasm" "${ABS_BASEDIR}/res/"

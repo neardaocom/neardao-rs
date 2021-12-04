@@ -1,19 +1,14 @@
 use std::convert::TryFrom;
 
-use near_sdk::CryptoHash;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{UnorderedMap, UnorderedSet};
-use near_sdk::json_types::{Base58CryptoHash, Base58PublicKey, Base64VecU8, U128, ValidAccountId};
+use near_sdk::collections::{UnorderedMap};
+use near_sdk::json_types::{Base58PublicKey, Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    assert_self, env, ext_contract, log, near_bindgen, serde_json::json, AccountId,
+    env, ext_contract, log, near_bindgen, AccountId,
     BorshStorageKey, PanicOnDefault, Promise,
 };
-use near_sdk::{env::BLOCKCHAIN_INTERFACE, IntoStorageKey, PromiseOrValue, PromiseResult};
-
-use near_contract_standards::fungible_token::metadata::{
-    FungibleTokenMetadata, FungibleTokenMetadataProvider, FT_METADATA_SPEC,
-};
+use near_sdk::{IntoStorageKey};
 
 near_sdk::setup_alloc!();
 
@@ -28,7 +23,6 @@ const ON_CREATE_CALL_GAS: u64 = 10_000_000_000_000;
 
 const DEPOSIT_CREATE: u128 = 5_000_000_000_000_000_000_000_000;
 const MAX_DAO_VERSIONS: u8 = 5;
-const GAS_SEND_BIN_LIMIT: u64 = 100_000_000_000_000;
 
 #[ext_contract(ext_self)]
 pub trait ExtSelf {
@@ -44,6 +38,7 @@ pub trait ExtSelf {
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 pub enum StorageKeys {
     Daos,
     V1,
@@ -83,27 +78,12 @@ impl DaoFactoryContract {
         let mut dao: DaoFactoryContract = env::state_read().expect("Failed to migrate");
 
         if dao_version_update {
-            // Inc version counter and rotate storage slots
-            if dao.latest_dao_version_idx == MAX_DAO_VERSIONS {
-                dao.latest_dao_version_idx = 1;
-            } else {
-                dao.latest_dao_version_idx += 1;
-            }
-            dao.version_count += 1;
+            // Check if we dont upload same version
+            //assert_ne!(dao.version_hash(dao.latest_dao_version_idx).unwrap(), Base64VecU8::from(env::sha256(&NEWEST_DAO_VERSION.to_vec())), "Uploaded existing DAO bin as next version");
 
-            // Store new dao version to storage
-            let key = match dao.latest_dao_version_idx {
-                1 => StorageKeys::V1,
-                2 => StorageKeys::V2,
-                3 => StorageKeys::V3,
-                4 => StorageKeys::V4,
-                5 => StorageKeys::V5,
-                _ => unreachable!(),
-            };
-
+            let key = dao.update_version_and_get_slot();
             env::storage_write(&key.into_storage_key(), NEWEST_DAO_VERSION);
         }
-
         dao
     }
 
@@ -125,10 +105,12 @@ impl DaoFactoryContract {
         }
     }
 
-    pub fn version_hash(self, version: u8) -> Option<Base64VecU8> {
+    /// Returns sha256 of requested dao binary version as base64.
+    /// Argument with value 0 means newest version.
+    pub fn version_hash(&self, version: u8) -> Option<Base64VecU8> {
         
         // Check it was already uploaded or we still keep this version 
-        if version > self.version_count || self.version_count - version > 4 && version != 0 {
+        if version > self.version_count || self.version_count - version >= MAX_DAO_VERSIONS && version != 0 {
             return None;
         }
 
@@ -162,13 +144,13 @@ impl DaoFactoryContract {
     pub fn create(
         &mut self,
         acc_name: AccountId,
-        public_key: Option<Base58PublicKey>, //TODO refactor
+        //public_key: Option<Base58PublicKey>, //TODO remove from interface
         dao_info: DaoInfo,
         args: Base64VecU8,
     ) -> Promise {
         assert!(env::attached_deposit() >= DEPOSIT_CREATE);
         let account_id = format!("{}.{}", acc_name, env::current_account_id());
-        log!("Creating account: {}", account_id);
+        log!("Creating DAO account: {}", account_id);
 
         assert!(
             self.get_dao_info(&account_id).is_none(),
@@ -180,7 +162,8 @@ impl DaoFactoryContract {
             .create_account()
             .deploy_contract(NEWEST_DAO_VERSION.to_vec())
             .transfer(env::attached_deposit())
-            .add_full_access_key(self.key.clone().into());
+            .add_full_access_key(self.key.clone().into()) // Remove in production
+        ;
 
         promise
             .function_call(
@@ -236,12 +219,41 @@ impl DaoFactoryContract {
     }
 }
 
+impl DaoFactoryContract {
+
+    #[inline]
+    pub fn update_version_and_get_slot(&mut self) -> StorageKeys {
+        // Inc version counter and rotate storage slots
+        if self.latest_dao_version_idx == MAX_DAO_VERSIONS {
+            self.latest_dao_version_idx = 1;
+        } else {
+            self.latest_dao_version_idx += 1;
+        }
+        self.version_count += 1;
+
+        // Store new dao version to storage
+        match self.latest_dao_version_idx {
+            1 => StorageKeys::V1,
+            2 => StorageKeys::V2,
+            3 => StorageKeys::V3,
+            4 => StorageKeys::V4,
+            5 => StorageKeys::V5,
+            _ => unreachable!(),
+        }
+    }
+}
+
 /// Sends wasm blob back to caller (dao) based on provided dao version
 /// Dao must implement store_new_version method
 /// Prepaid gas should be 100+ TGas
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn download_dao_bin() {
+
+    use env::BLOCKCHAIN_INTERFACE;
+
+    const GAS_SEND_BIN_LIMIT: u64 = 100_000_000_000_000;
+
     env::setup_panic_hook();
     env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
 
@@ -301,5 +313,35 @@ pub struct FactoryStats {
 
 #[cfg(test)]
 mod tests {
-    //TODO
+    use near_sdk::{test_utils::VMContextBuilder, testing_env, MockedBlockchain};
+
+    use super::*;
+    #[test]
+    pub fn rotate_slots() {
+
+        let context = VMContextBuilder::new();
+        testing_env!(context.build());
+
+        let mut factory = DaoFactoryContract::new(vec![]);
+        
+        assert_eq!(factory.version_count, 1);
+
+        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V2);
+        assert_eq!(factory.version_count, 2);
+
+        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V3);
+        assert_eq!(factory.version_count, 3);
+
+        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V4);
+        assert_eq!(factory.version_count, 4);
+
+        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V5);
+        assert_eq!(factory.version_count, 5);
+
+        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V1);
+        assert_eq!(factory.version_count, 6);
+
+        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V2);
+        assert_eq!(factory.version_count, 7);
+    }
 }
