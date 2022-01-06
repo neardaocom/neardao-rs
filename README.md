@@ -1,15 +1,14 @@
 # Near DAO prototype
 
-- version 0.5.1
+- version 0.5.0
 
 ## Compiling
-- via contract-builder
+- standardized build via contract-builder
 - requires Docker  
-- uses `build.sh` script
 
 ## Testing
 
-Run only simulation tests:  
+(DEPRECATED) Run only simulation tests:  
 `sh run_tests.sh`  
 
 Run all tests:  
