@@ -1,5 +1,7 @@
 #!/bin/bash
 
+##### Removed in v1.0, might be added later again
+
 #source ./near_cli_test/init_factory_and_dao.sh
 
 

@@ -4,7 +4,7 @@ use near_sdk::AccountId;
 use std::collections::HashMap;
 use std::ops::Add;
 
-use crate::CID_MAX_LENGTH;
+use crate::constants::CID_MAX_LENGTH;
 use crate::action::{ActionTx, TxInput};
 use crate::vote_policy::VoteConfig;
 
@@ -39,7 +39,7 @@ pub struct ProposalInput {
 impl ProposalInput {
     /// Checks description's and cid's max lengths
     /// Panics if above limits
-    pub(crate) fn assert_valid(&self) {
+    pub fn assert_valid(&self) {
         if let Some(desc) = self.description.as_ref() {
             assert!(desc.len() > 0 && desc.len() <= PROPOSAL_DESC_MAX_LENGTH);
         }
@@ -57,11 +57,11 @@ pub enum ProposalKindIdent {
     Pay,
     AddMember,
     RemoveMember,
-    RegularPayment,
     GeneralProposal,
     AddDocFile,
     InvalidateFile,
     DistributeFT,
+    RightForActionCall,
 }
 
 impl ProposalKindIdent {
@@ -70,11 +70,11 @@ impl ProposalKindIdent {
             TxInput::Pay { .. } => ProposalKindIdent::Pay,
             TxInput::AddMember { .. } => ProposalKindIdent::AddMember,
             TxInput::RemoveMember { .. } => ProposalKindIdent::RemoveMember,
-            TxInput::RegularPayment { .. } => ProposalKindIdent::RegularPayment,
             TxInput::GeneralProposal { .. } => ProposalKindIdent::GeneralProposal,
             TxInput::AddDocFile { .. } => ProposalKindIdent::AddDocFile,
             TxInput::InvalidateFile { .. } => ProposalKindIdent::InvalidateFile,
             TxInput::DistributeFT { .. } => ProposalKindIdent::DistributeFT,
+            TxInput::RightForActionCall { .. } => ProposalKindIdent::RightForActionCall,
             _ => unimplemented!(),
         }
     }
@@ -90,10 +90,10 @@ pub struct Proposal {
     pub description_cid: Option<String>,
     pub tags: Vec<String>,
     pub status: ProposalStatus,
-    pub votes: HashMap<AccountId, u8>, // account id, vote id
-    pub transactions: ActionTx,        // id of transaction should match vote id above
+    pub votes: HashMap<AccountId, u8>,
+    pub transactions: ActionTx, //TODO stringyfi so we can remove old actions
     pub duration_to: u64,
-    pub waiting_open_duration: u64,
+    pub waiting_open_duration: u64, // TODO remove
     pub quorum: u8,
     pub approve_threshold: u8,
     pub vote_only_once: bool,

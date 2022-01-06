@@ -2,7 +2,7 @@
 
 #source ./near_cli_test/init_factory_and_dao.sh
 
-PUUID=$(near call $DCID add_proposal '{"proposal_input" : {"description": "I want to contribute to your company.", "tags":["test","first","money"], "description_cid": null}, "tx_input": { "AddMember": {"group": "Council", "account_id":"'$CID4'"}}}' --amount $DEPOSIT_ADD_PROPOSAL --gas $TGAS_100 --accountId $CID | tail -n1 | tr -d '[:space:]')
+PUUID=$(near call $DCID add_proposal '{"proposal_input" : {"description": "I want to contribute to your company.", "tags":["test","first","money"], "description_cid": null}, "tx_input": { "AddMember": {"group": "Council", "account_id":"'$CID'"}}}' --amount $DEPOSIT_ADD_PROPOSAL --gas $TGAS_100 --accountId $CID | tail -n1 | tr -d '[:space:]')
 echo "Created proposal UUID: $PUUID"
 
 near call $DCID vote '{"proposal_id":'$PUUID',"vote_kind": 2}' --gas $TGAS_10 --amount $DEPOSIT_VOTE  --accountId $CID1

@@ -8,13 +8,18 @@
 set -xe 
 
 CRATES=(dao dao_factory)
+FEATURES=""
 ABS_BASEDIR=$(dirname $(readlink -f "$0"))
+
+if [[ $1 == "dev" || $2 == "dev" ]]; then
+    FEATURES='--features testnet';
+fi
 
 if [ ! -z "$1" -a -d "${ABS_BASEDIR}/${1}" ]; then      # Build required lib
 
     LIB_DIR="${ABS_BASEDIR}/${1}"
     cd $LIB_DIR
-    RUSTFLAGS='-C link-arg=-s' cargo build --target wasm32-unknown-unknown --release
+    RUSTFLAGS='-C link-arg=-s' cargo build --target wasm32-unknown-unknown $FEATURES --release
 
     if [ ! -e "${ABS_BASEDIR}/res" ]; then
         mkdir "${ABS_BASEDIR}/res"

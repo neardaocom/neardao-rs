@@ -4,12 +4,14 @@ use near_sdk::serde::Serialize;
 use near_sdk::{json_types::U128, near_bindgen, AccountId};
 
 use crate::CID;
-use crate::action::{MemberGroup, TokenGroup};
+use crate::action::{TokenGroup, ActionGroupRight};
 use crate::config::VConfig;
+use crate::constants::{PROPOSAL_KIND_COUNT, VERSION, GAS_FINISH_PROPOSAL, DEPOSIT_ADD_PROPOSAL, DEPOSIT_VOTE, GAS_VOTE, GAS_ADD_PROPOSAL};
 use crate::file::{VFileMetadata};
+use crate::internal::{TimeInterval, Mapper, MapperKind};
 use crate::proposal::{ProposalKindIdent, VProposal};
 use crate::release::{ReleaseDb, ReleaseModel};
-use crate::vote_policy::{self, VoteConfig};
+use crate::vote_policy::{VoteConfig};
 use crate::{core::*};
 
 #[near_bindgen]
@@ -21,12 +23,9 @@ impl DaoContract {
             total_distributed: self.ft_total_distributed,
             council_ft_stats: self.release_db.get(&TokenGroup::Council).unwrap().into(),
             council_release_model: self.release_config.get(&TokenGroup::Council).unwrap().into(),
-            foundation_ft_stats: self.release_db.get(&TokenGroup::Foundation).unwrap().into(),
-            foundation_release_model: self.release_config.get(&TokenGroup::Foundation).unwrap().into(),
-            community_ft_stats: self.release_db.get(&TokenGroup::Community).unwrap().into(),
-            community_release_model: self.release_config.get(&TokenGroup::Community).unwrap().into(),
             public_ft_stats: self.release_db.get(&TokenGroup::Public).unwrap().into(),
             public_release_model: self.release_config.get(&TokenGroup::Public).unwrap().into(),
+            storage_locked_near: U128::from(env::storage_byte_cost() * env::storage_usage() as u128)
         }
     }
 
@@ -40,12 +39,9 @@ impl DaoContract {
         StatsMembers {
             factory_acc: self.factory_acc,
             council: self.council.to_vec(),
-            foundation: self.foundation.to_vec(),
-            community: self.community.to_vec(),
             council_share_percent: config.council_share,
-            foundation_share_percent:config.foundation_share.unwrap_or_default(),
-            community_share_percent: config.community_share.unwrap_or_default(),
             registered_user_count: self.ft.registered_accounts_count,
+            council_rights: self.group_rights.get(&TokenGroup::Council),
         }
     }
 
@@ -88,22 +84,18 @@ impl DaoContract {
             slogan: config.slogan,
             description: config.description,
             council_share: config.council_share,
-            foundation_share: config.foundation_share,
-            community_share: config.community_share,
             vote_spam_threshold: config.vote_spam_threshold,
         }
     }
 
-    pub fn payments(self) -> Vec<RegularPayment> {
-        self.regular_payments.to_vec()
-    }
-
-    pub fn group_members(self, group: MemberGroup) -> Vec<AccountId> {
+    pub fn group_members(self, group: TokenGroup) -> Vec<AccountId> {
         match group {
-            MemberGroup::Council => self.council.to_vec(),
-            MemberGroup::Foundation => self.foundation.to_vec(),
-            MemberGroup::Community => self.community.to_vec(),
-            _ => unimplemented!(),
+            TokenGroup::Council => {
+                self.council.to_vec()
+            },
+            TokenGroup::Public => {
+                unimplemented!()
+            }
         }
     }
 
@@ -126,12 +118,21 @@ impl DaoContract {
         vec.push((ProposalKindIdent::Pay, VoteConfig::from(self.vote_policy_config.get(&ProposalKindIdent::Pay).unwrap())));
         vec.push((ProposalKindIdent::AddMember, VoteConfig::from(self.vote_policy_config.get(&ProposalKindIdent::AddMember).unwrap())));
         vec.push((ProposalKindIdent::RemoveMember, VoteConfig::from(self.vote_policy_config.get(&ProposalKindIdent::RemoveMember).unwrap())));
-        vec.push((ProposalKindIdent::RegularPayment, VoteConfig::from(self.vote_policy_config.get(&ProposalKindIdent::RegularPayment).unwrap())));
         vec.push((ProposalKindIdent::GeneralProposal, VoteConfig::from(self.vote_policy_config.get(&ProposalKindIdent::GeneralProposal).unwrap())));
         vec.push((ProposalKindIdent::AddDocFile, VoteConfig::from(self.vote_policy_config.get(&ProposalKindIdent::AddDocFile).unwrap())));
         vec.push((ProposalKindIdent::InvalidateFile, VoteConfig::from(self.vote_policy_config.get(&ProposalKindIdent::InvalidateFile).unwrap())));
+        vec.push((ProposalKindIdent::DistributeFT, VoteConfig::from(self.vote_policy_config.get(&ProposalKindIdent::DistributeFT).unwrap())));
+        vec.push((ProposalKindIdent::RightForActionCall, VoteConfig::from(self.vote_policy_config.get(&ProposalKindIdent::RightForActionCall).unwrap())));
 
         vec
+    }
+
+    pub fn ref_pools(self) -> Vec<u32> {
+        self.ref_pools.get().unwrap()
+    }
+
+    pub fn skyward_auctions(self) -> Vec<u64> {
+        self.skyward_auctions.get().unwrap()
     }
 }
 #[derive(Serialize)]
@@ -143,12 +144,9 @@ pub struct StatsFT {
     pub total_distributed: u32,
     pub council_ft_stats: ReleaseDb,
     pub council_release_model: ReleaseModel,
-    pub community_ft_stats: ReleaseDb,
-    pub community_release_model: ReleaseModel,
-    pub foundation_ft_stats: ReleaseDb,
-    pub foundation_release_model: ReleaseModel,
     pub public_ft_stats: ReleaseDb,
     pub public_release_model: ReleaseModel,
+    pub storage_locked_near: U128, //TODO move into more appropriate view
 }
 
 #[derive(Serialize)]
@@ -157,12 +155,9 @@ pub struct StatsFT {
 pub struct StatsMembers {
     factory_acc: AccountId,
     council: Vec<AccountId>,
-    foundation: Vec<AccountId>,
-    community: Vec<AccountId>,
     council_share_percent: u8,
-    foundation_share_percent: u8,
-    community_share_percent: u8,
     registered_user_count: u32,
+    council_rights: Option<Vec<(ActionGroupRight, TimeInterval)>>,
 }
 
 #[derive(Serialize)]
@@ -185,8 +180,6 @@ pub struct DaoConfig {
     pub slogan: String,
     pub description: String,
     pub council_share: u8,
-    pub foundation_share: Option<u8>,
-    pub community_share: Option<u8>,
     pub vote_spam_threshold: u8,
 }
 #[derive(Serialize)]

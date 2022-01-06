@@ -1,49 +1,17 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, WrappedDuration, WrappedTimestamp};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 
 use crate::CID;
 use crate::file::{FileType, VFileMetadata};
 
-//TODO: move from action.rs
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug,PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum TokenGroup {
     Council,
-    Foundation,
-    Community,
     Public,
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum MemberGroup {
-    Council,
-    Foundation,
-    Community,
-    Public,
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum PaymentPeriod {
-    Daily,
-    Weekly,
-    Monthly
-}
-
-impl PaymentPeriod {
-    pub fn to_nanos(&self) -> u64 {
-        match self {
-            PaymentPeriod::Daily => 86_400 * 10u64.pow(9),
-            PaymentPeriod::Weekly =>  7 * 86_400 * 10u64.pow(9),
-            PaymentPeriod::Monthly => 4 * 7 * 86_400 * 10u64.pow(9),
-        }
-    }
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Deserialize, Clone)]
@@ -62,13 +30,6 @@ pub enum TxInput {
         account_id: AccountId,
         group: TokenGroup,
     },
-    RegularPayment {
-        account_id: AccountId,
-        amount_near: U128,
-        since: u64,
-        until: u64,
-        period: PaymentPeriod,
-    },
     GeneralProposal {
         title: String,
     },
@@ -85,6 +46,12 @@ pub enum TxInput {
         total_amount: u32,
         from_group: TokenGroup,
         accounts: Vec<AccountId>,
+    },
+    RightForActionCall {
+        to: RightTarget,
+        rights: Vec<ActionGroupRight>,
+        time_from: Option<WrappedTimestamp>,
+        time_to: Option<WrappedTimestamp>
     }
 }
 
@@ -100,11 +67,16 @@ pub struct ActionTx {
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)] //TODO Remove debug in production
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub enum ActionExecutionError {
+pub enum TxValidationErr {
+    NotEnoughGas,
     NotEnoughNears,
     NotEnoughFT,
     InvalidTimeInputs,
     CIDExists,
+    GroupForbidden,
+    UserAlreadyInGroup,
+    UserNotInGroup,
+    Custom(String)
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone)]
@@ -122,13 +94,6 @@ pub enum Action {
     RemoveMember {
         account_id: AccountId,
         group: TokenGroup,
-    },
-    RegularPayment {
-        account_id: AccountId,
-        amount_near: u128,
-        since: u64,
-        until: u64,
-        period: PaymentPeriod,
     },
     GeneralProposal {
         title: String,
@@ -148,5 +113,45 @@ pub enum Action {
         amount: u32,
         from_group: TokenGroup,
         accounts: Vec<AccountId>,
+    },
+    AddRightsForActionGroup {
+        to: RightTarget,
+        rights: Vec<ActionGroupRight>,
+        time_from: u64,
+        time_to: u64,
     }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum RightTarget {
+    Group {
+        value: TokenGroup   
+    },
+    Users {
+        values: Vec<AccountId>
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
+#[serde(crate = "near_sdk::serde")]
+pub enum ActionGroupRight {
+    RefFinance,
+    SkywardFinance
+}
+
+/// ActionGroup structure represents input type for external action calls from privileged user
+/// One ActionGroup will be splitted into 1..N actions
+#[derive(Deserialize, Clone, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, Serialize))]
+#[serde(crate = "near_sdk::serde")]
+pub enum ActionGroupInput {
+    RefRegisterTokens,
+    RefAddPool { fee: Option<u32> },
+    RefAddLiquidity { pool_id: u32, amount_near: U128, amount_ft: U128 },
+    RefWithdrawLiquidity { pool_id: u32, shares: U128, min_ft: Option<U128>, min_near: Option<U128> },
+    RefWithdrawDeposit { token_id: AccountId, amount: U128 },
+    SkyCreateSale { title: String, url: String, amount_ft: U128, out_token_id: AccountId, time_from: WrappedTimestamp, duration: WrappedDuration },
 }

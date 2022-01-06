@@ -1,5 +1,3 @@
-use std::convert::TryFrom;
-
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap};
 use near_sdk::json_types::{Base58PublicKey, Base64VecU8, U128};
@@ -51,7 +49,6 @@ pub enum StorageKeys {
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct DaoFactoryContract {
     pub daos: UnorderedMap<AccountId, DaoInfo>,
-    pub key: Base58PublicKey, //TODO vec<u8>
     pub tags: Vec<String>,
     pub latest_dao_version_idx: u8,
     pub version_count: u8,
@@ -65,7 +62,6 @@ impl DaoFactoryContract {
 
         Self {
             daos: UnorderedMap::new(StorageKeys::Daos),
-            key: Base58PublicKey::try_from(env::signer_account_pk()).unwrap(),
             latest_dao_version_idx: 1,
             version_count: 1,
             tags,
@@ -75,16 +71,16 @@ impl DaoFactoryContract {
     #[private]
     #[init(ignore_state)]
     pub fn migrate(dao_version_update: bool) -> Self {
-        let mut dao: DaoFactoryContract = env::state_read().expect("Failed to migrate");
+        let mut factory: DaoFactoryContract = env::state_read().expect("Failed to migrate");
 
         if dao_version_update {
             // Check if we dont upload same version
             //assert_ne!(dao.version_hash(dao.latest_dao_version_idx).unwrap(), Base64VecU8::from(env::sha256(&NEWEST_DAO_VERSION.to_vec())), "Uploaded existing DAO bin as next version");
 
-            let key = dao.update_version_and_get_slot();
+            let key = factory.update_version_and_get_slot();
             env::storage_write(&key.into_storage_key(), NEWEST_DAO_VERSION);
         }
-        dao
+        factory
     }
 
     pub fn get_dao_list(&self, from_index: u64, limit: u64) -> Vec<(AccountId, DaoInfo)> {
@@ -144,7 +140,7 @@ impl DaoFactoryContract {
     pub fn create(
         &mut self,
         acc_name: AccountId,
-        //public_key: Option<Base58PublicKey>, //TODO remove from interface
+        _public_key: Option<Base58PublicKey>,
         dao_info: DaoInfo,
         args: Base64VecU8,
     ) -> Promise {
@@ -162,7 +158,6 @@ impl DaoFactoryContract {
             .create_account()
             .deploy_contract(NEWEST_DAO_VERSION.to_vec())
             .transfer(env::attached_deposit())
-            .add_full_access_key(self.key.clone().into()) // Remove in production
         ;
 
         promise
@@ -244,7 +239,7 @@ impl DaoFactoryContract {
 }
 
 /// Sends wasm blob back to caller (dao) based on provided dao version
-/// Dao must implement store_new_version method
+/// Dao must implement "store_new_version" method
 /// Prepaid gas should be 100+ TGas
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
@@ -257,11 +252,13 @@ pub extern "C" fn download_dao_bin() {
     env::setup_panic_hook();
     env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
 
-    log!("version: {:?}", *env::input().unwrap().get(0).unwrap());
-
+    let version: u8 = *env::input().unwrap().get(0).unwrap();
     let predecessor = env::predecessor_account_id().into_bytes();
     let method_name = "store_new_version".as_bytes().to_vec();
-    let key = match *env::input().unwrap().get(0).unwrap() as u8 % 5 {
+
+    log!("Got version: {:?}", version);
+
+    let key = match version % 5 {
         0 => StorageKeys::V1,
         1 => StorageKeys::V2,
         2 => StorageKeys::V3,

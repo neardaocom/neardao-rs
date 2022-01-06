@@ -4,7 +4,7 @@ mod test {
     use std::time::Duration;
     use std::u128;
 
-    use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FT_METADATA_SPEC};
+    use crate::standard_impl::ft_metadata::{FT_METADATA_SPEC, FungibleTokenMetadata};
 
     use near_contract_standards::storage_management::StorageManagement;
     use near_sdk::env::{self, block_timestamp};
@@ -13,11 +13,13 @@ mod test {
     use near_sdk::{testing_env, AccountId, MockedBlockchain};
     use near_sdk_sim::to_yocto;
 
-    use crate::action::{TokenGroup, TxInput};
+    use crate::action::{TokenGroup, TxInput, ActionGroupRight, ActionGroupInput};
     use crate::config::{Config, ConfigInput};
     use crate::core::{
-        DaoContract, DEPOSIT_ADD_PROPOSAL, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, GAS_VOTE,
+        DaoContract,
     };
+    use crate::internal::*;
+    use crate::constants::*;
     use crate::proposal::{Proposal, ProposalInput, ProposalKindIdent, ProposalStatus, VoteResult};
     use crate::release::{ReleaseDb, ReleaseModel, ReleaseModelInput};
     use crate::unit_tests::{DURATION_2Y_S, DURATION_3Y_S, DURATION_ONE_WEEK};
@@ -95,20 +97,6 @@ mod test {
                 duration: DURATION_2Y_S,
             },
         ));
-        vec.push((
-            TokenGroup::Foundation,
-            ReleaseModelInput::Linear {
-                from: Some(0),
-                duration: DURATION_3Y_S,
-            },
-        ));
-        vec.push((
-            TokenGroup::Community,
-            ReleaseModelInput::Linear {
-                from: Some(0),
-                duration: DURATION_3Y_S,
-            },
-        ));
 
         vec
     }
@@ -136,15 +124,6 @@ mod test {
 
         vec.push(VoteConfigInput {
             proposal_kind: ProposalKindIdent::Pay,
-            duration: DURATION_ONE_WEEK,
-            waiting_open_duration: DURATION_WAITING,
-            quorum: 50,
-            approve_threshold: 51,
-            vote_only_once: true,
-        });
-
-        vec.push(VoteConfigInput {
-            proposal_kind: ProposalKindIdent::RegularPayment,
             duration: DURATION_ONE_WEEK,
             waiting_open_duration: DURATION_WAITING,
             quorum: 50,
@@ -181,6 +160,15 @@ mod test {
 
         vec.push(VoteConfigInput {
             proposal_kind: ProposalKindIdent::DistributeFT,
+            duration: DURATION_ONE_WEEK,
+            waiting_open_duration: DURATION_WAITING,
+            quorum: 50,
+            approve_threshold: 51,
+            vote_only_once: true,
+        });
+
+        vec.push(VoteConfigInput {
+            proposal_kind: ProposalKindIdent::RightForActionCall,
             duration: DURATION_ONE_WEEK,
             waiting_open_duration: DURATION_WAITING,
             quorum: 50,
@@ -353,18 +341,9 @@ mod test {
                 duration: DURATION_2Y_S,
                 release_end: DURATION_2Y_S,
             },
-            foundation_ft_stats: ReleaseDb::new(150_000_000, 0, 0),
-            foundation_release_model: ReleaseModel::Linear {
-                duration: DURATION_3Y_S,
-                release_end: DURATION_3Y_S,
-            },
-            community_ft_stats: ReleaseDb::new(100_000_000, 0, 0),
-            community_release_model: ReleaseModel::Linear {
-                duration: DURATION_3Y_S,
-                release_end: DURATION_3Y_S,
-            },
             public_ft_stats: ReleaseDb::new(500_000_000, 500_000_000, 0),
             public_release_model: ReleaseModel::None,
+            storage_locked_near: U128::from(env::storage_byte_cost() * env::storage_usage() as u128)
         };
 
         let expected_total_distributed = 200_000_000;
@@ -502,7 +481,7 @@ mod test {
             let expected_percents = $expected_percents;
             assert_eq!(
                 expected_percents,
-                crate::core::calc_percent_u128(vote, total_vote, decimal_const)
+                crate::calc_percent_u128_unchecked(vote, total_vote, decimal_const)
             );
         };
     }
@@ -718,5 +697,56 @@ mod test {
             current_db,
             ReleaseDb::new(50_000_000, 50_000_000, 10_000_000)
         );
+    }
+
+    #[test]
+    fn test_merge_rights_empty () {
+        let time_to = 10;
+        let time_from = 0;
+        let input = vec![ActionGroupRight::RefFinance, ActionGroupRight::SkywardFinance, ActionGroupRight::RefFinance];
+        let mut current: Vec<(ActionGroupRight, TimeInterval)> = vec![];
+
+        crate::internal::merge_rights(&input, &mut current, time_from, time_to);
+
+        let expected = vec![(ActionGroupRight::RefFinance, TimeInterval::new(time_from, time_to)), (ActionGroupRight::SkywardFinance, TimeInterval::new(time_from, time_to))];
+        assert_eq!(current, expected);
+    }
+
+    #[test]
+    fn test_merge_rights_full () {
+        let time_to = 10;
+        let time_from = 0;
+        let input = vec![ActionGroupRight::RefFinance, ActionGroupRight::SkywardFinance, ActionGroupRight::RefFinance];
+        let mut current: Vec<(ActionGroupRight, TimeInterval)> = vec![(ActionGroupRight::RefFinance, TimeInterval::new(time_from + 1, time_to + 2)), (ActionGroupRight::SkywardFinance, TimeInterval::new(time_from + 3, time_to + 4))];
+
+        crate::internal::merge_rights(&input, &mut current, time_from, time_to);
+
+        let expected = vec![(ActionGroupRight::RefFinance, TimeInterval::new(time_from, time_to)), (ActionGroupRight::SkywardFinance, TimeInterval::new(time_from, time_to))];
+        assert_eq!(current, expected);
+    }
+
+    #[test]
+    fn test_merge_rights () {
+        let time_to = 10;
+        let time_from = 0;
+        let input = vec![ActionGroupRight::SkywardFinance, ActionGroupRight::SkywardFinance];
+        let mut current: Vec<(ActionGroupRight, TimeInterval)> = vec![(ActionGroupRight::RefFinance, TimeInterval::new(time_from + 1, time_to + 2))];
+
+        crate::internal::merge_rights(&input, &mut current, time_from, time_to);
+
+        let expected = vec![(ActionGroupRight::RefFinance, TimeInterval::new(time_from + 1, time_to + 2)), (ActionGroupRight::SkywardFinance, TimeInterval::new(time_from, time_to))];
+        assert_eq!(current, expected);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_execute_privileged_action_panics_without_rights () {
+        let mut context = get_context();
+        testing_env!(context.build());
+        let mut contract = get_default_contract();
+        testing_env!(context.predecessor_account_id(ValidAccountId::try_from(FOUNDER_1).unwrap()).build());
+
+        contract.execute_privileged_action(ActionGroupInput::RefRegisterTokens);
+        
     }
 }

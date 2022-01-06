@@ -1,17 +1,14 @@
 #!/bin/bash
 
-
-# Add key to DAO to FS storage
-cp ~/.near-credentials/testnet/$CID.json ~/.near-credentials/testnet/$DCID.json
-sed -i 's/dev-/dao.dev-/g' ~/.near-credentials/testnet/$DCID.json
-
+BEN=petrstudynka.testnet
 
 # remove blobs from contracts
 near call $CID clean_self --accountId $CID
-near call $DCID clean_self --accountId $DCID
+near call $DCID clean_self --accountId $CID1
+near call $DCID delete_self --accountId $CID1
 
 # delete accounts
-near delete $DCID pstu.testnet; near delete $CID1 pstu.testnet; near delete $CID2 pstu.testnet; near delete $CID3 pstu.testnet; near delete $CID4 pstu.testnet; near delete $CID pstu.testnet; 
+near delete $CID1 $BEN; near delete $CID2 $BEN; near delete $CID3 $BEN; near delete $CID4 $BEN; near delete $CID $BEN; 
 
 # delete dev acc credentials so we can generate a new one
 if [ -d ./neardev ]; then

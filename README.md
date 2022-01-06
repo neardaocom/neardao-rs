@@ -1,6 +1,6 @@
 # Near DAO prototype
 
-- version 0.4.1
+- version 0.5.1
 
 ## Compiling
 - via contract-builder

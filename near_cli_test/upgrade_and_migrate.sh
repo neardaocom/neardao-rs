@@ -2,8 +2,6 @@
 
 # source ./near_cli_test/init_factory_and_dao.sh
 
- cp ~/.near-credentials/testnet/$CID.json ~/.near-credentials/testnet/$DCID.json; sed -i 's/dev-/dao.dev-/g' ~/.near-credentials/testnet/$DCID.json
-
 # Build dao first then factory so it has new dao version
 # Manual code changes must be done, otherwise same version will be used, to verify, just inc VERSION const
 sh build.sh dao

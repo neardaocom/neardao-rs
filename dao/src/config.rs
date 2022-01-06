@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 
@@ -15,7 +17,6 @@ impl VConfig {
     }
 }
 
-/// User provided config type
 #[derive(Deserialize)]
 #[cfg_attr(
     not(target_arch = "wasm32"),
@@ -43,7 +44,7 @@ pub struct Config {
     pub foundation_share: Option<u8>,
     pub community_share: Option<u8>,
     pub description: String,
-    pub vote_spam_threshold: u8, //how many percent of total tokens voters needed for proposal to go to spam, relative to voted token weight amount
+    pub vote_spam_threshold: u8,
 }
 
 impl From<VConfig> for Config {
