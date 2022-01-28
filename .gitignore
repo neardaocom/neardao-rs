@@ -7,3 +7,4 @@ neardev/
 Cargo.lock
 .vscode
 notes.md
+.DS_Store

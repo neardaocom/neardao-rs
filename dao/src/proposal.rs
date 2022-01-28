@@ -6,7 +6,7 @@ use std::ops::Add;
 
 use crate::constants::CID_MAX_LENGTH;
 use crate::action::{ActionTx, TxInput};
-use crate::vote_policy::VoteConfig;
+use crate::workflow::WorkflowInstance;
 
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 
@@ -15,7 +15,7 @@ pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 #[serde(crate = "near_sdk::serde")]
 pub enum VProposal {
     //Prev(ProposalOld)
-    Curr(Proposal),
+    Curr(NewProposal),
 }
 
 impl VProposal {
@@ -89,14 +89,14 @@ pub struct Proposal {
     pub description: Option<String>,
     pub description_cid: Option<String>,
     pub tags: Vec<String>,
-    pub status: ProposalStatus,
+    pub status: ProposalState,
     pub votes: HashMap<AccountId, u8>,
     pub transactions: ActionTx, //TODO stringyfi so we can remove old actions
-    pub duration_to: u64,
-    pub waiting_open_duration: u64, // TODO remove
-    pub quorum: u8,
-    pub approve_threshold: u8,
-    pub vote_only_once: bool,
+    //pub duration_to: u64,
+    //pub waiting_open_duration: u64, // TODO remove
+    //pub quorum: u8,
+    //pub approve_threshold: u8,
+    //pub vote_only_once: bool,
 }
 
 impl Proposal {}
@@ -107,7 +107,7 @@ impl Proposal {
         proposer: AccountId,
         input: ProposalInput,
         tx: ActionTx,
-        vote_policy: VoteConfig,
+        //vote_policy: VoteConfig,
         current_time: u64,
     ) -> Self {
         Proposal {
@@ -116,19 +116,19 @@ impl Proposal {
             description: input.description,
             description_cid: input.description_cid,
             tags: input.tags,
-            status: ProposalStatus::InProgress,
+            status: ProposalState::InProgress,
             votes: HashMap::new(),
             transactions: tx,
-            duration_to: vote_policy.duration.add(current_time),
-            waiting_open_duration: vote_policy.waiting_open_duration,
-            quorum: vote_policy.quorum,
-            approve_threshold: vote_policy.approve_threshold,
-            vote_only_once: vote_policy.vote_only_once,
+            //duration_to: vote_policy.duration.add(current_time),
+            //waiting_open_duration: vote_policy.waiting_open_duration,
+            //quorum: vote_policy.quorum,
+            //approve_threshold: vote_policy.approve_threshold,
+            //vote_only_once: vote_policy.vote_only_once,
         }
     }
 }
 
-impl From<VProposal> for Proposal {
+impl From<VProposal> for NewProposal {
     fn from(fm: VProposal) -> Self {
         match fm {
             VProposal::Curr(p) => p,
@@ -140,7 +140,7 @@ impl From<VProposal> for Proposal {
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
-pub enum ProposalStatus {
+pub enum ProposalState {
     InProgress,
     Invalid, // Not enough voters/tokens when time expired or could not apply tx
     Spam,
@@ -156,4 +156,16 @@ pub enum VoteResult {
     AlreadyVoted,
     InvalidVote,
     VoteEnded,
+}
+
+// ---------------- NEW ----------------
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct NewProposal {
+    pub created: u64,
+    pub votes: HashMap<AccountId, u8>,
+    pub state: ProposalState,
+    pub workflow: WorkflowInstance,
 }

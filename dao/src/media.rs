@@ -6,7 +6,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 #[serde(crate = "near_sdk::serde")]
 pub enum VFileMetadata {
     //Prev (FileMetadata),
-    Curr (FileMetadata),
+    Curr(FileMetadata),
 }
 
 impl VFileMetadata {
@@ -19,21 +19,18 @@ impl VFileMetadata {
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct FileMetadata 
-{
+pub struct FileMetadata {
     pub name: String,
-    pub description: String,
     pub tags: Vec<u8>,
     pub category: u8,
-    pub ext: String,
-    pub v: String,
+    pub version: String,
     pub valid: bool,
 }
 
 impl From<VFileMetadata> for FileMetadata {
     fn from(fm: VFileMetadata) -> Self {
         match fm {
-            VFileMetadata::Curr(v) => v
+            VFileMetadata::Curr(v) => v,
         }
     }
 }
@@ -43,4 +40,38 @@ impl From<VFileMetadata> for FileMetadata {
 #[serde(crate = "near_sdk::serde")]
 pub enum FileType {
     Doc,
+}
+
+
+// ------------- NEW
+
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum MediaType {
+    Link(String),
+    CID(CIDInfo),
+}
+
+// TODO VCIDInfo ??
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct CIDInfo {
+    pub ipfs: String,
+    pub cid: String,
+    pub mimetype: String,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct Media {
+    pub name: String,
+    pub category: String,
+    pub media_type: MediaType,
+    pub tags: Vec<usize>,
+    pub version: String,
+    pub valid: bool
 }

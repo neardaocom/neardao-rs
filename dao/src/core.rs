@@ -1,36 +1,42 @@
 use std::u128;
 
 use crate::constants::{
-    DEPOSIT_ADD_PROPOSAL, DEPOSIT_VOTE, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, GAS_VOTE,
+    DEPOSIT_ADD_PROPOSAL, DEPOSIT_VOTE, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, GROUP_PREFIX,
     MAX_FT_TOTAL_SUPPLY, METADATA_MAX_DECIMALS, PROPOSAL_KIND_COUNT,
 };
-use crate::internal::{
-    assert_valid_founders, assert_valid_init_config, Context, Mapper, MapperKind, TimeInterval,
+use crate::internal::{assert_valid_founders, Context, Mapper, MapperKind, TimeInterval};
+use crate::settings::{
+    assert_valid_dao_settings, assert_valid_vote_settings, DaoSettings, VDaoSettings,
+    VVoteSettings, VoteSettings,
 };
-use crate::standard_impl::ft::{FungibleToken};
+use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
+use crate::tags::{TagInput, Tags};
+use crate::workflow::{WorkflowInstance, WorkflowTemplate};
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
 use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
-use near_contract_standards::storage_management::{StorageManagement, StorageBalance, StorageBalanceBounds};
+use near_contract_standards::storage_management::{
+    StorageBalance, StorageBalanceBounds, StorageManagement,
+};
+
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{ValidAccountId, U128};
+use near_sdk::serde_json::Value;
+use near_sdk::Promise;
 use near_sdk::{
-    env::{self},
-    log, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault, Promise,
-    PromiseOrValue,
+    env, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault, PromiseOrValue,
 };
 
-use crate::action::*;
-use crate::file::VFileMetadata;
-use crate::proposal::*;
+use crate::group::{Group, GroupInput};
+
+use crate::media::{Media, VFileMetadata};
 use crate::release::{ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel};
-use crate::vote_policy::{VVoteConfig, VoteConfig, VoteConfigInput};
-use crate::{calc_percent_u128_unchecked, config::*};
+use crate::{action::*, GroupId, GroupName};
+use crate::{calc_percent_u128_unchecked, FnCallId};
+use crate::{proposal::*, StorageKey, TagCategory};
 
 near_sdk::setup_alloc!();
-
-
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
@@ -39,6 +45,13 @@ pub enum StorageKeys {
     Proposals,
     ProposalConfig,
     Council,
+    Tags,
+    Media,
+    FunctionCalls,
+    FunctionCallMetadata,
+    Storage,
+    DaoSettings,
+    VoteSettings,
     VConfig,
     ReleaseConfig,
     ReleaseDb,
@@ -51,8 +64,121 @@ pub enum StorageKeys {
     StorageDeposit,
     RefPools,
     SkywardAuctions,
+    Groups,
+    Rights,
+    FunctionCallWhitelist,
+    WfTemplate,
+    WfInstance,
 }
 
+// ------  NEW smartcontract
+#[near_bindgen]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
+pub struct NewDaoContract {
+    pub deposit_min_vote: u128,
+    pub deposit_min_add_proposal: u128,
+    pub ft_total_supply: u32,
+    pub ft_total_locked: u32,
+    pub ft_total_distributed: u32,
+    pub decimal_const: u128,
+    pub ft: FungibleToken,
+    pub ft_metadata: LazyOption<FungibleTokenMetadata>,
+    pub group_last_id: GroupId,
+    pub groups: UnorderedMap<GroupId, Group>, //TODO use name as key??
+    pub settings: LazyOption<VDaoSettings>,
+    pub vote_settings: LazyOption<Vec<VVoteSettings>>,
+    pub proposal_count: u32,
+    pub proposals: UnorderedMap<u32, VProposal>,
+    pub storage: UnorderedMap<StorageKey, String>, // TODO
+    pub tags: UnorderedMap<TagCategory, Tags>,     //Once added cannot be removed or special DT??
+    pub media_count: u32,
+    pub media: LookupMap<u32, Media>, //TODO categorize??
+    pub function_call_metadata: LookupMap<FnCallId, Vec<FnCallMetadata>>,
+    pub function_calls: UnorderedMap<FnCallId, FnCallDefinition>,
+    pub workflow_template: UnorderedMap<u32, WorkflowTemplate>,
+    pub workflow_instance: UnorderedMap<u32, WorkflowInstance>,
+}
+
+#[near_bindgen]
+impl NewDaoContract {
+    #[init]
+    pub fn new(
+        deposit_min_vote: U128,
+        deposit_min_add_proposal: U128,
+        total_supply: u32,
+        ft_metadata: FungibleTokenMetadata,
+        settings: DaoSettings,
+        vote_settings: Vec<VoteSettings>,
+        groups: Vec<GroupInput>,
+        media: Vec<Media>,
+        tags: Vec<TagInput>,
+        function_calls: Vec<FnCallDefinition>,
+        function_call_metadata: Vec<Vec<FnCallMetadata>>,
+        workflow_templates: Vec<WorkflowTemplate>,
+    ) -> Self {
+        assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
+        assert_valid_dao_settings(&settings);
+        assert_valid_vote_settings(&vote_settings);
+
+        let mut contract = NewDaoContract {
+            deposit_min_vote: deposit_min_vote.0,
+            deposit_min_add_proposal: deposit_min_add_proposal.0,
+            ft_total_supply: total_supply,
+            ft_total_locked: 0,
+            ft_total_distributed: 0,
+            decimal_const: 10u128.pow(ft_metadata.decimals as u32),
+            ft: FungibleToken::new(StorageKeys::FT),
+            ft_metadata: LazyOption::new(StorageKeys::FTMetadata, Some(&ft_metadata)),
+            settings: LazyOption::new(StorageKeys::DaoSettings, None),
+            vote_settings: LazyOption::new(StorageKeys::VoteSettings, None),
+            group_last_id: 0,
+            groups: UnorderedMap::new(StorageKeys::Groups),
+            proposal_count: 0,
+            proposals: UnorderedMap::new(StorageKeys::Proposals),
+            storage: UnorderedMap::new(StorageKeys::Storage),
+            tags: UnorderedMap::new(StorageKeys::Tags),
+            media_count: 0,
+            media: LookupMap::new(StorageKeys::Media),
+            function_call_metadata: LookupMap::new(StorageKeys::FunctionCallMetadata),
+            function_calls: UnorderedMap::new(StorageKeys::FunctionCalls),
+            workflow_template: UnorderedMap::new(StorageKeys::WfTemplate),
+            workflow_instance: UnorderedMap::new(StorageKeys::WfInstance),
+        };
+
+        //register self and mint all FT
+        let contract_acc = env::current_account_id();
+        contract.ft.internal_register_account(&contract_acc);
+        contract.ft.internal_deposit(
+            &contract_acc,
+            contract.ft_total_supply as u128 * contract.decimal_const,
+        );
+
+        contract.init_dao_settings(settings);
+        contract.init_vote_settings(vote_settings);
+        contract.init_tags(tags);
+        contract.init_groups(groups);
+        contract.init_media(media);
+        contract.init_function_calls(function_calls, function_call_metadata);
+        contract.init_workflows(workflow_templates);
+
+        contract
+    }
+
+    /// For dev/testing purposes only
+    #[cfg(feature = "testnet")]
+    pub fn clean_self(&mut self) {
+        env::storage_remove(&StorageKeys::NewVersionCode.into_storage_key());
+    }
+
+    /// For dev/testing purposes only
+    #[cfg(feature = "testnet")]
+    pub fn delete_self(self) -> Promise {
+        let settings: DaoSettings = self.settings.get().unwrap().into();
+        Promise::new(env::current_account_id()).delete_account(settings.dao_admin_account_id)
+    }
+}
+
+/*
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct DaoContract {
@@ -68,7 +194,7 @@ pub struct DaoContract {
     pub ft_metadata: LazyOption<FungibleTokenMetadata>,
     pub ft: FungibleToken,
     pub proposals: UnorderedMap<u32, VProposal>,
-    pub release_config: LookupMap<TokenGroup, VReleaseModel>,
+    pub release_config: LookupMap<TokenGroup, VReleaseModel>, //TODO merge with release_db
     pub release_db: LookupMap<TokenGroup, VReleaseDb>,
     pub vote_policy_config: LookupMap<ProposalKindIdent, VVoteConfig>,
     pub doc_metadata: UnorderedMap<String, VFileMetadata>,
@@ -76,8 +202,14 @@ pub struct DaoContract {
     pub storage_deposit: UnorderedSet<AccountId>,
     pub ref_pools: LazyOption<Vec<u32>>,
     pub skyward_auctions: LazyOption<Vec<u64>>,
-}
 
+    pub groups: UnorderedMap<GroupName, Group>, //TODO iterate over LookupMap with use of last_group_key ?
+    pub rights: LookupMap<AccountId, Vec<ExecutionRight>>,
+    pub function_call_whitelist: LazyOption<Vec<String>>,
+}
+*/
+
+/*
 #[near_bindgen]
 impl DaoContract {
     #[private]
@@ -165,8 +297,16 @@ impl DaoContract {
             storage_deposit: UnorderedSet::new(StorageKeys::StorageDeposit),
             ref_pools: LazyOption::new(StorageKeys::RefPools, Some(&Vec::new())),
             skyward_auctions: LazyOption::new(StorageKeys::SkywardAuctions, Some(&Vec::new())),
+
+            groups: UnorderedMap::new(StorageKeys::Groups),
+            rights: LookupMap::new(StorageKeys::Rights),
+            function_call_whitelist: LazyOption::new(
+                StorageKeys::FunctionCallWhitelist,
+                Some(&Vec::new()),
+            ),
         };
 
+        //contract.setup_groups(),
         contract.setup_voting_policy(vote_policy_configs);
         contract.setup_release_models(release_config, founders_init_distribution);
         contract.init_mappers();
@@ -250,7 +390,7 @@ impl DaoContract {
         let mut proposal =
             Proposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
 
-        if proposal.status != ProposalStatus::InProgress
+        if proposal.status != ProposalState::InProgress
             || proposal.duration_to <= env::block_timestamp()
         {
             return VoteResult::VoteEnded;
@@ -271,13 +411,13 @@ impl DaoContract {
         VoteResult::Ok
     }
 
-    pub fn finish_proposal(&mut self, proposal_id: u32) -> ProposalStatus {
+    pub fn finish_proposal(&mut self, proposal_id: u32) -> ProposalState {
         assert!(env::prepaid_gas() >= GAS_FINISH_PROPOSAL);
         let mut proposal =
             Proposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
 
         let new_status = match &proposal.status {
-            &ProposalStatus::InProgress => {
+            &ProposalState::InProgress => {
                 if env::block_timestamp() < proposal.duration_to {
                     None
                 } else {
@@ -296,7 +436,7 @@ impl DaoContract {
                     if calc_percent_u128_unchecked(votes[0], total_voted_amount, self.decimal_const)
                         >= config.vote_spam_threshold
                     {
-                        Some(ProposalStatus::Spam)
+                        Some(ProposalState::Spam)
                     } else if calc_percent_u128_unchecked(
                         total_voted_amount,
                         self.ft_total_distributed as u128 * self.decimal_const,
@@ -304,7 +444,7 @@ impl DaoContract {
                     ) < proposal.quorum
                     {
                         // not enough quorum
-                        Some(ProposalStatus::Invalid)
+                        Some(ProposalState::Invalid)
                     } else if calc_percent_u128_unchecked(
                         votes[1],
                         total_voted_amount,
@@ -312,7 +452,7 @@ impl DaoContract {
                     ) < proposal.approve_threshold
                     {
                         // not enough voters to accept
-                        Some(ProposalStatus::Rejected)
+                        Some(ProposalState::Rejected)
                     } else {
                         // proposal is accepted, try to execute transaction
                         if let Err(errors) = self.execute_tx(
@@ -325,9 +465,9 @@ impl DaoContract {
                             },
                         ) {
                             log!("errors: {:?}", errors);
-                            Some(ProposalStatus::Invalid)
+                            Some(ProposalState::Invalid)
                         } else {
-                            Some(ProposalStatus::Accepted)
+                            Some(ProposalState::Accepted)
                         }
                     }
                 }
@@ -408,6 +548,55 @@ impl DaoContract {
         self.execute_privileged_action_group_call(action)
     }
 
+    pub fn execute_action(&mut self, action: Action) -> PromiseOrValue<Result<(), String>> {
+        unimplemented!();
+        //PromiseOrValue::Value(ActionResult::Success)
+    }
+
+    pub fn add_group(&mut self, group_input: GroupInput) {
+        assert!(self.groups.get(&group_input.name).is_none());
+        let hash = env::sha256(group_input.name.as_bytes());
+        let gkey: StorageKeyWrapper = to_storage_key_raw(GROUP_PREFIX, &hash).into();
+        let rkey: StorageKeyWrapper = to_storage_key_raw(GROUP_RELEASE_MODEL_SUFFIX, &hash).into();
+
+        self.groups.insert(
+            &group_input.name,
+            &Group {
+                members: UnorderedSet::new(gkey),
+                release: LazyOption::new(rkey, None),
+            },
+        );
+    }
+
+    pub fn remove_group(&mut self, group_name: GroupName) {
+        if let Some(mut group) = self.groups.get(&group_name) {
+            group.members.clear();
+            group.release.remove();
+            let hash = env::sha256(group_name.as_bytes());
+            let _ = env::storage_remove(&to_storage_key_raw(GROUP_PREFIX, &hash));
+            let _ = env::storage_remove(&to_storage_key_raw(GROUP_RELEASE_MODEL_SUFFIX, &hash));
+            self.groups.remove(&group_name);
+        }
+    }
+
+    pub fn add_group_member(&mut self, group_name: GroupName, account_id: AccountId) -> bool {
+        match self.groups.get(&group_name) {
+            Some(mut group) => {
+                group.members.insert(&account_id);
+                self.groups.insert(&group_name, &group);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn remove_group_member(&mut self, group_name: GroupName, account_id: AccountId) {
+        if let Some(mut group) = self.groups.get(&group_name) {
+            group.members.remove(&account_id);
+            self.groups.insert(&group_name, &group);
+        }
+    }
+
     //TODO implement on receiving contract based on wanted functionality
     // sender_id - who sent the tokens
     // env::predeccesor_account_id - token acc that confirms sender_id transfered this amount of FT to this account
@@ -430,6 +619,7 @@ impl DaoContract {
         Promise::new(env::current_account_id()).delete_account(self.factory_acc)
     }
 }
+*/
 
 /******************************************************************************
  *
@@ -439,7 +629,7 @@ impl DaoContract {
  ******************************************************************************/
 
 #[near_bindgen]
-impl FungibleTokenCore for DaoContract {
+impl FungibleTokenCore for NewDaoContract {
     #[payable]
     fn ft_transfer(&mut self, receiver_id: ValidAccountId, amount: U128, memo: Option<String>) {
         self.ft.ft_transfer(receiver_id, amount, memo)
@@ -466,7 +656,7 @@ impl FungibleTokenCore for DaoContract {
 }
 
 #[near_bindgen]
-impl FungibleTokenResolver for DaoContract {
+impl FungibleTokenResolver for NewDaoContract {
     #[private]
     fn ft_resolve_transfer(
         &mut self,
@@ -479,21 +669,21 @@ impl FungibleTokenResolver for DaoContract {
             self.ft
                 .internal_ft_resolve_transfer(&sender_id, receiver_id, amount);
         if burned_amount > 0 {
-            self.on_tokens_burned(sender_id, burned_amount);
+            //self.on_tokens_burned(sender_id, burned_amount);
         }
         used_amount.into()
     }
 }
 
 /******************************************************************************
- * 
+ *
  * Fungible Token Metadata (NEP-148)
  * https://nomicon.io/Standards/FungibleToken/Metadata.html
- * 
+ *
  ******************************************************************************/
 
 #[near_bindgen]
-impl FungibleTokenMetadataProvider for DaoContract {
+impl FungibleTokenMetadataProvider for NewDaoContract {
     fn ft_metadata(&self) -> FungibleTokenMetadata {
         self.ft_metadata.get().unwrap()
     }
@@ -507,7 +697,7 @@ impl FungibleTokenMetadataProvider for DaoContract {
  ******************************************************************************/
 
 #[near_bindgen]
-impl StorageManagement for DaoContract {
+impl StorageManagement for NewDaoContract {
     #[payable]
     fn storage_deposit(
         &mut self,
@@ -526,7 +716,7 @@ impl StorageManagement for DaoContract {
     fn storage_unregister(&mut self, force: Option<bool>) -> bool {
         #[allow(unused_variables)]
         if let Some((account_id, balance)) = self.ft.internal_storage_unregister(force) {
-            self.on_account_closed(account_id, balance);
+            //self.on_account_closed(account_id, balance);
             true
         } else {
             false
@@ -542,6 +732,8 @@ impl StorageManagement for DaoContract {
     }
 }
 
+//TODO: MOVE to action.rs
+
 /// Triggers new version download from factory
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
@@ -553,10 +745,10 @@ pub extern "C" fn download_new_version() {
     env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
 
     // We are not able to access council members any other way so we have deserialize SC
-    let contract: DaoContract = env::state_read().unwrap();
+    let contract: NewDaoContract = env::state_read().unwrap();
 
     // Currently only council member can call this
-    assert!(contract.council.contains(&env::predecessor_account_id()));
+    //assert!(contract.council.contains(&env::predecessor_account_id())); //TODO FIX
 
     let factory_acc = env::storage_read(&StorageKeys::FactoryAcc.into_storage_key()).unwrap();
     let method_name = b"download_dao_bin".to_vec();
@@ -600,16 +792,16 @@ pub extern "C" fn store_new_version() {
 #[no_mangle]
 pub extern "C" fn upgrade_self() {
     use crate::constants::GAS_MIN_UPGRADE_LIMIT;
-    use env::BLOCKCHAIN_INTERFACE;
+    use near_sdk::env::BLOCKCHAIN_INTERFACE;
 
     env::setup_panic_hook();
     env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
 
     // We are not able to access council members any other way so we have deserialize SC
-    let contract: DaoContract = env::state_read().unwrap();
+    let contract: NewDaoContract = env::state_read().unwrap();
 
     // Currently only council member can call this
-    assert!(contract.council.contains(&env::predecessor_account_id()));
+    //assert!(contract.council.contains(&env::predecessor_account_id())); //TODO FIX
 
     let current_acc = env::current_account_id().into_bytes();
     let method_name = "migrate".as_bytes().to_vec();
@@ -647,5 +839,19 @@ pub extern "C" fn upgrade_self() {
                     GAS_MIN_UPGRADE_LIMIT,
                 );
         });
+    }
+}
+
+pub struct StorageKeyWrapper(Vec<u8>);
+
+impl IntoStorageKey for StorageKeyWrapper {
+    fn into_storage_key(self) -> Vec<u8> {
+        self.0
+    }
+}
+
+impl From<Vec<u8>> for StorageKeyWrapper {
+    fn from(bytes: Vec<u8>) -> StorageKeyWrapper {
+        StorageKeyWrapper(bytes)
     }
 }

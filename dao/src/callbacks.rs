@@ -9,6 +9,7 @@ trait ExtSelf {
     fn callback_insert_skyward_auction(&mut self) -> u64;
 }
 
+/*
 #[near_bindgen]
 impl DaoContract {
     #[private]
@@ -49,3 +50,4 @@ impl DaoContract {
         }
     }
 }
+*/

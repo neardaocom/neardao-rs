@@ -2,27 +2,37 @@ use std::convert::TryFrom;
 
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    collections::{LazyOption, UnorderedSet},
     env::{self},
+    json_types::U128,
     log,
     serde::{Deserialize, Serialize},
-    AccountId, Balance, Promise, json_types::U128,
+    AccountId, Balance, IntoStorageKey, Promise,
 };
 
 use crate::{
     action::{
-        Action, ActionGroupInput, ActionGroupRight, ActionTx, RightTarget, TokenGroup, TxInput,
-        TxValidationErr,
+        Action, ActionGroupInput, ActionGroupRight, ActionIdent, ActionTx, FnCallDefinition,
+        FnCallMetadata, RightTarget, TokenGroup, TxInput, TxValidationErr,
     },
-    config::{Config, ConfigInput},
+    append,
+    callbacks::ext_self,
     constants::{
         ACC_REF_FINANCE, ACC_SKYWARD_FINANCE, ACC_WNEAR, DEFAULT_DOC_CAT, DEPOSIT_STANDARD_STORAGE,
+        GROUP_PREFIX, GROUP_RELEASE_PREFIX,
     },
-    core::{DaoContract},
-    file::{FileType, VFileMetadata},
-    release::{ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel},
-    vote_policy::{VVoteConfig, VoteConfig, VoteConfigInput}, callbacks::ext_self,
+    core::{NewDaoContract, StorageKeyWrapper},
+    errors::{ERR_DISTRIBUTION_ACC_EMPTY, ERR_LOCK_AMOUNT_ABOVE},
+    group::{Group, GroupInput},
+    media::{FileType, Media, VFileMetadata},
+    release::{Release, ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel},
+    settings::{DaoSettings, VoteSettings},
+    tags::{TagInput, Tags},
+    workflow::WorkflowTemplate,
+    GroupId, ProposalId,
 };
 
+/*
 impl DaoContract {
     pub fn setup_voting_policy(&mut self, configs: Vec<VoteConfigInput>) {
         for p in configs.into_iter() {
@@ -33,7 +43,7 @@ impl DaoContract {
                         &VVoteConfig::Curr(VoteConfig::try_from(p).unwrap())
                     )
                     .is_none(),
-               "{}",
+                "{}",
                 "Duplicate voting policy"
             );
         }
@@ -509,7 +519,10 @@ impl DaoContract {
         }
     }
 
-    pub fn execute_privileged_action_group_call(&mut self, action_group: ActionGroupInput) -> Promise {
+    pub fn execute_privileged_action_group_call(
+        &mut self,
+        action_group: ActionGroupInput,
+    ) -> Promise {
         match action_group {
             ActionGroupInput::RefRegisterTokens => {
                 let mut promise = Promise::new(ACC_REF_FINANCE.into());
@@ -537,19 +550,25 @@ impl DaoContract {
                     15_000_000_000_000,
                 )
             }
-            ActionGroupInput::RefAddPool { fee} => {
-                Promise::new(ACC_REF_FINANCE.into()).function_call(
-                    b"add_simple_pool".to_vec(),
-                    format!(
-                        "{{\"tokens\":[\"{}\",\"{}\"],\"fee\": {}}}",
-                        env::current_account_id(),
-                        ACC_WNEAR,
-                        fee.unwrap_or(25),
+            ActionGroupInput::RefAddPool { fee } => {
+                Promise::new(ACC_REF_FINANCE.into())
+                    .function_call(
+                        b"add_simple_pool".to_vec(),
+                        format!(
+                            "{{\"tokens\":[\"{}\",\"{}\"],\"fee\": {}}}",
+                            env::current_account_id(),
+                            ACC_WNEAR,
+                            fee.unwrap_or(25),
+                        )
+                        .into_bytes(),
+                        100_000_000_000_000_000_000_000, // 0.1 N
+                        10_000_000_000_000,
                     )
-                    .into_bytes(),
-                    100_000_000_000_000_000_000_000, // 0.1 N
-                    10_000_000_000_000,
-                ).then(ext_self::callback_insert_ref_pool(&env::current_account_id(), 0, 10_000_000_000_000))
+                    .then(ext_self::callback_insert_ref_pool(
+                        &env::current_account_id(),
+                        0,
+                        10_000_000_000_000,
+                    ))
             }
             ActionGroupInput::RefAddLiquidity {
                 pool_id,
@@ -628,20 +647,24 @@ impl DaoContract {
 
                 promise_wrap.then(promise_ref)
             }
-            ActionGroupInput::RefWithdrawLiquidity { pool_id, shares, min_ft, min_near } => {
-                Promise::new(ACC_REF_FINANCE.into()).function_call(
-                    b"remove_liquidity".to_vec(),
-                    format!(
-                        "{{\"pool_id\":{},\"shares\": \"{}\", \"min_amounts\": [\"{}\",\"{}\"]}}",
-                        pool_id, shares.0,
-                        min_ft.unwrap_or(U128::from(1)).0,
-                        min_near.unwrap_or(U128::from(1)).0,
-                    )
-                    .into_bytes(),
-                    1,
-                    50_000_000_000_000,
+            ActionGroupInput::RefWithdrawLiquidity {
+                pool_id,
+                shares,
+                min_ft,
+                min_near,
+            } => Promise::new(ACC_REF_FINANCE.into()).function_call(
+                b"remove_liquidity".to_vec(),
+                format!(
+                    "{{\"pool_id\":{},\"shares\": \"{}\", \"min_amounts\": [\"{}\",\"{}\"]}}",
+                    pool_id,
+                    shares.0,
+                    min_ft.unwrap_or(U128::from(1)).0,
+                    min_near.unwrap_or(U128::from(1)).0,
                 )
-            }
+                .into_bytes(),
+                1,
+                50_000_000_000_000,
+            ),
             ActionGroupInput::RefWithdrawDeposit { token_id, amount } => {
                 Promise::new(ACC_REF_FINANCE.into()).function_call(
                     b"withdraw".to_vec(),
@@ -744,7 +767,9 @@ impl DaoContract {
             .insert(&from_group, &VReleaseDb::Curr(group_stats));
     }
 }
+*/
 
+/*
 #[inline]
 pub fn assert_valid_init_config(config: &ConfigInput) {
     assert!(
@@ -756,6 +781,7 @@ pub fn assert_valid_init_config(config: &ConfigInput) {
     assert!(config.vote_spam_threshold.unwrap_or_default() <= 100);
     assert!(config.description.as_ref().unwrap().len() > 0);
 }
+*/
 
 #[inline]
 pub fn assert_valid_founders(founders: &mut Vec<AccountId>) {
@@ -827,5 +853,134 @@ impl TimeInterval {
     pub fn new(from: u64, to: u64) -> Self {
         assert!(from < to);
         TimeInterval { from, to }
+    }
+}
+
+// ---------- NEW ----------
+
+impl NewDaoContract {
+    #[inline]
+    pub fn init_dao_settings(&mut self, settings: DaoSettings) {
+        self.settings.set(&settings.into());
+    }
+    #[inline]
+    pub fn init_vote_settings(&mut self, settings: Vec<VoteSettings>) {
+        self.vote_settings
+            .set(&settings.into_iter().map(|v| v.into()).collect());
+    }
+
+    #[inline]
+    pub fn init_tags(&mut self, tags: Vec<TagInput>) {
+        for i in tags.into_iter() {
+            let mut tags = Tags::new();
+            tags.insert(i.values);
+            self.tags.insert(&i.category, &tags);
+        }
+    }
+
+    #[inline]
+    pub fn init_groups(&mut self, groups: Vec<GroupInput>) {
+        for g in groups.into_iter() {
+            self.add_group(g);
+        }
+
+        assert!(
+            self.ft_total_supply >= self.ft_total_locked,
+            "{}",
+            ERR_LOCK_AMOUNT_ABOVE
+        );
+    }
+
+    #[inline]
+    pub fn init_media(&mut self, media: Vec<Media>) {
+        for (i, m) in media.iter().enumerate() {
+            self.media.insert(&(i as u32), m);
+        }
+
+        self.media_count = media.len() as u32;
+    }
+
+    #[inline]
+    pub fn init_function_calls(
+        &mut self,
+        calls: Vec<FnCallDefinition>,
+        metadata: Vec<Vec<FnCallMetadata>>,
+    ) {
+        for (i, c) in calls.iter().enumerate() {
+            let key = format!("{}_{}", c.name, c.receiver); //TODO replace format! with push_str
+            self.function_calls.insert(&key, &c);
+            self.function_call_metadata.insert(&key, &metadata[i]);
+        }
+    }
+
+    #[inline]
+    pub fn init_workflows(&mut self, workflows: Vec<WorkflowTemplate>) {
+        for _w in workflows.iter() {}
+    }
+
+    // TODO should return option<right> with addiition
+    pub fn check_action_rights(&self, proposal_id: ProposalId) -> bool {
+        return true;
+        unimplemented!();
+    }
+
+    /// Checks if account id can propose this kind of action
+    pub fn check_propose_rights(&self, account_id: &AccountId, action: ActionIdent) -> bool {
+        return true;
+        unimplemented!();
+    }
+
+    pub fn add_group(&mut self, group: GroupInput) {
+        self.ft_total_locked += group.release.amount;
+
+        // Check if we can do init distribution
+        if group.release.init_distribution > 0 {
+            self.distribute_ft(
+                group.release.init_distribution,
+                &group
+                    .members
+                    .iter()
+                    .map(|member| member.account_id.clone())
+                    .collect::<Vec<AccountId>>(), //TODO optimalize
+            );
+        }
+
+        let release: Release = group.release.into();
+
+        // Create StorageKey for nested structure
+        self.group_last_id += 1;
+        let release_key = utils::get_group_key(self.group_last_id);
+
+        self.groups.insert(
+            &self.group_last_id,
+            &Group::new(release_key, group.settings, group.members, release),
+        );
+    }
+
+    /// Internally transfers FT from contract account all accounts equally
+    /// Sets contract's ft_total_distributed property
+    /// Panics if account_ids are empty vector
+    pub fn distribute_ft(&mut self, amount: u32, account_ids: &[AccountId]) {
+        assert!(account_ids.len() > 0, "{}", ERR_DISTRIBUTION_ACC_EMPTY);
+        let amount_per_acc = (amount / account_ids.len() as u32) as u128 * self.decimal_const;
+        self.ft_total_distributed += amount * account_ids.len() as u32;
+        let contract_account_id = env::current_account_id();
+        for acc in account_ids {
+            // If not registered when distributing ft, we register them, assuming payment is solved by other mechanisms
+            if !self.ft.accounts.contains_key(&acc) {
+                self.ft.accounts.insert(&acc, &0);
+            }
+
+            self.ft
+                .internal_transfer(&contract_account_id, acc, amount_per_acc, None);
+        }
+    }
+}
+
+pub mod utils {
+    use crate::{append, constants::GROUP_RELEASE_PREFIX, core::StorageKeyWrapper, GroupId};
+
+    pub fn get_group_key(id: GroupId) -> StorageKeyWrapper {
+        append(GROUP_RELEASE_PREFIX, &id.to_le_bytes()).into()
     }
 }

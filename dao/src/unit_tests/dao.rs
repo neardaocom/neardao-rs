@@ -20,7 +20,7 @@ mod test {
     };
     use crate::internal::*;
     use crate::constants::*;
-    use crate::proposal::{Proposal, ProposalInput, ProposalKindIdent, ProposalStatus, VoteResult};
+    use crate::proposal::{Proposal, ProposalInput, ProposalKindIdent, ProposalState, VoteResult};
     use crate::release::{ReleaseDb, ReleaseModel, ReleaseModelInput};
     use crate::unit_tests::{DURATION_2Y_S, DURATION_3Y_S, DURATION_ONE_WEEK};
     use crate::view::StatsFT;
@@ -289,7 +289,7 @@ mod test {
         account: AccountId,
         proposal_id: u32,
         at_block_timestamp: Option<u64>,
-    ) -> ProposalStatus {
+    ) -> ProposalState {
         testing_env!(context
             .predecessor_account_id(ValidAccountId::try_from(account.to_string()).unwrap())
             .prepaid_gas(GAS_FINISH_PROPOSAL)
@@ -455,7 +455,7 @@ mod test {
                 proposal_id,
                 None
             ),
-            ProposalStatus::InProgress
+            ProposalState::InProgress
         );
         assert_eq!(
             finish_proposal_as_user(
@@ -465,11 +465,11 @@ mod test {
                 proposal_id,
                 Some(DURATION_ONE_WEEK + 1)
             ),
-            ProposalStatus::Spam
+            ProposalState::Spam
         );
         assert_eq!(
             Proposal::from(contract.proposals.get(&proposal_id).unwrap()).status,
-            ProposalStatus::Spam
+            ProposalState::Spam
         );
     }
 
