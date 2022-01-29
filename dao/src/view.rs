@@ -1,3 +1,5 @@
+use crate::storage::DataType;
+use near_sdk::borsh::{self, BorshDeserialize};
 use near_sdk::json_types::Base64VecU8;
 use near_sdk::serde::Serialize;
 use near_sdk::{env, IntoStorageKey};
@@ -5,8 +7,8 @@ use near_sdk::{json_types::U128, near_bindgen, AccountId};
 
 use crate::action::{ActionGroupRight, TokenGroup};
 use crate::constants::{
-    DEPOSIT_ADD_PROPOSAL, DEPOSIT_VOTE, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL,
-    PROPOSAL_KIND_COUNT, VERSION,
+    DEPOSIT_ADD_PROPOSAL, DEPOSIT_VOTE, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, PROPOSAL_KIND_COUNT,
+    VERSION,
 };
 use crate::group::{Group, GroupMember, GroupOutput};
 use crate::internal::{Mapper, MapperKind, TimeInterval};
@@ -14,8 +16,9 @@ use crate::media::VFileMetadata;
 use crate::proposal::{ProposalKindIdent, VProposal};
 use crate::release::{ReleaseDb, ReleaseModel};
 use crate::settings::{DaoSettings, VoteSettings};
+use crate::storage::StorageData;
 use crate::tags::Tags;
-use crate::{core::*, GroupId, GroupName};
+use crate::{core::*, GroupId, GroupName, StorageKey};
 use crate::{TagCategory, CID};
 
 /*
@@ -211,7 +214,12 @@ impl NewDaoContract {
     }
 
     pub fn vote_settings(self) -> Vec<VoteSettings> {
-        self.vote_settings.get().unwrap().into_iter().map(|s| s.into()).collect()
+        self.vote_settings
+            .get()
+            .unwrap()
+            .into_iter()
+            .map(|s| s.into())
+            .collect()
     }
 
     pub fn groups(self) -> Vec<GroupOutput> {
@@ -239,6 +247,61 @@ impl NewDaoContract {
 
     pub fn tags(self, category: TagCategory) -> Option<Tags> {
         self.tags.get(&category)
+    }
+
+    pub fn storage_bucket_all(self, bucket_id: String) -> Option<Vec<StorageData>> {
+        self.storage.get(&bucket_id).map(|bucket| {
+            bucket
+                .get_all_data()
+                .into_iter()
+                .map(|(_, data)| data)
+                .collect()
+        })
+    }
+
+    pub fn storage_data(self, bucket_id: StorageKey, data_id: String) -> Option<StorageData> {
+        self.storage
+            .get(&bucket_id)
+            .map(|bucket| bucket.get_data(&data_id))
+            .flatten()
+    }
+
+    pub fn storage_data_as_vec_u8(self, bucket_id: StorageKey, data_id: String) -> Option<Result<Vec<u8>, String>> {
+        let storage_data = self
+            .storage
+            .get(&bucket_id)
+            .map(|bucket| bucket.get_data(&data_id))
+            .flatten();
+
+        storage_data.map(|s| s.try_into_vec_u8())
+    }
+
+    pub fn storage_data_as_string(
+        self,
+        bucket_id: StorageKey,
+        data_id: String,
+    ) -> Option<Result<String, String>> {
+        let storage_data = self
+            .storage
+            .get(&bucket_id)
+            .map(|bucket| bucket.get_data(&data_id))
+            .flatten();
+
+        storage_data.map(|s| s.try_into_string())
+    }
+
+    pub fn storage_data_as_vec_string(
+        self,
+        bucket_id: StorageKey,
+        data_id: String,
+    ) -> Option<Result<Vec<String>, String>> {
+        let storage_data = self
+            .storage
+            .get(&bucket_id)
+            .map(|bucket| bucket.get_data(&data_id))
+            .flatten();
+
+        storage_data.map(|s| s.try_into_vec_string())
     }
 }
 #[derive(Serialize)]

@@ -978,9 +978,13 @@ impl NewDaoContract {
 }
 
 pub mod utils {
-    use crate::{append, constants::GROUP_RELEASE_PREFIX, core::StorageKeyWrapper, GroupId};
+    use crate::{append, constants::{GROUP_RELEASE_PREFIX, STORAGE_BUCKET_PREFIX}, core::StorageKeyWrapper, GroupId};
 
     pub fn get_group_key(id: GroupId) -> StorageKeyWrapper {
         append(GROUP_RELEASE_PREFIX, &id.to_le_bytes()).into()
+    }
+
+    pub fn get_bucket_id(id: &String) -> StorageKeyWrapper {
+        append(STORAGE_BUCKET_PREFIX, id.as_bytes()).into()
     }
 }

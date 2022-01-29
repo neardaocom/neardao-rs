@@ -6,6 +6,8 @@ pub const ERR_LOCK_AMOUNT_ABOVE: &str = "Total FT locked amount exceeded total F
 pub const ERR_DISTRIBUTION_AMOUNT_ABOVE: &str = "Total FT distribution exceeded total FT supply";
 pub const ERR_DISTRIBUTION_ACC_EMPTY: &str = "No accounts to distribute to";
  
+pub const ERR_STORAGE_INVALID_TYPE: &str = "Invalid storage data type";
+pub const ERR_STORAGE_BUCKET_EXISTS: &str = "Storage bucket already exists";
  
 pub const ERR_PROMISE_INVALID_VALUE: &str = "Promise returned invalid type";
 pub const ERR_PROMISE_FAILED: &str = "Promise failed";

@@ -144,22 +144,25 @@ impl GroupOutput {
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Group {
+    pub key: Vec<u8>,
     pub settings: GroupSettings,
     pub members: GroupMembers,
     pub release: LazyOption<Release>,
 }
 
 impl Group {
-    pub fn new<S: IntoStorageKey>(
-        release_key: S,
+    pub fn new<T: IntoStorageKey>(
+        release_key: T,
         settings: GroupSettings,
         members: Vec<GroupMember>,
         release: Release,
     ) -> Self {
+        let key = release_key.into_storage_key();
         Group {
+            key: key.clone(),
             settings,
             members: members.into(),
-            release: LazyOption::new(release_key.into_storage_key(), Some(&release)),
+            release: LazyOption::new(key, Some(&release)),
         }
     }
 
@@ -173,10 +176,10 @@ impl Group {
         self.members.remove_member(account_id)
     }
 
-    pub fn remove_storage_data<T: IntoStorageKey>(&mut self, release_key: T) -> Release {
+    pub fn remove_storage_data(&mut self) -> Release {
         let release = self.release.get().unwrap();
         self.release.remove();
-        env::storage_remove(&release_key.into_storage_key());
+        env::storage_remove(&self.key);
         release
     }
 

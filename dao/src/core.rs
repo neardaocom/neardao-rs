@@ -11,6 +11,7 @@ use crate::settings::{
 };
 use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
+use crate::storage::{StorageData, StorageBucket};
 use crate::tags::{TagInput, Tags};
 use crate::workflow::{WorkflowInstance, WorkflowTemplate};
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
@@ -89,8 +90,8 @@ pub struct NewDaoContract {
     pub vote_settings: LazyOption<Vec<VVoteSettings>>,
     pub proposal_count: u32,
     pub proposals: UnorderedMap<u32, VProposal>,
-    pub storage: UnorderedMap<StorageKey, String>, // TODO
-    pub tags: UnorderedMap<TagCategory, Tags>,     //Once added cannot be removed or special DT??
+    pub storage: UnorderedMap<StorageKey, StorageBucket>, // TODO
+    pub tags: UnorderedMap<TagCategory, Tags>, //Once added cannot be removed or special DT??
     pub media_count: u32,
     pub media: LookupMap<u32, Media>, //TODO categorize??
     pub function_call_metadata: LookupMap<FnCallId, Vec<FnCallMetadata>>,
@@ -842,7 +843,7 @@ pub extern "C" fn upgrade_self() {
     }
 }
 
-pub struct StorageKeyWrapper(Vec<u8>);
+pub struct StorageKeyWrapper(pub Vec<u8>);
 
 impl IntoStorageKey for StorageKeyWrapper {
     fn into_storage_key(self) -> Vec<u8> {

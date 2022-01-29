@@ -6,12 +6,13 @@ use near_sdk::serde_json::{self, Value};
 use near_sdk::{env, near_bindgen, AccountId, Promise};
 
 use crate::constants::TGAS;
-use crate::errors::{ERR_NO_ACCESS, ERR_UNKNOWN_FNCALL};
+use crate::errors::{ERR_NO_ACCESS, ERR_STORAGE_BUCKET_EXISTS, ERR_UNKNOWN_FNCALL};
 use crate::group::Group;
 use crate::internal::utils;
 use crate::release::ReleaseDb;
 use crate::settings::assert_valid_dao_settings;
 use crate::settings::DaoSettings;
+use crate::storage::{StorageBucket, StorageData};
 use crate::tags::Tags;
 use crate::{
     core::*,
@@ -250,52 +251,27 @@ pub enum ActionIdent {
     WorkflowInstall,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone,Debug)]
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum DataType {
-    String,
-    Bool,
-    U8,
-    U32,
-    U64,
-    U128,
+    String(bool),
+    Bool(bool),
+    U8(bool),
+    U16(bool),
+    U32(bool),
+    U64(bool),
+    U128(bool),
     VecString,
     VecU8,
     VecU16,
     VecU32,
     VecU64,
     VecU128,
-    Object(u8),
+    Object(u8), // 0 value in object means optional object
+    NullableObject(u8),
+    VecObject(u8),
 }
-
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum MyValue {
-    String(String),
-    Bool(bool),
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(U64),
-    U128(U128),
-    VecString(Vec<String>),
-    VecU8(Vec<u8>),
-    VecU16(Vec<u16>),
-    VecU32(Vec<u32>),
-    VecU64(Vec<U64>),
-    VecU128(Vec<U128>),
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct FnCallArguments {
-    arg_names: Vec<String>,
-    arg_values: Vec<MyValue>, // TODO user Vec u8 or Vec string ?? check with serializer
-}
-
 // Represents object schema
 // Coz compiler yelling at me: "error[E0275]: overflow evaluating the requirement" on Borsh we do it this way
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
@@ -307,176 +283,15 @@ pub struct FnCallMetadata {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
 pub struct FnCallDefinition {
     pub name: String,
     pub receiver: AccountId,
 }
 
-// ---------- TEST OBJECTS
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
-pub struct TestObject {
-    name1: String,
-    name2: Vec<String>,
-    name3: Vec<u128>,
-    obj: InnerTestObject,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
-pub struct InnerTestObject {
-    nested_1_arr_8: Vec<u8>,
-    nested_1_obj: Inner2TestObject,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
-pub struct Inner2TestObject {
-    nested_2_arr_u64: Vec<U64>,
-    bool_val: bool,
-}
-
 impl FnCallDefinition {
-    /// Checks if fn metadata and provided fncall arguments match with their data type
-    pub fn validate_input_types(
-        &self,
-        inputs: &FnCallArguments,
-        metadata: &FnCallMetadata,
-    ) -> bool {
-        for i in 0..metadata.arg_names.len() {
-            match (&metadata.arg_types[i], &inputs.arg_values[i]) {
-                (DataType::Bool, MyValue::Bool(_)) => (),
-                (DataType::String, MyValue::String(_)) => (),
-                (DataType::U8, MyValue::U8(_)) => (),
-                (DataType::U32, MyValue::U32(_)) => (),
-                (DataType::U64, MyValue::U64(_)) => (),
-                (DataType::U128, MyValue::U128(_)) => (),
-                (DataType::VecString, MyValue::VecString(_)) => (),
-                (DataType::VecU8, MyValue::VecU8(_)) => (),
-                (DataType::VecU16, MyValue::VecU16(_)) => (),
-                (DataType::VecU32, MyValue::VecU32(_)) => (),
-                (DataType::VecU64, MyValue::VecU64(_)) => (),
-                (DataType::VecU128, MyValue::VecU128(_)) => (),
-                _ => {
-                    return false;
-                }
-            }
-        }
-        true
-    }
-
-    pub fn validate_types_and_parse(
-        &self,
-        arg_names: &Vec<Vec<String>>,
-        arg_values: &Vec<Vec<Value>>,
-        metadata: &Vec<FnCallMetadata>,
-    ) -> bool {
-        //let metadata = metadata.get(self.metadata_id).expect("Undefined metadata");
-        if arg_names.len() != arg_values.len() || arg_values.len() != metadata.len() {
-            return false;
-        }
-
-        self.validate_types_by_metadata(arg_names, arg_values, metadata, 0)
-    }
-
-    pub fn validate_types_by_metadata(
-        &self,
-        arg_names: &Vec<Vec<String>>,
-        arg_values: &Vec<Vec<Value>>,
-        metadata: &Vec<FnCallMetadata>,
-        metadata_id: usize,
-    ) -> bool {
-        if arg_names[metadata_id].len() != arg_values[metadata_id].len()
-            || arg_values[metadata_id].len() != metadata[metadata_id].arg_types.len()
-        {
-            return false;
-        }
-
-        for i in 0..metadata[metadata_id].arg_names.len() {
-            match (
-                &metadata[metadata_id].arg_types[i],
-                &arg_values[metadata_id][i],
-            ) {
-                (DataType::Bool, Value::Bool(_)) => (),
-                (DataType::String, Value::String(_)) => (),
-                (DataType::U8, Value::Number(_)) => (),
-                (DataType::U32, Value::Number(_)) => (),
-                (DataType::U64, Value::String(v)) => {
-                    let _: U64 = serde_json::from_str(v).unwrap();
-                }
-                (DataType::U128, Value::String(v)) => {
-                    let _: U64 = serde_json::from_str(v).unwrap();
-                }
-                (DataType::VecString, Value::Array(v)) => {
-                    for v in v.iter() {
-                        if !v.is_string() {
-                            panic!("Invalid value")
-                        }
-                    }
-                }
-                (DataType::VecU8, Value::Array(v)) => {
-                    for v in v.iter() {
-                        if !v.is_number() {
-                            panic!("Invalid value")
-                        }
-                    }
-                }
-                (DataType::VecU16, Value::Array(v)) => {
-                    for v in v.iter() {
-                        if !v.is_number() {
-                            panic!("Invalid value")
-                        }
-                    }
-                }
-                (DataType::VecU32, Value::Array(v)) => {
-                    for v in v.iter() {
-                        if !v.is_number() {
-                            panic!("Invalid value")
-                        }
-                    }
-                }
-                (DataType::VecU64, Value::Array(v)) => {
-                    for v in v.iter() {
-                        match v {
-                            Value::String(s) => {
-                                let _: u64 = serde_json::from_str(s).expect("Failed to parse U64");
-                            }
-                            _ => panic!("Invalid value"),
-                        }
-                    }
-                }
-                (DataType::VecU128, Value::Array(v)) => {
-                    for v in v.iter() {
-                        match v {
-                            Value::String(s) => {
-                                let _: u128 =
-                                    serde_json::from_str(s).expect("Failed to parse U128");
-                            }
-                            _ => panic!("Invalid value"),
-                        }
-                    }
-                }
-                (DataType::Object(id), _) => {
-                    return self.validate_types_by_metadata(
-                        arg_names,
-                        arg_values,
-                        metadata,
-                        *id as usize,
-                    )
-                }
-                _ => {
-                    panic!("Invalid value")
-                }
-            }
-        }
-        true
-    }
-
     /*
-    Objest always must be on index > 0 ??
-
     Object example:
     { name: test, value: { something1: something }, another_value2: { another:another}}
 
@@ -495,14 +310,12 @@ impl FnCallDefinition {
     pub fn bind_args(
         &self,
         arg_names: &Vec<Vec<String>>,
-        arg_values: &Vec<Vec<Value>>,
+        arg_values: &Vec<Option<Vec<Value>>>,
         metadata: &Vec<FnCallMetadata>,
         metadata_id: usize,
     ) -> String {
-        //TODO empty string, null values ??
-
         // Create raw json object string
-        let mut args = String::with_capacity(256);
+        let mut args = String::with_capacity(64);
         args.push('{');
         for i in 0..metadata[metadata_id].arg_names.len() {
             assert_eq!(
@@ -513,8 +326,6 @@ impl FnCallDefinition {
             args.push_str(arg_names[metadata_id][i].as_str()); //json attribute
             args.push('"');
             args.push(':');
-            log!("id {}", i);
-            log!("metadata type {:?}", metadata[metadata_id].arg_types[i]);
             match &metadata[metadata_id].arg_types[i] {
                 DataType::Object(id) => {
                     args.push_str(
@@ -522,77 +333,93 @@ impl FnCallDefinition {
                             .as_str(),
                     );
                 }
-                _ => {
-                    log!("provided arg name {:?}", arg_names[metadata_id][i]);
-                    log!("provided arg value {:?}", arg_values[metadata_id][i]);
-                    match (
-                        &metadata[metadata_id].arg_types[i],
-                        &arg_values[metadata_id][i],
-                    ) {
-                        (DataType::String, Value::String(v)) => {
-                            args.push('"');
-                            args.push_str(v.as_str());
-                            args.push('"');
+                DataType::NullableObject(id) => {
+                    match &arg_values[*id as usize] {
+                        None => {
+                            args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str());
+                            //TODO optimalize null value
                         }
-                        (DataType::Bool, Value::Bool(v)) => {
+                        _ => args.push_str(
+                            self.bind_args(arg_names, arg_values, metadata, *id as usize)
+                                .as_str(),
+                        ),
+                    }
+                }
+                DataType::String(opt) => match (opt, &arg_values[metadata_id].as_ref().unwrap()[i])
+                {
+                    (true, Value::String(v)) | (false, Value::String(v)) => {
+                        args.push('"');
+                        args.push_str(v.as_str());
+                        args.push('"');
+                    }
+                    (true, Value::Null) => {
+                        args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
+                    }
+                    _ => panic!("Invalid type during parsing"),
+                },
+                DataType::Bool(opt) => match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
+                    (true, Value::Bool(v)) | (false, Value::Bool(v)) => {
+                        args.push_str(serde_json::to_string(v).unwrap().as_str());
+                    }
+                    (true, Value::Null) => {
+                        args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
+                    }
+                    _ => panic!("Invalid type during parsing"),
+                },
+
+                DataType::U8(opt) | DataType::U16(opt) | DataType::U32(opt) => {
+                    match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
+                        (true, Value::Number(v)) | (false, Value::Number(v)) => {
                             args.push_str(serde_json::to_string(v).unwrap().as_str());
                         }
-                        (DataType::Bool, Value::Number(v)) => {
-                            args.push_str(serde_json::to_string(v).unwrap().as_str());
-                        }
-                        (DataType::VecString, Value::Array(v))
-                        | (DataType::VecU8, Value::Array(v))
-                        | (DataType::VecU16, Value::Array(v))
-                        | (DataType::VecU32, Value::Array(v))
-                        | (DataType::VecU64, Value::Array(v))
-                        | (DataType::VecU128, Value::Array(v)) => {
-                            args.push('[');
-                            for v in v.iter() {
-                                args.push_str(serde_json::to_string(v).unwrap().as_str());
-                                args.push(',');
-                            }
-                            args.pop();
-                            args.push(']');
-                            // _ => panic!("Invalid type during parsing");
+                        (true, Value::Null) => {
+                            args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
                         }
                         _ => panic!("Invalid type during parsing"),
                     }
                 }
+                DataType::U64(opt) | DataType::U128(opt) => {
+                    match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
+                        (true, Value::String(v)) | (false, Value::String(v)) => {
+                            args.push('"');
+                            args.push_str(serde_json::to_string(v).unwrap().as_str());
+                            args.push('"');
+                        }
+                        (true, Value::Null) => {
+                            args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
+                        }
+                        _ => panic!("Invalid type during parsing"),
+                    }
+                }
+                // Assuming no API expects something like Option<Vec<_>>, but instead Vec<_> is just empty
+                DataType::VecString
+                | DataType::VecU8
+                | DataType::VecU16
+                | DataType::VecU32
+                | DataType::VecU64
+                | DataType::VecU128 => {
+                    if let Value::Array(v) = &arg_values[metadata_id].as_ref().unwrap()[i] {
+                        args.push('[');
+                        for v in v.iter() {
+                            args.push_str(serde_json::to_string(v).unwrap().as_str());
+                            args.push(',');
+                        }
+                        args.pop();
+                        args.push(']');
+                    } else {
+                        panic!("Invalid type during parsing")
+                    }
+                }
+                _ => panic!("Invalid type during parsing"),
             }
-            //if is not arg_values, then must be object
-
-            //match (&metadata[metadata_id].arg_types[i],&arg_values[metadata_id][i]) {
-            //    (DataType::String,Value::String(v)) => {
-            //        args.push('"');
-            //        args.push_str(v.as_str());
-            //        args.push('"');
-            //    }
-            //    (DataType::Bool, Value::Bool(v)) => {
-            //        args.push_str(serde_json::to_string(v).unwrap().as_str());
-            //    }
-            //    (DataType::Bool, Value::Number(v)) => {
-            //        args.push_str(serde_json::to_string(v).unwrap().as_str());
-            //    }
-            //    (DataType::VecString, Value::Array(v)) | (DataType::VecU8, Value::Array(v)) | (DataType::VecU16, Value::Array(v)) | (DataType::VecU32, Value::Array(v))
-            //    | (DataType::VecU64, Value::Array(v)) | (DataType::VecU128, Value::Array(v))  => {
-            //        for v in v.iter() {
-            //            args.push_str(serde_json::to_string(v).unwrap().as_str());
-            //        }
-            //    }
-            //    (DataType::Object(id), Value::Object(_)) => {
-            //        args.push_str(self.bind_args(arg_names, arg_values, metadata, *id as usize).as_str());
-            //    }
-            //    _ => panic!("Invalid type during parsing"),
-            //}
             args.push(',');
         }
         args.pop();
         args.push('}');
 
-        log!("args: {}", args);
+        //log!("args: {}", args);
 
         args
-        //serde_json::from_str(&args).expect("Failed to serialize JSON object")
     }
 }
 
@@ -624,8 +451,7 @@ impl NewDaoContract {
 
         match self.groups.remove(&id) {
             Some(mut group) => {
-                let group_release_key = utils::get_group_key(id);
-                let release: ReleaseDb = group.remove_storage_data(group_release_key).data.into();
+                let release: ReleaseDb = group.remove_storage_data().data.into();
                 //TODO check: UPDATE DAO release settings
                 self.ft_total_locked -= release.total - release.init_distribution;
             }
@@ -690,10 +516,9 @@ impl NewDaoContract {
             _ => (),
         }
     }
-    //TODO ??
-    pub fn media_remove(&mut self, proposal_id: ProposalId, id: u32) {
+    pub fn media_remove(&mut self, proposal_id: ProposalId, id: u32) -> Option<Media> {
         assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
-        self.media.remove(&id);
+        self.media.remove(&id)
     }
 
     pub fn tag_insert(
@@ -857,6 +682,75 @@ impl NewDaoContract {
         }
     }
 
+    pub fn storage_add_bucket(&mut self, bucket_id: String) {
+        let bucket = StorageBucket::new(utils::get_bucket_id(&bucket_id));
+        assert!(
+            self.storage.insert(&bucket_id, &bucket).is_none(),
+            "{}",
+            ERR_STORAGE_BUCKET_EXISTS
+        );
+    }
+    pub fn storage_remove_bucket(&mut self, bucket_id: String) {
+        match self.storage.remove(&bucket_id) {
+            Some(mut bucket) => {
+                bucket.remove_storage_data();
+            }
+            None => (),
+        }
+    }
+    pub fn storage_add_data_as_string(&mut self, bucket_id: String, data_id: String, data: String) {
+        match self.storage.get(&bucket_id) {
+            Some(mut bucket) => {
+                bucket.add_data(&data_id, &StorageData::from(data));
+                self.storage.insert(&bucket_id, &bucket);
+            }
+            None => (),
+        }
+    }
+
+    pub fn storage_add_data_vec_u8(&mut self, bucket_id: String, data_id: String, data: Vec<u8>) {
+        match self.storage.get(&bucket_id) {
+            Some(mut bucket) => {
+                bucket.add_data(&data_id, &StorageData::from(data));
+                self.storage.insert(&bucket_id, &bucket);
+            }
+            None => (),
+        }
+    }
+
+    pub fn storage_add_data_as_vec_string(
+        &mut self,
+        bucket_id: String,
+        data_id: String,
+        data: Vec<String>,
+    ) {
+        match self.storage.get(&bucket_id) {
+            Some(mut bucket) => {
+                bucket.add_data(&data_id, &StorageData::from(data));
+                self.storage.insert(&bucket_id, &bucket);
+            }
+            None => (),
+        }
+    }
+
+    pub fn storage_remove_data(
+        &mut self,
+        bucket_id: String,
+        data_id: String,
+    ) -> Option<StorageData> {
+        match self.storage.get(&bucket_id) {
+            Some(mut bucket) => {
+                if let Some(data) = bucket.remove_data(&data_id) {
+                    self.storage.insert(&bucket_id, &bucket);
+                    Some(data)
+                } else {
+                    None
+                }
+            }
+            None => None,
+        }
+    }
+
     // TODO own Value for inputs and use serde Value for transforming to JSON ??
     // TODO write tests parsing arguments
     /// Invokes registered function call
@@ -882,38 +776,6 @@ impl NewDaoContract {
 
     } */
 
-    pub fn fn_call_validity_test(
-        &self,
-        fncall_id: String,
-        names: Vec<Vec<String>>,
-        args: Vec<Vec<Value>>,
-    ) -> Promise {
-        let fncall = self.function_calls.get(&fncall_id).unwrap();
-        let metadata = self.function_call_metadata.get(&fncall_id).unwrap();
-
-        //assert!(fncall.validate_types_and_parse(&names, &args, &metadata)); Maybe just throw runtime err during validation ??
-
-        let args = fncall.bind_args(&names, &args, &metadata, 0);
-        Promise::new(fncall.receiver).function_call(
-            fncall.name.into_bytes(),
-            args.into_bytes(),
-            0,
-            12 * TGAS,
-        )
-    }
-
-    pub fn test(
-        &self,
-        name1: String,
-        name2: Vec<String>,
-        name3: Vec<U128>,
-        obj: InnerTestObject,
-    ) -> bool {
-        log!("args: ");
-        dbg!("{}, {}, {},{}", name1, name2, name3, obj);
-        true
-    }
-
     pub fn function_call_add(&mut self, proposal_id: ProposalId, func: FnCallDefinition) {
         assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
         let id = format!("{}_{}", func.receiver, func.name);
@@ -935,4 +797,362 @@ impl NewDaoContract {
     }
 
     // TODO workflow settings??
+}
+
+#[cfg(test)]
+mod test {
+    use near_sdk::{
+        json_types::{U128, U64},
+        serde::{Deserialize, Serialize},
+        serde_json::{self, Number, Value},
+    };
+
+    use crate::action::{DataType, FnCallDefinition};
+
+    use super::FnCallMetadata;
+
+    /* ---------- TEST OBJECTS ---------- */
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[serde(crate = "near_sdk::serde")]
+    pub struct TestObject {
+        name1: String,
+        nullable_obj: Option<InnerNullableTestObj>,
+        name2: Vec<String>,
+        name3: Vec<U128>,
+        obj: InnerTestObject,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[serde(crate = "near_sdk::serde")]
+    pub struct InnerTestObject {
+        nested_1_arr_8: Vec<u8>,
+        nested_1_obj: Inner2TestObject,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[serde(crate = "near_sdk::serde")]
+    pub struct Inner2TestObject {
+        nested_2_arr_u64: Vec<U64>,
+        bool_val: bool,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[serde(crate = "near_sdk::serde")]
+    pub struct InnerNullableTestObj {
+        test: Option<u8>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[serde(crate = "near_sdk::serde")]
+    struct ObjOptCase {
+        optional_str: Option<String>,
+        optional_obj: Option<ObjOptCaseInner>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[serde(crate = "near_sdk::serde")]
+    struct ObjOptCaseInner {
+        optional_str: Option<String>,
+        vec_u8: Vec<u8>,
+    }
+
+    fn get_metadata_case_1() -> Vec<FnCallMetadata> {
+        vec![
+            FnCallMetadata {
+                arg_names: vec!["optional_str".into(), "optional_obj".into()],
+                arg_types: vec![DataType::String(true), DataType::NullableObject(1)],
+            },
+            FnCallMetadata {
+                arg_names: vec!["optional_str".into(), "vec_u8".into()],
+                arg_types: vec![DataType::String(true), DataType::VecU8],
+            },
+        ]
+    }
+
+    fn get_names_case_1() -> Vec<Vec<String>> {
+        vec![
+            vec!["optional_str".into(), "optional_obj".into()],
+            vec!["optional_str".into(), "vec_u8".into()],
+        ]
+    }
+
+    /* ---------- TEST CASES ---------- */
+
+    #[test]
+    fn bind_fn_args_optional_case_1() {
+        let fncall = FnCallDefinition {
+            receiver: "test".into(),
+            name: "test".into(),
+        };
+
+        let metadata = get_metadata_case_1();
+        let names = get_names_case_1();
+
+        let values = vec![
+            Some(vec![Value::String("outer_opt_str".into()), Value::Null]),
+            Some(vec![
+                Value::String("inner_opt_str".into()),
+                Value::Array(vec![
+                    Value::Number(Number::from(1)),
+                    Value::Number(Number::from(2)),
+                    Value::Number(Number::from(3)),
+                    Value::Number(Number::from(4)),
+                    Value::Number(Number::from(5)),
+                ]),
+            ]),
+        ];
+
+        let result_string = fncall.bind_args(&names, &values, &metadata, 0);
+        dbg!(result_string.clone());
+        let result: ObjOptCase = serde_json::from_str(result_string.as_str()).unwrap();
+
+        let expected_result = ObjOptCase {
+            optional_str: Some("outer_opt_str".into()),
+            optional_obj: Some(ObjOptCaseInner {
+                optional_str: Some("inner_opt_str".into()),
+                vec_u8: vec![1, 2, 3, 4, 5],
+            }),
+        };
+
+        assert_eq!(result, expected_result);
+
+        assert_eq!(
+            serde_json::to_string(&result).unwrap(),
+            serde_json::to_string(&expected_result).unwrap(),
+        );
+    }
+
+    #[test]
+    fn bind_fn_args_optional_case_2() {
+        let fncall = FnCallDefinition {
+            receiver: "test".into(),
+            name: "test".into(),
+        };
+
+        let metadata = get_metadata_case_1();
+        let names = get_names_case_1();
+
+        let values = vec![
+            Some(vec![Value::Null, Value::Null]),
+            Some(vec![
+                Value::String("inner_opt_str".into()),
+                Value::Array(vec![
+                    Value::Number(Number::from(1)),
+                    Value::Number(Number::from(2)),
+                    Value::Number(Number::from(3)),
+                    Value::Number(Number::from(4)),
+                    Value::Number(Number::from(5)),
+                ]),
+            ]),
+        ];
+
+        let result_string = fncall.bind_args(&names, &values, &metadata, 0);
+        dbg!(result_string.clone());
+        let result: ObjOptCase = serde_json::from_str(result_string.as_str()).unwrap();
+
+        let expected_result = ObjOptCase {
+            optional_str: None,
+            optional_obj: Some(ObjOptCaseInner {
+                optional_str: Some("inner_opt_str".into()),
+                vec_u8: vec![1, 2, 3, 4, 5],
+            }),
+        };
+
+        assert_eq!(result, expected_result);
+
+        assert_eq!(
+            serde_json::to_string(&result).unwrap(),
+            serde_json::to_string(&expected_result).unwrap(),
+        );
+    }
+
+    #[test]
+    fn bind_fn_args_optional_case_3() {
+        let fncall = FnCallDefinition {
+            receiver: "test".into(),
+            name: "test".into(),
+        };
+
+        let metadata = get_metadata_case_1();
+        let names = get_names_case_1();
+
+        let values = vec![Some(vec![Value::Null, Value::Null]), None];
+
+        let result_string = fncall.bind_args(&names, &values, &metadata, 0);
+        dbg!(result_string.clone());
+        let result: ObjOptCase = serde_json::from_str(result_string.as_str()).unwrap();
+
+        let expected_result = ObjOptCase {
+            optional_str: None,
+            optional_obj: None,
+        };
+
+        assert_eq!(result, expected_result);
+
+        assert_eq!(
+            serde_json::to_string(&result).unwrap(),
+            serde_json::to_string(&expected_result).unwrap(),
+        );
+    }
+
+    #[test]
+    fn bind_fn_args_optional_case_4() {
+        let fncall = FnCallDefinition {
+            receiver: "test".into(),
+            name: "test".into(),
+        };
+
+        let metadata = get_metadata_case_1();
+        let names = get_names_case_1();
+
+        let values = vec![
+            Some(vec![Value::String("outer_opt_str".into()), Value::Null]),
+            Some(vec![
+                Value::Null,
+                Value::Array(vec![
+                    Value::Number(Number::from(1)),
+                    Value::Number(Number::from(2)),
+                    Value::Number(Number::from(3)),
+                    Value::Number(Number::from(4)),
+                    Value::Number(Number::from(5)),
+                ]),
+            ]),
+        ];
+
+        let result_string = fncall.bind_args(&names, &values, &metadata, 0);
+        dbg!(result_string.clone());
+        let result: ObjOptCase = serde_json::from_str(result_string.as_str()).unwrap();
+
+        let expected_result = ObjOptCase {
+            optional_str: Some("outer_opt_str".into()),
+            optional_obj: Some(ObjOptCaseInner {
+                optional_str: None,
+                vec_u8: vec![1, 2, 3, 4, 5],
+            }),
+        };
+
+        assert_eq!(result, expected_result);
+
+        assert_eq!(
+            serde_json::to_string(&result).unwrap(),
+            serde_json::to_string(&expected_result).unwrap(),
+        );
+    }
+
+    #[test]
+    fn bind_fn_args_complex() {
+        let fncall = FnCallDefinition {
+            receiver: "test".into(),
+            name: "test".into(),
+        };
+        let metadata = vec![
+            FnCallMetadata {
+                arg_names: vec![
+                    "name1".into(),
+                    "nullable_obj".into(),
+                    "name2".into(),
+                    "name3".into(),
+                    "obj".into(),
+                ],
+                arg_types: vec![
+                    DataType::String(false),
+                    DataType::NullableObject(1),
+                    DataType::VecString,
+                    DataType::VecU128,
+                    DataType::Object(2),
+                ],
+            },
+            FnCallMetadata {
+                arg_names: vec!["test".into()],
+                arg_types: vec![DataType::U8(true)],
+            },
+            FnCallMetadata {
+                arg_names: vec!["nested_1_arr_8".into(), "nested_1_obj".into()],
+                arg_types: vec![DataType::VecU8, DataType::Object(3)],
+            },
+            FnCallMetadata {
+                arg_names: vec!["nested_2_arr_u64".into(), "bool_val".into()],
+                arg_types: vec![DataType::VecU64, DataType::Bool(false)],
+            },
+        ];
+
+        // Inputs
+        let names: Vec<Vec<String>> = vec![
+            vec![
+                "name1".into(),
+                "nullable_obj".into(),
+                "name2".into(),
+                "name3".into(),
+                "obj".into(),
+            ],
+            vec!["test".into()],
+            vec!["nested_1_arr_8".into(), "nested_1_obj".into()],
+            vec!["nested_2_arr_u64".into(), "bool_val".into()],
+        ];
+
+        let values: Vec<Option<Vec<Value>>> = vec![
+            Some(vec![
+                Value::String("string value".into()),
+                Value::Null,
+                Value::Array(vec![
+                    Value::String("string arr val 1".into()),
+                    Value::String("string arr val 2".into()),
+                    Value::String("string arr val 3".into()),
+                ]),
+                Value::Array(vec![
+                    "100000000000000000000000000".into(),
+                    "200".into(),
+                    "300".into(),
+                ]),
+                Value::Null,
+            ]),
+            Some(vec![Value::Number(Number::from(77))]),
+            Some(vec![Value::Array(vec![
+                Value::Number(Number::from(1)),
+                Value::Number(Number::from(2)),
+                Value::Number(Number::from(3)),
+                Value::Number(Number::from(4)),
+                Value::Number(Number::from(5)),
+                Value::Number(Number::from(255)),
+                Value::Number(Number::from(111)),
+            ])]),
+            Some(vec![
+                Value::Array(vec![
+                    Value::String("9007199254740993".into()),
+                    Value::String("123".into()),
+                    Value::String("456".into()),
+                ]),
+                Value::Bool(true),
+            ]),
+        ];
+
+        // Test
+        let result_string = fncall.bind_args(&names, &values, &metadata, 0);
+        dbg!(result_string.clone());
+        let result: TestObject = serde_json::from_str(result_string.as_str()).unwrap();
+
+        let expected_result = TestObject {
+            name1: "string value".into(),
+            nullable_obj: Some(InnerNullableTestObj { test: Some(77) }),
+            name2: vec![
+                "string arr val 1".into(),
+                "string arr val 2".into(),
+                "string arr val 3".into(),
+            ],
+            name3: vec![U128(100000000000000000000000000), U128(200), U128(300)],
+            obj: InnerTestObject {
+                nested_1_arr_8: vec![1, 2, 3, 4, 5, 255, 111],
+                nested_1_obj: Inner2TestObject {
+                    nested_2_arr_u64: vec![U64(9007199254740993), U64(123), U64(456)],
+                    bool_val: true,
+                },
+            },
+        };
+        assert_eq!(result, expected_result);
+
+        assert_eq!(
+            serde_json::to_string(&result).unwrap(),
+            serde_json::to_string(&expected_result).unwrap(),
+        );
+    }
 }

@@ -3,6 +3,7 @@ pub const VERSION: u8 = 1;
 
 pub const GROUP_PREFIX: &[u8; 3] = b"grp";
 pub const GROUP_RELEASE_PREFIX: &[u8; 3] = b"rml";
+pub const STORAGE_BUCKET_PREFIX: &[u8; 3] = b"bkt";
 
 pub const ACC_REF_FINANCE: &str = "pstu.testnet"; //"ref-finance.near";
 pub const ACC_SKYWARD_FINANCE: &str = "supertest.testnet"; //"skyward.near";

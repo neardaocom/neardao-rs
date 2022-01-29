@@ -5,25 +5,23 @@ use near_sdk::{env::sha256, CryptoHash};
 mod expression;
 mod standard_impl;
 
-//TODO order
-pub mod callbacks;
 pub mod constants;
 pub mod errors;
-pub mod internal;
-pub mod settings;
 pub mod tags;
-pub mod view;
 
-pub mod action;
-//pub mod config;
+pub mod settings;
+pub mod storage;
+pub mod group;
 pub mod media;
 pub mod proposal;
 pub mod release;
-pub mod group;
-//pub mod vote_policy;
+pub mod action;
+pub mod callbacks;
 pub mod workflow;
-pub mod core;
+pub mod internal;
 
+pub mod core;
+pub mod view;
 //mod unit_tests;
 
 pub(crate) type ProposalId = u32;
