@@ -31,16 +31,13 @@ pub enum DataType {
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct StorageBucket {
-    pub key: Vec<u8>,
     pub data: UnorderedMap<String, StorageData>,
 }
 
 impl StorageBucket {
     pub fn new<T: IntoStorageKey>(storage_key: T) -> Self {
-        let key = storage_key.into_storage_key();
         StorageBucket {
-            key: key.clone(),
-            data: UnorderedMap::new(key),
+            data: UnorderedMap::new(storage_key.into_storage_key()),
         }
     }
 
@@ -62,7 +59,6 @@ impl StorageBucket {
 
     pub fn remove_storage_data(&mut self) {
         self.data.clear();
-        env::storage_remove(&self.key);
     }
 }
 

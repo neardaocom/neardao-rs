@@ -1,6 +1,6 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{self, Deserialize, Serialize},
+    serde::{Deserialize, Serialize},
 };
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
@@ -19,10 +19,7 @@ pub enum ReleaseModelInput {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
-#[cfg_attr(
-    not(target_arch = "wasm32"),
-    derive(Clone, Debug, PartialEq)
-)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum VReleaseModel {
     Curr(ReleaseModel),
@@ -76,10 +73,7 @@ impl ReleaseModel {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
-#[cfg_attr(
-    not(target_arch = "wasm32"),
-    derive(Clone, Debug, PartialEq)
-)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum VReleaseDb {
     Curr(ReleaseDb),

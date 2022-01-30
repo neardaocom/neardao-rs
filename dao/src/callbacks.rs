@@ -5,8 +5,8 @@ use crate::errors::*;
 
 #[ext_contract(ext_self)]
 trait ExtSelf {
-    fn callback_insert_ref_pool(&mut self) -> u32;
-    fn callback_insert_skyward_auction(&mut self) -> u64;
+    //fn callback_insert_ref_pool(&mut self) -> u32;
+    //fn callback_insert_skyward_auction(&mut self) -> u64;
 }
 
 /*

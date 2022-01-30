@@ -5,7 +5,7 @@ use near_sdk::{
 };
 
 use crate::{
-    constants::MIN_VOTING_DURATION_SEC, derive_from_versioned, derive_into_versioned, TagId,
+    constants::MIN_VOTING_DURATION_SEC, derive_from_versioned, derive_into_versioned, TagId, workflow::VoteScenario,
 };
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -28,18 +28,13 @@ pub struct DaoSettings {
 derive_from_versioned!(VDaoSettings, DaoSettings);
 derive_into_versioned!(DaoSettings, VDaoSettings);
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum VoteScenario {
-    Democratic,
-    TokenWeighted,
-}
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub enum VVoteSettings {
     Curr(VoteSettings),
 }
+
+//TODO should be on WF settings
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
@@ -50,6 +45,7 @@ pub struct VoteSettings {
     pub quorum: u8,
     pub approve_threshold: u8,
     pub spam_threshold: u8,
+    pub vote_only_once: bool,
 }
 
 derive_from_versioned!(VVoteSettings, VoteSettings);

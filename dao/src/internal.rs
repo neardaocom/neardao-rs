@@ -11,10 +11,7 @@ use near_sdk::{
 };
 
 use crate::{
-    action::{
-        Action, ActionGroupInput, ActionGroupRight, ActionIdent, ActionTx, FnCallDefinition,
-        FnCallMetadata, RightTarget, TokenGroup, TxInput, TxValidationErr,
-    },
+    action::{ActionIdent, FnCallDefinition, FnCallMetadata},
     append,
     callbacks::ext_self,
     constants::{
@@ -22,13 +19,15 @@ use crate::{
         GROUP_PREFIX, GROUP_RELEASE_PREFIX,
     },
     core::{NewDaoContract, StorageKeyWrapper},
-    errors::{ERR_DISTRIBUTION_ACC_EMPTY, ERR_LOCK_AMOUNT_ABOVE},
+    errors::{ERR_DISTRIBUTION_ACC_EMPTY, ERR_GROUP_NOT_FOUND, ERR_LOCK_AMOUNT_ABOVE},
     group::{Group, GroupInput},
-    media::{FileType, Media, VFileMetadata},
+    media::Media,
     release::{Release, ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel},
     settings::{DaoSettings, VoteSettings},
     tags::{TagInput, Tags},
-    workflow::WorkflowTemplate,
+    workflow::{
+        ActivityRight, WorkflowInstance, WorkflowInstanceState, WorkflowSettings, WorkflowTemplate,
+    },
     GroupId, ProposalId,
 };
 
@@ -783,79 +782,6 @@ pub fn assert_valid_init_config(config: &ConfigInput) {
 }
 */
 
-#[inline]
-pub fn assert_valid_founders(founders: &mut Vec<AccountId>) {
-    let founders_len_before_dedup = founders.len();
-    founders.sort();
-    founders.dedup();
-    assert_eq!(founders_len_before_dedup, founders.len());
-}
-
-pub fn merge_rights(
-    input_rights: &Vec<ActionGroupRight>,
-    current_rights: &mut Vec<(ActionGroupRight, TimeInterval)>,
-    time_from: u64,
-    time_to: u64,
-) {
-    for r in input_rights.iter() {
-        let mut found = false;
-
-        // try to find the right and change it with new duration
-        for (gr, t) in current_rights.iter_mut() {
-            if gr == r {
-                *t = TimeInterval::new(time_from, time_to);
-                found = true;
-                break;
-            }
-        }
-
-        // otherwise push it
-        if !found {
-            current_rights.push((r.clone(), TimeInterval::new(time_from, time_to)));
-        }
-    }
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
-#[serde(crate = "near_sdk::serde")]
-pub enum MapperKind {
-    Doc,
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
-#[serde(crate = "near_sdk::serde")]
-pub enum Mapper {
-    Doc {
-        tags: Vec<String>,
-        categories: Vec<String>,
-    },
-}
-
-pub struct Context {
-    pub proposal_id: u32,
-    pub attached_deposit: u128,
-    pub current_balance: u128,
-    pub current_block_timestamp: u64,
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
-#[serde(crate = "near_sdk::serde")]
-pub struct TimeInterval {
-    pub from: u64,
-    pub to: u64,
-}
-
-impl TimeInterval {
-    #[inline]
-    pub fn new(from: u64, to: u64) -> Self {
-        assert!(from < to);
-        TimeInterval { from, to }
-    }
-}
-
 // ---------- NEW ----------
 
 impl NewDaoContract {
@@ -897,7 +823,7 @@ impl NewDaoContract {
             self.media.insert(&(i as u32), m);
         }
 
-        self.media_count = media.len() as u32;
+        self.media_last_id = media.len() as u32;
     }
 
     #[inline]
@@ -914,8 +840,23 @@ impl NewDaoContract {
     }
 
     #[inline]
-    pub fn init_workflows(&mut self, workflows: Vec<WorkflowTemplate>) {
-        for _w in workflows.iter() {}
+    pub fn init_workflows(
+        &mut self,
+        mut workflows: Vec<WorkflowTemplate>,
+        mut workflow_template_settings: Vec<Vec<WorkflowSettings>>,
+    ) {
+        // Each workflow must have at least one setting
+        assert_eq!(workflows.len(), workflow_template_settings.len());
+        for _ in 0..workflows.len() {
+            self.workflow_last_id += 1;
+            self.workflow_template.insert(
+                &self.workflow_last_id,
+                &(
+                    workflows.pop().unwrap(),
+                    workflow_template_settings.pop().unwrap(),
+                ),
+            );
+        }
     }
 
     // TODO should return option<right> with addiition
@@ -924,10 +865,102 @@ impl NewDaoContract {
         unimplemented!();
     }
 
+    // TODO unit tests
+    pub fn check_rights(&self, rights: &Vec<ActivityRight>, account_id: &AccountId) -> bool {
+        if rights.len() == 0 {
+            return true;
+        }
+
+        for right in rights.iter() {
+            match right {
+                ActivityRight::Anyone => {
+                    return true;
+                }
+                ActivityRight::Group(g) => match self.groups.get(g) {
+                    Some(group) => match group.get_member_by_account(account_id) {
+                        Some(_m) => return true,
+                        None => continue,
+                    },
+                    _ => panic!(ERR_GROUP_NOT_FOUND),
+                },
+                ActivityRight::GroupMember(g, name) => {
+                    if name != account_id {
+                        continue;
+                    }
+
+                    match self.groups.get(g) {
+                        Some(group) => match group.get_member_by_account(account_id) {
+                            Some(_m) => return true,
+                            None => continue,
+                        },
+                        _ => panic!(ERR_GROUP_NOT_FOUND),
+                    }
+                }
+                ActivityRight::TokenHolder => match self.ft.accounts.get(account_id) {
+                    Some(ft) if ft > 0 => {
+                        return true;
+                    }
+                    _ => continue,
+                },
+                ActivityRight::GroupRole(g, r) => match self.groups.get(g) {
+                    Some(group) => match group.get_member_by_account(account_id) {
+                        Some(m) => match m.tags.into_iter().any(|t| t == *r) {
+                            true => return true,
+                            false => continue,
+                        },
+                        None => continue,
+                    },
+                    _ => panic!(ERR_GROUP_NOT_FOUND),
+                },
+                ActivityRight::GroupLeader(g) => match self.groups.get(g) {
+                    Some(group) => match group.settings.leader == *account_id {
+                        true => return true,
+                        false => continue,
+                    },
+                    _ => panic!(ERR_GROUP_NOT_FOUND),
+                },
+                ActivityRight::Member => {
+                    match self.ft.accounts.get(account_id) {
+                        Some(ft) if ft > 0 => {
+                            return true;
+                        }
+                        _ => {
+                            // Yep this is expensive...
+                            // Iterate all groups and all members
+                            let groups = self.groups.to_vec();
+
+                            match groups
+                                .into_iter()
+                                .any(|(_, g)| g.get_member_by_account(account_id).is_some())
+                            {
+                                true => return true,
+                                false => continue,
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// Checks if account id can propose this kind of action
-    pub fn check_propose_rights(&self, account_id: &AccountId, action: ActionIdent) -> bool {
+    pub fn check_propose_rights(&self, propose: &AccountId, action: ActionIdent) -> bool {
         return true;
         unimplemented!();
+    }
+
+    pub fn find_current_workflow_activity(&self, proposal_id: u32) -> Option<WorkflowInstance> {
+        match self.workflow_instance.get(&proposal_id) {
+            Some(i) => match i.state {
+                WorkflowInstanceState::Running => {
+                    //i.current_action
+                    None
+                }
+                _ => None,
+            },
+            None => None,
+        }
     }
 
     pub fn add_group(&mut self, group: GroupInput) {
@@ -978,7 +1011,12 @@ impl NewDaoContract {
 }
 
 pub mod utils {
-    use crate::{append, constants::{GROUP_RELEASE_PREFIX, STORAGE_BUCKET_PREFIX}, core::StorageKeyWrapper, GroupId};
+    use crate::{
+        append,
+        constants::{GROUP_RELEASE_PREFIX, STORAGE_BUCKET_PREFIX},
+        core::StorageKeyWrapper,
+        GroupId,
+    };
 
     pub fn get_group_key(id: GroupId) -> StorageKeyWrapper {
         append(GROUP_RELEASE_PREFIX, &id.to_le_bytes()).into()

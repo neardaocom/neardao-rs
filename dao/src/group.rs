@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::LazyOption,
+    env,
     serde::{Deserialize, Serialize},
-    AccountId, IntoStorageKey, env,
+    AccountId, IntoStorageKey,
 };
 
 use crate::errors::ERR_INVALID_AMOUNT;
@@ -144,7 +145,6 @@ impl GroupOutput {
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Group {
-    pub key: Vec<u8>,
     pub settings: GroupSettings,
     pub members: GroupMembers,
     pub release: LazyOption<Release>,
@@ -157,12 +157,10 @@ impl Group {
         members: Vec<GroupMember>,
         release: Release,
     ) -> Self {
-        let key = release_key.into_storage_key();
         Group {
-            key: key.clone(),
             settings,
             members: members.into(),
-            release: LazyOption::new(key, Some(&release)),
+            release: LazyOption::new(release_key.into_storage_key(), Some(&release)),
         }
     }
 
@@ -176,17 +174,17 @@ impl Group {
         self.members.remove_member(account_id)
     }
 
+    //TODO test if storage removed properly
     pub fn remove_storage_data(&mut self) -> Release {
         let release = self.release.get().unwrap();
         self.release.remove();
-        env::storage_remove(&self.key);
         release
     }
 
     pub fn unlock_ft(&mut self, current_time: u64) -> u32 {
         let mut release = self.release.get().unwrap();
-        let (model, mut db): (ReleaseModel, ReleaseDb) = (release.model.into(), release.data.into());
-
+        let (model, mut db): (ReleaseModel, ReleaseDb) =
+            (release.model.into(), release.data.into());
 
         if db.total == db.unlocked {
             return 0;
@@ -214,6 +212,22 @@ impl Group {
         unlocked
     }
 
+    pub fn get_member_by_account(&self, account_id: &str) -> Option<GroupMember> {
+        self.members
+            .get_members()
+            .into_iter()
+            .find(|m| m.account_id == account_id)
+    }
+
+    pub fn get_members_by_role(&self, role: TagId) -> Vec<AccountId> {
+        self.members
+            .get_members()
+            .into_iter()
+            .filter(|m| m.tags.iter().any(|r| *r == role))
+            .map(|m| m.account_id)
+            .collect()
+    }
+
     pub fn distribute_ft(&mut self, amount: u32) -> bool {
         let mut release = self.release.get().unwrap();
         let mut db: ReleaseDb = release.data.into();
@@ -224,7 +238,7 @@ impl Group {
                 release.data = VReleaseDb::Curr(db);
                 self.release.set(&release);
                 true
-            },
+            }
             _ => false,
         }
     }

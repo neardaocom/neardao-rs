@@ -9,218 +9,20 @@ use crate::constants::TGAS;
 use crate::errors::{ERR_NO_ACCESS, ERR_STORAGE_BUCKET_EXISTS, ERR_UNKNOWN_FNCALL};
 use crate::group::Group;
 use crate::internal::utils;
+use crate::proposal::{NewProposal, ProposalState, VProposal};
 use crate::release::ReleaseDb;
 use crate::settings::assert_valid_dao_settings;
 use crate::settings::DaoSettings;
 use crate::storage::{StorageBucket, StorageData};
 use crate::tags::Tags;
+use crate::workflow::VoteScenario;
 use crate::{
     core::*,
     group::{GroupInput, GroupMember, GroupReleaseInput, GroupSettings},
-    media::{FileType, Media, VFileMetadata},
+    media::Media,
     GroupId, GroupName, ProposalId, CID,
 };
 use crate::{TagCategory, TagId};
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum TokenGroup {
-    Council,
-    Public,
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Serialize))]
-#[serde(crate = "near_sdk::serde")]
-pub enum TxInput {
-    Pay {
-        amount_near: U128,
-        account_id: AccountId,
-    },
-    AddMember {
-        account_id: AccountId,
-        group: TokenGroup,
-    },
-    RemoveMember {
-        account_id: AccountId,
-        group: TokenGroup,
-    },
-    GeneralProposal {
-        title: String,
-    },
-    AddDocFile {
-        cid: CID,
-        metadata: VFileMetadata,
-        new_tags: Vec<String>,
-        new_category: Option<String>,
-    },
-    InvalidateFile {
-        cid: CID,
-    },
-    DistributeFT {
-        total_amount: u32,
-        from_group: TokenGroup,
-        accounts: Vec<AccountId>,
-    },
-    RightForActionCall {
-        to: RightTarget,
-        rights: Vec<ActionGroupRight>,
-        time_from: Option<WrappedTimestamp>,
-        time_to: Option<WrappedTimestamp>,
-    },
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct ActionTx {
-    pub actions: Vec<Action>,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)] //TODO Remove debug in production
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum TxValidationErr {
-    NotEnoughGas,
-    NotEnoughNears,
-    NotEnoughFT,
-    InvalidTimeInputs,
-    CIDExists,
-    GroupForbidden,
-    UserAlreadyInGroup,
-    UserNotInGroup,
-    Custom(String),
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum Action {
-    SendNear {
-        account_id: AccountId,
-        amount_near: u128,
-    },
-    AddMember {
-        account_id: AccountId,
-        group: TokenGroup,
-    },
-    RemoveMember {
-        account_id: AccountId,
-        group: TokenGroup,
-    },
-    GeneralProposal {
-        title: String,
-    },
-    //TODO split into two actions ?
-    AddFile {
-        cid: CID,
-        ftype: FileType,
-        metadata: VFileMetadata,
-        new_category: Option<String>,
-        new_tags: Vec<String>,
-    },
-    InvalidateFile {
-        cid: CID,
-    },
-    DistributeFT {
-        amount: u32,
-        from_group: TokenGroup,
-        accounts: Vec<AccountId>,
-    },
-    AddRightsForActionGroup {
-        to: RightTarget,
-        rights: Vec<ActionGroupRight>,
-        time_from: u64,
-        time_to: u64,
-    },
-    FunctionCall {
-        account: AccountId,
-        actions: Vec<ActionCall>,
-    },
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum RightTarget {
-    Group { value: TokenGroup },
-    Users { values: Vec<AccountId> },
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, PartialEq)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
-#[serde(crate = "near_sdk::serde")]
-pub enum ActionGroupRight {
-    RefFinance,
-    SkywardFinance,
-}
-
-/// ActionGroup structure represents input type for external action calls from privileged user
-/// One ActionGroup will be splitted into 1..N actions
-#[derive(Deserialize, Clone, PartialEq)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, Serialize))]
-#[serde(crate = "near_sdk::serde")]
-pub enum ActionGroupInput {
-    RefRegisterTokens,
-    RefAddPool {
-        fee: Option<u32>,
-    },
-    RefAddLiquidity {
-        pool_id: u32,
-        amount_near: U128,
-        amount_ft: U128,
-    },
-    RefWithdrawLiquidity {
-        pool_id: u32,
-        shares: U128,
-        min_ft: Option<U128>,
-        min_near: Option<U128>,
-    },
-    RefWithdrawDeposit {
-        token_id: AccountId,
-        amount: U128,
-    },
-    SkyCreateSale {
-        title: String,
-        url: String,
-        amount_ft: U128,
-        out_token_id: AccountId,
-        time_from: WrappedTimestamp,
-        duration: WrappedDuration,
-    },
-}
-pub enum ActionResult<T> {
-    Success,
-    Error(T),
-}
-
-// TODO method whitelist
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct ActionCall {
-    method: String,
-    args: String,
-    tgas: u32,
-    deposit: u128,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct ExecutionRight {
-    id: u8,
-    valid_from: u64,
-    valid_duration: u64,
-    near_limit: u128,
-    near_current: u128,
-    ft_limit: Option<u32>,
-    ft_current: Option<u32>,
-    actions: Vec<Action>,
-}
-
-// Jmeno FT by mohlo byt evidovane v ramci workflows tak, aby to zbytecne nezabiralo misto v kazdem rights
 
 // ---------------- NEW ----------------
 
@@ -233,7 +35,7 @@ pub enum ActionIdent {
     GroupUpdate,
     GroupMemberAdd,
     GroupMemberRemove,
-    FnCall(String),
+    FnCall,
     SettingsUpdate,
     MediaAdd,
     MediaInvalidate,
@@ -425,10 +227,165 @@ impl FnCallDefinition {
 
 #[near_bindgen]
 impl NewDaoContract {
-    pub fn propose(&mut self) {
+    #[payable]
+    pub fn propose(
+        &mut self,
+        workflow_template_id: u16,
+        workflow_template_settings_id: u8,
+    ) -> bool {
         let caller = env::predecessor_account_id();
-        //assert!(self.check_propose_rights(&caller,), "{}", ERR_NO_ACCESS);
-        todo!()
+        let (_, wfs) = self.workflow_template.get(&workflow_template_id).unwrap();
+        let settings = wfs.get(workflow_template_id as usize).unwrap();
+
+        assert!(
+            env::attached_deposit()
+                >= wfs[workflow_template_settings_id as usize]
+                    .deposit_propose
+                    .unwrap_or(0)
+        );
+
+        if !self.check_rights(&settings.allowed_proposers, &caller) {
+            return false;
+        }
+
+        let proposal = NewProposal::new(
+            env::block_timestamp(),
+            workflow_template_id,
+            workflow_template_settings_id,
+        );
+
+        self.proposal_last_id += 1;
+        self.proposals
+            .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
+
+        true
+    }
+
+    #[payable]
+    pub fn vote(&mut self, proposal_id: u32, vote_kind: u8) -> bool {
+        if vote_kind > 2 {
+            return false;
+        }
+
+        let predeccesor_account_id = env::predecessor_account_id();
+        let mut proposal =
+            NewProposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
+
+        let (_, wfs) = self.workflow_template.get(&proposal.workflow_id).unwrap();
+
+        assert!(
+            env::attached_deposit()
+                >= wfs[proposal.workflow_settings_id as usize]
+                    .deposit_vote
+                    .unwrap_or(0)
+        );
+
+        if proposal.state != ProposalState::InProgress
+            || proposal.created
+                + (wfs[proposal.workflow_settings_id as usize].duration) as u64 * 1000
+                <= env::block_timestamp()
+        {
+            return false;
+        }
+
+        if wfs[proposal.workflow_settings_id as usize].vote_only_once
+            && proposal.votes.contains_key(&predeccesor_account_id)
+        {
+            return false;
+        }
+
+        proposal.votes.insert(predeccesor_account_id, vote_kind);
+
+        self.proposals
+            .insert(&proposal_id, &VProposal::Curr(proposal));
+
+        true
+    }
+
+    pub fn finish_proposal(&mut self, proposal_id: u32) -> ProposalState {
+        todo!();
+        let proposal =
+            NewProposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
+
+        let (wfi, wfs) = self.workflow_template.get(&proposal.workflow_id).unwrap();
+
+        let state = match proposal.state {
+            ProposalState::InProgress => {
+                if proposal.created
+                    + (wfs[proposal.workflow_settings_id as usize].duration) as u64 * 1000
+                    > env::block_timestamp()
+                {
+                    //None
+                } else {
+                    todo!()
+
+                    /*                     // count votes
+                    let mut votes = [0 as u128; 3];
+                    match wfs[proposal.workflow_settings_id as usize].scenario {
+                        VoteScenario::Democratic => {
+                            for (voter, vote_value) in proposal.votes.iter() {
+                                votes[*vote_value as usize] +=
+                                    self.ft.accounts.get(voter).unwrap_or(0);
+                            }
+                        }
+                        VoteScenario::TokenWeighted => {
+                            for (voter, vote_value) in proposal.votes.iter() {
+                                votes[*vote_value as usize] +=
+                                    self.ft.accounts.get(voter).unwrap_or(0);
+                            }
+                        }
+                    }
+
+                    let total_voted_amount: u128 = votes.iter().sum();
+
+                    // we need to read config just because of spam TH value - could be moved to voting ??
+                    let config = Config::from(self.config.get().unwrap());
+
+                    // check spam
+                    if calc_percent_u128_unchecked(votes[0], total_voted_amount, self.decimal_const)
+                        >= config.vote_spam_threshold
+                    {
+                        Some(ProposalState::Spam)
+                    } else if calc_percent_u128_unchecked(
+                        total_voted_amount,
+                        self.ft_total_distributed as u128 * self.decimal_const,
+                        self.decimal_const,
+                    ) < proposal.quorum
+                    {
+                        // not enough quorum
+                        Some(ProposalState::Invalid)
+                    } else if calc_percent_u128_unchecked(
+                        votes[1],
+                        total_voted_amount,
+                        self.decimal_const,
+                    ) < proposal.approve_threshold
+                    {
+                        // not enough voters to accept
+                        Some(ProposalState::Rejected)
+                    } else {
+                        // proposal is accepted, try to execute transaction
+                        if let Err(errors) = self.execute_tx(
+                            &proposal.transactions,
+                            Context {
+                                proposal_id: proposal.uuid,
+                                attached_deposit: env::attached_deposit(),
+                                current_balance: env::account_balance(),
+                                current_block_timestamp: env::block_timestamp(),
+                            },
+                        ) {
+                            log!("errors: {:?}", errors);
+                            Some(ProposalState::Invalid)
+                        } else {
+                            Some(ProposalState::Accepted)
+                        }
+                    } */
+                }
+            }
+            ProposalState::Invalid => todo!(),
+            ProposalState::Spam => todo!(),
+            ProposalState::Rejected => todo!(),
+            ProposalState::Accepted => todo!(),
+        };
     }
 
     pub fn group_create(
@@ -452,7 +409,6 @@ impl NewDaoContract {
         match self.groups.remove(&id) {
             Some(mut group) => {
                 let release: ReleaseDb = group.remove_storage_data().data.into();
-                //TODO check: UPDATE DAO release settings
                 self.ft_total_locked -= release.total - release.init_distribution;
             }
             _ => (),
@@ -503,8 +459,8 @@ impl NewDaoContract {
     pub fn media_add(&mut self, proposal_id: ProposalId, media: Media) {
         assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
 
-        self.media_count += 1;
-        self.media.insert(&self.media_count, &media);
+        self.media_last_id += 1;
+        self.media.insert(&self.media_last_id, &media);
     }
     pub fn media_invalidate(&mut self, proposal_id: ProposalId, id: u32) {
         assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
@@ -754,27 +710,27 @@ impl NewDaoContract {
     // TODO own Value for inputs and use serde Value for transforming to JSON ??
     // TODO write tests parsing arguments
     /// Invokes registered function call
-    /*     pub fn function_call(
+    pub fn function_call(
         &mut self,
         proposal_id: ProposalId,
         fncall_id: String,
-        fncall_arguments: FnCallArguments,
         deposit: U128,
         tgas: u16,
-    ) -> Promise {
+    ) {
         assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
-        let fncall = self.function_calls.get(&fncall_id).expect(ERR_UNKNOWN_FNCALL);
-        fncall.validate_input_types(fncall_arguments);
+        let fncall = self
+            .function_calls
+            .get(&fncall_id)
+            .expect(ERR_UNKNOWN_FNCALL);
 
         // TODO get constrains and binds from workflow template and postprocessing
         // Should be some match for Option
 
         // TODO validate fn args
-        fncall.bind_and_execute()
+        //fncall.bind_args()
 
         //add postprocessing (save promise result - must be from workflow)
-
-    } */
+    }
 
     pub fn function_call_add(&mut self, proposal_id: ProposalId, func: FnCallDefinition) {
         assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);

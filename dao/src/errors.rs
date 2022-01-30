@@ -1,5 +1,6 @@
 pub const ERR_INVALID_AMOUNT: &str = "Invalid amount";
 pub const ERR_NO_ACCESS: &str = "You have no rights for this action";
+pub const ERR_GROUP_NOT_FOUND: &str = "Group does not exist";
 pub const ERR_UNKNOWN_FNCALL: &str = "Undefined fn call";
 
 pub const ERR_LOCK_AMOUNT_ABOVE: &str = "Total FT locked amount exceeded total FT supply";

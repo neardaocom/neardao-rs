@@ -4,16 +4,15 @@ use crate::constants::{
     DEPOSIT_ADD_PROPOSAL, DEPOSIT_VOTE, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, GROUP_PREFIX,
     MAX_FT_TOTAL_SUPPLY, METADATA_MAX_DECIMALS, PROPOSAL_KIND_COUNT,
 };
-use crate::internal::{assert_valid_founders, Context, Mapper, MapperKind, TimeInterval};
 use crate::settings::{
     assert_valid_dao_settings, assert_valid_vote_settings, DaoSettings, VDaoSettings,
     VVoteSettings, VoteSettings,
 };
 use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
-use crate::storage::{StorageData, StorageBucket};
+use crate::storage::{StorageBucket, StorageData};
 use crate::tags::{TagInput, Tags};
-use crate::workflow::{WorkflowInstance, WorkflowTemplate};
+use crate::workflow::{WorkflowInstance, WorkflowSettings, WorkflowTemplate};
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
 use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
 use near_contract_standards::storage_management::{
@@ -31,7 +30,7 @@ use near_sdk::{
 
 use crate::group::{Group, GroupInput};
 
-use crate::media::{Media, VFileMetadata};
+use crate::media::Media;
 use crate::release::{ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel};
 use crate::{action::*, GroupId, GroupName};
 use crate::{calc_percent_u128_unchecked, FnCallId};
@@ -69,6 +68,7 @@ pub enum StorageKeys {
     Rights,
     FunctionCallWhitelist,
     WfTemplate,
+    WfTemplateSettings,
     WfInstance,
 }
 
@@ -88,15 +88,16 @@ pub struct NewDaoContract {
     pub groups: UnorderedMap<GroupId, Group>, //TODO use name as key??
     pub settings: LazyOption<VDaoSettings>,
     pub vote_settings: LazyOption<Vec<VVoteSettings>>,
-    pub proposal_count: u32,
+    pub proposal_last_id: u32,
     pub proposals: UnorderedMap<u32, VProposal>,
     pub storage: UnorderedMap<StorageKey, StorageBucket>, // TODO
     pub tags: UnorderedMap<TagCategory, Tags>, //Once added cannot be removed or special DT??
-    pub media_count: u32,
+    pub media_last_id: u32,
     pub media: LookupMap<u32, Media>, //TODO categorize??
     pub function_call_metadata: LookupMap<FnCallId, Vec<FnCallMetadata>>,
     pub function_calls: UnorderedMap<FnCallId, FnCallDefinition>,
-    pub workflow_template: UnorderedMap<u32, WorkflowTemplate>,
+    pub workflow_last_id: u16,
+    pub workflow_template: UnorderedMap<u16, (WorkflowTemplate, Vec<WorkflowSettings>)>,
     pub workflow_instance: UnorderedMap<u32, WorkflowInstance>,
 }
 
@@ -115,6 +116,7 @@ impl NewDaoContract {
         tags: Vec<TagInput>,
         function_calls: Vec<FnCallDefinition>,
         function_call_metadata: Vec<Vec<FnCallMetadata>>,
+        workflow_template_settings: Vec<Vec<WorkflowSettings>>,
         workflow_templates: Vec<WorkflowTemplate>,
     ) -> Self {
         assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
@@ -134,14 +136,15 @@ impl NewDaoContract {
             vote_settings: LazyOption::new(StorageKeys::VoteSettings, None),
             group_last_id: 0,
             groups: UnorderedMap::new(StorageKeys::Groups),
-            proposal_count: 0,
+            proposal_last_id: 0,
             proposals: UnorderedMap::new(StorageKeys::Proposals),
             storage: UnorderedMap::new(StorageKeys::Storage),
             tags: UnorderedMap::new(StorageKeys::Tags),
-            media_count: 0,
+            media_last_id: 0,
             media: LookupMap::new(StorageKeys::Media),
             function_call_metadata: LookupMap::new(StorageKeys::FunctionCallMetadata),
             function_calls: UnorderedMap::new(StorageKeys::FunctionCalls),
+            workflow_last_id: 0,
             workflow_template: UnorderedMap::new(StorageKeys::WfTemplate),
             workflow_instance: UnorderedMap::new(StorageKeys::WfInstance),
         };
@@ -160,7 +163,7 @@ impl NewDaoContract {
         contract.init_groups(groups);
         contract.init_media(media);
         contract.init_function_calls(function_calls, function_call_metadata);
-        contract.init_workflows(workflow_templates);
+        contract.init_workflows(workflow_templates, workflow_template_settings);
 
         contract
     }

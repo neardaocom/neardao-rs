@@ -5,15 +5,12 @@ use near_sdk::serde::Serialize;
 use near_sdk::{env, IntoStorageKey};
 use near_sdk::{json_types::U128, near_bindgen, AccountId};
 
-use crate::action::{ActionGroupRight, TokenGroup};
 use crate::constants::{
     DEPOSIT_ADD_PROPOSAL, DEPOSIT_VOTE, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, PROPOSAL_KIND_COUNT,
     VERSION,
 };
 use crate::group::{Group, GroupMember, GroupOutput};
-use crate::internal::{Mapper, MapperKind, TimeInterval};
-use crate::media::VFileMetadata;
-use crate::proposal::{ProposalKindIdent, VProposal};
+use crate::proposal::VProposal;
 use crate::release::{ReleaseDb, ReleaseModel};
 use crate::settings::{DaoSettings, VoteSettings};
 use crate::storage::StorageData;
@@ -209,6 +206,18 @@ impl DaoContract {
 // ------------ NEW
 #[near_bindgen]
 impl NewDaoContract {
+    pub fn proposal(&self, proposal_id: u32) -> Option<VProposal> {
+        self.proposals.get(&proposal_id)
+    }
+
+    pub fn proposals(&self, from_index: u64, limit: u64) -> Vec<(u32, VProposal)> {
+        let keys = self.proposals.keys_as_vector();
+        let values = self.proposals.values_as_vector();
+        (from_index..std::cmp::min(from_index + limit, self.proposals.len()))
+            .map(|index| (keys.get(index).unwrap(), values.get(index).unwrap()))
+            .collect()
+    }
+
     pub fn dao_settings(self) -> DaoSettings {
         self.settings.get().unwrap().into()
     }
@@ -266,7 +275,11 @@ impl NewDaoContract {
             .flatten()
     }
 
-    pub fn storage_data_as_vec_u8(self, bucket_id: StorageKey, data_id: String) -> Option<Result<Vec<u8>, String>> {
+    pub fn storage_data_as_vec_u8(
+        self,
+        bucket_id: StorageKey,
+        data_id: String,
+    ) -> Option<Result<Vec<u8>, String>> {
         let storage_data = self
             .storage
             .get(&bucket_id)
@@ -303,58 +316,4 @@ impl NewDaoContract {
 
         storage_data.map(|s| s.try_into_vec_string())
     }
-}
-#[derive(Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct StatsFT {
-    pub total_supply: u32,
-    pub decimals: u8,
-    pub total_distributed: u32,
-    pub council_ft_stats: ReleaseDb,
-    pub council_release_model: ReleaseModel,
-    pub public_ft_stats: ReleaseDb,
-    pub public_release_model: ReleaseModel,
-    pub storage_locked_near: U128, //TODO move into more appropriate view
-}
-
-#[derive(Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct StatsMembers {
-    factory_acc: AccountId,
-    council: Vec<AccountId>,
-    council_share_percent: u8,
-    registered_user_count: u32,
-    council_rights: Option<Vec<(ActionGroupRight, TimeInterval)>>,
-}
-
-#[derive(Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct DaoFee {
-    min_gas_add_proposal: U128,
-    min_gas_vote: U128,
-    min_gas_finish_proposal: U128,
-    min_yocto_near_add_proposal: U128,
-    min_yocto_near_vote: U128,
-}
-
-#[derive(Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct DaoConfig {
-    pub version: u8,
-    pub lang: String,
-    pub slogan: String,
-    pub description: String,
-    pub council_share: u8,
-    pub vote_spam_threshold: u8,
-}
-#[derive(Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct DocFileMetadata {
-    files: Vec<(CID, VFileMetadata)>,
-    map: Mapper,
 }
