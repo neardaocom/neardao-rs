@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::{collections::HashMap, convert::TryFrom};
 
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
@@ -19,14 +19,20 @@ use crate::{
         GROUP_PREFIX, GROUP_RELEASE_PREFIX,
     },
     core::{NewDaoContract, StorageKeyWrapper},
-    errors::{ERR_DISTRIBUTION_ACC_EMPTY, ERR_GROUP_NOT_FOUND, ERR_LOCK_AMOUNT_ABOVE},
+    errors::{
+        ERR_DISTRIBUTION_ACC_EMPTY, ERR_GROUP_NOT_FOUND, ERR_LOCK_AMOUNT_ABOVE,
+        ERR_STORAGE_BUCKET_EXISTS,
+    },
     group::{Group, GroupInput},
     media::Media,
+    proposal::NewProposal,
     release::{Release, ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel},
     settings::{DaoSettings, VoteSettings},
+    storage::StorageBucket,
     tags::{TagInput, Tags},
     workflow::{
-        ActivityRight, WorkflowInstance, WorkflowInstanceState, WorkflowSettings, WorkflowTemplate,
+        ActivityRight, VoteScenario, WorkflowInstance, WorkflowInstanceState, WorkflowSettings,
+        WorkflowTemplate,
     },
     GroupId, ProposalId,
 };
@@ -859,10 +865,16 @@ impl NewDaoContract {
         }
     }
 
-    // TODO should return option<right> with addiition
-    pub fn check_action_rights(&self, proposal_id: ProposalId) -> bool {
-        return true;
-        unimplemented!();
+    pub fn get_wf_and_proposal(
+        &self,
+        proposal_id: u32,
+    ) -> (NewProposal, WorkflowTemplate, WorkflowSettings) {
+        let proposal =
+            NewProposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
+        let (wft, mut wfs) = self.workflow_template.get(&proposal.workflow_id).unwrap();
+        let settings = wfs.swap_remove(proposal.workflow_settings_id as usize);
+
+        (proposal, wft, settings)
     }
 
     // TODO unit tests
@@ -948,10 +960,78 @@ impl NewDaoContract {
         false
     }
 
-    /// Checks if account id can propose this kind of action
-    pub fn check_propose_rights(&self, propose: &AccountId, action: ActionIdent) -> bool {
-        return true;
-        unimplemented!();
+    // TODO test
+    /// Evaluates vote results by scenario and type of voters.
+    /// Returns tuple (total_voted_amount,vote_results)
+    pub fn calculate_votes(
+        &self,
+        votes: &HashMap<String, u8>,
+        scenario: &VoteScenario,
+        vote_target: &ActivityRight,
+    ) -> (u128, [u128; 3]) {
+        // count votes
+        let mut vote_result = [0 as u128; 3];
+        let mut total_voted_amount: u128 = 0;
+        match scenario {
+            VoteScenario::Democratic => {
+                match vote_target {
+                    ActivityRight::Anyone => {
+                        total_voted_amount = votes.len() as u128;
+                    }
+                    ActivityRight::Group(g) => match self.groups.get(&g) {
+                        Some(group) => {
+                            total_voted_amount = group.members.members_count() as u128;
+                        }
+                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                    },
+                    ActivityRight::GroupMember(_, _)
+                    | ActivityRight::Account(_)
+                    | ActivityRight::GroupLeader(_) => {
+                        total_voted_amount = 1;
+                    }
+                    ActivityRight::TokenHolder => todo!(),
+                    ActivityRight::Member => todo!(),
+                    ActivityRight::GroupRole(g, r) => match self.groups.get(&g) {
+                        Some(group) => {
+                            total_voted_amount = group.get_members_by_role(*r).len() as u128;
+                        }
+                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                    },
+                }
+
+                //calculate votes
+                for vote_value in votes.values() {
+                    vote_result[*vote_value as usize] += 1;
+                }
+            }
+            VoteScenario::TokenWeighted => match vote_target {
+                ActivityRight::Anyone | ActivityRight::TokenHolder | ActivityRight::Member => {
+                    total_voted_amount = self.ft_total_distributed as u128 * self.decimal_const;
+
+                    for (voter, vote_value) in votes.iter() {
+                        vote_result[*vote_value as usize] +=
+                            self.ft.accounts.get(voter).unwrap_or(0);
+                    }
+                }
+                ActivityRight::Group(_) | ActivityRight::GroupRole(_, _) => {
+                    for (voter, vote_value) in votes.iter() {
+                        let value = self.ft.accounts.get(voter).unwrap_or(0);
+                        vote_result[*vote_value as usize] += value;
+                        total_voted_amount += value;
+                    }
+                }
+                ActivityRight::GroupMember(_, _)
+                | ActivityRight::Account(_)
+                | ActivityRight::GroupLeader(_) => {
+                    total_voted_amount = 1;
+                    for vote_value in votes.values() {
+                        vote_result[*vote_value as usize] += 1;
+                    }
+                }
+            },
+        }
+
+        (total_voted_amount, vote_result)
     }
 
     pub fn find_current_workflow_activity(&self, proposal_id: u32) -> Option<WorkflowInstance> {
@@ -965,6 +1045,17 @@ impl NewDaoContract {
             },
             None => None,
         }
+    }
+
+    pub fn storage_bucket_add(&mut self, bucket_id: &str) {
+        let bucket = StorageBucket::new(utils::get_bucket_id(bucket_id));
+        assert!(
+            self.storage
+                .insert(&bucket_id.to_owned(), &bucket)
+                .is_none(),
+            "{}",
+            ERR_STORAGE_BUCKET_EXISTS
+        );
     }
 
     pub fn add_group(&mut self, group: GroupInput) {
@@ -1026,7 +1117,7 @@ pub mod utils {
         append(GROUP_RELEASE_PREFIX, &id.to_le_bytes()).into()
     }
 
-    pub fn get_bucket_id(id: &String) -> StorageKeyWrapper {
+    pub fn get_bucket_id(id: &str) -> StorageKeyWrapper {
         append(STORAGE_BUCKET_PREFIX, id.as_bytes()).into()
     }
 }

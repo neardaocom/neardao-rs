@@ -5,10 +5,12 @@ use near_sdk::{
     IntoStorageKey,
 };
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+//TODO move
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum DataType {
+    Null,
     String(String),
     Bool(bool),
     U8(u8),
@@ -23,6 +25,15 @@ pub enum DataType {
     VecU32(Vec<u32>),
     VecU64(Vec<u64>),
     VecU128(Vec<u128>),
+}
+
+impl DataType {
+    pub fn try_into_bool(self) -> Result<bool, String> {
+        match self {
+            DataType::Bool(b) => Ok(b),
+            _ => Err("DataType is not bool".into()),
+        }
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]

@@ -1,9 +1,14 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize}, AccountId,
+    serde::{Deserialize, Serialize},
+    AccountId,
 };
 
-use crate::{action::ActionIdent, FnCallId, GroupId, TagId};
+use crate::{
+    action::ActionIdent,
+    storage::{DataType, StorageBucket},
+    FnCallId, GroupId, TagId,
+};
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
@@ -22,8 +27,8 @@ pub struct WorkflowTemplate {
     pub transitions: Vec<WorkflowTransition>,
     pub start: Vec<u8>, // ids of activitys above
     pub end: Vec<u8>,
-    pub storage_id: String, // storage for this WF
-                            // TODO ad WF settings here?
+    pub storage_key: String, // storage for this WF
+                             // TODO ad WF settings here?
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
@@ -41,13 +46,24 @@ pub struct WorkflowTransition {
 #[serde(crate = "near_sdk::serde")]
 pub struct Expression;
 
+impl Expression {
+    //TODO
+    pub fn eval(&self, storage: &mut StorageBucket) -> DataType {
+        DataType::Bool(true)
+    }
+}
+
+type ArgValidatorId = u8;
+type BindId = u8;
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum WorkflowActivityArgType {
-    Free,         //User provided
-    Bind(String), // Template hardcoded,
-    Register(String),
+    Free,
+    Checked(ArgValidatorId), //User provided
+    Bind(BindId),            // Template hardcoded,
+    Storage(String),
     Expression(Expression),
 }
 
@@ -74,12 +90,49 @@ pub struct WorkflowActivity {
     pub gas: u64,
     pub deposit: u128,
     pub arg_types: Vec<WorkflowActivityArgType>,
+    pub arg_validators: Vec<Expression>,
+    pub binds: Vec<DataType>,
     pub postprocessing: Option<Postprocessing>,
 }
 
 impl WorkflowActivity {
     pub fn execute(&mut self) -> WorkflowActivityExecutionResult {
         todo!();
+    }
+
+    // TODO tests
+    /// Interpolates args into result args
+    pub fn interpolate_args(
+        &self,
+        mut args: Vec<DataType>,
+        storage: &mut StorageBucket,
+    ) -> Vec<DataType> {
+        assert_eq!(self.arg_types.len(), args.len());
+
+        let mut result_args = Vec::with_capacity(self.arg_types.len());
+
+        for (i, arg_type) in self.arg_types.iter().enumerate() {
+            match arg_type {
+                WorkflowActivityArgType::Free => {
+                    result_args.push(std::mem::replace(&mut args[i], DataType::Null))
+                }
+                WorkflowActivityArgType::Checked(id) => {
+                    let expr = self.arg_validators.get(*id as usize).unwrap();
+                    if !expr.eval(storage).try_into_bool().unwrap() {
+                        panic!("{}", "Input is not valid");
+                    }
+                    result_args.push(std::mem::replace(&mut args[i], DataType::Null))
+                }
+                WorkflowActivityArgType::Bind(id) => {
+                    result_args.push(self.binds[*id as usize].clone())
+                }
+                WorkflowActivityArgType::Storage(key) => {
+                    result_args.push(storage.get_data(key).unwrap());
+                }
+                WorkflowActivityArgType::Expression(expr) => result_args.push(expr.eval(storage)),
+            }
+        }
+        result_args
     }
 }
 
@@ -90,8 +143,8 @@ pub struct Postprocessing {
     script: String, //TODO program expressions?
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug))]
 #[serde(crate = "near_sdk::serde")]
 pub enum WorkflowInstanceState {
     Waiting,
@@ -111,7 +164,6 @@ pub struct WorkflowInstance {
 }
 
 impl WorkflowInstance {
-
     pub fn new(template_id: u16, transitions_len: usize) -> Self {
         WorkflowInstance {
             state: WorkflowInstanceState::Running,
@@ -120,7 +172,65 @@ impl WorkflowInstance {
             template_id,
         }
     }
-    pub fn transition_to_next(&mut self) {}
+
+    // TODO return type structure
+    /// Tries to advance to next activity in workflow. Panics if anything is wrong.
+    pub fn transition_to_next(
+        &mut self,
+        wft: &WorkflowTemplate,
+        current_action_ident: ActionIdent,
+        action_args: Vec<DataType>,
+        storage_bucket: &mut StorageBucket,
+    ) -> Option<Postprocessing> {
+        if self.state == WorkflowInstanceState::Finished {
+            return None;
+        }
+
+        // check if theres transition from current action to desired
+        let transition = wft
+            .transitions
+            .iter()
+            .filter(|t| t.from == self.current_action)
+            .find(|t| wft.activity[t.to as usize].action == current_action_ident);
+
+        let activity_id: u8 = match transition {
+            Some(t) => match t
+                .condition
+                .as_ref()
+                .map(|cond| cond.eval(storage_bucket).try_into_bool().unwrap())
+                .unwrap_or(true)
+            {
+                true => t.to,
+                false => panic!("{}", "Condition for transition not fullfiled"),
+            },
+            None => panic!("{}", "Undefined transition"),
+        };
+
+        // check if we can run this
+        let can_be_exec = wft.activity[activity_id as usize]
+            .exec_condition
+            .eval(storage_bucket);
+
+        if !can_be_exec.try_into_bool().unwrap() {
+            //TODO
+            return None;
+        }
+
+        // bind args and check values
+        let args = wft.activity[self.current_action as usize]
+            .interpolate_args(action_args, storage_bucket);
+
+        //check if current activity is final
+        if wft.end.contains(&self.current_action) {
+            self.state = WorkflowInstanceState::Finished;
+            //TODO
+            return None;
+        } else {
+            self.current_action += 1;
+        }
+
+        None
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
@@ -143,10 +253,9 @@ pub enum ActivityRight {
 pub struct WorkflowSettings {
     pub allowed_proposers: Vec<ActivityRight>,
     pub deposit_propose: Option<u128>,
-    pub deposit_vote: Option<u128>,              // Near
-    pub deposit_propose_return: bool,            // if return deposit above when workflow finishes
+    pub deposit_vote: Option<u128>,   // Near
+    pub deposit_propose_return: bool, // if return deposit above when workflow finishes
     pub allowed_voters: ActivityRight,
-    //pub vote_deposit: Option<u128>, //yoctoNear // get from DAO settings?
     pub vote_settings_id: u8,
     pub activity_rights: Vec<ActivityRight>,
     pub activity_inputs: Vec<Vec<WorkflowActivityArgType>>, //arguments for each activity

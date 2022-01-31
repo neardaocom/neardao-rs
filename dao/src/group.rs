@@ -42,6 +42,10 @@ impl GroupMembers {
         }
     }
 
+    pub fn members_count(&self) -> usize {
+        self.0.len()
+    }
+
     pub fn get_members(&self) -> Vec<GroupMember> {
         self.0
             .iter()

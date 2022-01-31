@@ -6,28 +6,30 @@ use near_sdk::serde_json::{self, Value};
 use near_sdk::{env, near_bindgen, AccountId, Promise};
 
 use crate::constants::TGAS;
-use crate::errors::{ERR_NO_ACCESS, ERR_STORAGE_BUCKET_EXISTS, ERR_UNKNOWN_FNCALL};
+use crate::errors::{
+    ERR_GROUP_NOT_FOUND, ERR_NO_ACCESS, ERR_STORAGE_BUCKET_EXISTS, ERR_UNKNOWN_FNCALL,
+};
 use crate::group::Group;
 use crate::internal::utils;
 use crate::proposal::{NewProposal, ProposalState, VProposal};
 use crate::release::ReleaseDb;
 use crate::settings::assert_valid_dao_settings;
 use crate::settings::DaoSettings;
-use crate::storage::{DataType as Data, StorageBucket};
+use crate::storage::{DataType, StorageBucket};
 use crate::tags::Tags;
-use crate::workflow::VoteScenario;
+use crate::workflow::{ActivityRight, VoteScenario, WorkflowActivity, WorkflowInstance};
+use crate::{calc_percent_u128_unchecked, TagCategory, TagId};
 use crate::{
     core::*,
     group::{GroupInput, GroupMember, GroupReleaseInput, GroupSettings},
     media::Media,
     GroupId, GroupName, ProposalId, CID,
 };
-use crate::{TagCategory, TagId};
 
 // ---------------- NEW ----------------
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
 pub enum ActionIdent {
     GroupAdd,
@@ -56,7 +58,7 @@ pub enum ActionIdent {
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub enum DataType {
+pub enum DataTypeDef {
     String(bool),
     Bool(bool),
     U8(bool),
@@ -81,7 +83,7 @@ pub enum DataType {
 #[serde(crate = "near_sdk::serde")]
 pub struct FnCallMetadata {
     pub arg_names: Vec<String>,
-    pub arg_types: Vec<DataType>,
+    pub arg_types: Vec<DataTypeDef>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
@@ -129,13 +131,13 @@ impl FnCallDefinition {
             args.push('"');
             args.push(':');
             match &metadata[metadata_id].arg_types[i] {
-                DataType::Object(id) => {
+                DataTypeDef::Object(id) => {
                     args.push_str(
                         self.bind_args(arg_names, arg_values, metadata, *id as usize)
                             .as_str(),
                     );
                 }
-                DataType::NullableObject(id) => {
+                DataTypeDef::NullableObject(id) => {
                     match &arg_values[*id as usize] {
                         None => {
                             args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str());
@@ -147,29 +149,32 @@ impl FnCallDefinition {
                         ),
                     }
                 }
-                DataType::String(opt) => match (opt, &arg_values[metadata_id].as_ref().unwrap()[i])
-                {
-                    (true, Value::String(v)) | (false, Value::String(v)) => {
-                        args.push('"');
-                        args.push_str(v.as_str());
-                        args.push('"');
+                DataTypeDef::String(opt) => {
+                    match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
+                        (true, Value::String(v)) | (false, Value::String(v)) => {
+                            args.push('"');
+                            args.push_str(v.as_str());
+                            args.push('"');
+                        }
+                        (true, Value::Null) => {
+                            args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
+                        }
+                        _ => panic!("Invalid type during parsing"),
                     }
-                    (true, Value::Null) => {
-                        args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
+                }
+                DataTypeDef::Bool(opt) => {
+                    match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
+                        (true, Value::Bool(v)) | (false, Value::Bool(v)) => {
+                            args.push_str(serde_json::to_string(v).unwrap().as_str());
+                        }
+                        (true, Value::Null) => {
+                            args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
+                        }
+                        _ => panic!("Invalid type during parsing"),
                     }
-                    _ => panic!("Invalid type during parsing"),
-                },
-                DataType::Bool(opt) => match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
-                    (true, Value::Bool(v)) | (false, Value::Bool(v)) => {
-                        args.push_str(serde_json::to_string(v).unwrap().as_str());
-                    }
-                    (true, Value::Null) => {
-                        args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
-                    }
-                    _ => panic!("Invalid type during parsing"),
-                },
+                }
 
-                DataType::U8(opt) | DataType::U16(opt) | DataType::U32(opt) => {
+                DataTypeDef::U8(opt) | DataTypeDef::U16(opt) | DataTypeDef::U32(opt) => {
                     match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
                         (true, Value::Number(v)) | (false, Value::Number(v)) => {
                             args.push_str(serde_json::to_string(v).unwrap().as_str());
@@ -180,7 +185,7 @@ impl FnCallDefinition {
                         _ => panic!("Invalid type during parsing"),
                     }
                 }
-                DataType::U64(opt) | DataType::U128(opt) => {
+                DataTypeDef::U64(opt) | DataTypeDef::U128(opt) => {
                     match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
                         (true, Value::String(v)) | (false, Value::String(v)) => {
                             args.push('"');
@@ -194,12 +199,12 @@ impl FnCallDefinition {
                     }
                 }
                 // Assuming no API expects something like Option<Vec<_>>, but instead Vec<_> is just empty
-                DataType::VecString
-                | DataType::VecU8
-                | DataType::VecU16
-                | DataType::VecU32
-                | DataType::VecU64
-                | DataType::VecU128 => {
+                DataTypeDef::VecString
+                | DataTypeDef::VecU8
+                | DataTypeDef::VecU16
+                | DataTypeDef::VecU32
+                | DataTypeDef::VecU64
+                | DataTypeDef::VecU128 => {
                     if let Value::Array(v) = &arg_values[metadata_id].as_ref().unwrap()[i] {
                         args.push('[');
                         for v in v.iter() {
@@ -218,9 +223,6 @@ impl FnCallDefinition {
         }
         args.pop();
         args.push('}');
-
-        //log!("args: {}", args);
-
         args
     }
 }
@@ -267,34 +269,26 @@ impl NewDaoContract {
             return false;
         }
 
-        let predeccesor_account_id = env::predecessor_account_id();
-        let mut proposal =
-            NewProposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
+        let caller = env::predecessor_account_id();
+        let (mut proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
-        let (_, wfs) = self.workflow_template.get(&proposal.workflow_id).unwrap();
+        assert!(env::attached_deposit() >= wfs.deposit_vote.unwrap_or(0));
 
-        assert!(
-            env::attached_deposit()
-                >= wfs[proposal.workflow_settings_id as usize]
-                    .deposit_vote
-                    .unwrap_or(0)
-        );
+        if !self.check_rights(&wfs.allowed_proposers, &caller) {
+            return false;
+        }
 
         if proposal.state != ProposalState::InProgress
-            || proposal.created
-                + (wfs[proposal.workflow_settings_id as usize].duration) as u64 * 1000
-                <= env::block_timestamp()
+            || proposal.created + (wfs.duration) as u64 * 1000 <= env::block_timestamp()
         {
             return false;
         }
 
-        if wfs[proposal.workflow_settings_id as usize].vote_only_once
-            && proposal.votes.contains_key(&predeccesor_account_id)
-        {
+        if wfs.vote_only_once && proposal.votes.contains_key(&caller) {
             return false;
         }
 
-        proposal.votes.insert(predeccesor_account_id, vote_kind);
+        proposal.votes.insert(caller, vote_kind);
 
         self.proposals
             .insert(&proposal_id, &VProposal::Curr(proposal));
@@ -303,89 +297,61 @@ impl NewDaoContract {
     }
 
     pub fn finish_proposal(&mut self, proposal_id: u32) -> ProposalState {
-        todo!();
-        let proposal =
-            NewProposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
+        let (mut proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
-        let (wfi, wfs) = self.workflow_template.get(&proposal.workflow_id).unwrap();
-
-        let state = match proposal.state {
+        let new_state = match proposal.state {
             ProposalState::InProgress => {
-                if proposal.created
-                    + (wfs[proposal.workflow_settings_id as usize].duration) as u64 * 1000
-                    > env::block_timestamp()
-                {
-                    //None
+                if proposal.created + (wfs.duration) as u64 * 1000 > env::block_timestamp() {
+                    None
                 } else {
-                    todo!()
-
-                    /*                     // count votes
-                    let mut votes = [0 as u128; 3];
-                    match wfs[proposal.workflow_settings_id as usize].scenario {
-                        VoteScenario::Democratic => {
-                            for (voter, vote_value) in proposal.votes.iter() {
-                                votes[*vote_value as usize] +=
-                                    self.ft.accounts.get(voter).unwrap_or(0);
-                            }
-                        }
-                        VoteScenario::TokenWeighted => {
-                            for (voter, vote_value) in proposal.votes.iter() {
-                                votes[*vote_value as usize] +=
-                                    self.ft.accounts.get(voter).unwrap_or(0);
-                            }
-                        }
-                    }
-
-                    let total_voted_amount: u128 = votes.iter().sum();
-
-                    // we need to read config just because of spam TH value - could be moved to voting ??
-                    let config = Config::from(self.config.get().unwrap());
+                    // count votes
+                    let (total_voted_amount, vote_results) =
+                        self.calculate_votes(&proposal.votes, &wfs.scenario, &wfs.allowed_voters);
 
                     // check spam
-                    if calc_percent_u128_unchecked(votes[0], total_voted_amount, self.decimal_const)
-                        >= config.vote_spam_threshold
+                    if calc_percent_u128_unchecked(
+                        vote_results[0],
+                        total_voted_amount,
+                        self.decimal_const,
+                    ) >= wfs.spam_threshold
                     {
                         Some(ProposalState::Spam)
                     } else if calc_percent_u128_unchecked(
                         total_voted_amount,
                         self.ft_total_distributed as u128 * self.decimal_const,
                         self.decimal_const,
-                    ) < proposal.quorum
+                    ) < wfs.quorum
                     {
                         // not enough quorum
                         Some(ProposalState::Invalid)
                     } else if calc_percent_u128_unchecked(
-                        votes[1],
+                        vote_results[1],
                         total_voted_amount,
                         self.decimal_const,
-                    ) < proposal.approve_threshold
+                    ) < wfs.approve_threshold
                     {
                         // not enough voters to accept
                         Some(ProposalState::Rejected)
                     } else {
-                        // proposal is accepted, try to execute transaction
-                        if let Err(errors) = self.execute_tx(
-                            &proposal.transactions,
-                            Context {
-                                proposal_id: proposal.uuid,
-                                attached_deposit: env::attached_deposit(),
-                                current_balance: env::account_balance(),
-                                current_block_timestamp: env::block_timestamp(),
-                            },
-                        ) {
-                            log!("errors: {:?}", errors);
-                            Some(ProposalState::Invalid)
-                        } else {
-                            Some(ProposalState::Accepted)
-                        }
-                    } */
+                        // proposal is accepted, create new workflow activity with its storage
+                        self.storage_bucket_add(wft.storage_key.as_str());
+                        WorkflowInstance::new(proposal.workflow_id, wft.transitions.len());
+                        Some(ProposalState::Accepted)
+                    }
                 }
             }
-            ProposalState::Invalid => todo!(),
-            ProposalState::Spam => todo!(),
-            ProposalState::Rejected => todo!(),
-            ProposalState::Accepted => todo!(),
+            _ => None,
         };
+
+        match new_state {
+            Some(state) => {
+                proposal.state = state.clone();
+                self.proposals
+                    .insert(&proposal_id, &VProposal::Curr(proposal));
+                state
+            }
+            None => proposal.state,
+        }
     }
 
     pub fn group_create(
@@ -395,7 +361,10 @@ impl NewDaoContract {
         members: Vec<GroupMember>,
         token_lock: GroupReleaseInput,
     ) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
 
         self.add_group(GroupInput {
             settings,
@@ -404,7 +373,10 @@ impl NewDaoContract {
         });
     }
     pub fn group_remove(&mut self, proposal_id: ProposalId, id: GroupId) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
 
         match self.groups.remove(&id) {
             Some(mut group) => {
@@ -415,7 +387,10 @@ impl NewDaoContract {
         }
     }
     pub fn group_update(&mut self, proposal_id: ProposalId, id: GroupId, settings: GroupSettings) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
 
         match self.groups.get(&id) {
             Some(mut group) => {
@@ -431,7 +406,10 @@ impl NewDaoContract {
         id: GroupId,
         members: Vec<GroupMember>,
     ) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
 
         match self.groups.get(&id) {
             Some(mut group) => {
@@ -442,7 +420,11 @@ impl NewDaoContract {
         }
     }
     pub fn group_remove_member(&mut self, proposal_id: ProposalId, id: GroupId, member: AccountId) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
+
         match self.groups.get(&id) {
             Some(mut group) => {
                 group.remove_member(member);
@@ -452,18 +434,27 @@ impl NewDaoContract {
         }
     }
     pub fn settings_update(&mut self, proposal_id: ProposalId, settings: DaoSettings) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         assert_valid_dao_settings(&settings);
         self.settings.replace(&settings.into());
     }
     pub fn media_add(&mut self, proposal_id: ProposalId, media: Media) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
 
         self.media_last_id += 1;
         self.media.insert(&self.media_last_id, &media);
     }
     pub fn media_invalidate(&mut self, proposal_id: ProposalId, id: u32) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         match self.media.get(&id) {
             Some(mut media) => {
                 media.valid = false;
@@ -473,7 +464,10 @@ impl NewDaoContract {
         }
     }
     pub fn media_remove(&mut self, proposal_id: ProposalId, id: u32) -> Option<Media> {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         self.media.remove(&id)
     }
 
@@ -483,7 +477,10 @@ impl NewDaoContract {
         category: TagCategory,
         tags: Vec<String>,
     ) -> Option<(TagId, TagId)> {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         let mut t = self.tags.get(&category).unwrap_or(Tags::new());
         let ids = t.insert(tags);
         self.tags.insert(&category, &t);
@@ -497,7 +494,10 @@ impl NewDaoContract {
         id: TagId,
         name: String,
     ) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         match self.tags.get(&category) {
             Some(mut t) => {
                 t.rename(id, name);
@@ -508,7 +508,10 @@ impl NewDaoContract {
     }
 
     pub fn tag_clear(&mut self, proposal_id: ProposalId, category: TagCategory, id: TagId) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         //TODO implement check for all usage
         match self.tags.get(&category) {
             Some(mut t) => {
@@ -520,7 +523,10 @@ impl NewDaoContract {
     }
 
     pub fn ft_unlock(&mut self, proposal_id: ProposalId, group_ids: Vec<GroupId>) -> Vec<u32> {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         let mut released = Vec::with_capacity(group_ids.len());
         for id in group_ids.into_iter() {
             if let Some(mut group) = self.groups.get(&id) {
@@ -537,7 +543,10 @@ impl NewDaoContract {
         amount: u32,
         account_ids: Vec<AccountId>,
     ) -> bool {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         if let Some(mut group) = self.groups.get(&group_id) {
             match group.distribute_ft(amount) && account_ids.len() > 0 {
                 true => {
@@ -557,7 +566,23 @@ impl NewDaoContract {
         receiver_id: AccountId,
         amount: U128,
     ) -> Promise {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
+
+        //
+        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
+        let mut bucket = self.storage.get(&wft.storage_key).unwrap();
+        let _postprocessing = wfi.transition_to_next(
+            &wft,
+            ActionIdent::NearSend,
+            vec![
+                DataType::String(receiver_id.clone()),
+                DataType::U128(amount.0),
+            ],
+            &mut bucket,
+        );
+
         Promise::new(receiver_id).transfer(amount.0)
     }
     pub fn treasury_send_ft(
@@ -570,7 +595,10 @@ impl NewDaoContract {
         memo: Option<String>,
         msg: String,
     ) -> Promise {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
 
         let promise = Promise::new(ft_account_id);
         if is_contract {
@@ -615,7 +643,10 @@ impl NewDaoContract {
         memo: Option<String>,
         msg: String,
     ) -> Promise {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         let promise = Promise::new(nft_account_id);
         if is_contract {
             //TODO test formating memo
@@ -638,13 +669,9 @@ impl NewDaoContract {
         }
     }
 
+    //TODO move to internal when properly tested
     pub fn storage_add_bucket(&mut self, bucket_id: String) {
-        let bucket = StorageBucket::new(utils::get_bucket_id(&bucket_id));
-        assert!(
-            self.storage.insert(&bucket_id, &bucket).is_none(),
-            "{}",
-            ERR_STORAGE_BUCKET_EXISTS
-        );
+        self.storage_bucket_add(&bucket_id);
     }
     pub fn storage_remove_bucket(&mut self, bucket_id: String) {
         match self.storage.remove(&bucket_id) {
@@ -654,8 +681,8 @@ impl NewDaoContract {
             None => (),
         }
     }
-    
-    pub fn storage_add_data(&mut self, bucket_id: String, data_id: String, data: Data) {
+
+    pub fn storage_add_data(&mut self, bucket_id: String, data_id: String, data: DataType) {
         match self.storage.get(&bucket_id) {
             Some(mut bucket) => {
                 bucket.add_data(&data_id, &data);
@@ -665,7 +692,7 @@ impl NewDaoContract {
         }
     }
 
-    pub fn storage_remove_data(&mut self, bucket_id: String, data_id: String) -> Option<Data> {
+    pub fn storage_remove_data(&mut self, bucket_id: String, data_id: String) -> Option<DataType> {
         match self.storage.get(&bucket_id) {
             Some(mut bucket) => {
                 if let Some(data) = bucket.remove_data(&data_id) {
@@ -689,7 +716,10 @@ impl NewDaoContract {
         deposit: U128,
         tgas: u16,
     ) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         let fncall = self
             .function_calls
             .get(&fncall_id)
@@ -705,22 +735,34 @@ impl NewDaoContract {
     }
 
     pub fn function_call_add(&mut self, proposal_id: ProposalId, func: FnCallDefinition) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         let id = format!("{}_{}", func.receiver, func.name);
         self.function_calls.insert(&id, &func);
     }
     //TODO key as ID or func name
     pub fn function_call_remove(&mut self, proposal_id: ProposalId, id: String) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         self.function_calls.remove(&id);
     }
 
     pub fn workflow_install(&mut self, proposal_id: ProposalId) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         todo!()
     }
     pub fn workflow_add(&mut self, proposal_id: ProposalId) {
-        assert!(self.check_action_rights(proposal_id), "{}", ERR_NO_ACCESS);
+        let caller = env::predecessor_account_id();
+        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         todo!()
     }
 
@@ -735,7 +777,7 @@ mod test {
         serde_json::{self, Number, Value},
     };
 
-    use crate::action::{DataType, FnCallDefinition};
+    use crate::action::{DataTypeDef, FnCallDefinition};
 
     use super::FnCallMetadata;
 
@@ -788,11 +830,11 @@ mod test {
         vec![
             FnCallMetadata {
                 arg_names: vec!["optional_str".into(), "optional_obj".into()],
-                arg_types: vec![DataType::String(true), DataType::NullableObject(1)],
+                arg_types: vec![DataTypeDef::String(true), DataTypeDef::NullableObject(1)],
             },
             FnCallMetadata {
                 arg_names: vec!["optional_str".into(), "vec_u8".into()],
-                arg_types: vec![DataType::String(true), DataType::VecU8],
+                arg_types: vec![DataTypeDef::String(true), DataTypeDef::VecU8],
             },
         ]
     }
@@ -983,24 +1025,24 @@ mod test {
                     "obj".into(),
                 ],
                 arg_types: vec![
-                    DataType::String(false),
-                    DataType::NullableObject(1),
-                    DataType::VecString,
-                    DataType::VecU128,
-                    DataType::Object(2),
+                    DataTypeDef::String(false),
+                    DataTypeDef::NullableObject(1),
+                    DataTypeDef::VecString,
+                    DataTypeDef::VecU128,
+                    DataTypeDef::Object(2),
                 ],
             },
             FnCallMetadata {
                 arg_names: vec!["test".into()],
-                arg_types: vec![DataType::U8(true)],
+                arg_types: vec![DataTypeDef::U8(true)],
             },
             FnCallMetadata {
                 arg_names: vec!["nested_1_arr_8".into(), "nested_1_obj".into()],
-                arg_types: vec![DataType::VecU8, DataType::Object(3)],
+                arg_types: vec![DataTypeDef::VecU8, DataTypeDef::Object(3)],
             },
             FnCallMetadata {
                 arg_names: vec!["nested_2_arr_u64".into(), "bool_val".into()],
-                arg_types: vec![DataType::VecU64, DataType::Bool(false)],
+                arg_types: vec![DataTypeDef::VecU64, DataTypeDef::Bool(false)],
             },
         ];
 
