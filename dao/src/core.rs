@@ -10,7 +10,7 @@ use crate::settings::{
 };
 use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
-use crate::storage::{StorageBucket, StorageData};
+use crate::storage::{StorageBucket};
 use crate::tags::{TagInput, Tags};
 use crate::workflow::{WorkflowInstance, WorkflowSettings, WorkflowTemplate};
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
@@ -116,8 +116,8 @@ impl NewDaoContract {
         tags: Vec<TagInput>,
         function_calls: Vec<FnCallDefinition>,
         function_call_metadata: Vec<Vec<FnCallMetadata>>,
-        workflow_template_settings: Vec<Vec<WorkflowSettings>>,
         workflow_templates: Vec<WorkflowTemplate>,
+        workflow_template_settings: Vec<Vec<WorkflowSettings>>,
     ) -> Self {
         assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
         assert_valid_dao_settings(&settings);

@@ -881,7 +881,7 @@ impl NewDaoContract {
                         Some(_m) => return true,
                         None => continue,
                     },
-                    _ => panic!(ERR_GROUP_NOT_FOUND),
+                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
                 },
                 ActivityRight::GroupMember(g, name) => {
                     if name != account_id {
@@ -893,7 +893,7 @@ impl NewDaoContract {
                             Some(_m) => return true,
                             None => continue,
                         },
-                        _ => panic!(ERR_GROUP_NOT_FOUND),
+                        _ => panic!("{}", ERR_GROUP_NOT_FOUND),
                     }
                 }
                 ActivityRight::TokenHolder => match self.ft.accounts.get(account_id) {
@@ -910,14 +910,14 @@ impl NewDaoContract {
                         },
                         None => continue,
                     },
-                    _ => panic!(ERR_GROUP_NOT_FOUND),
+                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
                 },
                 ActivityRight::GroupLeader(g) => match self.groups.get(g) {
                     Some(group) => match group.settings.leader == *account_id {
                         true => return true,
                         false => continue,
                     },
-                    _ => panic!(ERR_GROUP_NOT_FOUND),
+                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
                 },
                 ActivityRight::Member => {
                     match self.ft.accounts.get(account_id) {
@@ -939,6 +939,10 @@ impl NewDaoContract {
                         }
                     }
                 }
+                ActivityRight::Account(a) => match a == account_id {
+                    true => return true,
+                    false => continue,
+                },
             }
         }
         false

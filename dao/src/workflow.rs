@@ -1,6 +1,6 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
+    serde::{Deserialize, Serialize}, AccountId,
 };
 
 use crate::{action::ActionIdent, FnCallId, GroupId, TagId};
@@ -130,6 +130,7 @@ pub enum ActivityRight {
     Anyone,
     Group(GroupId),
     GroupMember(GroupId, String),
+    Account(AccountId),
     TokenHolder,
     Member,
     GroupRole(GroupId, TagId),
@@ -144,7 +145,7 @@ pub struct WorkflowSettings {
     pub deposit_propose: Option<u128>,
     pub deposit_vote: Option<u128>,              // Near
     pub deposit_propose_return: bool,            // if return deposit above when workflow finishes
-    pub allowed_voters: Vec<Vec<ActivityRight>>, // activity ID -> possible voters[]
+    pub allowed_voters: ActivityRight,
     //pub vote_deposit: Option<u128>, //yoctoNear // get from DAO settings?
     pub vote_settings_id: u8,
     pub activity_rights: Vec<ActivityRight>,

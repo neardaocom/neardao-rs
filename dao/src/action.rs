@@ -13,7 +13,7 @@ use crate::proposal::{NewProposal, ProposalState, VProposal};
 use crate::release::ReleaseDb;
 use crate::settings::assert_valid_dao_settings;
 use crate::settings::DaoSettings;
-use crate::storage::{StorageBucket, StorageData};
+use crate::storage::{DataType as Data, StorageBucket};
 use crate::tags::Tags;
 use crate::workflow::VoteScenario;
 use crate::{
@@ -654,46 +654,18 @@ impl NewDaoContract {
             None => (),
         }
     }
-    pub fn storage_add_data_as_string(&mut self, bucket_id: String, data_id: String, data: String) {
+    
+    pub fn storage_add_data(&mut self, bucket_id: String, data_id: String, data: Data) {
         match self.storage.get(&bucket_id) {
             Some(mut bucket) => {
-                bucket.add_data(&data_id, &StorageData::from(data));
+                bucket.add_data(&data_id, &data);
                 self.storage.insert(&bucket_id, &bucket);
             }
             None => (),
         }
     }
 
-    pub fn storage_add_data_vec_u8(&mut self, bucket_id: String, data_id: String, data: Vec<u8>) {
-        match self.storage.get(&bucket_id) {
-            Some(mut bucket) => {
-                bucket.add_data(&data_id, &StorageData::from(data));
-                self.storage.insert(&bucket_id, &bucket);
-            }
-            None => (),
-        }
-    }
-
-    pub fn storage_add_data_as_vec_string(
-        &mut self,
-        bucket_id: String,
-        data_id: String,
-        data: Vec<String>,
-    ) {
-        match self.storage.get(&bucket_id) {
-            Some(mut bucket) => {
-                bucket.add_data(&data_id, &StorageData::from(data));
-                self.storage.insert(&bucket_id, &bucket);
-            }
-            None => (),
-        }
-    }
-
-    pub fn storage_remove_data(
-        &mut self,
-        bucket_id: String,
-        data_id: String,
-    ) -> Option<StorageData> {
+    pub fn storage_remove_data(&mut self, bucket_id: String, data_id: String) -> Option<Data> {
         match self.storage.get(&bucket_id) {
             Some(mut bucket) => {
                 if let Some(data) = bucket.remove_data(&data_id) {

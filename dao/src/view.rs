@@ -13,7 +13,6 @@ use crate::group::{Group, GroupMember, GroupOutput};
 use crate::proposal::VProposal;
 use crate::release::{ReleaseDb, ReleaseModel};
 use crate::settings::{DaoSettings, VoteSettings};
-use crate::storage::StorageData;
 use crate::tags::Tags;
 use crate::{core::*, GroupId, GroupName, StorageKey};
 use crate::{TagCategory, CID};
@@ -258,7 +257,7 @@ impl NewDaoContract {
         self.tags.get(&category)
     }
 
-    pub fn storage_bucket_all(self, bucket_id: String) -> Option<Vec<StorageData>> {
+    pub fn storage_bucket_data_all(self, bucket_id: StorageKey) -> Option<Vec<DataType>> {
         self.storage.get(&bucket_id).map(|bucket| {
             bucket
                 .get_all_data()
@@ -268,52 +267,14 @@ impl NewDaoContract {
         })
     }
 
-    pub fn storage_data(self, bucket_id: StorageKey, data_id: String) -> Option<StorageData> {
+    pub fn storage_buckets(self) -> Vec<StorageKey> {
+        self.storage.keys_as_vector().to_vec()
+    }
+
+    pub fn storage_bucket_data(self, bucket_id: StorageKey, data_id: String) -> Option<DataType> {
         self.storage
             .get(&bucket_id)
             .map(|bucket| bucket.get_data(&data_id))
             .flatten()
-    }
-
-    pub fn storage_data_as_vec_u8(
-        self,
-        bucket_id: StorageKey,
-        data_id: String,
-    ) -> Option<Result<Vec<u8>, String>> {
-        let storage_data = self
-            .storage
-            .get(&bucket_id)
-            .map(|bucket| bucket.get_data(&data_id))
-            .flatten();
-
-        storage_data.map(|s| s.try_into_vec_u8())
-    }
-
-    pub fn storage_data_as_string(
-        self,
-        bucket_id: StorageKey,
-        data_id: String,
-    ) -> Option<Result<String, String>> {
-        let storage_data = self
-            .storage
-            .get(&bucket_id)
-            .map(|bucket| bucket.get_data(&data_id))
-            .flatten();
-
-        storage_data.map(|s| s.try_into_string())
-    }
-
-    pub fn storage_data_as_vec_string(
-        self,
-        bucket_id: StorageKey,
-        data_id: String,
-    ) -> Option<Result<Vec<String>, String>> {
-        let storage_data = self
-            .storage
-            .get(&bucket_id)
-            .map(|bucket| bucket.get_data(&data_id))
-            .flatten();
-
-        storage_data.map(|s| s.try_into_vec_string())
     }
 }
