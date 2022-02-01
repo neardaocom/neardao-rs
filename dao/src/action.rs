@@ -335,7 +335,7 @@ impl NewDaoContract {
                     } else {
                         // proposal is accepted, create new workflow activity with its storage
                         self.storage_bucket_add(wft.storage_key.as_str());
-                        WorkflowInstance::new(proposal.workflow_id, wft.transitions.len());
+                        WorkflowInstance::new(proposal.workflow_id, &wft.transitions);
                         Some(ProposalState::Accepted)
                     }
                 }
@@ -573,15 +573,12 @@ impl NewDaoContract {
         //
         let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
         let mut bucket = self.storage.get(&wft.storage_key).unwrap();
-        let _postprocessing = wfi.transition_to_next(
-            &wft,
-            ActionIdent::NearSend,
-            vec![
-                DataType::String(receiver_id.clone()),
-                DataType::U128(amount.0),
-            ],
-            &mut bucket,
-        );
+        let mut args = vec![
+            DataType::String(receiver_id.clone()),
+            DataType::U128(amount.0),
+        ];
+        let _postprocessing =
+            wfi.transition_to_next(&wft, ActionIdent::NearSend, &mut args, &mut bucket);
 
         Promise::new(receiver_id).transfer(amount.0)
     }

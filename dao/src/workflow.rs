@@ -1,3 +1,5 @@
+use std::marker;
+
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
@@ -6,9 +8,13 @@ use near_sdk::{
 
 use crate::{
     action::ActionIdent,
+    expression::EExpr,
     storage::{DataType, StorageBucket},
     FnCallId, GroupId, TagId,
 };
+
+type ArgValidatorId = u8;
+type BindId = u8;
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
@@ -17,44 +23,74 @@ pub enum VoteScenario {
     Democratic,
     TokenWeighted,
 }
+
+// Issue: ATM we are not able to bind/validate non-primitive data types, eg. bind GroupSettings type to WF
+// TODO use the schema in ::actions
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct WorkflowTemplate {
     pub name: String,
     pub version: u8,
-    pub activity: Vec<WorkflowActivity>,
-    pub transitions: Vec<WorkflowTransition>,
-    pub start: Vec<u8>, // ids of activitys above
+    pub activity: Vec<Option<WorkflowActivity>>,
+    pub transitions: Vec<Vec<WorkflowTransition>>,
+    pub start: Vec<u8>,
     pub end: Vec<u8>,
-    pub storage_key: String, // storage for this WF
-                             // TODO ad WF settings here?
+    pub storage_key: String,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct WorkflowTransition {
-    from: u8,
     to: u8,
-    iteration_limit: u16,
+    iteration_limit: u8,
     condition: Option<Expression>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct Expression;
+pub struct Expression {
+    args: Vec<ExprArg>,
+    expr: EExpr,
+}
 
 impl Expression {
-    //TODO
-    pub fn eval(&self, storage: &mut StorageBucket) -> DataType {
-        DataType::Bool(true)
+    pub fn bind_and_eval(
+        &self,
+        storage: &StorageBucket,
+        binds: &[DataType],
+        args: &[DataType],
+    ) -> DataType {
+        let mut binded_args: Vec<DataType> = Vec::with_capacity(args.len());
+
+        for arg in self.args.iter() {
+            match arg {
+                ExprArg::User(id) => {
+                    binded_args.push(args[*id as usize].clone());
+                }
+                ExprArg::Bind(id) => {
+                    binded_args.push(binds[*id as usize].clone());
+                }
+                ExprArg::Storage(key) => {
+                    binded_args.push(storage.get_data(key).unwrap().clone());
+                }
+            }
+        }
+
+        self.expr.eval(&mut binded_args)
     }
 }
 
-type ArgValidatorId = u8;
-type BindId = u8;
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum ExprArg {
+    User(u8),
+    Bind(u8),
+    Storage(String),
+}
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
@@ -71,12 +107,41 @@ pub enum WorkflowActivityArgType {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum WorkflowActivityExecutionResult {
-    Success,
-    ErrMaxTransitionLimitReached,
+    Ok,
+    Finished,
+    MaxTransitionLimitReached,
+    TransitionCondFailed,
+    ActivityCondFailed,
     ErrPostprocessing,
     ErrInputOutOfRange, // user provided too high or too low value
     ErrRuntime,         // datatype mismatch/register missing
-                        // TODO ...
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum Activity {
+    Start,
+    Activity(WorkflowActivity),
+    End,
+}
+
+impl Activity {
+    pub fn get_inner(&self) -> Option<&WorkflowActivity> {
+        match self {
+            Activity::Activity(a) => Some(a),
+            _ => None,
+        }
+    }
+}
+
+impl PartialEq<ActionIdent> for Activity {
+    fn eq(&self, other: &ActionIdent) -> bool {
+        match self {
+            Self::Activity(wfa) => wfa.action == *other,
+            _ => false,
+        }
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
@@ -102,11 +167,7 @@ impl WorkflowActivity {
 
     // TODO tests
     /// Interpolates args into result args
-    pub fn interpolate_args(
-        &self,
-        mut args: Vec<DataType>,
-        storage: &mut StorageBucket,
-    ) -> Vec<DataType> {
+    pub fn interpolate_args(&self, mut args: &mut Vec<DataType>, storage: &mut StorageBucket) {
         assert_eq!(self.arg_types.len(), args.len());
 
         let mut result_args = Vec::with_capacity(self.arg_types.len());
@@ -118,10 +179,13 @@ impl WorkflowActivity {
                 }
                 WorkflowActivityArgType::Checked(id) => {
                     let expr = self.arg_validators.get(*id as usize).unwrap();
-                    if !expr.eval(storage).try_into_bool().unwrap() {
+                    if !expr
+                        .bind_and_eval(storage, self.binds.as_slice(), result_args.as_slice())
+                        .try_into_bool()
+                        .unwrap()
+                    {
                         panic!("{}", "Input is not valid");
                     }
-                    result_args.push(std::mem::replace(&mut args[i], DataType::Null))
                 }
                 WorkflowActivityArgType::Bind(id) => {
                     result_args.push(self.binds[*id as usize].clone())
@@ -129,10 +193,15 @@ impl WorkflowActivity {
                 WorkflowActivityArgType::Storage(key) => {
                     result_args.push(storage.get_data(key).unwrap());
                 }
-                WorkflowActivityArgType::Expression(expr) => result_args.push(expr.eval(storage)),
+                WorkflowActivityArgType::Expression(expr) => result_args.push(expr.bind_and_eval(
+                    storage,
+                    self.binds.as_slice(),
+                    result_args.as_slice(),
+                )),
             }
         }
-        result_args
+
+        std::mem::swap(&mut result_args, &mut args);
     }
 }
 
@@ -141,6 +210,12 @@ impl WorkflowActivity {
 #[serde(crate = "near_sdk::serde")]
 pub struct Postprocessing {
     script: String, //TODO program expressions?
+}
+
+impl Postprocessing {
+    pub fn process(&self, storgae: &mut StorageBucket) -> bool {
+        todo!()
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
@@ -158,78 +233,104 @@ pub enum WorkflowInstanceState {
 #[serde(crate = "near_sdk::serde")]
 pub struct WorkflowInstance {
     pub state: WorkflowInstanceState,
-    pub current_action: u8,
-    pub transition_counter: Vec<u8>,
+    pub current_activity_id: u8,
+    pub transition_counter: Vec<Vec<u8>>,
     pub template_id: u16,
 }
 
 impl WorkflowInstance {
-    pub fn new(template_id: u16, transitions_len: usize) -> Self {
+    pub fn new(template_id: u16, transitions: &Vec<Vec<WorkflowTransition>>) -> Self {
+        let mut transition_counter = Vec::with_capacity(transitions.len());
+
+        for t in transitions.iter() {
+            transition_counter.push(vec![0; t.len()])
+        }
+
         WorkflowInstance {
             state: WorkflowInstanceState::Running,
-            current_action: 0,
-            transition_counter: vec![0; transitions_len],
+            current_activity_id: 0,
+            transition_counter,
             template_id,
         }
     }
 
-    // TODO return type structure
-    /// Tries to advance to next activity in workflow. Panics if anything is wrong.
-    pub fn transition_to_next(
+    /// Tries to advance to next activity in workflow. Panics if anything is wrong - for now.
+    pub fn transition_to_next<'a>(
         &mut self,
-        wft: &WorkflowTemplate,
+        wft: &'a WorkflowTemplate,
         current_action_ident: ActionIdent,
-        action_args: Vec<DataType>,
+        action_args: &mut Vec<DataType>,
         storage_bucket: &mut StorageBucket,
-    ) -> Option<Postprocessing> {
+    ) -> (WorkflowActivityExecutionResult, Option<&'a Postprocessing>) {
         if self.state == WorkflowInstanceState::Finished {
-            return None;
+            return (WorkflowActivityExecutionResult::Finished, None);
         }
 
         // check if theres transition from current action to desired
-        let transition = wft
-            .transitions
+        let transition = wft.transitions[self.current_activity_id as usize]
             .iter()
-            .filter(|t| t.from == self.current_action)
-            .find(|t| wft.activity[t.to as usize].action == current_action_ident);
+            .enumerate()
+            .find(|(_, t)| {
+                wft.activity[t.to as usize].as_ref().unwrap().action == current_action_ident
+            });
 
-        let activity_id: u8 = match transition {
-            Some(t) => match t
-                .condition
-                .as_ref()
-                .map(|cond| cond.eval(storage_bucket).try_into_bool().unwrap())
-                .unwrap_or(true)
-            {
-                true => t.to,
-                false => panic!("{}", "Condition for transition not fullfiled"),
-            },
+        // check if we can do the transition
+        let current_activity;
+        match transition {
+            Some((_, t)) => {
+                self.current_activity_id = t.to;
+                current_activity = wft.activity[t.to as usize].as_ref().unwrap();
+                match t
+                    .condition
+                    .as_ref()
+                    .map(|cond| {
+                        // Cond if desired activity can be run
+                        cond.bind_and_eval(
+                            storage_bucket,
+                            current_activity.binds.as_slice(),
+                            action_args.as_slice(),
+                        )
+                        .try_into_bool()
+                        .unwrap()
+                    })
+                    .unwrap_or(true)
+                {
+                    true => (),
+                    false => return (WorkflowActivityExecutionResult::TransitionCondFailed, None),
+                };
+            }
             None => panic!("{}", "Undefined transition"),
-        };
+        }
+
+        // ATM we know the activity is valid workflow activity
+
+        // check transition counter
+        self.transition_counter[self.current_activity_id as usize][transition.unwrap().0] += 1;
+        assert!(
+            self.transition_counter[self.current_activity_id as usize][transition.unwrap().0]
+                <= transition.unwrap().1.iteration_limit
+        );
 
         // check if we can run this
-        let can_be_exec = wft.activity[activity_id as usize]
-            .exec_condition
-            .eval(storage_bucket);
+        let can_be_exec = current_activity.exec_condition.bind_and_eval(
+            storage_bucket,
+            current_activity.binds.as_slice(),
+            action_args.as_slice(),
+        );
 
         if !can_be_exec.try_into_bool().unwrap() {
-            //TODO
-            return None;
+            return (WorkflowActivityExecutionResult::ActivityCondFailed, None);
         }
 
         // bind args and check values
-        let args = wft.activity[self.current_action as usize]
-            .interpolate_args(action_args, storage_bucket);
+        current_activity.interpolate_args(action_args, storage_bucket);
 
-        //check if current activity is final
-        if wft.end.contains(&self.current_action) {
-            self.state = WorkflowInstanceState::Finished;
-            //TODO
-            return None;
-        } else {
-            self.current_action += 1;
-        }
+        // TODO to end transition - should by done by app
 
-        None
+        (
+            WorkflowActivityExecutionResult::Ok,
+            current_activity.postprocessing.as_ref(),
+        )
     }
 }
 
@@ -266,4 +367,163 @@ pub struct WorkflowSettings {
     pub approve_threshold: u8,
     pub spam_threshold: u8,
     pub vote_only_once: bool,
+}
+
+#[cfg(test)]
+
+mod test {
+    use crate::{
+        action::ActionIdent,
+        expression::{
+            EExpr, ExprTerm, FnName, LogicOperation, Op, Operator, RelationalOperation, TExpr,
+        },
+        storage::{DataType, StorageBucket},
+        workflow::{ExprArg, WorkflowActivityExecutionResult},
+    };
+
+    use super::{
+        Activity, Expression, Postprocessing, WorkflowActivity, WorkflowActivityArgType,
+        WorkflowInstance, WorkflowInstanceState, WorkflowTemplate, WorkflowTransition,
+    };
+
+    // PoC test case
+    #[test]
+    pub fn simple_workflow() {
+        // Eg: start -> send_near -> create_group -> end
+        // Args: receiver -> binded
+
+        let pp1 = Some(Postprocessing {
+            script: "script code".into(),
+        });
+
+        // 100 > user input
+        let expr_send_near = EExpr::Boolean(TExpr {
+            operators: vec![Op {
+                op_type: Operator::Relational(RelationalOperation::Gt),
+                operands_ids: [0, 1],
+            }],
+            terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
+        });
+
+        // group_name == concat(input test_bind) (bind = "_group")
+        let expr_add_group = EExpr::Boolean(TExpr {
+            operators: vec![Op {
+                operands_ids: [0, 1],
+                op_type: Operator::Relational(RelationalOperation::Eqs),
+            }],
+            terms: vec![ExprTerm::FnCall(FnName::Concat, (0, 1)), ExprTerm::Arg(2)],
+        });
+
+        let wft = WorkflowTemplate {
+            name: "test".into(),
+            version: 1,
+            activity: vec![
+                None,
+                Some(WorkflowActivity {
+                    name: "send_near".into(),
+                    exec_condition: Expression {
+                        args: vec![ExprArg::Bind(0), ExprArg::User(1)],
+                        expr: expr_send_near,
+                    },
+                    action: ActionIdent::NearSend,
+                    fncall_id: None,
+                    gas: 0,
+                    deposit: 0,
+                    arg_types: vec![WorkflowActivityArgType::Free, WorkflowActivityArgType::Free],
+                    arg_validators: vec![],
+                    binds: vec![DataType::U8(100)],
+                    postprocessing: pp1.clone(),
+                }),
+                Some(WorkflowActivity {
+                    name: "create_group".into(),
+                    exec_condition: Expression {
+                        args: vec![ExprArg::User(1), ExprArg::Bind(1), ExprArg::Bind(2)],
+                        expr: expr_add_group,
+                    },
+                    action: ActionIdent::GroupAdd,
+                    fncall_id: None,
+                    gas: 0,
+                    deposit: 0,
+                    arg_types: vec![
+                        WorkflowActivityArgType::Bind(0),
+                        WorkflowActivityArgType::Bind(2),
+                        WorkflowActivityArgType::Free,
+                    ],
+                    arg_validators: vec![],
+                    binds: vec![
+                        DataType::String("rustaceans".into()),
+                        DataType::String("_group".into()),
+                        DataType::String("leaderisme_group".into()),
+                    ],
+                    postprocessing: pp1.clone(),
+                }),
+            ],
+            transitions: vec![
+                vec![WorkflowTransition {
+                    to: 1,
+                    iteration_limit: 1,
+                    condition: None,
+                }],
+                vec![WorkflowTransition {
+                    to: 2,
+                    iteration_limit: 1,
+                    condition: None,
+                }],
+                vec![WorkflowTransition {
+                    to: 3,
+                    iteration_limit: 1,
+                    condition: None,
+                }],
+            ],
+            start: vec![0],
+            end: vec![2],
+            storage_key: "simple_wf".into(),
+        };
+
+        let mut wfi = WorkflowInstance {
+            state: WorkflowInstanceState::Running,
+            current_activity_id: 0,
+            transition_counter: vec![vec![0], vec![0], vec![0]],
+            template_id: 1,
+        };
+        let mut storage_bucket = StorageBucket::new(b"simple_wf".to_vec());
+
+        // Execute Workflow
+        let expected_args = vec![DataType::String("jonnyis.near".into()), DataType::U8(50)];
+
+        let mut args_result = expected_args.clone();
+
+        let result = wfi.transition_to_next(
+            &wft,
+            ActionIdent::NearSend,
+            &mut args_result,
+            &mut storage_bucket,
+        );
+
+        let expected_result = (WorkflowActivityExecutionResult::Ok, pp1.as_ref());
+
+        assert_eq!(result, expected_result);
+        assert_eq!(args_result, expected_args);
+        assert_eq!(wfi.current_activity_id, 1);
+
+        let mut args = vec![
+            DataType::String("rustlovers".into()),
+            DataType::String("leaderisme".into()),
+            DataType::String("user_provided_settings".into()),
+        ];
+
+        let result =
+            wfi.transition_to_next(&wft, ActionIdent::GroupAdd, &mut args, &mut storage_bucket);
+
+        let expected_result = (WorkflowActivityExecutionResult::Ok, pp1.as_ref());
+        let expected_args = vec![
+            DataType::String("rustaceans".into()),
+            DataType::String("leaderisme_group".into()),
+            DataType::String("user_provided_settings".into()),
+        ];
+
+        assert_eq!(result, expected_result);
+        assert_eq!(args, expected_args);
+        assert_eq!(wfi.current_activity_id, 2);
+    }
 }
