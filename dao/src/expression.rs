@@ -75,8 +75,8 @@ use crate::storage::DataType as DT;
 type ExprNode = Box<TExpr>;
 type ArgId = u8;
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum ExprTerm {
     Value(DT),
@@ -84,8 +84,8 @@ pub enum ExprTerm {
     FnCall(FnName, (u8, u8)),
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum FnName {
     Concat,
@@ -109,46 +109,69 @@ pub enum FnName {
 */
 
 // Recursive structure does not work with deserializer
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct TExpr {
     pub operators: Vec<Op>,
     pub terms: Vec<ExprTerm>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct Condition {
+    pub expr: EExpr,
+    pub true_path: u8,
+    pub false_path: u8,
+}
+
+impl Condition {
+    pub fn eval(&self, args: &[DT]) -> u8 {
+        if let DT::Bool(v) = self.expr.eval(args) {
+            match v {
+                true => self.true_path,
+                false => self.false_path,
+            }
+        } else {
+            panic!("{}", "Cond expr must return bool");
+        }
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Op {
     pub operands_ids: [u8; 2],
     pub op_type: Operator,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum EExpr {
     Aritmetic(TExpr),
     Boolean(TExpr),
     String(TExpr),
     Fn(FnName),
+    Value(DT),
 }
 
 impl EExpr {
-    pub fn eval(&self, args: &mut Vec<DT>) -> DT {
+    pub fn eval(&self, args: &[DT]) -> DT {
         match self {
             EExpr::Aritmetic(e) | EExpr::Boolean(e) | EExpr::String(e) => {
                 self.eval_expr(e, args).unwrap()
             }
-            EExpr::Fn(fn_name) => self.eval_fn(fn_name, args.as_slice()),
+            EExpr::Fn(fn_name) => self.eval_fn(fn_name, args),
+            EExpr::Value(v) => v.clone(),
         }
     }
 
     pub fn eval_expr(&self, expr: &TExpr, args: &[DT]) -> Result<DT, String> {
         let mut results = Vec::with_capacity(expr.terms.len());
         for op in expr.operators.iter() {
-
             let temp_res = match &op.op_type {
                 Operator::Logic(_) => {
                     let (lhs, rhs) = (
@@ -184,7 +207,6 @@ impl EExpr {
             };
             results.push(temp_res);
         }
-
 
         Ok(results.pop().unwrap())
 
@@ -298,8 +320,8 @@ impl EExpr {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum AritmeticOperation {
     Add,
@@ -309,8 +331,8 @@ pub enum AritmeticOperation {
     Modulo,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum RelationalOperation {
     Eqs,
@@ -321,16 +343,16 @@ pub enum RelationalOperation {
     LtE,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum LogicOperation {
     And,
     Or,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum Operator {
     Aritmetic(AritmeticOperation),

@@ -7,8 +7,8 @@ use near_sdk::{
 };
 
 use crate::{
-    action::ActionIdent,
-    expression::EExpr,
+    action::{ActionIdent, DataTypeDef},
+    expression::{Condition, EExpr},
     storage::{DataType, StorageBucket},
     FnCallId, GroupId, TagId,
 };
@@ -205,16 +205,40 @@ impl WorkflowActivity {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum CondOrExpr {
+    Cond(Condition),
+    Expr(EExpr),
+}
+
+/// Simple post-fncall instructions which say what to do based on FnCall result
+/// ATM Used its only used to save fncall action result to the storage
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Postprocessing {
-    script: String, //TODO program expressions?
+    pub storage_key: String,
+    pub fn_call_result_type: DataTypeDef,
+    pub instructions: Vec<CondOrExpr>,
 }
 
 impl Postprocessing {
-    pub fn process(&self, storgae: &mut StorageBucket) -> bool {
-        todo!()
+    pub fn process(&self, result_input: &[DataType]) -> DataType {
+        if self.instructions.len() == 0 {
+            return result_input[0].clone();
+        }
+
+        let mut idx = 0;
+        return loop {
+            match &self.instructions[idx] {
+                CondOrExpr::Cond(c) => idx = c.eval(result_input) as usize,
+                CondOrExpr::Expr(e) => {
+                    break e.eval(result_input);
+                }
+            }
+        };
     }
 }
 
@@ -257,11 +281,11 @@ impl WorkflowInstance {
     /// Tries to advance to next activity in workflow. Panics if anything is wrong - for now.
     pub fn transition_to_next<'a>(
         &mut self,
-        wft: &'a WorkflowTemplate,
+        wft: &WorkflowTemplate,
         current_action_ident: ActionIdent,
         action_args: &mut Vec<DataType>,
         storage_bucket: &mut StorageBucket,
-    ) -> (WorkflowActivityExecutionResult, Option<&'a Postprocessing>) {
+    ) -> (WorkflowActivityExecutionResult, Option<Postprocessing>) {
         if self.state == WorkflowInstanceState::Finished {
             return (WorkflowActivityExecutionResult::Finished, None);
         }
@@ -305,11 +329,16 @@ impl WorkflowInstance {
         // ATM we know the activity is valid workflow activity
 
         // check transition counter
-        self.transition_counter[self.current_activity_id as usize][transition.unwrap().0] += 1;
-        assert!(
-            self.transition_counter[self.current_activity_id as usize][transition.unwrap().0]
-                <= transition.unwrap().1.iteration_limit
-        );
+        if self.transition_counter[self.current_activity_id as usize - 1][transition.unwrap().0] + 1
+            > transition.unwrap().1.iteration_limit
+        {
+            return (
+                WorkflowActivityExecutionResult::MaxTransitionLimitReached,
+                None,
+            );
+        }
+
+        self.transition_counter[self.current_activity_id as usize - 1][transition.unwrap().0] += 1;
 
         // check if we can run this
         let can_be_exec = current_activity.exec_condition.bind_and_eval(
@@ -329,7 +358,7 @@ impl WorkflowInstance {
 
         (
             WorkflowActivityExecutionResult::Ok,
-            current_activity.postprocessing.as_ref(),
+            current_activity.postprocessing.clone(),
         )
     }
 }
@@ -373,27 +402,30 @@ pub struct WorkflowSettings {
 
 mod test {
     use crate::{
-        action::ActionIdent,
+        action::{ActionIdent, DataTypeDef},
         expression::{
-            EExpr, ExprTerm, FnName, LogicOperation, Op, Operator, RelationalOperation, TExpr,
+            Condition, EExpr, ExprTerm, FnName, Op, Operator, RelationalOperation, TExpr,
         },
         storage::{DataType, StorageBucket},
         workflow::{ExprArg, WorkflowActivityExecutionResult},
     };
 
     use super::{
-        Activity, Expression, Postprocessing, WorkflowActivity, WorkflowActivityArgType,
-        WorkflowInstance, WorkflowInstanceState, WorkflowTemplate, WorkflowTransition,
+        Activity, CondOrExpr, Expression, Postprocessing, WorkflowActivity,
+        WorkflowActivityArgType, WorkflowInstance, WorkflowInstanceState, WorkflowTemplate,
+        WorkflowTransition,
     };
 
     // PoC test case
     #[test]
-    pub fn simple_workflow() {
+    pub fn workflow_simple() {
         // Eg: start -> send_near -> create_group -> end
         // Args: receiver -> binded
 
         let pp1 = Some(Postprocessing {
-            script: "script code".into(),
+            storage_key: "activity_1_postprocessing".into(),
+            fn_call_result_type: DataTypeDef::String(false),
+            instructions: vec![],
         });
 
         // 100 > user input
@@ -500,7 +532,7 @@ mod test {
             &mut storage_bucket,
         );
 
-        let expected_result = (WorkflowActivityExecutionResult::Ok, pp1.as_ref());
+        let expected_result = (WorkflowActivityExecutionResult::Ok, pp1.clone());
 
         assert_eq!(result, expected_result);
         assert_eq!(args_result, expected_args);
@@ -515,7 +547,7 @@ mod test {
         let result =
             wfi.transition_to_next(&wft, ActionIdent::GroupAdd, &mut args, &mut storage_bucket);
 
-        let expected_result = (WorkflowActivityExecutionResult::Ok, pp1.as_ref());
+        let expected_result = (WorkflowActivityExecutionResult::Ok, pp1.clone());
         let expected_args = vec![
             DataType::String("rustaceans".into()),
             DataType::String("leaderisme_group".into()),
@@ -525,5 +557,146 @@ mod test {
         assert_eq!(result, expected_result);
         assert_eq!(args, expected_args);
         assert_eq!(wfi.current_activity_id, 2);
+    }
+
+    #[test]
+    fn workflow_simple_loop() {
+        // 100 > user input
+        let expr_send_near = EExpr::Boolean(TExpr {
+            operators: vec![Op {
+                op_type: Operator::Relational(RelationalOperation::GtE),
+                operands_ids: [0, 1],
+            }],
+            terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
+        });
+
+        let pp1 = Some(Postprocessing {
+            storage_key: "activity_1_postprocessing".into(),
+            fn_call_result_type: DataTypeDef::String(false),
+            instructions: vec![],
+        });
+
+        let wft = WorkflowTemplate {
+            name: "test".into(),
+            version: 1,
+            activity: vec![
+                None,
+                Some(WorkflowActivity {
+                    name: "send_near".into(),
+                    exec_condition: Expression {
+                        args: vec![ExprArg::Bind(0), ExprArg::User(1)],
+                        expr: expr_send_near,
+                    },
+                    action: ActionIdent::NearSend,
+                    fncall_id: None,
+                    gas: 0,
+                    deposit: 0,
+                    arg_types: vec![WorkflowActivityArgType::Free, WorkflowActivityArgType::Free],
+                    arg_validators: vec![],
+                    binds: vec![DataType::U8(50)],
+                    postprocessing: pp1.clone(),
+                }),
+            ],
+            transitions: vec![
+                vec![WorkflowTransition {
+                    to: 1,
+                    iteration_limit: 1,
+                    condition: None,
+                }],
+                // From 1 to 1 loop
+                vec![WorkflowTransition {
+                    to: 1,
+                    iteration_limit: 5,
+                    condition: None,
+                }],
+            ],
+            start: vec![0],
+            end: vec![2],
+            storage_key: "simple_wf".into(),
+        };
+
+        let mut wfi = WorkflowInstance {
+            state: WorkflowInstanceState::Running,
+            current_activity_id: 0,
+            transition_counter: vec![vec![0]],
+            template_id: 1,
+        };
+        let mut storage_bucket = StorageBucket::new(b"simple_wf".to_vec());
+
+        // Execute Workflow
+        for i in 1..=5 {
+            let expected_args = vec![DataType::String("jonnyis.near".into()), DataType::U8(50)];
+
+            let mut args_result = expected_args.clone();
+
+            let result = wfi.transition_to_next(
+                &wft,
+                ActionIdent::NearSend,
+                &mut args_result,
+                &mut storage_bucket,
+            );
+
+            let expected_result = (WorkflowActivityExecutionResult::Ok, pp1.clone());
+
+            assert_eq!(result, expected_result);
+            assert_eq!(args_result, expected_args);
+            assert_eq!(wfi.current_activity_id, 1);
+            assert_eq!(wfi.transition_counter[0][0], i);
+        }
+
+        let expected_args = vec![DataType::String("jonnyis.near".into()), DataType::U8(50)];
+
+        let mut args_result = expected_args.clone();
+
+        let result = wfi.transition_to_next(
+            &wft,
+            ActionIdent::NearSend,
+            &mut args_result,
+            &mut storage_bucket,
+        );
+
+        let expected_result = (
+            WorkflowActivityExecutionResult::MaxTransitionLimitReached,
+            None,
+        );
+
+        assert_eq!(result, expected_result);
+        assert_eq!(args_result, expected_args);
+        assert_eq!(wfi.current_activity_id, 1);
+        assert_eq!(wfi.transition_counter[0][0], 5);
+    }
+
+    #[test]
+    fn postprocessing_with_cond() {
+        // FnCall result > 5 then 20 else 40
+        let input: Vec<DataType> = vec![DataType::U8(1)];
+        let postprocessing = Postprocessing {
+            storage_key: "key".into(),
+            fn_call_result_type: DataTypeDef::String(false),
+            instructions: vec![
+                CondOrExpr::Cond(Condition {
+                    expr: EExpr::Boolean(TExpr {
+                        operators: vec![Op {
+                            op_type: Operator::Relational(RelationalOperation::Gt),
+                            operands_ids: [0, 1],
+                        }],
+                        terms: vec![ExprTerm::Arg(0), ExprTerm::Value(DataType::U8(5))],
+                    }),
+                    true_path: 1,
+                    false_path: 2,
+                }),
+                CondOrExpr::Expr(EExpr::Value(DataType::U8(20))),
+                CondOrExpr::Expr(EExpr::Value(DataType::U8(40))),
+            ],
+        };
+
+        let result = postprocessing.process(input.as_slice());
+        let expected_result = 40;
+
+        if let DataType::U8(v) = result {
+            assert_eq!(v, expected_result);
+        } else {
+            panic!("expected DataType::U8");
+        }
     }
 }

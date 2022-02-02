@@ -1,10 +1,11 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::{Base64VecU8, WrappedDuration, WrappedTimestamp, U128, U64};
-use near_sdk::log;
 use near_sdk::serde::{self, Deserialize, Serialize};
 use near_sdk::serde_json::{self, Value};
 use near_sdk::{env, near_bindgen, AccountId, Promise};
+use near_sdk::{log, PromiseOrValue};
 
+use crate::callbacks::ext_self;
 use crate::constants::TGAS;
 use crate::errors::{
     ERR_GROUP_NOT_FOUND, ERR_NO_ACCESS, ERR_STORAGE_BUCKET_EXISTS, ERR_UNKNOWN_FNCALL,
@@ -17,7 +18,10 @@ use crate::settings::assert_valid_dao_settings;
 use crate::settings::DaoSettings;
 use crate::storage::{DataType, StorageBucket};
 use crate::tags::Tags;
-use crate::workflow::{ActivityRight, VoteScenario, WorkflowActivity, WorkflowInstance};
+use crate::workflow::{
+    ActivityRight, VoteScenario, WorkflowActivity, WorkflowActivityExecutionResult,
+    WorkflowInstance,
+};
 use crate::{calc_percent_u128_unchecked, TagCategory, TagId};
 use crate::{
     core::*,
@@ -565,7 +569,7 @@ impl NewDaoContract {
         proposal_id: ProposalId,
         receiver_id: AccountId,
         amount: U128,
-    ) -> Promise {
+    ) -> PromiseOrValue<WorkflowActivityExecutionResult> {
         let caller = env::predecessor_account_id();
         let (_proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
         assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
@@ -577,10 +581,25 @@ impl NewDaoContract {
             DataType::String(receiver_id.clone()),
             DataType::U128(amount.0),
         ];
-        let _postprocessing =
+        let (result, postprocessing) =
             wfi.transition_to_next(&wft, ActionIdent::NearSend, &mut args, &mut bucket);
 
-        Promise::new(receiver_id).transfer(amount.0)
+        match result {
+            WorkflowActivityExecutionResult::Ok => {
+                let promise = Promise::new(receiver_id).transfer(amount.0);
+                match postprocessing {
+                    Some(p) => PromiseOrValue::Promise(promise.then(ext_self::postprocess(
+                        wft.storage_key.clone(),
+                        p,
+                        &env::current_account_id(),
+                        0,
+                        30 * TGAS,
+                    ))),
+                    None => PromiseOrValue::Value(result),
+                }
+            }
+            _ => PromiseOrValue::Value(result),
+        }
     }
     pub fn treasury_send_ft(
         &mut self,
