@@ -10,9 +10,9 @@ use crate::settings::{
 };
 use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
-use crate::storage::{StorageBucket};
 use crate::tags::{TagInput, Tags};
-use crate::workflow::{WorkflowInstance, WorkflowSettings, WorkflowTemplate};
+use library::storage::StorageBucket;
+use library::workflow::{Template, Instance, Settings};
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
 use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
 use near_contract_standards::storage_management::{
@@ -72,10 +72,9 @@ pub enum StorageKeys {
     WfInstance,
 }
 
-// ------  NEW smartcontract
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-pub struct NewDaoContract {
+pub struct Contract {
     pub deposit_min_vote: u128,
     pub deposit_min_add_proposal: u128,
     pub ft_total_supply: u32,
@@ -97,12 +96,12 @@ pub struct NewDaoContract {
     pub function_call_metadata: LookupMap<FnCallId, Vec<FnCallMetadata>>,
     pub function_calls: UnorderedMap<FnCallId, FnCallDefinition>,
     pub workflow_last_id: u16,
-    pub workflow_template: UnorderedMap<u16, (WorkflowTemplate, Vec<WorkflowSettings>)>,
-    pub workflow_instance: UnorderedMap<u32, WorkflowInstance>,
+    pub workflow_template: UnorderedMap<u16, (Template, Vec<Settings>)>,
+    pub workflow_instance: UnorderedMap<u32, Instance>,
 }
 
 #[near_bindgen]
-impl NewDaoContract {
+impl Contract {
     #[init]
     pub fn new(
         deposit_min_vote: U128,
@@ -116,14 +115,14 @@ impl NewDaoContract {
         tags: Vec<TagInput>,
         function_calls: Vec<FnCallDefinition>,
         function_call_metadata: Vec<Vec<FnCallMetadata>>,
-        workflow_templates: Vec<WorkflowTemplate>,
-        workflow_template_settings: Vec<Vec<WorkflowSettings>>,
+        workflow_templates: Vec<Template>,
+        workflow_template_settings: Vec<Vec<Settings>>,
     ) -> Self {
         assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
         assert_valid_dao_settings(&settings);
         assert_valid_vote_settings(&vote_settings);
 
-        let mut contract = NewDaoContract {
+        let mut contract = Contract {
             deposit_min_vote: deposit_min_vote.0,
             deposit_min_add_proposal: deposit_min_add_proposal.0,
             ft_total_supply: total_supply,
@@ -182,449 +181,6 @@ impl NewDaoContract {
     }
 }
 
-/*
-#[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-pub struct DaoContract {
-    pub factory_acc: String,
-    pub decimal_const: u128,
-    pub ft_total_supply: u32,
-    pub ft_total_distributed: u32,
-    pub proposal_count: u32,
-    pub config: LazyOption<VConfig>,
-    pub council: UnorderedSet<AccountId>,
-    pub group_rights: LookupMap<TokenGroup, Vec<(ActionGroupRight, TimeInterval)>>,
-    pub user_rights: LookupMap<AccountId, Vec<(ActionGroupRight, TimeInterval)>>,
-    pub ft_metadata: LazyOption<FungibleTokenMetadata>,
-    pub ft: FungibleToken,
-    pub proposals: UnorderedMap<u32, VProposal>,
-    pub release_config: LookupMap<TokenGroup, VReleaseModel>, //TODO merge with release_db
-    pub release_db: LookupMap<TokenGroup, VReleaseDb>,
-    pub vote_policy_config: LookupMap<ProposalKindIdent, VVoteConfig>,
-    pub doc_metadata: UnorderedMap<String, VFileMetadata>,
-    pub mappers: UnorderedMap<MapperKind, Mapper>,
-    pub storage_deposit: UnorderedSet<AccountId>,
-    pub ref_pools: LazyOption<Vec<u32>>,
-    pub skyward_auctions: LazyOption<Vec<u64>>,
-
-    pub groups: UnorderedMap<GroupName, Group>, //TODO iterate over LookupMap with use of last_group_key ?
-    pub rights: LookupMap<AccountId, Vec<ExecutionRight>>,
-    pub function_call_whitelist: LazyOption<Vec<String>>,
-}
-*/
-
-/*
-#[near_bindgen]
-impl DaoContract {
-    #[private]
-    #[init(ignore_state)]
-    pub fn migrate() -> Self {
-        // TODO: ON EACH migration migrate config, policy, release model etc !!!
-
-        //We remove this new version from storage so we do not have to pay NEARs for unneccessary storage
-        assert!(env::storage_remove(
-            &StorageKeys::NewVersionCode.into_storage_key()
-        ));
-        let mut _dao: DaoContract = env::state_read().expect("Failed to migrate");
-
-        // Migration example process
-        /*
-
-        let mut config =  dao.config.get().unwrap();
-        config.migrate();
-        dao.config.set(&config);
-
-        let mut vote_policy = dao.vote_policy_config.get(&ProposalKindIdent::Pay).unwrap().migrate();
-        dao.vote_policy_config.insert(&ProposalKindIndet::Pay);
-        ... Migrate all
-
-        let mut release_model = dao.release_config.get().unwrap();
-        release_config.migrate();
-        dao.release_config.set(&release_model);
-
-        let mut docs = dao.doc_metadata.to_vec();
-        for (uuid, doc) in docs.into_ter() {
-            dao.insert(&uuid, &doc.migrate());
-        }
-
-        */
-
-        _dao
-    }
-
-    #[init]
-    pub fn new(
-        total_supply: u32,
-        founders_init_distribution: u32,
-        ft_metadata: FungibleTokenMetadata,
-        config: ConfigInput,
-        release_config: Vec<(TokenGroup, ReleaseModelInput)>,
-        vote_policy_configs: Vec<VoteConfigInput>,
-        mut founders: Vec<AccountId>,
-    ) -> Self {
-        assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
-        assert!(ft_metadata.decimals <= METADATA_MAX_DECIMALS);
-        assert_eq!(vote_policy_configs.len(), PROPOSAL_KIND_COUNT as usize);
-
-        ft_metadata.assert_valid();
-        assert_valid_founders(&mut founders);
-        assert_valid_init_config(&config);
-        assert!(
-            total_supply as u64 * config.council_share.unwrap_or_default() as u64 / 100
-                >= founders_init_distribution as u64,
-            "{}",
-            "Founders init distribution cannot be larger than their total amount share"
-        );
-
-        let amount_per_founder: u32 = founders_init_distribution / founders.len() as u32;
-
-        let decimal_const = 10u128.pow(ft_metadata.decimals as u32);
-
-        let mut contract = DaoContract {
-            factory_acc: env::predecessor_account_id(),
-            config: LazyOption::new(StorageKeys::VConfig, Some(&VConfig::from(config))),
-            council: UnorderedSet::new(StorageKeys::Council),
-            group_rights: LookupMap::new(StorageKeys::TokenGroupRights),
-            user_rights: LookupMap::new(StorageKeys::UserRights),
-            ft_metadata: LazyOption::new(StorageKeys::FTMetadata, Some(&ft_metadata)),
-            ft: FungibleToken::new(StorageKeys::FT),
-            ft_total_supply: total_supply,
-            ft_total_distributed: founders_init_distribution,
-            decimal_const: decimal_const,
-            proposals: UnorderedMap::new(StorageKeys::Proposals),
-            proposal_count: 0,
-            release_config: LookupMap::new(StorageKeys::ReleaseConfig),
-            release_db: LookupMap::new(StorageKeys::ReleaseDb),
-            vote_policy_config: LookupMap::new(StorageKeys::ProposalConfig),
-            doc_metadata: UnorderedMap::new(StorageKeys::DocMetadata),
-            mappers: UnorderedMap::new(StorageKeys::Mappers),
-            storage_deposit: UnorderedSet::new(StorageKeys::StorageDeposit),
-            ref_pools: LazyOption::new(StorageKeys::RefPools, Some(&Vec::new())),
-            skyward_auctions: LazyOption::new(StorageKeys::SkywardAuctions, Some(&Vec::new())),
-
-            groups: UnorderedMap::new(StorageKeys::Groups),
-            rights: LookupMap::new(StorageKeys::Rights),
-            function_call_whitelist: LazyOption::new(
-                StorageKeys::FunctionCallWhitelist,
-                Some(&Vec::new()),
-            ),
-        };
-
-        //contract.setup_groups(),
-        contract.setup_voting_policy(vote_policy_configs);
-        contract.setup_release_models(release_config, founders_init_distribution);
-        contract.init_mappers();
-
-        //register contract account and transfer all total supply of GT to it
-        contract
-            .ft
-            .internal_register_account(&env::current_account_id());
-        contract.ft.internal_deposit(
-            &env::current_account_id(),
-            contract.ft_total_supply as u128 * contract.decimal_const,
-        );
-
-        // register council and distribute them their amount of the tokens
-        for founder in founders.iter() {
-            contract.ft.internal_register_account(&founder);
-
-            contract.ft.internal_transfer(
-                &env::current_account_id(),
-                &founder,
-                amount_per_founder as u128 * contract.decimal_const,
-                None,
-            );
-            contract.council.insert(founder);
-        }
-
-        contract.ft.registered_accounts_count -= 1;
-
-        // We store factory acc directly into trie so we dont have to deserialize SC when we upgrade/migrate
-        env::storage_write(
-            &StorageKeys::FactoryAcc.into_storage_key(),
-            &env::predecessor_account_id().into_bytes(),
-        );
-
-        contract
-    }
-
-    #[payable]
-    pub fn add_proposal(&mut self, proposal_input: ProposalInput, tx_input: TxInput) -> u32 {
-        let predeccesor_account_id = env::predecessor_account_id();
-
-        assert!(env::attached_deposit() >= DEPOSIT_ADD_PROPOSAL);
-        assert!(env::prepaid_gas() >= GAS_ADD_PROPOSAL);
-        proposal_input.assert_valid();
-
-        let vote_policy = VoteConfig::from(
-            self.vote_policy_config
-                .get(&ProposalKindIdent::get_ident_from(&tx_input))
-                .expect("Invalid proposal input"),
-        );
-
-        let tx = self
-            .create_tx(tx_input, &predeccesor_account_id, env::block_timestamp())
-            .unwrap();
-
-        self.proposal_count += 1;
-
-        let proposal = Proposal::new(
-            self.proposal_count,
-            predeccesor_account_id,
-            proposal_input,
-            tx,
-            vote_policy,
-            env::block_timestamp(),
-        );
-
-        self.proposals
-            .insert(&self.proposal_count, &VProposal::Curr(proposal));
-        self.proposal_count
-    }
-
-    /// vote_kind values: 0 = spam, 1 = yes, 2 = no
-    #[payable]
-    pub fn vote(&mut self, proposal_id: u32, vote_kind: u8) -> VoteResult {
-        let predeccesor_account_id = env::predecessor_account_id();
-
-        assert!(env::prepaid_gas() >= GAS_VOTE);
-        assert!(env::attached_deposit() >= DEPOSIT_VOTE);
-        assert!(predeccesor_account_id != self.factory_acc);
-
-        let mut proposal =
-            Proposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
-
-        if proposal.status != ProposalState::InProgress
-            || proposal.duration_to <= env::block_timestamp()
-        {
-            return VoteResult::VoteEnded;
-        }
-
-        if vote_kind > 2 {
-            return VoteResult::InvalidVote;
-        }
-
-        if proposal.vote_only_once && proposal.votes.contains_key(&predeccesor_account_id) {
-            return VoteResult::AlreadyVoted;
-        }
-
-        proposal.votes.insert(predeccesor_account_id, vote_kind);
-
-        self.proposals
-            .insert(&proposal_id, &VProposal::Curr(proposal));
-        VoteResult::Ok
-    }
-
-    pub fn finish_proposal(&mut self, proposal_id: u32) -> ProposalState {
-        assert!(env::prepaid_gas() >= GAS_FINISH_PROPOSAL);
-        let mut proposal =
-            Proposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
-
-        let new_status = match &proposal.status {
-            &ProposalState::InProgress => {
-                if env::block_timestamp() < proposal.duration_to {
-                    None
-                } else {
-                    // count votes
-                    let mut votes = [0 as u128; 3];
-                    for (voter, vote_value) in proposal.votes.iter() {
-                        votes[*vote_value as usize] += self.ft.accounts.get(voter).unwrap_or(0);
-                    }
-
-                    let total_voted_amount: u128 = votes.iter().sum();
-
-                    // we need to read config just because of spam TH value - could be moved to voting ??
-                    let config = Config::from(self.config.get().unwrap());
-
-                    // check spam
-                    if calc_percent_u128_unchecked(votes[0], total_voted_amount, self.decimal_const)
-                        >= config.vote_spam_threshold
-                    {
-                        Some(ProposalState::Spam)
-                    } else if calc_percent_u128_unchecked(
-                        total_voted_amount,
-                        self.ft_total_distributed as u128 * self.decimal_const,
-                        self.decimal_const,
-                    ) < proposal.quorum
-                    {
-                        // not enough quorum
-                        Some(ProposalState::Invalid)
-                    } else if calc_percent_u128_unchecked(
-                        votes[1],
-                        total_voted_amount,
-                        self.decimal_const,
-                    ) < proposal.approve_threshold
-                    {
-                        // not enough voters to accept
-                        Some(ProposalState::Rejected)
-                    } else {
-                        // proposal is accepted, try to execute transaction
-                        if let Err(errors) = self.execute_tx(
-                            &proposal.transactions,
-                            Context {
-                                proposal_id: proposal.uuid,
-                                attached_deposit: env::attached_deposit(),
-                                current_balance: env::account_balance(),
-                                current_block_timestamp: env::block_timestamp(),
-                            },
-                        ) {
-                            log!("errors: {:?}", errors);
-                            Some(ProposalState::Invalid)
-                        } else {
-                            Some(ProposalState::Accepted)
-                        }
-                    }
-                }
-            }
-            _ => None,
-        };
-
-        match new_status {
-            Some(status) => {
-                proposal.status = status.clone();
-                self.proposals
-                    .insert(&proposal.uuid.clone(), &VProposal::Curr(proposal));
-                status
-            }
-            None => proposal.status,
-        }
-    }
-
-    /// Returns amount of newly unlocked tokens
-    pub fn unlock_tokens(&mut self, group: TokenGroup) -> u32 {
-        let model: ReleaseModel = self.release_config.get(&group).unwrap().into();
-        let mut db: ReleaseDb = self.release_db.get(&group).unwrap().into();
-
-        if db.total == db.unlocked {
-            return 0;
-        }
-
-        let total_released_now = model.release(
-            db.total,
-            db.init_distribution,
-            db.unlocked,
-            (env::block_timestamp() / 10u64.pow(9)) as u32,
-        );
-
-        if total_released_now > 0 {
-            let delta = total_released_now - (db.unlocked - db.init_distribution);
-            db.unlocked += delta;
-            self.release_db.insert(&group, &VReleaseDb::Curr(db));
-            delta
-        } else {
-            total_released_now
-        }
-    }
-
-    /// Allows privileged users to call and execute actions directly as DAO
-    pub fn execute_privileged_action(&mut self, action: ActionGroupInput) -> Promise {
-        let caller = env::predecessor_account_id();
-
-        // check caller has right to do this
-        let mut user_rights = self.user_rights.get(&caller);
-
-        if user_rights.is_none() {
-            let group = self.get_users_group(&caller);
-            assert!(group.is_some());
-
-            user_rights = self.group_rights.get(&group.unwrap());
-            assert!(user_rights.is_some())
-        }
-
-        let group_right = match action {
-            ActionGroupInput::SkyCreateSale { .. } => ActionGroupRight::SkywardFinance,
-            _ => ActionGroupRight::RefFinance,
-        };
-
-        let mut right_to_call = false;
-        for (right, interval) in user_rights.unwrap().iter() {
-            if *right == group_right
-                && interval.from <= env::block_timestamp()
-                && interval.to >= env::block_timestamp()
-            {
-                right_to_call = true;
-                break;
-            }
-        }
-
-        assert!(right_to_call, "You have no rights to call this action");
-
-        self.execute_privileged_action_group_call(action)
-    }
-
-    pub fn execute_action(&mut self, action: Action) -> PromiseOrValue<Result<(), String>> {
-        unimplemented!();
-        //PromiseOrValue::Value(ActionResult::Success)
-    }
-
-    pub fn add_group(&mut self, group_input: GroupInput) {
-        assert!(self.groups.get(&group_input.name).is_none());
-        let hash = env::sha256(group_input.name.as_bytes());
-        let gkey: StorageKeyWrapper = to_storage_key_raw(GROUP_PREFIX, &hash).into();
-        let rkey: StorageKeyWrapper = to_storage_key_raw(GROUP_RELEASE_MODEL_SUFFIX, &hash).into();
-
-        self.groups.insert(
-            &group_input.name,
-            &Group {
-                members: UnorderedSet::new(gkey),
-                release: LazyOption::new(rkey, None),
-            },
-        );
-    }
-
-    pub fn remove_group(&mut self, group_name: GroupName) {
-        if let Some(mut group) = self.groups.get(&group_name) {
-            group.members.clear();
-            group.release.remove();
-            let hash = env::sha256(group_name.as_bytes());
-            let _ = env::storage_remove(&to_storage_key_raw(GROUP_PREFIX, &hash));
-            let _ = env::storage_remove(&to_storage_key_raw(GROUP_RELEASE_MODEL_SUFFIX, &hash));
-            self.groups.remove(&group_name);
-        }
-    }
-
-    pub fn add_group_member(&mut self, group_name: GroupName, account_id: AccountId) -> bool {
-        match self.groups.get(&group_name) {
-            Some(mut group) => {
-                group.members.insert(&account_id);
-                self.groups.insert(&group_name, &group);
-                true
-            }
-            _ => false,
-        }
-    }
-
-    pub fn remove_group_member(&mut self, group_name: GroupName, account_id: AccountId) {
-        if let Some(mut group) = self.groups.get(&group_name) {
-            group.members.remove(&account_id);
-            self.groups.insert(&group_name, &group);
-        }
-    }
-
-    //TODO implement on receiving contract based on wanted functionality
-    // sender_id - who sent the tokens
-    // env::predeccesor_account_id - token acc that confirms sender_id transfered this amount of FT to this account
-    // receiver - this acc should register it
-    pub fn ft_on_transfer(&self, _sender_id: String, _amount: U128, _msg: String) -> String {
-        unimplemented!();
-    }
-
-    /// For dev/testing purposes only
-    #[cfg(feature = "testnet")]
-    pub fn clean_self(&mut self) {
-        assert!(self.council.contains(&env::predecessor_account_id()));
-        env::storage_remove(&StorageKeys::NewVersionCode.into_storage_key());
-    }
-
-    /// For dev/testing purposes only
-    #[cfg(feature = "testnet")]
-    pub fn delete_self(self) -> Promise {
-        assert!(self.council.contains(&env::predecessor_account_id()));
-        Promise::new(env::current_account_id()).delete_account(self.factory_acc)
-    }
-}
-*/
-
 /******************************************************************************
  *
  * Fungible Token (NEP-141)
@@ -633,7 +189,7 @@ impl DaoContract {
  ******************************************************************************/
 
 #[near_bindgen]
-impl FungibleTokenCore for NewDaoContract {
+impl FungibleTokenCore for Contract {
     #[payable]
     fn ft_transfer(&mut self, receiver_id: ValidAccountId, amount: U128, memo: Option<String>) {
         self.ft.ft_transfer(receiver_id, amount, memo)
@@ -660,7 +216,7 @@ impl FungibleTokenCore for NewDaoContract {
 }
 
 #[near_bindgen]
-impl FungibleTokenResolver for NewDaoContract {
+impl FungibleTokenResolver for Contract {
     #[private]
     fn ft_resolve_transfer(
         &mut self,
@@ -687,7 +243,7 @@ impl FungibleTokenResolver for NewDaoContract {
  ******************************************************************************/
 
 #[near_bindgen]
-impl FungibleTokenMetadataProvider for NewDaoContract {
+impl FungibleTokenMetadataProvider for Contract {
     fn ft_metadata(&self) -> FungibleTokenMetadata {
         self.ft_metadata.get().unwrap()
     }
@@ -701,7 +257,7 @@ impl FungibleTokenMetadataProvider for NewDaoContract {
  ******************************************************************************/
 
 #[near_bindgen]
-impl StorageManagement for NewDaoContract {
+impl StorageManagement for Contract {
     #[payable]
     fn storage_deposit(
         &mut self,
@@ -749,7 +305,7 @@ pub extern "C" fn download_new_version() {
     env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
 
     // We are not able to access council members any other way so we have deserialize SC
-    let contract: NewDaoContract = env::state_read().unwrap();
+    let contract: Contract = env::state_read().unwrap();
 
     // Currently only council member can call this
     //assert!(contract.council.contains(&env::predecessor_account_id())); //TODO FIX
@@ -802,7 +358,7 @@ pub extern "C" fn upgrade_self() {
     env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
 
     // We are not able to access council members any other way so we have deserialize SC
-    let contract: NewDaoContract = env::state_read().unwrap();
+    let contract: Contract = env::state_read().unwrap();
 
     // Currently only council member can call this
     //assert!(contract.council.contains(&env::predecessor_account_id())); //TODO FIX

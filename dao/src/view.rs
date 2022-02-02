@@ -1,4 +1,4 @@
-use crate::storage::DataType;
+use library::types::DataType;
 use near_sdk::borsh::{self, BorshDeserialize};
 use near_sdk::json_types::Base64VecU8;
 use near_sdk::serde::Serialize;
@@ -204,7 +204,7 @@ impl DaoContract {
 
 // ------------ NEW
 #[near_bindgen]
-impl NewDaoContract {
+impl Contract {
     pub fn proposal(&self, proposal_id: u32) -> Option<VProposal> {
         self.proposals.get(&proposal_id)
     }

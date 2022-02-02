@@ -7,7 +7,7 @@
 
 set -xe 
 
-CRATES=(dao dao_factory)
+CRATES=(dao dao_factory workflow_provider)
 FEATURES=""
 ABS_BASEDIR=$(dirname $(readlink -f "$0"))
 

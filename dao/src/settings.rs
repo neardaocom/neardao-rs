@@ -1,3 +1,4 @@
+use library::workflow::VoteScenario;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
@@ -5,7 +6,7 @@ use near_sdk::{
 };
 
 use crate::{
-    constants::MIN_VOTING_DURATION_SEC, derive_from_versioned, derive_into_versioned, TagId, workflow::VoteScenario,
+    constants::MIN_VOTING_DURATION_SEC, derive_from_versioned, derive_into_versioned, TagId,
 };
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -27,7 +28,6 @@ pub struct DaoSettings {
 
 derive_from_versioned!(VDaoSettings, DaoSettings);
 derive_into_versioned!(DaoSettings, VDaoSettings);
-
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub enum VVoteSettings {

@@ -2,7 +2,6 @@
 
 use near_sdk::{env::sha256, CryptoHash};
 
-mod expression;
 mod standard_impl;
 
 pub mod constants;
@@ -10,14 +9,12 @@ pub mod errors;
 pub mod tags;
 
 pub mod settings;
-pub mod storage;
 pub mod group;
 pub mod media;
 pub mod proposal;
 pub mod release;
 pub mod action;
 pub mod callbacks;
-pub mod workflow;
 pub mod internal;
 
 pub mod core;
@@ -35,12 +32,6 @@ pub(crate) type GroupName = String;
 pub(crate) type GroupStorageKey = u8;
 pub(crate) type UUID = CryptoHash;
 pub(crate) type CID = String; // IPFS address
-
-pub fn generate_uuid(input: &[u8]) -> UUID {
-    let mut tmp = [0u8; 32];
-    tmp.copy_from_slice(&sha256(input));
-    tmp
-}
 
 /// Calculates votes as percents
 #[inline]

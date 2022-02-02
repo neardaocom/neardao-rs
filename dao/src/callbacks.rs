@@ -1,30 +1,43 @@
+use library::workflow::{ActivityResult, InstanceState, Template};
 use near_sdk::serde_json;
 use near_sdk::{env, ext_contract, near_bindgen, PromiseResult};
 
-use crate::action::DataTypeDef;
 use crate::core::*;
 use crate::errors::*;
-use crate::storage::DataType;
-use crate::workflow::Postprocessing;
+use library::{
+    types::{DataType, DataTypeDef},
+    workflow::Postprocessing,
+};
 
 #[ext_contract(ext_self)]
 trait ExtSelf {
-    fn postprocess(&mut self, storage_key: String, postprocessing: Postprocessing) -> u32;
-    //fn callback_insert_skyward_auction(&mut self) -> u64;
+    fn postprocess(
+        &mut self,
+        instance_id: u32,
+        storage_key: String,
+        postprocessing: Postprocessing,
+    ) -> ActivityResult;
+
+    fn store_workflow(&mut self);
 }
 
 #[near_bindgen]
-impl NewDaoContract {
+impl Contract {
     // TODO error handling
     #[private]
-    pub fn postprocess(&mut self, storage_key: String, postprocessing: &Postprocessing) {
+    pub fn postprocess(
+        &mut self,
+        instance_id: u32,
+        storage_key: String,
+        postprocessing: Postprocessing,
+    ) -> ActivityResult {
         assert_eq!(
             env::promise_results_count(),
             1,
             "{}",
             ERR_PROMISE_INVALID_RESULTS_COUNT
         );
-        match env::promise_result(0) {
+        let result = match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),
             PromiseResult::Successful(val) => {
                 let value: DataType = match postprocessing.fn_call_result_type {
@@ -79,8 +92,41 @@ impl NewDaoContract {
                 let mut bucket = self.storage.get(&storage_key).unwrap();
                 bucket.add_data(&postprocessing.storage_key, &value);
                 self.storage.insert(&storage_key, &bucket);
+                true
             }
-            PromiseResult::Failed => env::panic(ERR_PROMISE_FAILED.as_bytes()),
+            PromiseResult::Failed => false,
+        };
+
+        match result {
+            true => ActivityResult::Ok,
+            false => {
+                let mut wfi = self.workflow_instance.get(&instance_id).unwrap();
+                wfi.current_activity_id -= 1;
+                wfi.state = InstanceState::FatalError;
+                self.workflow_instance.insert(&instance_id, &wfi).unwrap();
+                ActivityResult::ErrPostprocessing
+            }
+        }
+    }
+
+    #[private]
+    pub fn store_workflow(&mut self) {
+        assert_eq!(
+            env::promise_results_count(),
+            1,
+            "{}",
+            ERR_PROMISE_INVALID_RESULTS_COUNT
+        );
+
+        match env::promise_result(0) {
+            PromiseResult::NotReady => unreachable!(),
+            PromiseResult::Successful(val) => {
+                let workflow: Template = serde_json::from_slice(&val).unwrap();
+                self.workflow_last_id += 1;
+                self.workflow_template
+                    .insert(&self.workflow_last_id, &(workflow, vec![]));
+            }
+            PromiseResult::Failed => panic!("Failed to store workflow template"),
         }
     }
 }

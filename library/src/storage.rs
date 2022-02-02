@@ -5,36 +5,7 @@ use near_sdk::{
     IntoStorageKey,
 };
 
-//TODO move
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum DataType {
-    Null,
-    String(String),
-    Bool(bool),
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    U128(u128),
-    VecString(Vec<String>),
-    VecBool(Vec<bool>),
-    VecU8(Vec<u8>),
-    VecU16(Vec<u16>),
-    VecU32(Vec<u32>),
-    VecU64(Vec<u64>),
-    VecU128(Vec<u128>),
-}
-
-impl DataType {
-    pub fn try_into_bool(self) -> Result<bool, String> {
-        match self {
-            DataType::Bool(b) => Ok(b),
-            _ => Err("DataType is not bool".into()),
-        }
-    }
-}
+use crate::types::DataType;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct StorageBucket {

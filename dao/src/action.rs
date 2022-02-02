@@ -1,3 +1,5 @@
+use library::types::{ActionIdent, DataType, DataTypeDef};
+use library::workflow::{ActivityResult, Instance};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::{Base64VecU8, WrappedDuration, WrappedTimestamp, U128, U64};
 use near_sdk::serde::{self, Deserialize, Serialize};
@@ -12,16 +14,11 @@ use crate::errors::{
 };
 use crate::group::Group;
 use crate::internal::utils;
-use crate::proposal::{NewProposal, ProposalState, VProposal};
+use crate::proposal::{Proposal, ProposalState, VProposal};
 use crate::release::ReleaseDb;
 use crate::settings::assert_valid_dao_settings;
 use crate::settings::DaoSettings;
-use crate::storage::{DataType, StorageBucket};
 use crate::tags::Tags;
-use crate::workflow::{
-    ActivityRight, VoteScenario, WorkflowActivity, WorkflowActivityExecutionResult,
-    WorkflowInstance,
-};
 use crate::{calc_percent_u128_unchecked, TagCategory, TagId};
 use crate::{
     core::*,
@@ -32,54 +29,6 @@ use crate::{
 
 // ---------------- NEW ----------------
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
-#[serde(crate = "near_sdk::serde")]
-pub enum ActionIdent {
-    GroupAdd,
-    GroupRemove,
-    GroupUpdate,
-    GroupMemberAdd,
-    GroupMemberRemove,
-    FnCall,
-    SettingsUpdate,
-    MediaAdd,
-    MediaInvalidate,
-    FnCallAdd,
-    FnCallRemove,
-    TagAdd,
-    TagEdit,
-    TagRemove,
-    FtUnlock,
-    FtDistribute,
-    FtSend,
-    NftSend,
-    NearSend,
-    WorkflowChange, // TODO rozdelit na Add a remove??
-    WorkflowInstall,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum DataTypeDef {
-    String(bool),
-    Bool(bool),
-    U8(bool),
-    U16(bool),
-    U32(bool),
-    U64(bool),
-    U128(bool),
-    VecString,
-    VecU8,
-    VecU16,
-    VecU32,
-    VecU64,
-    VecU128,
-    Object(u8), // 0 value in object means optional object
-    NullableObject(u8),
-    VecObject(u8),
-}
 // Represents object schema
 // Coz compiler yelling at me: "error[E0275]: overflow evaluating the requirement" on Borsh we do it this way
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
@@ -232,7 +181,7 @@ impl FnCallDefinition {
 }
 
 #[near_bindgen]
-impl NewDaoContract {
+impl Contract {
     #[payable]
     pub fn propose(
         &mut self,
@@ -254,7 +203,7 @@ impl NewDaoContract {
             return false;
         }
 
-        let proposal = NewProposal::new(
+        let proposal = Proposal::new(
             env::block_timestamp(),
             workflow_template_id,
             workflow_template_settings_id,
@@ -339,7 +288,7 @@ impl NewDaoContract {
                     } else {
                         // proposal is accepted, create new workflow activity with its storage
                         self.storage_bucket_add(wft.storage_key.as_str());
-                        WorkflowInstance::new(proposal.workflow_id, &wft.transitions);
+                        //WorkflowInstance::new(proposal.workflow_id, &wft.transitions); // TODO add settings
                         Some(ProposalState::Accepted)
                     }
                 }
@@ -569,12 +518,11 @@ impl NewDaoContract {
         proposal_id: ProposalId,
         receiver_id: AccountId,
         amount: U128,
-    ) -> PromiseOrValue<WorkflowActivityExecutionResult> {
+    ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
         let (_proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
         assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
 
-        //
         let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
         let mut bucket = self.storage.get(&wft.storage_key).unwrap();
         let mut args = vec![
@@ -585,10 +533,12 @@ impl NewDaoContract {
             wfi.transition_to_next(&wft, ActionIdent::NearSend, &mut args, &mut bucket);
 
         match result {
-            WorkflowActivityExecutionResult::Ok => {
-                let promise = Promise::new(receiver_id).transfer(amount.0);
+            ActivityResult::Ok => {
+                let promise = Promise::new(args.swap_remove(0).try_into_string().unwrap())
+                    .transfer(args.swap_remove(0).try_into_u128().unwrap());
                 match postprocessing {
                     Some(p) => PromiseOrValue::Promise(promise.then(ext_self::postprocess(
+                        proposal_id,
                         wft.storage_key.clone(),
                         p,
                         &env::current_account_id(),
@@ -774,12 +724,53 @@ impl NewDaoContract {
         assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         todo!()
     }
-    pub fn workflow_add(&mut self, proposal_id: ProposalId) {
+    pub fn workflow_add(
+        &mut self,
+        proposal_id: ProposalId,
+        workflow_id: u16,
+    ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
-        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (_, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
         assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
-        todo!()
+
+        let mut args = vec![DataType::U16(workflow_id)];
+        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
+        let mut bucket = self.storage.get(&wft.storage_key).unwrap();
+        let (result, postprocessing) =
+            wfi.transition_to_next(&wft, ActionIdent::WorkflowAdd, &mut args, &mut bucket);
+
+        let settings: DaoSettings = self.settings.get().unwrap().into();
+        let acc = env::current_account_id();
+        match result {
+            ActivityResult::Ok => {
+                let promise = Promise::new(settings.workflow_provider)
+                    .function_call(
+                        b"get".to_vec(),
+                        format!(
+                            "{{\"id\":\"{}\"}}",
+                            args.pop().unwrap().try_into_u128().unwrap()
+                        )
+                        .into_bytes(),
+                        0,
+                        50 * TGAS,
+                    )
+                    .then(ext_self::store_workflow(&acc, 0, 30 * TGAS));
+
+                match postprocessing {
+                    Some(p) => PromiseOrValue::Promise(promise.then(ext_self::postprocess(
+                        proposal_id,
+                        wft.storage_key.clone(),
+                        p,
+                        &acc,
+                        0,
+                        30 * TGAS,
+                    ))),
+                    None => PromiseOrValue::Promise(promise),
+                }
+            }
+            _ => PromiseOrValue::Value(result),
+        }
     }
 
     // TODO workflow settings??

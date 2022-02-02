@@ -22,4 +22,4 @@ panic = "abort"
 overflow-checks = true
 
 [workspace]
-members = ["dao", "dao_factory"]
+members = ["dao", "dao_factory","library", "workflow_provider"]

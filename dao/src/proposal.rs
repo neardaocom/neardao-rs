@@ -3,8 +3,6 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 use std::collections::HashMap;
 
-use crate::workflow::{self, WorkflowInstance};
-
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize)]
@@ -12,7 +10,7 @@ pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 #[serde(crate = "near_sdk::serde")]
 pub enum VProposal {
     //Prev(ProposalOld)
-    Curr(NewProposal),
+    Curr(Proposal),
 }
 
 impl VProposal {
@@ -23,7 +21,7 @@ impl VProposal {
     }
 }
 
-impl From<VProposal> for NewProposal {
+impl From<VProposal> for Proposal {
     fn from(fm: VProposal) -> Self {
         match fm {
             VProposal::Curr(p) => p,
@@ -58,7 +56,7 @@ pub enum VoteResult {
 #[derive(BorshSerialize, BorshDeserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct NewProposal {
+pub struct Proposal {
     pub created: u64,
     pub votes: HashMap<AccountId, u8>,
     pub state: ProposalState,
@@ -66,10 +64,10 @@ pub struct NewProposal {
     pub workflow_settings_id: u8,
 }
 
-impl NewProposal {
+impl Proposal {
     #[inline]
     pub fn new(created: u64, workflow_id: u16, workflow_settings_id: u8) -> Self {
-        NewProposal {
+        Proposal {
             created,
             votes: HashMap::new(),
             state: ProposalState::InProgress,

@@ -1,5 +1,3 @@
-use std::marker;
-
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
@@ -7,10 +5,9 @@ use near_sdk::{
 };
 
 use crate::{
-    action::{ActionIdent, DataTypeDef},
     expression::{Condition, EExpr},
-    storage::{DataType, StorageBucket},
-    FnCallId, GroupId, TagId,
+    storage::StorageBucket,
+    types::{ActionIdent, DataType, DataTypeDef},
 };
 
 type ArgValidatorId = u8;
@@ -29,11 +26,11 @@ pub enum VoteScenario {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct WorkflowTemplate {
+pub struct Template {
     pub name: String,
     pub version: u8,
-    pub activity: Vec<Option<WorkflowActivity>>,
-    pub transitions: Vec<Vec<WorkflowTransition>>,
+    pub activity: Vec<Option<Activity>>,
+    pub transitions: Vec<Vec<Transition>>,
     pub start: Vec<u8>,
     pub end: Vec<u8>,
     pub storage_key: String,
@@ -42,18 +39,18 @@ pub struct WorkflowTemplate {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct WorkflowTransition {
-    to: u8,
-    iteration_limit: u8,
-    condition: Option<Expression>,
+pub struct Transition {
+    pub to: u8,
+    pub iteration_limit: u8,
+    pub condition: Option<Expression>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Expression {
-    args: Vec<ExprArg>,
-    expr: EExpr,
+    pub args: Vec<ExprArg>,
+    pub expr: EExpr,
 }
 
 impl Expression {
@@ -95,7 +92,7 @@ pub enum ExprArg {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub enum WorkflowActivityArgType {
+pub enum ArgType {
     Free,
     Checked(ArgValidatorId), //User provided
     Bind(BindId),            // Template hardcoded,
@@ -106,7 +103,7 @@ pub enum WorkflowActivityArgType {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub enum WorkflowActivityExecutionResult {
+pub enum ActivityResult {
     Ok,
     Finished,
     MaxTransitionLimitReached,
@@ -120,48 +117,21 @@ pub enum WorkflowActivityExecutionResult {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub enum Activity {
-    Start,
-    Activity(WorkflowActivity),
-    End,
-}
-
-impl Activity {
-    pub fn get_inner(&self) -> Option<&WorkflowActivity> {
-        match self {
-            Activity::Activity(a) => Some(a),
-            _ => None,
-        }
-    }
-}
-
-impl PartialEq<ActionIdent> for Activity {
-    fn eq(&self, other: &ActionIdent) -> bool {
-        match self {
-            Self::Activity(wfa) => wfa.action == *other,
-            _ => false,
-        }
-    }
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct WorkflowActivity {
+pub struct Activity {
     pub name: String,
-    pub exec_condition: Expression, //TODO
+    pub exec_condition: Option<Expression>,
     pub action: ActionIdent,
-    pub fncall_id: Option<FnCallId>, // only if self.action is FnCall variant
+    pub fncall_id: Option<String>, // only if self.action is FnCall variant
     pub gas: u64,
     pub deposit: u128,
-    pub arg_types: Vec<WorkflowActivityArgType>,
+    pub arg_types: Vec<ArgType>,
     pub arg_validators: Vec<Expression>,
     pub binds: Vec<DataType>,
     pub postprocessing: Option<Postprocessing>,
 }
 
-impl WorkflowActivity {
-    pub fn execute(&mut self) -> WorkflowActivityExecutionResult {
+impl Activity {
+    pub fn execute(&mut self) -> ActivityResult {
         todo!();
     }
 
@@ -174,10 +144,8 @@ impl WorkflowActivity {
 
         for (i, arg_type) in self.arg_types.iter().enumerate() {
             match arg_type {
-                WorkflowActivityArgType::Free => {
-                    result_args.push(std::mem::replace(&mut args[i], DataType::Null))
-                }
-                WorkflowActivityArgType::Checked(id) => {
+                ArgType::Free => result_args.push(std::mem::replace(&mut args[i], DataType::Null)),
+                ArgType::Checked(id) => {
                     let expr = self.arg_validators.get(*id as usize).unwrap();
                     if !expr
                         .bind_and_eval(storage, self.binds.as_slice(), result_args.as_slice())
@@ -187,13 +155,11 @@ impl WorkflowActivity {
                         panic!("{}", "Input is not valid");
                     }
                 }
-                WorkflowActivityArgType::Bind(id) => {
-                    result_args.push(self.binds[*id as usize].clone())
-                }
-                WorkflowActivityArgType::Storage(key) => {
+                ArgType::Bind(id) => result_args.push(self.binds[*id as usize].clone()),
+                ArgType::Storage(key) => {
                     result_args.push(storage.get_data(key).unwrap());
                 }
-                WorkflowActivityArgType::Expression(expr) => result_args.push(expr.bind_and_eval(
+                ArgType::Expression(expr) => result_args.push(expr.bind_and_eval(
                     storage,
                     self.binds.as_slice(),
                     result_args.as_slice(),
@@ -245,7 +211,7 @@ impl Postprocessing {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug))]
 #[serde(crate = "near_sdk::serde")]
-pub enum WorkflowInstanceState {
+pub enum InstanceState {
     Waiting,
     Running,
     FatalError,
@@ -255,23 +221,23 @@ pub enum WorkflowInstanceState {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct WorkflowInstance {
-    pub state: WorkflowInstanceState,
+pub struct Instance {
+    pub state: InstanceState,
     pub current_activity_id: u8,
     pub transition_counter: Vec<Vec<u8>>,
     pub template_id: u16,
 }
 
-impl WorkflowInstance {
-    pub fn new(template_id: u16, transitions: &Vec<Vec<WorkflowTransition>>) -> Self {
+impl Instance {
+    pub fn new(template_id: u16, transitions: &Vec<Vec<Transition>>) -> Self {
         let mut transition_counter = Vec::with_capacity(transitions.len());
 
         for t in transitions.iter() {
             transition_counter.push(vec![0; t.len()])
         }
 
-        WorkflowInstance {
-            state: WorkflowInstanceState::Running,
+        Instance {
+            state: InstanceState::Running,
             current_activity_id: 0,
             transition_counter,
             template_id,
@@ -281,13 +247,13 @@ impl WorkflowInstance {
     /// Tries to advance to next activity in workflow. Panics if anything is wrong - for now.
     pub fn transition_to_next<'a>(
         &mut self,
-        wft: &WorkflowTemplate,
+        wft: &Template,
         current_action_ident: ActionIdent,
         action_args: &mut Vec<DataType>,
         storage_bucket: &mut StorageBucket,
-    ) -> (WorkflowActivityExecutionResult, Option<Postprocessing>) {
-        if self.state == WorkflowInstanceState::Finished {
-            return (WorkflowActivityExecutionResult::Finished, None);
+    ) -> (ActivityResult, Option<Postprocessing>) {
+        if self.state == InstanceState::Finished {
+            return (ActivityResult::Finished, None);
         }
 
         // check if theres transition from current action to desired
@@ -320,7 +286,7 @@ impl WorkflowInstance {
                     .unwrap_or(true)
                 {
                     true => (),
-                    false => return (WorkflowActivityExecutionResult::TransitionCondFailed, None),
+                    false => return (ActivityResult::TransitionCondFailed, None),
                 };
             }
             None => panic!("{}", "Undefined transition"),
@@ -332,23 +298,23 @@ impl WorkflowInstance {
         if self.transition_counter[self.current_activity_id as usize - 1][transition.unwrap().0] + 1
             > transition.unwrap().1.iteration_limit
         {
-            return (
-                WorkflowActivityExecutionResult::MaxTransitionLimitReached,
-                None,
-            );
+            return (ActivityResult::MaxTransitionLimitReached, None);
         }
 
         self.transition_counter[self.current_activity_id as usize - 1][transition.unwrap().0] += 1;
 
         // check if we can run this
-        let can_be_exec = current_activity.exec_condition.bind_and_eval(
-            storage_bucket,
-            current_activity.binds.as_slice(),
-            action_args.as_slice(),
-        );
+        let can_be_exec = match current_activity.exec_condition {
+            Some(ref e) => e.bind_and_eval(
+                storage_bucket,
+                current_activity.binds.as_slice(),
+                action_args.as_slice(),
+            ),
+            None => DataType::Bool(true),
+        };
 
         if !can_be_exec.try_into_bool().unwrap() {
-            return (WorkflowActivityExecutionResult::ActivityCondFailed, None);
+            return (ActivityResult::ActivityCondFailed, None);
         }
 
         // bind args and check values
@@ -356,10 +322,7 @@ impl WorkflowInstance {
 
         // TODO to end transition - should by done by app
 
-        (
-            WorkflowActivityExecutionResult::Ok,
-            current_activity.postprocessing.clone(),
-        )
+        (ActivityResult::Ok, current_activity.postprocessing.clone())
     }
 }
 
@@ -368,19 +331,19 @@ impl WorkflowInstance {
 #[serde(crate = "near_sdk::serde")]
 pub enum ActivityRight {
     Anyone,
-    Group(GroupId),
-    GroupMember(GroupId, String),
+    Group(u16),
+    GroupMember(u16, String),
     Account(AccountId),
     TokenHolder,
     Member,
-    GroupRole(GroupId, TagId),
-    GroupLeader(GroupId),
+    GroupRole(u16, u16),
+    GroupLeader(u16),
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct WorkflowSettings {
+pub struct Settings {
     pub allowed_proposers: Vec<ActivityRight>,
     pub deposit_propose: Option<u128>,
     pub deposit_vote: Option<u128>,   // Near
@@ -388,8 +351,8 @@ pub struct WorkflowSettings {
     pub allowed_voters: ActivityRight,
     pub vote_settings_id: u8,
     pub activity_rights: Vec<ActivityRight>,
-    pub activity_inputs: Vec<Vec<WorkflowActivityArgType>>, //arguments for each activity
-    pub automatic_start: bool,                              // maybe unnecessary
+    pub activity_inputs: Vec<Vec<ArgType>>, //arguments for each activity
+    pub automatic_start: bool,              // maybe unnecessary
     pub scenario: VoteScenario,
     pub duration: u32,
     pub quorum: u8,
@@ -402,18 +365,15 @@ pub struct WorkflowSettings {
 
 mod test {
     use crate::{
-        action::{ActionIdent, DataTypeDef},
-        expression::{
-            Condition, EExpr, ExprTerm, FnName, Op, Operator, RelationalOperation, TExpr,
-        },
-        storage::{DataType, StorageBucket},
-        workflow::{ExprArg, WorkflowActivityExecutionResult},
+        expression::{Condition, EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
+        storage::StorageBucket,
+        types::{ActionIdent, DataType, DataTypeDef},
+        workflow::{ActivityResult, ExprArg},
     };
 
     use super::{
-        Activity, CondOrExpr, Expression, Postprocessing, WorkflowActivity,
-        WorkflowActivityArgType, WorkflowInstance, WorkflowInstanceState, WorkflowTemplate,
-        WorkflowTransition,
+        Activity, ArgType, CondOrExpr, Expression, Instance, InstanceState, Postprocessing,
+        Template, Transition,
     };
 
     // PoC test case
@@ -431,7 +391,7 @@ mod test {
         // 100 > user input
         let expr_send_near = EExpr::Boolean(TExpr {
             operators: vec![Op {
-                op_type: Operator::Relational(RelationalOperation::Gt),
+                op_type: EOp::Rel(RelOp::Gt),
                 operands_ids: [0, 1],
             }],
             terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
@@ -441,46 +401,42 @@ mod test {
         let expr_add_group = EExpr::Boolean(TExpr {
             operators: vec![Op {
                 operands_ids: [0, 1],
-                op_type: Operator::Relational(RelationalOperation::Eqs),
+                op_type: EOp::Rel(RelOp::Eqs),
             }],
             terms: vec![ExprTerm::FnCall(FnName::Concat, (0, 1)), ExprTerm::Arg(2)],
         });
 
-        let wft = WorkflowTemplate {
+        let wft = Template {
             name: "test".into(),
             version: 1,
             activity: vec![
                 None,
-                Some(WorkflowActivity {
+                Some(Activity {
                     name: "send_near".into(),
-                    exec_condition: Expression {
+                    exec_condition: Some(Expression {
                         args: vec![ExprArg::Bind(0), ExprArg::User(1)],
                         expr: expr_send_near,
-                    },
+                    }),
                     action: ActionIdent::NearSend,
                     fncall_id: None,
                     gas: 0,
                     deposit: 0,
-                    arg_types: vec![WorkflowActivityArgType::Free, WorkflowActivityArgType::Free],
+                    arg_types: vec![ArgType::Free, ArgType::Free],
                     arg_validators: vec![],
                     binds: vec![DataType::U8(100)],
                     postprocessing: pp1.clone(),
                 }),
-                Some(WorkflowActivity {
+                Some(Activity {
                     name: "create_group".into(),
-                    exec_condition: Expression {
+                    exec_condition: Some(Expression {
                         args: vec![ExprArg::User(1), ExprArg::Bind(1), ExprArg::Bind(2)],
                         expr: expr_add_group,
-                    },
+                    }),
                     action: ActionIdent::GroupAdd,
                     fncall_id: None,
                     gas: 0,
                     deposit: 0,
-                    arg_types: vec![
-                        WorkflowActivityArgType::Bind(0),
-                        WorkflowActivityArgType::Bind(2),
-                        WorkflowActivityArgType::Free,
-                    ],
+                    arg_types: vec![ArgType::Bind(0), ArgType::Bind(2), ArgType::Free],
                     arg_validators: vec![],
                     binds: vec![
                         DataType::String("rustaceans".into()),
@@ -491,17 +447,17 @@ mod test {
                 }),
             ],
             transitions: vec![
-                vec![WorkflowTransition {
+                vec![Transition {
                     to: 1,
                     iteration_limit: 1,
                     condition: None,
                 }],
-                vec![WorkflowTransition {
+                vec![Transition {
                     to: 2,
                     iteration_limit: 1,
                     condition: None,
                 }],
-                vec![WorkflowTransition {
+                vec![Transition {
                     to: 3,
                     iteration_limit: 1,
                     condition: None,
@@ -512,8 +468,8 @@ mod test {
             storage_key: "simple_wf".into(),
         };
 
-        let mut wfi = WorkflowInstance {
-            state: WorkflowInstanceState::Running,
+        let mut wfi = Instance {
+            state: InstanceState::Running,
             current_activity_id: 0,
             transition_counter: vec![vec![0], vec![0], vec![0]],
             template_id: 1,
@@ -532,7 +488,7 @@ mod test {
             &mut storage_bucket,
         );
 
-        let expected_result = (WorkflowActivityExecutionResult::Ok, pp1.clone());
+        let expected_result = (ActivityResult::Ok, pp1.clone());
 
         assert_eq!(result, expected_result);
         assert_eq!(args_result, expected_args);
@@ -547,7 +503,7 @@ mod test {
         let result =
             wfi.transition_to_next(&wft, ActionIdent::GroupAdd, &mut args, &mut storage_bucket);
 
-        let expected_result = (WorkflowActivityExecutionResult::Ok, pp1.clone());
+        let expected_result = (ActivityResult::Ok, pp1.clone());
         let expected_args = vec![
             DataType::String("rustaceans".into()),
             DataType::String("leaderisme_group".into()),
@@ -564,7 +520,7 @@ mod test {
         // 100 > user input
         let expr_send_near = EExpr::Boolean(TExpr {
             operators: vec![Op {
-                op_type: Operator::Relational(RelationalOperation::GtE),
+                op_type: EOp::Rel(RelOp::GtE),
                 operands_ids: [0, 1],
             }],
             terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
@@ -576,35 +532,35 @@ mod test {
             instructions: vec![],
         });
 
-        let wft = WorkflowTemplate {
+        let wft = Template {
             name: "test".into(),
             version: 1,
             activity: vec![
                 None,
-                Some(WorkflowActivity {
+                Some(Activity {
                     name: "send_near".into(),
-                    exec_condition: Expression {
+                    exec_condition: Some(Expression {
                         args: vec![ExprArg::Bind(0), ExprArg::User(1)],
                         expr: expr_send_near,
-                    },
+                    }),
                     action: ActionIdent::NearSend,
                     fncall_id: None,
                     gas: 0,
                     deposit: 0,
-                    arg_types: vec![WorkflowActivityArgType::Free, WorkflowActivityArgType::Free],
+                    arg_types: vec![ArgType::Free, ArgType::Free],
                     arg_validators: vec![],
                     binds: vec![DataType::U8(50)],
                     postprocessing: pp1.clone(),
                 }),
             ],
             transitions: vec![
-                vec![WorkflowTransition {
+                vec![Transition {
                     to: 1,
                     iteration_limit: 1,
                     condition: None,
                 }],
                 // From 1 to 1 loop
-                vec![WorkflowTransition {
+                vec![Transition {
                     to: 1,
                     iteration_limit: 5,
                     condition: None,
@@ -615,8 +571,8 @@ mod test {
             storage_key: "simple_wf".into(),
         };
 
-        let mut wfi = WorkflowInstance {
-            state: WorkflowInstanceState::Running,
+        let mut wfi = Instance {
+            state: InstanceState::Running,
             current_activity_id: 0,
             transition_counter: vec![vec![0]],
             template_id: 1,
@@ -636,7 +592,7 @@ mod test {
                 &mut storage_bucket,
             );
 
-            let expected_result = (WorkflowActivityExecutionResult::Ok, pp1.clone());
+            let expected_result = (ActivityResult::Ok, pp1.clone());
 
             assert_eq!(result, expected_result);
             assert_eq!(args_result, expected_args);
@@ -655,10 +611,7 @@ mod test {
             &mut storage_bucket,
         );
 
-        let expected_result = (
-            WorkflowActivityExecutionResult::MaxTransitionLimitReached,
-            None,
-        );
+        let expected_result = (ActivityResult::MaxTransitionLimitReached, None);
 
         assert_eq!(result, expected_result);
         assert_eq!(args_result, expected_args);
@@ -677,7 +630,7 @@ mod test {
                 CondOrExpr::Cond(Condition {
                     expr: EExpr::Boolean(TExpr {
                         operators: vec![Op {
-                            op_type: Operator::Relational(RelationalOperation::Gt),
+                            op_type: EOp::Rel(RelOp::Gt),
                             operands_ids: [0, 1],
                         }],
                         terms: vec![ExprTerm::Arg(0), ExprTerm::Value(DataType::U8(5))],
