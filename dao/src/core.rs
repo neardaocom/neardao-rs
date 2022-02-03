@@ -12,7 +12,7 @@ use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
 use crate::tags::{TagInput, Tags};
 use library::storage::StorageBucket;
-use library::workflow::{Template, Instance, Settings};
+use library::workflow::{Instance, ProposeSettings, Template, TemplateSettings};
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
 use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
 use near_contract_standards::storage_management::{
@@ -20,9 +20,8 @@ use near_contract_standards::storage_management::{
 };
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
+use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
 use near_sdk::json_types::{ValidAccountId, U128};
-use near_sdk::serde_json::Value;
 use near_sdk::Promise;
 use near_sdk::{
     env, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault, PromiseOrValue,
@@ -86,7 +85,7 @@ pub struct Contract {
     pub group_last_id: GroupId,
     pub groups: UnorderedMap<GroupId, Group>, //TODO use name as key??
     pub settings: LazyOption<VDaoSettings>,
-    pub vote_settings: LazyOption<Vec<VVoteSettings>>,
+    //pub vote_settings: LazyOption<Vec<VVoteSettings>>, //TODO remove vote settings
     pub proposal_last_id: u32,
     pub proposals: UnorderedMap<u32, VProposal>,
     pub storage: UnorderedMap<StorageKey, StorageBucket>, // TODO
@@ -96,8 +95,8 @@ pub struct Contract {
     pub function_call_metadata: LookupMap<FnCallId, Vec<FnCallMetadata>>,
     pub function_calls: UnorderedMap<FnCallId, FnCallDefinition>,
     pub workflow_last_id: u16,
-    pub workflow_template: UnorderedMap<u16, (Template, Vec<Settings>)>,
-    pub workflow_instance: UnorderedMap<u32, Instance>,
+    pub workflow_template: UnorderedMap<u16, (Template, Vec<TemplateSettings>)>,
+    pub workflow_instance: UnorderedMap<u32, (Option<Instance>, Option<ProposeSettings>)>,
 }
 
 #[near_bindgen]
@@ -109,18 +108,18 @@ impl Contract {
         total_supply: u32,
         ft_metadata: FungibleTokenMetadata,
         settings: DaoSettings,
-        vote_settings: Vec<VoteSettings>,
+        //vote_settings: Vec<VoteSettings>,
         groups: Vec<GroupInput>,
         media: Vec<Media>,
         tags: Vec<TagInput>,
         function_calls: Vec<FnCallDefinition>,
         function_call_metadata: Vec<Vec<FnCallMetadata>>,
         workflow_templates: Vec<Template>,
-        workflow_template_settings: Vec<Vec<Settings>>,
+        workflow_template_settings: Vec<Vec<TemplateSettings>>,
     ) -> Self {
         assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
         assert_valid_dao_settings(&settings);
-        assert_valid_vote_settings(&vote_settings);
+        //assert_valid_vote_settings(&vote_settings);
 
         let mut contract = Contract {
             deposit_min_vote: deposit_min_vote.0,
@@ -132,7 +131,7 @@ impl Contract {
             ft: FungibleToken::new(StorageKeys::FT),
             ft_metadata: LazyOption::new(StorageKeys::FTMetadata, Some(&ft_metadata)),
             settings: LazyOption::new(StorageKeys::DaoSettings, None),
-            vote_settings: LazyOption::new(StorageKeys::VoteSettings, None),
+            //vote_settings: LazyOption::new(StorageKeys::VoteSettings, None),
             group_last_id: 0,
             groups: UnorderedMap::new(StorageKeys::Groups),
             proposal_last_id: 0,
@@ -157,7 +156,7 @@ impl Contract {
         );
 
         contract.init_dao_settings(settings);
-        contract.init_vote_settings(vote_settings);
+        //contract.init_vote_settings(vote_settings);
         contract.init_tags(tags);
         contract.init_groups(groups);
         contract.init_media(media);

@@ -1,4 +1,4 @@
-use library::workflow::{ActivityResult, InstanceState, Template};
+use library::workflow::{ActivityResult, Instance, InstanceState, ProposeSettings, Template};
 use near_sdk::serde_json;
 use near_sdk::{env, ext_contract, near_bindgen, PromiseResult};
 
@@ -100,10 +100,12 @@ impl Contract {
         match result {
             true => ActivityResult::Ok,
             false => {
-                let mut wfi = self.workflow_instance.get(&instance_id).unwrap();
+                let (wfi, settings) = self.workflow_instance.get(&instance_id).unwrap();
+                let mut wfi = wfi.unwrap();
                 wfi.current_activity_id -= 1;
                 wfi.state = InstanceState::FatalError;
-                self.workflow_instance.insert(&instance_id, &wfi).unwrap();
+                self.workflow_instance
+                    .insert(&instance_id, &(Some(wfi), settings));
                 ActivityResult::ErrPostprocessing
             }
         }

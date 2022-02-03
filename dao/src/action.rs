@@ -1,5 +1,7 @@
 use library::types::{ActionIdent, DataType, DataTypeDef};
-use library::workflow::{ActivityResult, Instance};
+use library::workflow::{
+    ActivityResult, Instance, ProposeSettings, TemplateActivity, TemplateSettings,
+};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::{Base64VecU8, WrappedDuration, WrappedTimestamp, U128, U64};
 use near_sdk::serde::{self, Deserialize, Serialize};
@@ -187,17 +189,13 @@ impl Contract {
         &mut self,
         workflow_template_id: u16,
         workflow_template_settings_id: u8,
+        workflow_settings: ProposeSettings,
     ) -> bool {
         let caller = env::predecessor_account_id();
         let (_, wfs) = self.workflow_template.get(&workflow_template_id).unwrap();
-        let settings = wfs.get(workflow_template_id as usize).unwrap();
+        let settings = wfs.get(workflow_template_settings_id as usize).unwrap();
 
-        assert!(
-            env::attached_deposit()
-                >= wfs[workflow_template_settings_id as usize]
-                    .deposit_propose
-                    .unwrap_or(0)
-        );
+        assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or(0));
 
         if !self.check_rights(&settings.allowed_proposers, &caller) {
             return false;
@@ -212,6 +210,8 @@ impl Contract {
         self.proposal_last_id += 1;
         self.proposals
             .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
+        self.workflow_instance
+            .insert(&self.proposal_last_id, &(None, Some(workflow_settings)));
 
         true
     }
@@ -227,7 +227,7 @@ impl Contract {
 
         assert!(env::attached_deposit() >= wfs.deposit_vote.unwrap_or(0));
 
-        if !self.check_rights(&wfs.allowed_proposers, &caller) {
+        if !self.check_rights(&[wfs.allowed_voters], &caller) {
             return false;
         }
 
@@ -251,6 +251,7 @@ impl Contract {
 
     pub fn finish_proposal(&mut self, proposal_id: u32) -> ProposalState {
         let (mut proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (mut instance, mut settings) = self.workflow_instance.get(&proposal_id).unwrap();
 
         let new_state = match proposal.state {
             ProposalState::InProgress => {
@@ -268,6 +269,7 @@ impl Contract {
                         self.decimal_const,
                     ) >= wfs.spam_threshold
                     {
+                        settings = None;
                         Some(ProposalState::Spam)
                     } else if calc_percent_u128_unchecked(
                         total_voted_amount,
@@ -276,6 +278,7 @@ impl Contract {
                     ) < wfs.quorum
                     {
                         // not enough quorum
+                        settings = None;
                         Some(ProposalState::Invalid)
                     } else if calc_percent_u128_unchecked(
                         vote_results[1],
@@ -284,11 +287,12 @@ impl Contract {
                     ) < wfs.approve_threshold
                     {
                         // not enough voters to accept
+                        settings = None;
                         Some(ProposalState::Rejected)
                     } else {
                         // proposal is accepted, create new workflow activity with its storage
                         self.storage_bucket_add(wft.storage_key.as_str());
-                        //WorkflowInstance::new(proposal.workflow_id, &wft.transitions); // TODO add settings
+                        instance = Some(Instance::new(proposal.workflow_id, &wft.transitions));
                         Some(ProposalState::Accepted)
                     }
                 }
@@ -298,6 +302,8 @@ impl Contract {
 
         match new_state {
             Some(state) => {
+                self.workflow_instance
+                    .insert(&proposal_id, &(instance, settings));
                 proposal.state = state.clone();
                 self.proposals
                     .insert(&proposal_id, &VProposal::Curr(proposal));
@@ -521,19 +527,42 @@ impl Contract {
     ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
         let (_proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
-        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
+        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+        let (mut wfi, settings) = (wfi.unwrap(), settings.unwrap()); // uh, this is ugly
 
-        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
+        //transition check
+        let (transition_id, activity_id): (u8, u8) = wfi
+            .get_target_trans_with_act(&wft, &ActionIdent::NearSend)
+            .expect("Undefined transition");
+
+        //rights checks
+        assert!(!self.check_rights(
+            &settings.activity_rights[activity_id as usize].as_slice(),
+            &caller
+        ));
+
         let mut bucket = self.storage.get(&wft.storage_key).unwrap();
-        let mut args = vec![
-            DataType::String(receiver_id.clone()),
-            DataType::U128(amount.0),
-        ];
-        let (result, postprocessing) =
-            wfi.transition_to_next(&wft, ActionIdent::NearSend, &mut args, &mut bucket);
+        let mut args = vec![DataType::String(receiver_id), DataType::U128(amount.0)];
+        let (result, postprocessing) = wfi.transition_to_next(
+            activity_id,
+            transition_id,
+            &wft,
+            &settings,
+            args.as_slice(),
+            &mut bucket,
+        );
 
         match result {
             ActivityResult::Ok => {
+                // bind args and check values
+                wfi.interpolate_args(
+                    &settings.activity_inputs[activity_id as usize].as_slice(),
+                    &settings.binds.as_slice(),
+                    &settings.validators.as_slice(),
+                    &mut args,
+                    &mut bucket,
+                );
+
                 let promise = Promise::new(args.swap_remove(0).try_into_string().unwrap())
                     .transfer(args.swap_remove(0).try_into_u128().unwrap());
                 match postprocessing {
@@ -724,7 +753,7 @@ impl Contract {
         assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         todo!()
     }
-    pub fn workflow_add(
+/*     pub fn workflow_add(
         &mut self,
         proposal_id: ProposalId,
         workflow_id: u16,
@@ -771,7 +800,7 @@ impl Contract {
             }
             _ => PromiseOrValue::Value(result),
         }
-    }
+    } */
 
     // TODO workflow settings??
 }

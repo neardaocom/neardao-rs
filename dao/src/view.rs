@@ -221,14 +221,14 @@ impl Contract {
         self.settings.get().unwrap().into()
     }
 
-    pub fn vote_settings(self) -> Vec<VoteSettings> {
+/*     pub fn vote_settings(self) -> Vec<VoteSettings> {
         self.vote_settings
             .get()
             .unwrap()
             .into_iter()
             .map(|s| s.into())
             .collect()
-    }
+    } */
 
     pub fn groups(self) -> Vec<GroupOutput> {
         self.groups

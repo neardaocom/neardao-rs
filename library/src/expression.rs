@@ -32,15 +32,6 @@ pub enum FnName {
     ArrayLen,
 }
 
-/*
- concat([a,b,c]) == "abc" || 1 > 2
-
-    operands: [eqs(0,1), eqs(2,3), logic(0,1)]
-    terms: [concat([0,0]), arg(1), arg(2) , arg(3)],
-    res: [term[0]]
-
-*/
-
 // Recursive structure does not work with deserializer
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]

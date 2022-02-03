@@ -34,8 +34,8 @@ use crate::{
 use library::{
     storage::StorageBucket,
     workflow::{
-        ActivityRight, VoteScenario, Instance, InstanceState, Settings,
-        Template,
+        ActivityRight, VoteScenario, Instance, InstanceState,
+        Template, TemplateSettings,
     },
 };
 
@@ -44,11 +44,11 @@ impl Contract {
     pub fn init_dao_settings(&mut self, settings: DaoSettings) {
         self.settings.set(&settings.into());
     }
-    #[inline]
+/*     #[inline]
     pub fn init_vote_settings(&mut self, settings: Vec<VoteSettings>) {
         self.vote_settings
             .set(&settings.into_iter().map(|v| v.into()).collect());
-    }
+    } */
 
     #[inline]
     pub fn init_tags(&mut self, tags: Vec<TagInput>) {
@@ -98,7 +98,7 @@ impl Contract {
     pub fn init_workflows(
         &mut self,
         mut workflows: Vec<Template>,
-        mut workflow_template_settings: Vec<Vec<Settings>>,
+        mut workflow_template_settings: Vec<Vec<TemplateSettings>>,
     ) {
         // Each workflow must have at least one setting
         assert_eq!(workflows.len(), workflow_template_settings.len());
@@ -117,7 +117,7 @@ impl Contract {
     pub fn get_wf_and_proposal(
         &self,
         proposal_id: u32,
-    ) -> (Proposal, Template, Settings) {
+    ) -> (Proposal, Template, TemplateSettings) {
         let proposal =
             Proposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
         let (wft, mut wfs) = self.workflow_template.get(&proposal.workflow_id).unwrap();
@@ -127,7 +127,7 @@ impl Contract {
     }
 
     // TODO unit tests
-    pub fn check_rights(&self, rights: &Vec<ActivityRight>, account_id: &AccountId) -> bool {
+    pub fn check_rights(&self, rights: &[ActivityRight], account_id: &AccountId) -> bool {
         if rights.len() == 0 {
             return true;
         }
@@ -283,7 +283,7 @@ impl Contract {
         (total_voted_amount, vote_result)
     }
 
-    pub fn find_current_workflow_activity(&self, proposal_id: u32) -> Option<Instance> {
+/*     pub fn find_current_workflow_activity(&self, proposal_id: u32) -> Option<Instance> {
         match self.workflow_instance.get(&proposal_id) {
             Some(i) => match i.state {
                 InstanceState::Running => {
@@ -294,7 +294,7 @@ impl Contract {
             },
             None => None,
         }
-    }
+    } */
 
     pub fn storage_bucket_add(&mut self, bucket_id: &str) {
         let bucket = StorageBucket::new(utils::get_bucket_id(bucket_id));
