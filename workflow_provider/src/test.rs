@@ -9,40 +9,35 @@ Workflow templates for providers
 mod test {
     use library::{
         expression::{EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
-        types::ActionIdent,
-        workflow::{Activity, ArgType, ExprArg, Expression, Template},
+        types::{ActionIdent, DataType, DataTypeDef},
+        workflow::{
+            Activity, ActivityRight, ArgType, ExprArg, Expression, ProposeSettings, Template,
+            TemplateActivity, TemplateSettings, TransitionConstraint, VoteScenario,
+        },
     };
     use near_sdk::serde_json;
 
-// TODO FIX
-/*     #[test] 
+    #[test]
     fn add_workflow() {
         let wf = Template {
-            name: "add_wf".into(),
+            name: "wf_add".into(),
             version: 1,
-            activity: vec![
+            activities: vec![
                 None,
-                Some(Activity {
-                    name: "add_wf".into(),
+                Some(TemplateActivity {
                     exec_condition: None,
                     action: ActionIdent::WorkflowAdd,
                     fncall_id: None,
-                    gas: 0,
-                    deposit: 0,
-                    arg_types: vec![ArgType::Free],
-                    arg_validators: vec![],
-                    binds: vec![],
+                    gas: Some(0),
+                    deposit: Some(0),
+                    arg_types: vec![DataTypeDef::U16(false), DataTypeDef::Object(0)],
                     postprocessing: None,
                 }),
             ],
-            transitions: vec![vec![Transition {
-                to: 1,
-                iteration_limit: 10,
-                condition: None,
-            }]],
+            transitions: vec![vec![1]],
             start: vec![0],
             end: vec![1],
-            storage_key: "wf_add_wft".into(),
+            binds: vec![],
         };
 
         println!(
@@ -54,45 +49,110 @@ mod test {
     #[test]
     fn payout_workflow() {
         let wf = Template {
-            name: "payout_wf".into(),
+            name: "wf_near_send".into(),
             version: 1,
-            activity: vec![
+            activities: vec![
                 None,
-                Some(Activity {
-                    name: "payout_wf".into(),
+                Some(TemplateActivity {
                     exec_condition: None,
                     action: ActionIdent::NearSend,
                     fncall_id: None,
-                    gas: 0,
-                    deposit: 0,
-                    arg_types: vec![ArgType::Free, ArgType::Checked(0)],
-                    arg_validators: vec![Expression {
-                        args: vec![ExprArg::Bind(0), ExprArg::User(1)],
-                        expr: EExpr::Boolean(TExpr {
-                            operators: vec![Op {
-                                operands_ids: [0, 1],
-                                op_type: EOp::Rel(RelOp::Eqs),
-                            }],
-                            terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
-                        }),
-                    }],
-                    binds: vec![],
+                    gas: None,
+                    deposit: None,
+                    arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: None,
                 }),
             ],
-            transitions: vec![vec![Transition {
-                to: 1,
-                iteration_limit: 5,
-                condition: None,
-            }]],
+            transitions: vec![vec![1], vec![1]],
+            binds: vec![],
             start: vec![0],
             end: vec![1],
-            storage_key: "wf_payout_wft".into(),
         };
 
         println!(
             "------------------------------ WORKFLOW PAYOUT NEAR ------------------------------\n{}",
             serde_json::to_string(&wf).unwrap()
         );
-    } */
+    }
+
+    #[test]
+    fn settings() {
+        let settings = ProposeSettings {
+            activity_rights: vec![vec![ActivityRight::GroupLeader(1)]],
+            activity_inputs: vec![vec![ArgType::Free]],
+            transition_constraints: vec![
+                vec![TransitionConstraint {
+                    transition_limit: 1,
+                    cond: None,
+                }],
+                vec![TransitionConstraint {
+                    transition_limit: 0,
+                    cond: None,
+                }],
+            ],
+            binds: vec![],
+            validators: vec![],
+            storage_key: "test".into(),
+        };
+
+        println!(
+            "------------------------------ PROPOSE SETTINGS ADD WORKFLOW ------------------------------\n{}",
+            serde_json::to_string(&settings).unwrap()
+        );
+
+        let wfs = TemplateSettings {
+            allowed_proposers: vec![ActivityRight::Group(1)],
+            allowed_voters: ActivityRight::TokenHolder,
+            scenario: VoteScenario::TokenWeighted,
+            duration: 60,
+            quorum: 51,
+            approve_threshold: 20,
+            spam_threshold: 80,
+            vote_only_once: true,
+            deposit_propose: Some(1),
+            deposit_vote: Some(1000),
+            deposit_propose_return: 0,
+        };
+
+        println!(
+            "------------------------------ TEMPLATE SETTINGS ADD WORFLOW ------------------------------\n{}",
+            serde_json::to_string(&wfs).unwrap()
+        );
+
+        let propose_settings = ProposeSettings {
+            activity_rights: vec![
+                vec![ActivityRight::Group(1)],
+                vec![ActivityRight::GroupLeader(1)],
+            ],
+            activity_inputs: vec![vec![ArgType::Free, ArgType::Checked(0)]],
+            transition_constraints: vec![
+                vec![TransitionConstraint {
+                    transition_limit: 1,
+                    cond: None,
+                }],
+                vec![TransitionConstraint {
+                    transition_limit: 4,
+                    cond: None,
+                }],
+            ],
+            binds: vec![DataType::U8(100)],
+            validators: vec![Expression {
+                args: vec![ExprArg::User(1), ExprArg::Bind(0)],
+                expr: EExpr::Boolean(TExpr {
+                    operators: vec![Op {
+                        op_type: EOp::Rel(RelOp::Gt),
+                        operands_ids: [0, 1],
+                    }],
+                    terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
+                }),
+            }],
+            storage_key: "test".into(),
+        };
+
+        println!(
+            "------------------------------ PROPOSE SETTINGS PAYOUT ------------------------------\n{}",
+            serde_json::to_string(&propose_settings).unwrap()
+        );
+
+    }
 }

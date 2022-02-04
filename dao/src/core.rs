@@ -1,13 +1,9 @@
 use std::u128;
 
 use crate::constants::{
-    DEPOSIT_ADD_PROPOSAL, DEPOSIT_VOTE, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, GROUP_PREFIX,
-    MAX_FT_TOTAL_SUPPLY, METADATA_MAX_DECIMALS, PROPOSAL_KIND_COUNT,
+    MAX_FT_TOTAL_SUPPLY,
 };
-use crate::settings::{
-    assert_valid_dao_settings, assert_valid_vote_settings, DaoSettings, VDaoSettings,
-    VVoteSettings, VoteSettings,
-};
+use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
 use crate::tags::{TagInput, Tags};
@@ -22,17 +18,16 @@ use near_contract_standards::storage_management::{
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
 use near_sdk::json_types::{ValidAccountId, U128};
-use near_sdk::Promise;
 use near_sdk::{
-    env, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault, PromiseOrValue,
+    env, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault, Promise,
+    PromiseOrValue,
 };
 
 use crate::group::{Group, GroupInput};
 
 use crate::media::Media;
-use crate::release::{ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel};
-use crate::{action::*, GroupId, GroupName};
-use crate::{calc_percent_u128_unchecked, FnCallId};
+use crate::FnCallId;
+use crate::{action::*, GroupId};
 use crate::{proposal::*, StorageKey, TagCategory};
 
 near_sdk::setup_alloc!();
@@ -74,8 +69,6 @@ pub enum StorageKeys {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
-    pub deposit_min_vote: u128,
-    pub deposit_min_add_proposal: u128,
     pub ft_total_supply: u32,
     pub ft_total_locked: u32,
     pub ft_total_distributed: u32,
@@ -83,13 +76,12 @@ pub struct Contract {
     pub ft: FungibleToken,
     pub ft_metadata: LazyOption<FungibleTokenMetadata>,
     pub group_last_id: GroupId,
-    pub groups: UnorderedMap<GroupId, Group>, //TODO use name as key??
+    pub groups: UnorderedMap<GroupId, Group>,
     pub settings: LazyOption<VDaoSettings>,
-    //pub vote_settings: LazyOption<Vec<VVoteSettings>>, //TODO remove vote settings
     pub proposal_last_id: u32,
     pub proposals: UnorderedMap<u32, VProposal>,
-    pub storage: UnorderedMap<StorageKey, StorageBucket>, // TODO
-    pub tags: UnorderedMap<TagCategory, Tags>, //Once added cannot be removed or special DT??
+    pub storage: UnorderedMap<StorageKey, StorageBucket>,
+    pub tags: UnorderedMap<TagCategory, Tags>,
     pub media_last_id: u32,
     pub media: LookupMap<u32, Media>, //TODO categorize??
     pub function_call_metadata: LookupMap<FnCallId, Vec<FnCallMetadata>>,
@@ -103,12 +95,9 @@ pub struct Contract {
 impl Contract {
     #[init]
     pub fn new(
-        deposit_min_vote: U128,
-        deposit_min_add_proposal: U128,
         total_supply: u32,
         ft_metadata: FungibleTokenMetadata,
         settings: DaoSettings,
-        //vote_settings: Vec<VoteSettings>,
         groups: Vec<GroupInput>,
         media: Vec<Media>,
         tags: Vec<TagInput>,
@@ -119,11 +108,8 @@ impl Contract {
     ) -> Self {
         assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
         assert_valid_dao_settings(&settings);
-        //assert_valid_vote_settings(&vote_settings);
 
         let mut contract = Contract {
-            deposit_min_vote: deposit_min_vote.0,
-            deposit_min_add_proposal: deposit_min_add_proposal.0,
             ft_total_supply: total_supply,
             ft_total_locked: 0,
             ft_total_distributed: 0,
@@ -131,7 +117,6 @@ impl Contract {
             ft: FungibleToken::new(StorageKeys::FT),
             ft_metadata: LazyOption::new(StorageKeys::FTMetadata, Some(&ft_metadata)),
             settings: LazyOption::new(StorageKeys::DaoSettings, None),
-            //vote_settings: LazyOption::new(StorageKeys::VoteSettings, None),
             group_last_id: 0,
             groups: UnorderedMap::new(StorageKeys::Groups),
             proposal_last_id: 0,
@@ -156,7 +141,6 @@ impl Contract {
         );
 
         contract.init_dao_settings(settings);
-        //contract.init_vote_settings(vote_settings);
         contract.init_tags(tags);
         contract.init_groups(groups);
         contract.init_media(media);

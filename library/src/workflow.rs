@@ -34,7 +34,6 @@ pub struct Template {
     pub binds: Vec<DataType>,                      // TODO ??
     pub start: Vec<u8>,
     pub end: Vec<u8>,
-    pub storage_key: String,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
@@ -68,16 +67,16 @@ pub struct TemplateSettings {
     pub spam_threshold: u8,
     pub vote_only_once: bool,
     pub deposit_propose: Option<u128>,
-    pub deposit_vote: Option<u128>,   // Near
-    pub deposit_propose_return: bool, // if return deposit to proposer above when workflow finishes
+    pub deposit_vote: Option<u128>, // Near
+    pub deposit_propose_return: u8, // how many percent of propose deposit to return
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct TransitionConstraint {
-    transition_limit: u8,
-    cond: Option<Expression>,
+    pub transition_limit: u8,
+    pub cond: Option<Expression>,
 }
 
 // Template settings for proposing and limits
@@ -90,10 +89,11 @@ pub struct ProposeSettings {
     pub transition_constraints: Vec<Vec<TransitionConstraint>>,
     pub binds: Vec<DataType>,
     pub validators: Vec<Expression>,
+    pub storage_key: String,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)] //Remove clone + debug
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum ActivityRight {
     Anyone,
@@ -280,13 +280,13 @@ impl Instance {
     pub fn get_target_trans_with_act(
         &self,
         wft: &Template,
-        action_ident: &ActionIdent,
+        action_ident: ActionIdent,
     ) -> Option<(TransitionId, ActivityId)> {
         wft.transitions[self.current_activity_id as usize]
             .iter()
             .enumerate()
             .find(|(_, act_id)| {
-                wft.activities[**act_id as usize].as_ref().unwrap().action == *action_ident
+                wft.activities[**act_id as usize].as_ref().unwrap().action == action_ident
             })
             .map(|(t_id, act_id)| (t_id as u8, *act_id))
     }
@@ -306,9 +306,8 @@ impl Instance {
             return (ActivityResult::Finished, None);
         }
 
-        let current_activity = wft.activities[activity_id as usize].as_ref().unwrap();
-        let transition_settings =
-            &settings.transition_constraints[activity_id as usize][transition_id as usize];
+        let transition_settings = &settings.transition_constraints
+            [self.current_activity_id as usize][transition_id as usize];
 
         //check transition cond
         let transition_cond_result = match &transition_settings.cond {
@@ -334,7 +333,8 @@ impl Instance {
         self.current_activity_id = activity_id;
 
         // check if we can run this
-        let can_be_exec = match current_activity.exec_condition {
+        let wanted_activity = wft.activities[activity_id as usize].as_ref().unwrap();
+        let can_be_exec = match wanted_activity.exec_condition {
             Some(ref e) => e.bind_and_eval(storage_bucket, settings.binds.as_slice(), action_args),
             None => DataType::Bool(true),
         };
@@ -345,7 +345,7 @@ impl Instance {
 
         // TODO to end transition - should by done by app
 
-        (ActivityResult::Ok, current_activity.postprocessing.clone())
+        (ActivityResult::Ok, wanted_activity.postprocessing.clone())
     }
 
     pub fn interpolate_args(
@@ -401,10 +401,7 @@ mod test {
         },
     };
 
-    use super::{
-        ArgType, CondOrExpr, Expression, Instance, Postprocessing,
-        Template,
-    };
+    use super::{ArgType, CondOrExpr, Expression, Instance, Postprocessing, Template};
 
     // PoC test case
     #[test]
@@ -448,7 +445,6 @@ mod test {
             binds: vec![],
             start: vec![0],
             end: vec![2],
-            storage_key: "wf_simple".into(),
         };
 
         //Template Settings example
@@ -463,16 +459,18 @@ mod test {
             vote_only_once: true,
             deposit_propose: Some(1),
             deposit_vote: Some(1000),
-            deposit_propose_return: false,
+            deposit_propose_return: 0,
         };
 
         //User proposed settings type
         let settings = ProposeSettings {
             activity_rights: vec![
+                vec![],
                 vec![ActivityRight::Group(1)],
                 vec![ActivityRight::GroupLeader(1)],
             ],
             activity_inputs: vec![
+                vec![],
                 vec![ArgType::Free, ArgType::Checked(0)],
                 vec![ArgType::Bind(0), ArgType::Free, ArgType::Free],
             ],
@@ -504,6 +502,7 @@ mod test {
                     terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
                 }),
             }],
+            storage_key: "wf_simple".into(),
         };
 
         let mut wfi = Instance::new(1, &wft.transitions);
@@ -514,7 +513,7 @@ mod test {
         let mut user_args = expected_args.clone();
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, &ActionIdent::NearSend)
+            .get_target_trans_with_act(&wft, ActionIdent::NearSend)
             .unwrap();
 
         assert_eq!(activity_id, 1);
@@ -535,7 +534,7 @@ mod test {
         assert_eq!(wfi.current_activity_id, 1);
 
         wfi.interpolate_args(
-            &settings.activity_inputs[activity_id as usize - 1].as_slice(),
+            &settings.activity_inputs[activity_id as usize].as_slice(),
             &settings.binds.as_slice(),
             &settings.validators.as_slice(),
             &mut user_args,
@@ -552,7 +551,7 @@ mod test {
         ];
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, &ActionIdent::GroupAdd)
+            .get_target_trans_with_act(&wft, ActionIdent::GroupAdd)
             .unwrap();
 
         assert_eq!(activity_id, 2);
@@ -568,7 +567,7 @@ mod test {
         );
 
         wfi.interpolate_args(
-            &settings.activity_inputs[activity_id as usize - 1].as_slice(),
+            &settings.activity_inputs[activity_id as usize].as_slice(),
             &settings.binds.as_slice(),
             &settings.validators.as_slice(),
             &mut user_args,
@@ -615,7 +614,6 @@ mod test {
             binds: vec![],
             start: vec![0],
             end: vec![1],
-            storage_key: "wf_simple_loop".into(),
         };
 
         //Template Settings example
@@ -630,16 +628,17 @@ mod test {
             vote_only_once: true,
             deposit_propose: Some(1),
             deposit_vote: Some(1000),
-            deposit_propose_return: false,
+            deposit_propose_return: 0,
         };
 
         //User proposed settings type
         let settings = ProposeSettings {
             activity_rights: vec![
+                vec![],
                 vec![ActivityRight::Group(1)],
                 vec![ActivityRight::GroupLeader(1)],
             ],
-            activity_inputs: vec![vec![ArgType::Free, ArgType::Checked(0)]],
+            activity_inputs: vec![vec![], vec![ArgType::Free, ArgType::Checked(0)]],
             transition_constraints: vec![
                 vec![TransitionConstraint {
                     transition_limit: 1,
@@ -661,6 +660,7 @@ mod test {
                     terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
                 }),
             }],
+            storage_key: "wf_simple_loop".into(),
         };
 
         let mut wfi = Instance::new(1, &wft.transitions);
@@ -671,7 +671,7 @@ mod test {
         // Execute Workflow
         for i in 0..5 {
             let (transition_id, activity_id) = wfi
-                .get_target_trans_with_act(&wft, &ActionIdent::NearSend)
+                .get_target_trans_with_act(&wft, ActionIdent::NearSend)
                 .unwrap();
 
             assert_eq!(activity_id, 1);
@@ -688,7 +688,7 @@ mod test {
             let expected_result = (ActivityResult::Ok, pp.clone());
 
             wfi.interpolate_args(
-                &settings.activity_inputs[activity_id as usize - 1].as_slice(),
+                &settings.activity_inputs[activity_id as usize].as_slice(),
                 &settings.binds.as_slice(),
                 &settings.validators.as_slice(),
                 &mut user_args,
@@ -698,13 +698,12 @@ mod test {
             assert_eq!(result, expected_result);
             assert_eq!(user_args, expected_args);
             assert_eq!(wfi.current_activity_id, 1);
-            //dbg!(wfi.transition_counter[1].clone());
             assert_eq!(wfi.transition_counter[0][0], 1);
             assert_eq!(wfi.transition_counter[1][0], i);
         }
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, &ActionIdent::NearSend)
+            .get_target_trans_with_act(&wft, ActionIdent::NearSend)
             .unwrap();
 
         let result = wfi.transition_to_next(
@@ -722,7 +721,7 @@ mod test {
         let expected_result = (ActivityResult::MaxTransitionLimitReached, None);
 
         wfi.interpolate_args(
-            &settings.activity_inputs[activity_id as usize - 1].as_slice(),
+            &settings.activity_inputs[activity_id as usize].as_slice(),
             &settings.binds.as_slice(),
             &settings.validators.as_slice(),
             &mut user_args,
@@ -756,16 +755,16 @@ mod test {
                 }),
                 CondOrExpr::Expr(EExpr::Value(DataType::U8(20))),
                 CondOrExpr::Expr(EExpr::Value(DataType::U8(40))),
-                ],
-            };
+            ],
+        };
 
-            let result = postprocessing.process(input.as_slice());
-            let expected_result = 40;
+        let result = postprocessing.process(input.as_slice());
+        let expected_result = 40;
 
-            if let DataType::U8(v) = result {
-                assert_eq!(v, expected_result);
-            } else {
-                panic!("expected DataType::U8");
-            }
+        if let DataType::U8(v) = result {
+            assert_eq!(v, expected_result);
+        } else {
+            panic!("expected DataType::U8");
         }
+    }
 }

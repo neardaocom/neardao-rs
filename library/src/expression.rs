@@ -334,6 +334,15 @@ impl EOp {
                     RelOp::LtE => DataType::Bool(lhs <= rhs),
                     _ => panic!("Invalid operands"),
                 },
+                (DataType::U128(lhs), DataType::U128(rhs)) => match o {
+                    RelOp::Eqs => DataType::Bool(lhs == rhs),
+                    RelOp::NEqs => DataType::Bool(lhs != rhs),
+                    RelOp::Gt => DataType::Bool(lhs > rhs),
+                    RelOp::Lt => DataType::Bool(lhs < rhs),
+                    RelOp::GtE => DataType::Bool(lhs >= rhs),
+                    RelOp::LtE => DataType::Bool(lhs <= rhs),
+                    _ => panic!("Invalid operands"),
+                },
                 (DataType::String(lhs), DataType::String(rhs)) => match o {
                     RelOp::Eqs => DataType::Bool(*lhs == *rhs),
                     RelOp::NEqs => DataType::Bool(*lhs != *rhs),

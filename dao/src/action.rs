@@ -29,8 +29,6 @@ use crate::{
     GroupId, GroupName, ProposalId, CID,
 };
 
-// ---------------- NEW ----------------
-
 // Represents object schema
 // Coz compiler yelling at me: "error[E0275]: overflow evaluating the requirement" on Borsh we do it this way
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
@@ -187,33 +185,31 @@ impl Contract {
     #[payable]
     pub fn propose(
         &mut self,
-        workflow_template_id: u16,
-        workflow_template_settings_id: u8,
-        workflow_settings: ProposeSettings,
-    ) -> bool {
+        template_id: u16,
+        template_settings_id: u8,
+        propose_settings: ProposeSettings,
+    ) -> u32 {
         let caller = env::predecessor_account_id();
-        let (_, wfs) = self.workflow_template.get(&workflow_template_id).unwrap();
-        let settings = wfs.get(workflow_template_settings_id as usize).unwrap();
+        let (_, wfs) = self.workflow_template.get(&template_id).unwrap();
+        let settings = wfs
+            .get(template_settings_id as usize)
+            .expect("Undefined settings id");
 
         assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or(0));
 
         if !self.check_rights(&settings.allowed_proposers, &caller) {
-            return false;
+            panic!("You have no rights to propose this");
         }
 
-        let proposal = Proposal::new(
-            env::block_timestamp(),
-            workflow_template_id,
-            workflow_template_settings_id,
-        );
+        let proposal = Proposal::new(env::block_timestamp(), template_id, template_settings_id);
 
         self.proposal_last_id += 1;
         self.proposals
             .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
         self.workflow_instance
-            .insert(&self.proposal_last_id, &(None, Some(workflow_settings)));
+            .insert(&self.proposal_last_id, &(None, Some(propose_settings)));
 
-        true
+        self.proposal_last_id
     }
 
     #[payable]
@@ -223,17 +219,18 @@ impl Contract {
         }
 
         let caller = env::predecessor_account_id();
-        let (mut proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (mut proposal, _, wfs) = self.get_wf_and_proposal(proposal_id);
 
         assert!(env::attached_deposit() >= wfs.deposit_vote.unwrap_or(0));
 
-        if !self.check_rights(&[wfs.allowed_voters], &caller) {
+        if !self.check_rights(&[wfs.allowed_voters.clone()], &caller) {
             return false;
         }
 
         if proposal.state != ProposalState::InProgress
-            || proposal.created + (wfs.duration) as u64 * 1000 <= env::block_timestamp()
+            || proposal.created + (wfs.duration) as u64 * 10u64.pow(9) < env::block_timestamp()
         {
+            //TODO update expired proposal state
             return false;
         }
 
@@ -259,21 +256,21 @@ impl Contract {
                     None
                 } else {
                     // count votes
-                    let (total_voted_amount, vote_results) =
+                    let (max_possible_amount, vote_results) =
                         self.calculate_votes(&proposal.votes, &wfs.scenario, &wfs.allowed_voters);
-
+                    log!("{}, {:?}", max_possible_amount, vote_results);
                     // check spam
                     if calc_percent_u128_unchecked(
                         vote_results[0],
-                        total_voted_amount,
+                        max_possible_amount,
                         self.decimal_const,
                     ) >= wfs.spam_threshold
                     {
                         settings = None;
                         Some(ProposalState::Spam)
                     } else if calc_percent_u128_unchecked(
-                        total_voted_amount,
-                        self.ft_total_distributed as u128 * self.decimal_const,
+                        vote_results.iter().sum(),
+                        max_possible_amount,
                         self.decimal_const,
                     ) < wfs.quorum
                     {
@@ -282,7 +279,7 @@ impl Contract {
                         Some(ProposalState::Invalid)
                     } else if calc_percent_u128_unchecked(
                         vote_results[1],
-                        total_voted_amount,
+                        max_possible_amount,
                         self.decimal_const,
                     ) < wfs.approve_threshold
                     {
@@ -291,7 +288,7 @@ impl Contract {
                         Some(ProposalState::Rejected)
                     } else {
                         // proposal is accepted, create new workflow activity with its storage
-                        self.storage_bucket_add(wft.storage_key.as_str());
+                        self.storage_bucket_add(settings.as_ref().unwrap().storage_key.as_str());
                         instance = Some(Instance::new(proposal.workflow_id, &wft.transitions));
                         Some(ProposalState::Accepted)
                     }
@@ -482,10 +479,6 @@ impl Contract {
     }
 
     pub fn ft_unlock(&mut self, proposal_id: ProposalId, group_ids: Vec<GroupId>) -> Vec<u32> {
-        let caller = env::predecessor_account_id();
-        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
-
-        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         let mut released = Vec::with_capacity(group_ids.len());
         for id in group_ids.into_iter() {
             if let Some(mut group) = self.groups.get(&id) {
@@ -526,22 +519,25 @@ impl Contract {
         amount: U128,
     ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
-        let (_proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(proposal.state == ProposalState::Accepted);
+
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
         let (mut wfi, settings) = (wfi.unwrap(), settings.unwrap()); // uh, this is ugly
 
         //transition check
         let (transition_id, activity_id): (u8, u8) = wfi
-            .get_target_trans_with_act(&wft, &ActionIdent::NearSend)
+            .get_target_trans_with_act(&wft, ActionIdent::NearSend)
             .expect("Undefined transition");
 
         //rights checks
-        assert!(!self.check_rights(
+        assert!(self.check_rights(
             &settings.activity_rights[activity_id as usize].as_slice(),
             &caller
         ));
 
-        let mut bucket = self.storage.get(&wft.storage_key).unwrap();
+        let mut bucket = self.storage.get(&settings.storage_key).unwrap();
         let mut args = vec![DataType::String(receiver_id), DataType::U128(amount.0)];
         let (result, postprocessing) = wfi.transition_to_next(
             activity_id,
@@ -552,7 +548,7 @@ impl Contract {
             &mut bucket,
         );
 
-        match result {
+        let result = match result {
             ActivityResult::Ok => {
                 // bind args and check values
                 wfi.interpolate_args(
@@ -568,7 +564,7 @@ impl Contract {
                 match postprocessing {
                     Some(p) => PromiseOrValue::Promise(promise.then(ext_self::postprocess(
                         proposal_id,
-                        wft.storage_key.clone(),
+                        settings.storage_key.clone(),
                         p,
                         &env::current_account_id(),
                         0,
@@ -578,7 +574,13 @@ impl Contract {
                 }
             }
             _ => PromiseOrValue::Value(result),
-        }
+        };
+
+        self.workflow_instance
+            .insert(&proposal_id, &(Some(wfi), Some(settings)))
+            .unwrap();
+
+        result
     }
     pub fn treasury_send_ft(
         &mut self,
@@ -753,43 +755,87 @@ impl Contract {
         assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         todo!()
     }
-/*     pub fn workflow_add(
+
+    // It makes no sense to check for something else than right to call this action in this case
+    pub fn workflow_add(
         &mut self,
         proposal_id: ProposalId,
         workflow_id: u16,
+        workflow_settings: Vec<TemplateSettings>,
     ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
-        let (_, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (proposal, wft, _) = self.get_wf_and_proposal(proposal_id);
 
-        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
+        assert!(proposal.state == ProposalState::Accepted);
 
+        let (wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+        let (mut wfi, settings) = (wfi.unwrap(), settings.unwrap()); // uh, this is ugly
+
+        //transition check
+        let (transition_id, activity_id): (u8, u8) = wfi
+            .get_target_trans_with_act(&wft, ActionIdent::WorkflowAdd)
+            .expect("Undefined transition");
+
+        log!(
+            "{}, {}, {:?}",
+            transition_id,
+            activity_id,
+            wfi.transition_counter.clone()
+        );
+
+        //rights checks
+        assert!(self.check_rights(
+            &settings.activity_rights[activity_id as usize].as_slice(),
+            &caller
+        ));
+
+        //TODO remove unnecessary
+        let mut bucket = self.storage.get(&settings.storage_key).unwrap();
         let mut args = vec![DataType::U16(workflow_id)];
-        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
-        let mut bucket = self.storage.get(&wft.storage_key).unwrap();
-        let (result, postprocessing) =
-            wfi.transition_to_next(&wft, ActionIdent::WorkflowAdd, &mut args, &mut bucket);
+        let (result, postprocessing) = wfi.transition_to_next(
+            activity_id,
+            transition_id,
+            &wft,
+            &settings,
+            args.as_slice(),
+            &mut bucket,
+        );
 
-        let settings: DaoSettings = self.settings.get().unwrap().into();
+        log!(
+            "{}, {}, {:?}",
+            transition_id,
+            activity_id,
+            wfi.transition_counter.clone()
+        );
+
+        let dao_settings: DaoSettings = self.settings.get().unwrap().into();
         let acc = env::current_account_id();
-        match result {
+        let result = match result {
             ActivityResult::Ok => {
-                let promise = Promise::new(settings.workflow_provider)
+                let promise = Promise::new(dao_settings.workflow_provider)
                     .function_call(
                         b"get".to_vec(),
                         format!(
-                            "{{\"id\":\"{}\"}}",
+                            "{{\"id\":{}}}",
                             args.pop().unwrap().try_into_u128().unwrap()
                         )
                         .into_bytes(),
                         0,
                         50 * TGAS,
                     )
-                    .then(ext_self::store_workflow(&acc, 0, 30 * TGAS));
+                    .then(ext_self::store_workflow(
+                        proposal_id,
+                        workflow_settings,
+                        &acc,
+                        0,
+                        50 * TGAS,
+                    ));
 
+                //TODO: FIX TO RETURN VALUE IN POSTPROCESSING
                 match postprocessing {
                     Some(p) => PromiseOrValue::Promise(promise.then(ext_self::postprocess(
                         proposal_id,
-                        wft.storage_key.clone(),
+                        settings.storage_key.clone(),
                         p,
                         &acc,
                         0,
@@ -799,9 +845,14 @@ impl Contract {
                 }
             }
             _ => PromiseOrValue::Value(result),
-        }
-    } */
+        };
 
+        self.workflow_instance
+            .insert(&proposal_id, &(Some(wfi), Some(settings)))
+            .unwrap();
+
+        result
+    }
     // TODO workflow settings??
 }
 

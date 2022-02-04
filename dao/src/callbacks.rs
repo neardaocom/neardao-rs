@@ -1,4 +1,6 @@
-use library::workflow::{ActivityResult, Instance, InstanceState, ProposeSettings, Template};
+use library::workflow::{
+    ActivityResult, Instance, InstanceState, ProposeSettings, Template, TemplateSettings,
+};
 use near_sdk::serde_json;
 use near_sdk::{env, ext_contract, near_bindgen, PromiseResult};
 
@@ -18,7 +20,11 @@ trait ExtSelf {
         postprocessing: Postprocessing,
     ) -> ActivityResult;
 
-    fn store_workflow(&mut self);
+    fn store_workflow(
+        &mut self,
+        instance_id: u32,
+        settings: Vec<TemplateSettings>,
+    ) -> ActivityResult;
 }
 
 #[near_bindgen]
@@ -99,20 +105,16 @@ impl Contract {
 
         match result {
             true => ActivityResult::Ok,
-            false => {
-                let (wfi, settings) = self.workflow_instance.get(&instance_id).unwrap();
-                let mut wfi = wfi.unwrap();
-                wfi.current_activity_id -= 1;
-                wfi.state = InstanceState::FatalError;
-                self.workflow_instance
-                    .insert(&instance_id, &(Some(wfi), settings));
-                ActivityResult::ErrPostprocessing
-            }
+            false => self.postprocessing_fail_update(instance_id),
         }
     }
 
     #[private]
-    pub fn store_workflow(&mut self) {
+    pub fn store_workflow(
+        &mut self,
+        instance_id: u32,
+        settings: Vec<TemplateSettings>,
+    ) -> ActivityResult {
         assert_eq!(
             env::promise_results_count(),
             1,
@@ -126,9 +128,10 @@ impl Contract {
                 let workflow: Template = serde_json::from_slice(&val).unwrap();
                 self.workflow_last_id += 1;
                 self.workflow_template
-                    .insert(&self.workflow_last_id, &(workflow, vec![]));
+                    .insert(&self.workflow_last_id, &(workflow, settings));
+                ActivityResult::Ok
             }
-            PromiseResult::Failed => panic!("Failed to store workflow template"),
+            PromiseResult::Failed => self.postprocessing_fail_update(instance_id),
         }
     }
 }

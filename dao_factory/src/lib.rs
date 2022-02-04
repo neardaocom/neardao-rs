@@ -1,12 +1,11 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{UnorderedMap};
-use near_sdk::json_types::{Base58PublicKey, Base64VecU8, U128};
+use near_sdk::collections::UnorderedMap;
+use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::IntoStorageKey;
 use near_sdk::{
-    env, ext_contract, log, near_bindgen, AccountId,
-    BorshStorageKey, PanicOnDefault, Promise,
+    env, ext_contract, log, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise,
 };
-use near_sdk::{IntoStorageKey};
 
 near_sdk::setup_alloc!();
 
@@ -104,9 +103,10 @@ impl DaoFactoryContract {
     /// Returns sha256 of requested dao binary version as base64.
     /// Argument with value 0 means newest version.
     pub fn version_hash(&self, version: u8) -> Option<Base64VecU8> {
-        
-        // Check it was already uploaded or we still keep this version 
-        if version > self.version_count || self.version_count - version >= MAX_DAO_VERSIONS && version != 0 {
+        // Check it was already uploaded or we still keep this version
+        if version > self.version_count
+            || self.version_count - version >= MAX_DAO_VERSIONS && version != 0
+        {
             return None;
         }
 
@@ -123,27 +123,17 @@ impl DaoFactoryContract {
                 _ => unreachable!(),
             };
         }
-            
+
         let code = match key {
-            Some(k) => {
-                env::storage_read(&k.into_storage_key()).unwrap()
-            },
-            None => {
-                NEWEST_DAO_VERSION.to_vec()
-            }
+            Some(k) => env::storage_read(&k.into_storage_key()).unwrap(),
+            None => NEWEST_DAO_VERSION.to_vec(),
         };
 
         Some(Base64VecU8::from(env::sha256(&code)))
     }
 
     #[payable]
-    pub fn create(
-        &mut self,
-        acc_name: AccountId,
-        _public_key: Option<Base58PublicKey>,
-        dao_info: DaoInfo,
-        args: Base64VecU8,
-    ) -> Promise {
+    pub fn create(&mut self, acc_name: AccountId, dao_info: DaoInfo, args: Base64VecU8) -> Promise {
         assert!(env::attached_deposit() >= DEPOSIT_CREATE);
         let account_id = format!("{}.{}", acc_name, env::current_account_id());
         log!("Creating DAO account: {}", account_id);
@@ -157,8 +147,7 @@ impl DaoFactoryContract {
         let promise = Promise::new(account_id.clone())
             .create_account()
             .deploy_contract(NEWEST_DAO_VERSION.to_vec())
-            .transfer(env::attached_deposit())
-        ;
+            .transfer(env::attached_deposit());
 
         promise
             .function_call(
@@ -215,7 +204,6 @@ impl DaoFactoryContract {
 }
 
 impl DaoFactoryContract {
-
     #[inline]
     pub fn update_version_and_get_slot(&mut self) -> StorageKeys {
         // Inc version counter and rotate storage slots
@@ -244,7 +232,6 @@ impl DaoFactoryContract {
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn download_dao_bin() {
-
     use env::BLOCKCHAIN_INTERFACE;
 
     const GAS_SEND_BIN_LIMIT: u64 = 100_000_000_000_000;
@@ -315,12 +302,11 @@ mod tests {
     use super::*;
     #[test]
     pub fn rotate_slots() {
-
         let context = VMContextBuilder::new();
         testing_env!(context.build());
 
         let mut factory = DaoFactoryContract::new(vec![]);
-        
+
         assert_eq!(factory.version_count, 1);
 
         assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V2);

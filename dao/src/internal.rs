@@ -27,15 +27,15 @@ use crate::{
     media::Media,
     proposal::Proposal,
     release::{Release, ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel},
-    settings::{DaoSettings, VoteSettings},
+    settings::DaoSettings,
     tags::{TagInput, Tags},
     GroupId, ProposalId,
 };
 use library::{
     storage::StorageBucket,
     workflow::{
-        ActivityRight, VoteScenario, Instance, InstanceState,
-        Template, TemplateSettings,
+        ActivityResult, ActivityRight, Instance, InstanceState, Template, TemplateSettings,
+        VoteScenario,
     },
 };
 
@@ -44,14 +44,12 @@ impl Contract {
     pub fn init_dao_settings(&mut self, settings: DaoSettings) {
         self.settings.set(&settings.into());
     }
-/*     #[inline]
-    pub fn init_vote_settings(&mut self, settings: Vec<VoteSettings>) {
-        self.vote_settings
-            .set(&settings.into_iter().map(|v| v.into()).collect());
-    } */
 
     #[inline]
     pub fn init_tags(&mut self, tags: Vec<TagInput>) {
+        self.tags.insert(&"group".into(), &Tags::new());
+        self.tags.insert(&"media".into(), &Tags::new());
+
         for i in tags.into_iter() {
             let mut tags = Tags::new();
             tags.insert(i.values);
@@ -101,7 +99,6 @@ impl Contract {
         mut workflow_template_settings: Vec<Vec<TemplateSettings>>,
     ) {
         // Each workflow must have at least one setting
-        assert_eq!(workflows.len(), workflow_template_settings.len());
         for _ in 0..workflows.len() {
             self.workflow_last_id += 1;
             self.workflow_template.insert(
@@ -114,12 +111,8 @@ impl Contract {
         }
     }
 
-    pub fn get_wf_and_proposal(
-        &self,
-        proposal_id: u32,
-    ) -> (Proposal, Template, TemplateSettings) {
-        let proposal =
-            Proposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
+    pub fn get_wf_and_proposal(&self, proposal_id: u32) -> (Proposal, Template, TemplateSettings) {
+        let proposal = Proposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
         let (wft, mut wfs) = self.workflow_template.get(&proposal.workflow_id).unwrap();
         let settings = wfs.swap_remove(proposal.workflow_settings_id as usize);
 
@@ -211,7 +204,7 @@ impl Contract {
 
     // TODO test
     /// Evaluates vote results by scenario and type of voters.
-    /// Returns tuple (total_voted_amount,vote_results)
+    /// Returns tuple (max_possible_amount,vote_results)
     pub fn calculate_votes(
         &self,
         votes: &HashMap<String, u8>,
@@ -220,29 +213,33 @@ impl Contract {
     ) -> (u128, [u128; 3]) {
         // count votes
         let mut vote_result = [0 as u128; 3];
-        let mut total_voted_amount: u128 = 0;
+        let mut max_possible_amount: u128 = 0;
         match scenario {
             VoteScenario::Democratic => {
                 match vote_target {
                     ActivityRight::Anyone => {
-                        total_voted_amount = votes.len() as u128;
+                        max_possible_amount = votes.len() as u128;
                     }
                     ActivityRight::Group(g) => match self.groups.get(&g) {
                         Some(group) => {
-                            total_voted_amount = group.members.members_count() as u128;
+                            max_possible_amount = group.members.members_count() as u128;
                         }
                         None => panic!("{}", ERR_GROUP_NOT_FOUND),
                     },
                     ActivityRight::GroupMember(_, _)
                     | ActivityRight::Account(_)
                     | ActivityRight::GroupLeader(_) => {
-                        total_voted_amount = 1;
+                        max_possible_amount = 1;
                     }
-                    ActivityRight::TokenHolder => todo!(),
-                    ActivityRight::Member => todo!(),
+                    ActivityRight::TokenHolder => {
+                        todo!()
+                    },
+                    ActivityRight::Member => {
+                        todo!()
+                    },
                     ActivityRight::GroupRole(g, r) => match self.groups.get(&g) {
                         Some(group) => {
-                            total_voted_amount = group.get_members_by_role(*r).len() as u128;
+                            max_possible_amount = group.get_members_by_role(*r).len() as u128;
                         }
                         None => panic!("{}", ERR_GROUP_NOT_FOUND),
                     },
@@ -255,7 +252,7 @@ impl Contract {
             }
             VoteScenario::TokenWeighted => match vote_target {
                 ActivityRight::Anyone | ActivityRight::TokenHolder | ActivityRight::Member => {
-                    total_voted_amount = self.ft_total_distributed as u128 * self.decimal_const;
+                    max_possible_amount = self.ft_total_distributed as u128 * self.decimal_const;
 
                     for (voter, vote_value) in votes.iter() {
                         vote_result[*vote_value as usize] +=
@@ -266,13 +263,13 @@ impl Contract {
                     for (voter, vote_value) in votes.iter() {
                         let value = self.ft.accounts.get(voter).unwrap_or(0);
                         vote_result[*vote_value as usize] += value;
-                        total_voted_amount += value;
+                        max_possible_amount += value;
                     }
                 }
                 ActivityRight::GroupMember(_, _)
                 | ActivityRight::Account(_)
                 | ActivityRight::GroupLeader(_) => {
-                    total_voted_amount = 1;
+                    max_possible_amount = 1;
                     for vote_value in votes.values() {
                         vote_result[*vote_value as usize] += 1;
                     }
@@ -280,10 +277,10 @@ impl Contract {
             },
         }
 
-        (total_voted_amount, vote_result)
+        (max_possible_amount, vote_result)
     }
 
-/*     pub fn find_current_workflow_activity(&self, proposal_id: u32) -> Option<Instance> {
+    /*     pub fn find_current_workflow_activity(&self, proposal_id: u32) -> Option<Instance> {
         match self.workflow_instance.get(&proposal_id) {
             Some(i) => match i.state {
                 InstanceState::Running => {
@@ -340,10 +337,10 @@ impl Contract {
     pub fn distribute_ft(&mut self, amount: u32, account_ids: &[AccountId]) {
         assert!(account_ids.len() > 0, "{}", ERR_DISTRIBUTION_ACC_EMPTY);
         let amount_per_acc = (amount / account_ids.len() as u32) as u128 * self.decimal_const;
-        self.ft_total_distributed += amount * account_ids.len() as u32;
+        self.ft_total_distributed += amount - (amount % account_ids.len() as u32);
         let contract_account_id = env::current_account_id();
         for acc in account_ids {
-            // If not registered when distributing ft, we register them, assuming payment is solved by other mechanisms
+            // If not registered when distributing ft, we register them, assuming storage deposit payment is solved by other mechanisms
             if !self.ft.accounts.contains_key(&acc) {
                 self.ft.accounts.insert(&acc, &0);
             }
@@ -351,6 +348,16 @@ impl Contract {
             self.ft
                 .internal_transfer(&contract_account_id, acc, amount_per_acc, None);
         }
+    }
+
+    pub fn postprocessing_fail_update(&mut self, proposal_id: u32) -> ActivityResult {
+        let (wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+        let mut wfi = wfi.unwrap();
+        wfi.current_activity_id -= 1;
+        wfi.state = InstanceState::FatalError;
+        self.workflow_instance
+            .insert(&proposal_id, &(Some(wfi), settings));
+        ActivityResult::ErrPostprocessing
     }
 }
 

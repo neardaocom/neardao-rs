@@ -21,7 +21,6 @@ pub enum ActionIdent {
     TagAdd,
     TagEdit,
     TagRemove,
-    FtUnlock,
     FtDistribute,
     FtSend,
     NftSend,
@@ -95,7 +94,7 @@ impl DataType {
             DataType::U32(b) => Ok(b as u128),
             DataType::U64(b) => Ok(b as u128),
             DataType::U128(b) => Ok(b as u128),
-            _ => Err("DataType is not string".into()),
+            _ => Err("DataType is not integer".into()),
         }
     }
 }

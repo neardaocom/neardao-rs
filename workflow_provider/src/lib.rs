@@ -21,13 +21,13 @@ pub struct Contract {
 #[near_bindgen]
 impl Contract {
     #[private]
-    pub fn add_workflow(&mut self, workflow: Template) {
+    pub fn workflow_add(&mut self, workflow: Template) {
         self.last_wf_id += 1;
         self.workflows.insert(&self.last_wf_id, &workflow);
     }
 
     #[private]
-    pub fn remove_workflow(&mut self, id: u16) -> bool {
+    pub fn workflow_remove(&mut self, id: u16) -> bool {
         self.workflows.remove(&id).map_or(false, |_| true)
     }
 
