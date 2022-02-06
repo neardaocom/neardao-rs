@@ -1,4 +1,6 @@
-use near_contract_standards::fungible_token::{core::FungibleTokenCore, resolver::FungibleTokenResolver};
+use near_contract_standards::fungible_token::{
+    core::FungibleTokenCore, resolver::FungibleTokenResolver,
+};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap;
 use near_sdk::json_types::{ValidAccountId, U128};
@@ -8,10 +10,10 @@ use near_sdk::{
 };
 
 /******************************************************************************
- * 
+ *
  * Fungible Token (NEP-141)
  * https://nomicon.io/Standards/FungibleToken/Core.html
- * 
+ *
  ******************************************************************************/
 
 const GAS_FOR_RESOLVE_TRANSFER: Gas = 5_000_000_000_000;
@@ -71,8 +73,12 @@ pub trait FungibleTokenContract {
 pub struct FungibleToken {
     /// AccountID -> Account balance.
     pub accounts: LookupMap<AccountId, Balance>,
-    
+
+    /// Count of registered accounts.
     pub registered_accounts_count: u32,
+
+    /// Count of registered accounts with > 0 tokens.
+    pub token_holders_count: u32,
 
     /// Total supply of the all token.
     pub total_supply: Balance,
@@ -86,8 +92,13 @@ impl FungibleToken {
     where
         S: IntoStorageKey,
     {
-        let mut this =
-            Self { accounts: LookupMap::new(prefix), total_supply: 0, account_storage_usage: 0, registered_accounts_count: 0 };
+        let mut this = Self {
+            accounts: LookupMap::new(prefix),
+            total_supply: 0,
+            account_storage_usage: 0,
+            token_holders_count: 0,
+            registered_accounts_count: 0,
+        };
         this.measure_account_storage_usage();
         this
     }
@@ -110,9 +121,14 @@ impl FungibleToken {
     pub fn internal_deposit(&mut self, account_id: &AccountId, amount: Balance) {
         let balance = self.internal_unwrap_balance_of(account_id);
         if let Some(new_balance) = balance.checked_add(amount) {
+            if balance == 0 && new_balance > 0 {
+                self.token_holders_count += 1;
+            }
             self.accounts.insert(&account_id, &new_balance);
-            self.total_supply =
-                self.total_supply.checked_add(amount).expect("Total supply overflow");
+            self.total_supply = self
+                .total_supply
+                .checked_add(amount)
+                .expect("Total supply overflow");
         } else {
             env::panic(b"Balance overflow");
         }
@@ -121,9 +137,14 @@ impl FungibleToken {
     pub fn internal_withdraw(&mut self, account_id: &AccountId, amount: Balance) {
         let balance = self.internal_unwrap_balance_of(account_id);
         if let Some(new_balance) = balance.checked_sub(amount) {
+            if new_balance == 0 {
+                self.token_holders_count -= 1;
+            }
             self.accounts.insert(&account_id, &new_balance);
-            self.total_supply =
-                self.total_supply.checked_sub(amount).expect("Total supply overflow");
+            self.total_supply = self
+                .total_supply
+                .checked_sub(amount)
+                .expect("Total supply overflow");
         } else {
             env::panic(b"The account doesn't have enough balance");
         }
@@ -136,7 +157,10 @@ impl FungibleToken {
         amount: Balance,
         memo: Option<String>,
     ) {
-        assert_ne!(sender_id, receiver_id, "Sender and receiver should be different");
+        assert_ne!(
+            sender_id, receiver_id,
+            "Sender and receiver should be different"
+        );
         assert!(amount > 0, "The amount should be a positive number");
         self.internal_withdraw(sender_id, amount);
         self.internal_deposit(receiver_id, amount);
@@ -232,11 +256,18 @@ impl FungibleToken {
             let receiver_balance = self.accounts.get(&receiver_id).unwrap_or(0);
             if receiver_balance > 0 {
                 let refund_amount = std::cmp::min(receiver_balance, unused_amount);
-                self.accounts.insert(&receiver_id, &(receiver_balance - refund_amount));
+                self.accounts
+                    .insert(&receiver_id, &(receiver_balance - refund_amount));
 
                 if let Some(sender_balance) = self.accounts.get(&sender_id) {
-                    self.accounts.insert(&sender_id, &(sender_balance + refund_amount));
-                    log!("Refund {} from {} to {}", refund_amount, receiver_id, sender_id);
+                    self.accounts
+                        .insert(&sender_id, &(sender_balance + refund_amount));
+                    log!(
+                        "Refund {} from {} to {}",
+                        refund_amount,
+                        receiver_id,
+                        sender_id
+                    );
                     return (amount - refund_amount, 0);
                 } else {
                     // Sender's account was deleted, but we don't burn tokens, we transfer them back to contract in caller's method.
@@ -257,6 +288,8 @@ impl FungibleTokenResolver for FungibleToken {
         receiver_id: ValidAccountId,
         amount: U128,
     ) -> U128 {
-        self.internal_ft_resolve_transfer(sender_id.as_ref(), receiver_id, amount).0.into()
+        self.internal_ft_resolve_transfer(sender_id.as_ref(), receiver_id, amount)
+            .0
+            .into()
     }
 }

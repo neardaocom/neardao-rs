@@ -41,6 +41,7 @@ pub struct Template {
 #[serde(crate = "near_sdk::serde")]
 pub struct TemplateActivity {
     // ?? pub name: String,
+    pub code: String,
     pub exec_condition: Option<Expression>,
     pub action: ActionIdent,
     pub fncall_id: Option<String>, // only if self.action is FnCall variant
@@ -58,6 +59,7 @@ pub struct TemplateActivity {
 pub struct TemplateSettings {
     pub allowed_proposers: Vec<ActivityRight>,
     pub allowed_voters: ActivityRight,
+    pub activity_rights: Vec<Vec<ActivityRight>>, //ActivityRight
     //pub constants: Vec<DataType>,       // ??
     //pub validators: Vec<Vec<DataType>>, //[activity_id][argument pos] = validator
     pub scenario: VoteScenario,
@@ -84,8 +86,7 @@ pub struct TransitionConstraint {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProposeSettings {
-    pub activity_rights: Vec<Vec<ActivityRight>>, //ActivityRight
-    pub activity_inputs: Vec<Vec<ArgType>>,       //arguments for each activity
+    pub activity_inputs: Vec<Vec<ArgType>>, //arguments for each activity
     pub transition_constraints: Vec<Vec<TransitionConstraint>>,
     pub binds: Vec<DataType>,
     pub validators: Vec<Expression>,
@@ -237,8 +238,8 @@ impl Postprocessing {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone))]
 #[serde(crate = "near_sdk::serde")]
 pub enum InstanceState {
     Waiting,
@@ -269,7 +270,7 @@ impl Instance {
         }
 
         Instance {
-            state: InstanceState::Running,
+            state: InstanceState::Waiting,
             current_activity_id: 0,
             transition_counter,
             template_id,
@@ -305,6 +306,8 @@ impl Instance {
         if self.state == InstanceState::Finished {
             return (ActivityResult::Finished, None);
         }
+
+        assert_eq!(self.state, InstanceState::Running);
 
         let transition_settings = &settings.transition_constraints
             [self.current_activity_id as usize][transition_id as usize];
@@ -419,6 +422,7 @@ mod test {
             activities: vec![
                 None,
                 Some(TemplateActivity {
+                    code: "near_send".into(),
                     exec_condition: None,
                     action: ActionIdent::NearSend,
                     fncall_id: None,
@@ -428,6 +432,7 @@ mod test {
                     postprocessing: pp.clone(),
                 }),
                 Some(TemplateActivity {
+                    code: "group_add".into(),
                     exec_condition: None,
                     action: ActionIdent::GroupAdd,
                     fncall_id: None,
@@ -449,6 +454,11 @@ mod test {
 
         //Template Settings example
         let wfs = TemplateSettings {
+            activity_rights: vec![
+                vec![],
+                vec![ActivityRight::Group(1)],
+                vec![ActivityRight::GroupLeader(1)],
+            ],
             allowed_proposers: vec![ActivityRight::Group(1)],
             allowed_voters: ActivityRight::TokenHolder,
             scenario: VoteScenario::TokenWeighted,
@@ -464,11 +474,6 @@ mod test {
 
         //User proposed settings type
         let settings = ProposeSettings {
-            activity_rights: vec![
-                vec![],
-                vec![ActivityRight::Group(1)],
-                vec![ActivityRight::GroupLeader(1)],
-            ],
             activity_inputs: vec![
                 vec![],
                 vec![ArgType::Free, ArgType::Checked(0)],
@@ -601,6 +606,7 @@ mod test {
             activities: vec![
                 None,
                 Some(TemplateActivity {
+                    code: "near_send".into(),
                     exec_condition: None,
                     action: ActionIdent::NearSend,
                     fncall_id: None,
@@ -618,6 +624,11 @@ mod test {
 
         //Template Settings example
         let wfs = TemplateSettings {
+            activity_rights: vec![
+                vec![],
+                vec![ActivityRight::Group(1)],
+                vec![ActivityRight::GroupLeader(1)],
+            ],
             allowed_proposers: vec![ActivityRight::Group(1)],
             allowed_voters: ActivityRight::TokenHolder,
             scenario: VoteScenario::TokenWeighted,
@@ -633,11 +644,6 @@ mod test {
 
         //User proposed settings type
         let settings = ProposeSettings {
-            activity_rights: vec![
-                vec![],
-                vec![ActivityRight::Group(1)],
-                vec![ActivityRight::GroupLeader(1)],
-            ],
             activity_inputs: vec![vec![], vec![ArgType::Free, ArgType::Checked(0)]],
             transition_constraints: vec![
                 vec![TransitionConstraint {

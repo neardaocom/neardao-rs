@@ -19,11 +19,13 @@ use crate::{core::*, GroupId, GroupName, StorageKey};
 
 #[near_bindgen]
 impl Contract {
-    pub fn stats_ft(self) -> StatsFt {
-        StatsFt {
+    pub fn stats(self) -> Stats {
+        Stats {
             ft_total_supply: self.ft_total_supply,
             ft_total_locked: self.ft_total_locked,
             ft_total_distributed: self.ft_total_distributed,
+            ft_token_holders_count: self.ft.token_holders_count,
+            total_members_count: self.total_members_count,
         }
     }
 
@@ -47,14 +49,11 @@ impl Contract {
         self.workflow_template.get(&id)
     }
 
-    pub fn wf_templates(self) -> Vec<(Template, Vec<TemplateSettings>)> {
-        self.workflow_template.values_as_vector().to_vec()
+    pub fn wf_templates(self) -> Vec<(u16,(Template, Vec<TemplateSettings>))> {
+        self.workflow_template.to_vec()
     }
 
-    pub fn wf_instance(
-        self,
-        proposal_id: u32,
-    ) -> Option<(Option<Instance>, Option<ProposeSettings>)> {
+    pub fn wf_instance(self, proposal_id: u32) -> Option<(Instance, ProposeSettings)> {
         self.workflow_instance.get(&proposal_id)
     }
 
@@ -62,18 +61,16 @@ impl Contract {
         self,
         proposal_id: u32,
         args: Vec<DataType>,
-        id: u8,
         activity_id: u8,
         transition_id: Option<u8>,
     ) -> bool {
         let (_, wft, _) = self.get_wf_and_proposal(proposal_id);
         let (_, settings) = self.workflow_instance.get(&proposal_id).unwrap();
-        let settings = settings.unwrap();
         let bucket = self.storage.get(&settings.storage_key).unwrap();
 
         match transition_id {
             None => {
-                let activity = wft.activities.get(id as usize).unwrap().as_ref();
+                let activity = wft.activities.get(activity_id as usize).unwrap().as_ref();
 
                 activity
                     .unwrap()
@@ -167,8 +164,10 @@ impl Contract {
 #[derive(Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct StatsFt {
+pub struct Stats {
     pub ft_total_distributed: u32,
     pub ft_total_locked: u32,
     pub ft_total_supply: u32,
+    pub ft_token_holders_count: u32,
+    pub total_members_count: u32,
 }

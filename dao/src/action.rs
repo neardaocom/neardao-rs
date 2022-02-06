@@ -1,6 +1,6 @@
 use library::types::{ActionIdent, DataType, DataTypeDef};
 use library::workflow::{
-    ActivityResult, Instance, ProposeSettings, TemplateActivity, TemplateSettings,
+    ActivityResult, Instance, InstanceState, ProposeSettings, TemplateActivity, TemplateSettings,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::{Base64VecU8, WrappedDuration, WrappedTimestamp, U128, U64};
@@ -188,9 +188,10 @@ impl Contract {
         template_id: u16,
         template_settings_id: u8,
         propose_settings: ProposeSettings,
+        template_settings: Option<Vec<TemplateSettings>>,
     ) -> u32 {
         let caller = env::predecessor_account_id();
-        let (_, wfs) = self.workflow_template.get(&template_id).unwrap();
+        let (wft, wfs) = self.workflow_template.get(&template_id).unwrap();
         let settings = wfs
             .get(template_settings_id as usize)
             .expect("Undefined settings id");
@@ -200,14 +201,34 @@ impl Contract {
         if !self.check_rights(&settings.allowed_proposers, &caller) {
             panic!("You have no rights to propose this");
         }
-
-        let proposal = Proposal::new(env::block_timestamp(), template_id, template_settings_id);
-
         self.proposal_last_id += 1;
+
+        //Assuming template_id for WorkflowAdd is always first wf added during dao init
+        if template_id == 1 {
+            assert!(
+                template_settings.is_some(),
+                "{}",
+                "Expected template settings for 'WorkflowAdd' proposal"
+            );
+            self.proposed_workflow_settings
+                .insert(&self.proposal_last_id, &template_settings.unwrap());
+        }
+
+        let proposal = Proposal::new(
+            env::block_timestamp(),
+            template_id,
+            template_settings_id,
+            true,
+        );
         self.proposals
             .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
-        self.workflow_instance
-            .insert(&self.proposal_last_id, &(None, Some(propose_settings)));
+        self.workflow_instance.insert(
+            &self.proposal_last_id,
+            &(
+                Instance::new(template_id, &wft.transitions),
+                propose_settings,
+            ),
+        );
 
         self.proposal_last_id
     }
@@ -266,7 +287,6 @@ impl Contract {
                         self.decimal_const,
                     ) >= wfs.spam_threshold
                     {
-                        settings = None;
                         Some(ProposalState::Spam)
                     } else if calc_percent_u128_unchecked(
                         vote_results.iter().sum(),
@@ -275,7 +295,6 @@ impl Contract {
                     ) < wfs.quorum
                     {
                         // not enough quorum
-                        settings = None;
                         Some(ProposalState::Invalid)
                     } else if calc_percent_u128_unchecked(
                         vote_results[1],
@@ -284,12 +303,12 @@ impl Contract {
                     ) < wfs.approve_threshold
                     {
                         // not enough voters to accept
-                        settings = None;
                         Some(ProposalState::Rejected)
                     } else {
                         // proposal is accepted, create new workflow activity with its storage
-                        self.storage_bucket_add(settings.as_ref().unwrap().storage_key.as_str());
-                        instance = Some(Instance::new(proposal.workflow_id, &wft.transitions));
+                        instance.state = InstanceState::Running;
+                        // Storage key must be unique among all proposals
+                        self.storage_bucket_add(settings.storage_key.as_str());
                         Some(ProposalState::Accepted)
                     }
                 }
@@ -338,6 +357,7 @@ impl Contract {
             Some(mut group) => {
                 let release: ReleaseDb = group.remove_storage_data().data.into();
                 self.ft_total_locked -= release.total - release.init_distribution;
+                self.total_members_count -= group.members.members_count() as u32;
             }
             _ => (),
         }
@@ -369,7 +389,7 @@ impl Contract {
 
         match self.groups.get(&id) {
             Some(mut group) => {
-                group.add_members(members);
+                self.total_members_count += group.add_members(members);
                 self.groups.insert(&id, &group);
             }
             _ => (),
@@ -384,6 +404,7 @@ impl Contract {
         match self.groups.get(&id) {
             Some(mut group) => {
                 group.remove_member(member);
+                self.total_members_count -= 1;
                 self.groups.insert(&id, &group);
             }
             _ => (),
@@ -512,7 +533,7 @@ impl Contract {
             false
         }
     }
-    pub fn treasury_send_near(
+    pub fn treasury_near_send(
         &mut self,
         proposal_id: ProposalId,
         receiver_id: AccountId,
@@ -524,7 +545,6 @@ impl Contract {
         assert!(proposal.state == ProposalState::Accepted);
 
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
-        let (mut wfi, settings) = (wfi.unwrap(), settings.unwrap()); // uh, this is ugly
 
         //transition check
         let (transition_id, activity_id): (u8, u8) = wfi
@@ -533,7 +553,7 @@ impl Contract {
 
         //rights checks
         assert!(self.check_rights(
-            &settings.activity_rights[activity_id as usize].as_slice(),
+            &wfs.activity_rights[activity_id as usize].as_slice(),
             &caller
         ));
 
@@ -559,30 +579,29 @@ impl Contract {
                     &mut bucket,
                 );
 
-                let promise = Promise::new(args.swap_remove(0).try_into_string().unwrap())
-                    .transfer(args.swap_remove(0).try_into_u128().unwrap());
-                match postprocessing {
-                    Some(p) => PromiseOrValue::Promise(promise.then(ext_self::postprocess(
-                        proposal_id,
-                        settings.storage_key.clone(),
-                        p,
-                        &env::current_account_id(),
-                        0,
-                        30 * TGAS,
-                    ))),
-                    None => PromiseOrValue::Value(result),
-                }
+                PromiseOrValue::Promise(
+                    Promise::new(args.swap_remove(0).try_into_string().unwrap())
+                        .transfer(args.swap_remove(0).try_into_u128().unwrap())
+                        .then(ext_self::postprocess(
+                            proposal_id,
+                            settings.storage_key.clone(),
+                            postprocessing,
+                            &env::current_account_id(),
+                            0,
+                            30 * TGAS,
+                        )),
+                )
             }
             _ => PromiseOrValue::Value(result),
         };
 
         self.workflow_instance
-            .insert(&proposal_id, &(Some(wfi), Some(settings)))
+            .insert(&proposal_id, &(wfi, settings))
             .unwrap();
 
         result
     }
-    pub fn treasury_send_ft(
+    pub fn treasury_ft_send(
         &mut self,
         proposal_id: ProposalId,
         ft_account_id: AccountId,
@@ -629,7 +648,7 @@ impl Contract {
         }
     }
     //TODO check correct NFT usage
-    pub fn treasury_send_nft(
+    pub fn treasury_nft_send(
         &mut self,
         proposal_id: ProposalId,
         nft_account_id: AccountId,
@@ -761,15 +780,14 @@ impl Contract {
         &mut self,
         proposal_id: ProposalId,
         workflow_id: u16,
-        workflow_settings: Vec<TemplateSettings>,
     ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
-        let (proposal, wft, _) = self.get_wf_and_proposal(proposal_id);
+        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
         assert!(proposal.state == ProposalState::Accepted);
 
         let (wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
-        let (mut wfi, settings) = (wfi.unwrap(), settings.unwrap()); // uh, this is ugly
+        let (mut wfi, settings) = (wfi, settings);
 
         //transition check
         let (transition_id, activity_id): (u8, u8) = wfi
@@ -785,7 +803,7 @@ impl Contract {
 
         //rights checks
         assert!(self.check_rights(
-            &settings.activity_rights[activity_id as usize].as_slice(),
+            &wfs.activity_rights[activity_id as usize].as_slice(),
             &caller
         ));
 
@@ -810,9 +828,10 @@ impl Contract {
 
         let dao_settings: DaoSettings = self.settings.get().unwrap().into();
         let acc = env::current_account_id();
+        let workflow_settings = self.proposed_workflow_settings.get(&proposal_id).unwrap();
         let result = match result {
-            ActivityResult::Ok => {
-                let promise = Promise::new(dao_settings.workflow_provider)
+            ActivityResult::Ok => PromiseOrValue::Promise(
+                Promise::new(dao_settings.workflow_provider)
                     .function_call(
                         b"get".to_vec(),
                         format!(
@@ -829,26 +848,21 @@ impl Contract {
                         &acc,
                         0,
                         50 * TGAS,
-                    ));
-
-                //TODO: FIX TO RETURN VALUE IN POSTPROCESSING
-                match postprocessing {
-                    Some(p) => PromiseOrValue::Promise(promise.then(ext_self::postprocess(
+                    ))
+                    .then(ext_self::postprocess(
                         proposal_id,
                         settings.storage_key.clone(),
-                        p,
+                        postprocessing,
                         &acc,
                         0,
                         30 * TGAS,
-                    ))),
-                    None => PromiseOrValue::Promise(promise),
-                }
-            }
+                    )),
+            ),
             _ => PromiseOrValue::Value(result),
         };
 
         self.workflow_instance
-            .insert(&proposal_id, &(Some(wfi), Some(settings)))
+            .insert(&proposal_id, &(wfi, settings))
             .unwrap();
 
         result

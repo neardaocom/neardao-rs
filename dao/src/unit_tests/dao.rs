@@ -1,12 +1,18 @@
-/*
 #[cfg(test)]
 mod test {
     use std::convert::TryFrom;
     use std::time::Duration;
     use std::u128;
 
-    use crate::standard_impl::ft_metadata::{FT_METADATA_SPEC, FungibleTokenMetadata};
+    use crate::action::{FnCallDefinition, FnCallMetadata};
+    use crate::core::Contract;
+    use crate::group::{GroupInput, GroupMember, GroupMembers, GroupReleaseInput, GroupSettings};
+    use crate::media::Media;
+    use crate::settings::DaoSettings;
+    use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FT_METADATA_SPEC};
+    use crate::tags::TagInput;
 
+    use library::workflow::{Template, TemplateSettings};
     use near_contract_standards::storage_management::StorageManagement;
     use near_sdk::env::{self, block_timestamp};
     use near_sdk::json_types::{ValidAccountId, U128};
@@ -14,18 +20,11 @@ mod test {
     use near_sdk::{testing_env, AccountId, MockedBlockchain};
     use near_sdk_sim::to_yocto;
 
-    use crate::action::{TokenGroup, TxInput, ActionGroupRight, ActionGroupInput};
-    use crate::config::{Config, ConfigInput};
-    use crate::core::{
-        DaoContract,
-    };
-    use crate::internal::*;
     use crate::constants::*;
-    use crate::proposal::{Proposal, ProposalInput, ProposalKindIdent, ProposalState, VoteResult};
-    use crate::release::{ReleaseDb, ReleaseModel, ReleaseModelInput};
+    use crate::internal::*;
+    use crate::proposal::{Proposal, ProposalState, VoteResult};
+    use crate::release::{Release, ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseModel};
     use crate::unit_tests::{DURATION_2Y_S, DURATION_3Y_S, DURATION_ONE_WEEK};
-    use crate::view::StatsFT;
-    use crate::vote_policy::VoteConfigInput;
 
     const ISSUER_ACC: &str = "dao_factory";
     const OWNER_ACC: &str = "dao_instance";
@@ -73,159 +72,97 @@ mod test {
         }
     }
 
-    fn get_default_dao_config(
-        council_share: Option<u8>,
-        foundation_share: Option<u8>,
-        community_share: Option<u8>,
-    ) -> ConfigInput {
-        ConfigInput {
+    fn get_default_dao_config() -> DaoSettings {
+        DaoSettings {
             name: "dao".into(),
-            lang: "cs".into(),
-            slogan: "best dao in EU".into(),
-            council_share,
-            foundation_share,
-            community_share,
-            description: Some(DAO_DESC.into()),
-            vote_spam_threshold: Some(VOTE_SPAM_TH),
+            purpose: "test".into(),
+            tags: vec![0, 1, 2],
+            dao_admin_account_id: "admin.neardao.testnet".into(),
+            dao_admin_rights: vec!["all".into()],
+            workflow_provider: "provider.neardao.testnet".into(),
         }
     }
-    fn get_default_release_config() -> Vec<(TokenGroup, ReleaseModelInput)> {
-        let mut vec = Vec::with_capacity(3);
-        vec.push((
-            TokenGroup::Council,
-            ReleaseModelInput::Linear {
-                from: Some(0),
-                duration: DURATION_2Y_S,
+
+    fn get_default_groups() -> Vec<GroupInput> {
+        let mut members = vec![
+            GroupMember {
+                account_id: FOUNDER_1.into(),
+                tags: vec![0],
             },
-        ));
+            GroupMember {
+                account_id: FOUNDER_2.into(),
+                tags: vec![1],
+            },
+            GroupMember {
+                account_id: FOUNDER_3.into(),
+                tags: vec![2],
+            },
+        ];
+        let mut groups = Vec::with_capacity(1);
+        groups.push(GroupInput {
+            settings: GroupSettings {
+                name: "council".into(),
+                leader: FOUNDER_1.into(),
+            },
+            members: members,
+            release: GroupReleaseInput {
+                amount: 100_000_000,
+                init_distribution: 10_000_000,
+                start_from: 0,
+                duration: 1_000_000_000_000,
+                model: ReleaseModelInput::Linear,
+            },
+        });
 
-        vec
+        groups
     }
-
-    fn get_default_voting_policy() -> Vec<VoteConfigInput> {
-        let mut vec: Vec<VoteConfigInput> = Vec::with_capacity(8);
-
-        vec.push(VoteConfigInput {
-            proposal_kind: ProposalKindIdent::AddMember,
-            duration: DURATION_ONE_WEEK,
-            waiting_open_duration: DURATION_WAITING,
-            quorum: 50,
-            approve_threshold: 51,
-            vote_only_once: true,
-        });
-
-        vec.push(VoteConfigInput {
-            proposal_kind: ProposalKindIdent::RemoveMember,
-            duration: DURATION_ONE_WEEK,
-            waiting_open_duration: DURATION_WAITING,
-            quorum: 50,
-            approve_threshold: 51,
-            vote_only_once: true,
-        });
-
-        vec.push(VoteConfigInput {
-            proposal_kind: ProposalKindIdent::Pay,
-            duration: DURATION_ONE_WEEK,
-            waiting_open_duration: DURATION_WAITING,
-            quorum: 50,
-            approve_threshold: 51,
-            vote_only_once: true,
-        });
-
-        vec.push(VoteConfigInput {
-            proposal_kind: ProposalKindIdent::GeneralProposal,
-            duration: DURATION_ONE_WEEK,
-            waiting_open_duration: DURATION_WAITING,
-            quorum: 50,
-            approve_threshold: 51,
-            vote_only_once: true,
-        });
-
-        vec.push(VoteConfigInput {
-            proposal_kind: ProposalKindIdent::AddDocFile,
-            duration: DURATION_ONE_WEEK,
-            waiting_open_duration: DURATION_WAITING,
-            quorum: 50,
-            approve_threshold: 51,
-            vote_only_once: true,
-        });
-
-        vec.push(VoteConfigInput {
-            proposal_kind: ProposalKindIdent::InvalidateFile,
-            duration: DURATION_ONE_WEEK,
-            waiting_open_duration: DURATION_WAITING,
-            quorum: 50,
-            approve_threshold: 51,
-            vote_only_once: true,
-        });
-
-        vec.push(VoteConfigInput {
-            proposal_kind: ProposalKindIdent::DistributeFT,
-            duration: DURATION_ONE_WEEK,
-            waiting_open_duration: DURATION_WAITING,
-            quorum: 50,
-            approve_threshold: 51,
-            vote_only_once: true,
-        });
-
-        vec.push(VoteConfigInput {
-            proposal_kind: ProposalKindIdent::RightForActionCall,
-            duration: DURATION_ONE_WEEK,
-            waiting_open_duration: DURATION_WAITING,
-            quorum: 50,
-            approve_threshold: 51,
-            vote_only_once: true,
-        });
-
-        vec
-    }
-
-    fn get_default_founders_5() -> Vec<AccountId> {
-        let mut founders = Vec::with_capacity(5);
-
-        founders.push(FOUNDER_1.into());
-        founders.push(FOUNDER_2.into());
-        founders.push(FOUNDER_3.into());
-        founders.push(FOUNDER_4.into());
-        founders.push(FOUNDER_5.into());
-
-        founders
-    }
+    //TODO HERE
+    fn get_default_media() -> Vec<Media> {}
+    fn get_default_tags() -> Vec<TagInput> {}
+    fn get_default_fncalls() -> Vec<FnCallDefinition> {}
+    fn get_default_fncall_metadata() -> Vec<Vec<FnCallMetadata>> {}
+    fn get_default_templates() -> Vec<Template> {}
+    fn get_efault_template_settings() -> Vec<Vec<TemplateSettings>> {}
 
     /// Contract constructor
     fn get_contract(
         total_supply: u32,
-        founders_init_distribution: u32,
-        metadata: FungibleTokenMetadata,
-        config: ConfigInput,
-        release_config: Vec<(TokenGroup, ReleaseModelInput)>,
-        vote_policy_config: Vec<VoteConfigInput>,
-        founders: Vec<AccountId>,
-    ) -> DaoContract {
-        DaoContract::new(
+        ft_metadata: FungibleTokenMetadata,
+        settings: DaoSettings,
+        groups: Vec<GroupInput>,
+        media: Vec<Media>,
+        tags: Vec<TagInput>,
+        function_calls: Vec<FnCallDefinition>,
+        function_call_metadata: Vec<Vec<FnCallMetadata>>,
+        workflow_templates: Vec<Template>,
+        workflow_template_settings: Vec<Vec<TemplateSettings>>,
+    ) -> Contract {
+        Contract::new(
             total_supply,
-            founders_init_distribution,
-            metadata,
-            config,
-            release_config,
-            vote_policy_config,
-            founders,
+            ft_metadata,
+            settings,
+            groups,
+            media,
+            tags,
+            function_calls,
+            function_call_metadata,
+            workflow_templates,
+            workflow_template_settings,
         )
     }
 
-    fn get_default_contract() -> DaoContract {
+    fn get_default_contract() -> Contract {
         get_contract(
             TOKEN_TOTAL_SUPPLY,
-            INIT_DISTRIBUTION,
             get_default_metadata(),
-            get_default_dao_config(
-                Some(COUNCIL_SHARE),
-                Some(FOUNDATION_SHARE),
-                Some(COMMUNITY_SHARE),
-            ),
-            get_default_release_config(),
-            get_default_voting_policy(),
-            get_default_founders_5(),
+            get_default_dao_config(),
+            get_default_groups(),
+            get_default_media(),
+            get_default_tags(),
+            get_default_fncalls(),
+            get_default_fncall_metadata(),
+            get_default_templates(),
+            get_efault_template_settings(),
         )
     }
 
@@ -235,7 +172,7 @@ mod test {
         council_share: u8,
         foundation_share: u8,
         community_share: u8,
-    ) -> DaoContract {
+    ) -> Contract {
         assert!(
             total_supply >= (founders_init_distribution as u64 * council_share as u64) as u32 / 100
         );
@@ -256,11 +193,7 @@ mod test {
         )
     }
 
-    fn register_user(
-        context: &mut VMContextBuilder,
-        contract: &mut DaoContract,
-        account: AccountId,
-    ) {
+    fn register_user(context: &mut VMContextBuilder, contract: &mut Contract, account: AccountId) {
         testing_env!(context
             .predecessor_account_id(ValidAccountId::try_from(env::current_account_id()).unwrap())
             .attached_deposit(contract.storage_balance_bounds().min.0)
@@ -271,7 +204,7 @@ mod test {
 
     fn vote_as_user(
         context: &mut VMContextBuilder,
-        contract: &mut DaoContract,
+        contract: &mut Contract,
         account: AccountId,
         proposal_id: u32,
         vote_kind: u8,
@@ -286,7 +219,7 @@ mod test {
 
     fn finish_proposal_as_user(
         context: &mut VMContextBuilder,
-        contract: &mut DaoContract,
+        contract: &mut Contract,
         account: AccountId,
         proposal_id: u32,
         at_block_timestamp: Option<u64>,
@@ -344,7 +277,9 @@ mod test {
             },
             public_ft_stats: ReleaseDb::new(500_000_000, 500_000_000, 0),
             public_release_model: ReleaseModel::None,
-            storage_locked_near: U128::from(env::storage_byte_cost() * env::storage_usage() as u128)
+            storage_locked_near: U128::from(
+                env::storage_byte_cost() * env::storage_usage() as u128,
+            ),
         };
 
         let expected_total_distributed = 200_000_000;
@@ -701,54 +636,104 @@ mod test {
     }
 
     #[test]
-    fn test_merge_rights_empty () {
+    fn test_merge_rights_empty() {
         let time_to = 10;
         let time_from = 0;
-        let input = vec![ActionGroupRight::RefFinance, ActionGroupRight::SkywardFinance, ActionGroupRight::RefFinance];
+        let input = vec![
+            ActionGroupRight::RefFinance,
+            ActionGroupRight::SkywardFinance,
+            ActionGroupRight::RefFinance,
+        ];
         let mut current: Vec<(ActionGroupRight, TimeInterval)> = vec![];
 
         crate::internal::merge_rights(&input, &mut current, time_from, time_to);
 
-        let expected = vec![(ActionGroupRight::RefFinance, TimeInterval::new(time_from, time_to)), (ActionGroupRight::SkywardFinance, TimeInterval::new(time_from, time_to))];
+        let expected = vec![
+            (
+                ActionGroupRight::RefFinance,
+                TimeInterval::new(time_from, time_to),
+            ),
+            (
+                ActionGroupRight::SkywardFinance,
+                TimeInterval::new(time_from, time_to),
+            ),
+        ];
         assert_eq!(current, expected);
     }
 
     #[test]
-    fn test_merge_rights_full () {
+    fn test_merge_rights_full() {
         let time_to = 10;
         let time_from = 0;
-        let input = vec![ActionGroupRight::RefFinance, ActionGroupRight::SkywardFinance, ActionGroupRight::RefFinance];
-        let mut current: Vec<(ActionGroupRight, TimeInterval)> = vec![(ActionGroupRight::RefFinance, TimeInterval::new(time_from + 1, time_to + 2)), (ActionGroupRight::SkywardFinance, TimeInterval::new(time_from + 3, time_to + 4))];
+        let input = vec![
+            ActionGroupRight::RefFinance,
+            ActionGroupRight::SkywardFinance,
+            ActionGroupRight::RefFinance,
+        ];
+        let mut current: Vec<(ActionGroupRight, TimeInterval)> = vec![
+            (
+                ActionGroupRight::RefFinance,
+                TimeInterval::new(time_from + 1, time_to + 2),
+            ),
+            (
+                ActionGroupRight::SkywardFinance,
+                TimeInterval::new(time_from + 3, time_to + 4),
+            ),
+        ];
 
         crate::internal::merge_rights(&input, &mut current, time_from, time_to);
 
-        let expected = vec![(ActionGroupRight::RefFinance, TimeInterval::new(time_from, time_to)), (ActionGroupRight::SkywardFinance, TimeInterval::new(time_from, time_to))];
+        let expected = vec![
+            (
+                ActionGroupRight::RefFinance,
+                TimeInterval::new(time_from, time_to),
+            ),
+            (
+                ActionGroupRight::SkywardFinance,
+                TimeInterval::new(time_from, time_to),
+            ),
+        ];
         assert_eq!(current, expected);
     }
 
     #[test]
-    fn test_merge_rights () {
+    fn test_merge_rights() {
         let time_to = 10;
         let time_from = 0;
-        let input = vec![ActionGroupRight::SkywardFinance, ActionGroupRight::SkywardFinance];
-        let mut current: Vec<(ActionGroupRight, TimeInterval)> = vec![(ActionGroupRight::RefFinance, TimeInterval::new(time_from + 1, time_to + 2))];
+        let input = vec![
+            ActionGroupRight::SkywardFinance,
+            ActionGroupRight::SkywardFinance,
+        ];
+        let mut current: Vec<(ActionGroupRight, TimeInterval)> = vec![(
+            ActionGroupRight::RefFinance,
+            TimeInterval::new(time_from + 1, time_to + 2),
+        )];
 
         crate::internal::merge_rights(&input, &mut current, time_from, time_to);
 
-        let expected = vec![(ActionGroupRight::RefFinance, TimeInterval::new(time_from + 1, time_to + 2)), (ActionGroupRight::SkywardFinance, TimeInterval::new(time_from, time_to))];
+        let expected = vec![
+            (
+                ActionGroupRight::RefFinance,
+                TimeInterval::new(time_from + 1, time_to + 2),
+            ),
+            (
+                ActionGroupRight::SkywardFinance,
+                TimeInterval::new(time_from, time_to),
+            ),
+        ];
         assert_eq!(current, expected);
     }
 
     #[test]
     #[should_panic]
-    fn test_execute_privileged_action_panics_without_rights () {
+    fn test_execute_privileged_action_panics_without_rights() {
         let mut context = get_context();
         testing_env!(context.build());
         let mut contract = get_default_contract();
-        testing_env!(context.predecessor_account_id(ValidAccountId::try_from(FOUNDER_1).unwrap()).build());
+        testing_env!(context
+            .predecessor_account_id(ValidAccountId::try_from(FOUNDER_1).unwrap())
+            .build());
 
         contract.execute_privileged_action(ActionGroupInput::RefRegisterTokens);
-        
     }
 }
- */

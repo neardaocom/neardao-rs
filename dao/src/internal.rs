@@ -1,10 +1,7 @@
-use std::{collections::HashMap, convert::TryFrom};
+use std::collections::HashMap;
 
 use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    collections::{LazyOption, UnorderedSet},
     env::{self},
-    json_types::U128,
     log,
     serde::{Deserialize, Serialize},
     AccountId, Balance, IntoStorageKey, Promise,
@@ -20,8 +17,8 @@ use crate::{
     },
     core::{Contract, StorageKeyWrapper},
     errors::{
-        ERR_DISTRIBUTION_ACC_EMPTY, ERR_GROUP_NOT_FOUND, ERR_LOCK_AMOUNT_ABOVE,
-        ERR_STORAGE_BUCKET_EXISTS,
+        ERR_DISTRIBUTION_ACC_EMPTY, ERR_DISTRIBUTION_MIN_VALUE, ERR_DISTRIBUTION_NOT_ENOUGH_FT,
+        ERR_GROUP_NOT_FOUND, ERR_LOCK_AMOUNT_ABOVE, ERR_STORAGE_BUCKET_EXISTS,
     },
     group::{Group, GroupInput},
     media::Media,
@@ -173,6 +170,7 @@ impl Contract {
                     },
                     _ => panic!("{}", ERR_GROUP_NOT_FOUND),
                 },
+                //TODO only group members
                 ActivityRight::Member => {
                     match self.ft.accounts.get(account_id) {
                         Some(ft) if ft > 0 => {
@@ -232,11 +230,12 @@ impl Contract {
                         max_possible_amount = 1;
                     }
                     ActivityRight::TokenHolder => {
-                        todo!()
-                    },
+                        max_possible_amount = self.ft.token_holders_count as u128;
+                    }
                     ActivityRight::Member => {
+                        // TODO only group members without token holders ??
                         todo!()
-                    },
+                    }
                     ActivityRight::GroupRole(g, r) => match self.groups.get(&g) {
                         Some(group) => {
                             max_possible_amount = group.get_members_by_role(*r).len() as u128;
@@ -306,9 +305,16 @@ impl Contract {
 
     pub fn add_group(&mut self, group: GroupInput) {
         self.ft_total_locked += group.release.amount;
+        self.total_members_count += group.members.len() as u32;
 
-        // Check if we can do init distribution
+        // Check if dao has enough free tokens to distribute ft
         if group.release.init_distribution > 0 {
+            assert!(
+                group.release.init_distribution
+                    <= self.ft_total_supply - self.ft_total_locked - self.ft_total_distributed,
+                "{}",
+                ERR_DISTRIBUTION_NOT_ENOUGH_FT
+            );
             self.distribute_ft(
                 group.release.init_distribution,
                 &group
@@ -336,6 +342,11 @@ impl Contract {
     /// Panics if account_ids are empty vector
     pub fn distribute_ft(&mut self, amount: u32, account_ids: &[AccountId]) {
         assert!(account_ids.len() > 0, "{}", ERR_DISTRIBUTION_ACC_EMPTY);
+        assert!(
+            amount / account_ids.len() as u32 > 0,
+            "{}",
+            ERR_DISTRIBUTION_MIN_VALUE
+        );
         let amount_per_acc = (amount / account_ids.len() as u32) as u128 * self.decimal_const;
         self.ft_total_distributed += amount - (amount % account_ids.len() as u32);
         let contract_account_id = env::current_account_id();
@@ -351,12 +362,11 @@ impl Contract {
     }
 
     pub fn postprocessing_fail_update(&mut self, proposal_id: u32) -> ActivityResult {
-        let (wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
-        let mut wfi = wfi.unwrap();
+        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
         wfi.current_activity_id -= 1;
         wfi.state = InstanceState::FatalError;
         self.workflow_instance
-            .insert(&proposal_id, &(Some(wfi), settings));
+            .insert(&proposal_id, &(wfi, settings));
         ActivityResult::ErrPostprocessing
     }
 }

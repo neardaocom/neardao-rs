@@ -29,10 +29,14 @@ pub struct GroupMember {
 pub struct GroupMembers(HashMap<AccountId, Vec<TagId>>);
 
 impl GroupMembers {
-    /// Adds members to group
-    /// Overrides existing
-    pub fn add_member(&mut self, member: GroupMember) {
-        self.0.insert(member.account_id, member.tags);
+    /// Adds members to group.
+    /// Overrides existing.
+    /// Returns false if the member was not in the group before.
+    pub fn add_member(&mut self, member: GroupMember) -> bool {
+       match self.0.insert(member.account_id, member.tags) {
+           Some(_) => true,
+           None => false,
+       }
     }
 
     pub fn remove_member(&mut self, account_id: AccountId) -> Option<GroupMember> {
@@ -168,10 +172,16 @@ impl Group {
         }
     }
 
-    pub fn add_members(&mut self, members: Vec<GroupMember>) {
+    /// Adds members to the group.
+    /// Returns count of new members added.
+    pub fn add_members(&mut self, members: Vec<GroupMember>) -> u32 {
+        let mut new_added = 0;
         for m in members.into_iter() {
-            self.members.add_member(m)
+            if !self.members.add_member(m) {
+                new_added += 1;
+            }
         }
+        new_added
     }
 
     pub fn remove_member(&mut self, account_id: AccountId) -> Option<GroupMember> {

@@ -62,17 +62,19 @@ pub struct Proposal {
     pub state: ProposalState,
     pub workflow_id: u16,
     pub workflow_settings_id: u8,
+    pub workflow_add_settings_id: bool,
 }
 
 impl Proposal {
     #[inline]
-    pub fn new(created: u64, workflow_id: u16, workflow_settings_id: u8) -> Self {
+    pub fn new(created: u64, workflow_id: u16, workflow_settings_id: u8, workflow_add_settings_id: bool) -> Self {
         Proposal {
             created,
             votes: HashMap::new(),
             state: ProposalState::InProgress,
             workflow_id,
             workflow_settings_id,
+            workflow_add_settings_id,
         }
     }
 }

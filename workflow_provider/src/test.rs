@@ -11,7 +11,7 @@ mod test {
         expression::{EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
         types::{ActionIdent, DataType, DataTypeDef},
         workflow::{
-            Activity, ActivityRight, ArgType, ExprArg, Expression, ProposeSettings, Template,
+            ActivityRight, ArgType, ExprArg, Expression, ProposeSettings, Template,
             TemplateActivity, TemplateSettings, TransitionConstraint, VoteScenario,
         },
     };
@@ -25,6 +25,7 @@ mod test {
             activities: vec![
                 None,
                 Some(TemplateActivity {
+                    code: "wf_add".into(),
                     exec_condition: None,
                     action: ActionIdent::WorkflowAdd,
                     fncall_id: None,
@@ -54,6 +55,7 @@ mod test {
             activities: vec![
                 None,
                 Some(TemplateActivity {
+                    code: "near_send".into(),
                     exec_condition: None,
                     action: ActionIdent::NearSend,
                     fncall_id: None,
@@ -78,7 +80,6 @@ mod test {
     #[test]
     fn settings() {
         let settings = ProposeSettings {
-            activity_rights: vec![vec![ActivityRight::GroupLeader(1)]],
             activity_inputs: vec![vec![ArgType::Free]],
             transition_constraints: vec![
                 vec![TransitionConstraint {
@@ -101,6 +102,7 @@ mod test {
         );
 
         let wfs = TemplateSettings {
+            activity_rights: vec![vec![], vec![ActivityRight::GroupLeader(1)]],
             allowed_proposers: vec![ActivityRight::Group(1)],
             allowed_voters: ActivityRight::TokenHolder,
             scenario: VoteScenario::TokenWeighted,
@@ -119,11 +121,27 @@ mod test {
             serde_json::to_string(&wfs).unwrap()
         );
 
+        let wfs = TemplateSettings {
+            activity_rights: vec![vec![], vec![ActivityRight::GroupLeader(1)]],
+            allowed_proposers: vec![ActivityRight::Group(1)],
+            allowed_voters: ActivityRight::TokenHolder,
+            scenario: VoteScenario::TokenWeighted,
+            duration: 60,
+            quorum: 51,
+            approve_threshold: 20,
+            spam_threshold: 80,
+            vote_only_once: true,
+            deposit_propose: Some(1),
+            deposit_vote: Some(1000),
+            deposit_propose_return: 0,
+        };
+
+        println!(
+            "------------------------------ TEMPLATE SETTINGS SEND NEAR WORKFLOW ------------------------------\n{}",
+            serde_json::to_string(&wfs).unwrap()
+        );
+
         let propose_settings = ProposeSettings {
-            activity_rights: vec![
-                vec![ActivityRight::Group(1)],
-                vec![ActivityRight::GroupLeader(1)],
-            ],
             activity_inputs: vec![vec![ArgType::Free, ArgType::Checked(0)]],
             transition_constraints: vec![
                 vec![TransitionConstraint {
@@ -153,6 +171,5 @@ mod test {
             "------------------------------ PROPOSE SETTINGS PAYOUT ------------------------------\n{}",
             serde_json::to_string(&propose_settings).unwrap()
         );
-
     }
 }

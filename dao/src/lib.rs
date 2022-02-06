@@ -1,7 +1,8 @@
 #![allow(unreachable_patterns)]
 
-use near_sdk::{env::sha256, CryptoHash};
+use near_sdk::CryptoHash;
 
+//mod unit_tests;
 mod standard_impl;
 
 pub mod constants;
@@ -19,7 +20,6 @@ pub mod internal;
 
 pub mod core;
 pub mod view;
-//mod unit_tests;
 
 pub(crate) type ProposalId = u32;
 pub(crate) type TagId = u16;

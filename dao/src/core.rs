@@ -1,8 +1,6 @@
 use std::u128;
 
-use crate::constants::{
-    MAX_FT_TOTAL_SUPPLY,
-};
+use crate::constants::MAX_FT_TOTAL_SUPPLY;
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
@@ -63,6 +61,7 @@ pub enum StorageKeys {
     FunctionCallWhitelist,
     WfTemplate,
     WfTemplateSettings,
+    ProposedWfTemplateSettings, //for proposal workflow add template
     WfInstance,
 }
 
@@ -72,6 +71,7 @@ pub struct Contract {
     pub ft_total_supply: u32,
     pub ft_total_locked: u32,
     pub ft_total_distributed: u32,
+    pub total_members_count: u32,
     pub decimal_const: u128,
     pub ft: FungibleToken,
     pub ft_metadata: LazyOption<FungibleTokenMetadata>,
@@ -88,7 +88,8 @@ pub struct Contract {
     pub function_calls: UnorderedMap<FnCallId, FnCallDefinition>,
     pub workflow_last_id: u16,
     pub workflow_template: UnorderedMap<u16, (Template, Vec<TemplateSettings>)>,
-    pub workflow_instance: UnorderedMap<u32, (Option<Instance>, Option<ProposeSettings>)>,
+    pub workflow_instance: UnorderedMap<u32, (Instance, ProposeSettings)>,
+    pub proposed_workflow_settings: LookupMap<u32, Vec<TemplateSettings>>,
 }
 
 #[near_bindgen]
@@ -113,6 +114,7 @@ impl Contract {
             ft_total_supply: total_supply,
             ft_total_locked: 0,
             ft_total_distributed: 0,
+            total_members_count: 0,
             decimal_const: 10u128.pow(ft_metadata.decimals as u32),
             ft: FungibleToken::new(StorageKeys::FT),
             ft_metadata: LazyOption::new(StorageKeys::FTMetadata, Some(&ft_metadata)),
@@ -130,6 +132,7 @@ impl Contract {
             workflow_last_id: 0,
             workflow_template: UnorderedMap::new(StorageKeys::WfTemplate),
             workflow_instance: UnorderedMap::new(StorageKeys::WfInstance),
+            proposed_workflow_settings: LookupMap::new(StorageKeys::ProposedWfTemplateSettings),
         };
 
         //register self and mint all FT
@@ -275,8 +278,6 @@ impl StorageManagement for Contract {
     }
 }
 
-//TODO: MOVE to action.rs
-
 /// Triggers new version download from factory
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
@@ -289,9 +290,13 @@ pub extern "C" fn download_new_version() {
 
     // We are not able to access council members any other way so we have deserialize SC
     let contract: Contract = env::state_read().unwrap();
+    let dao_settings: DaoSettings = contract.settings.get().unwrap().into();
 
-    // Currently only council member can call this
-    //assert!(contract.council.contains(&env::predecessor_account_id())); //TODO FIX
+    //TODO who can trigger the download
+    assert_eq!(
+        dao_settings.dao_admin_account_id,
+        env::predecessor_account_id()
+    );
 
     let factory_acc = env::storage_read(&StorageKeys::FactoryAcc.into_storage_key()).unwrap();
     let method_name = b"download_dao_bin".to_vec();
@@ -342,9 +347,12 @@ pub extern "C" fn upgrade_self() {
 
     // We are not able to access council members any other way so we have deserialize SC
     let contract: Contract = env::state_read().unwrap();
+    let dao_settings: DaoSettings = contract.settings.get().unwrap().into();
 
-    // Currently only council member can call this
-    //assert!(contract.council.contains(&env::predecessor_account_id())); //TODO FIX
+    assert_eq!(
+        dao_settings.dao_admin_account_id,
+        env::predecessor_account_id()
+    );
 
     let current_acc = env::current_account_id().into_bytes();
     let method_name = "migrate".as_bytes().to_vec();

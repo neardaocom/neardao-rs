@@ -20,10 +20,10 @@ fi
 # ------------ DATA ------------ #
 
 # WFT - Workflow Add
-WF1='{"name":"wf_add","version":1,"activities":[null,{"exec_condition":null,"action":"WorkflowAdd","fncall_id":null,"gas":0,"deposit":0,"arg_types":[{"U16":false},{"Object":0}],"postprocessing":null}],"transitions":[[1]],"binds":[],"start":[0],"end":[1]}'
+WF1='{"name":"wf_add","version":1,"activities":[null,{"code":"wf_add","exec_condition":null,"action":"WorkflowAdd","fncall_id":null,"gas":0,"deposit":0,"arg_types":[{"U16":false},{"Object":0}],"postprocessing":null}],"transitions":[[1]],"binds":[],"start":[0],"end":[1]}'
 
 # WFT - Near Send
-WF2='{"name":"payout","version":1,"activities":[null,{"exec_condition":null,"action":"NearSend","fncall_id":null,"gas":0,"deposit":0,"arg_types":[{"U16":false},{"Object":0}],"postprocessing":null}],"transitions":[[1],[1]],"binds":[],"start":[0],"end":[1]}'
+WF2='{"name":"wf_near_send","version":1,"activities":[null,{"code":"near_send","exec_condition":null,"action":"NearSend","fncall_id":null,"gas":null,"deposit":null,"arg_types":[{"String":false},{"U128":false}],"postprocessing":null}],"transitions":[[1],[1]],"binds":[],"start":[0],"end":[1]}'
 
 # ------------ LOAD ------------ #
 
