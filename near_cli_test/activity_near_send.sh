@@ -1,2 +1,1 @@
-
-near call $DCID treasury_near_send '{"proposal_id":2,"receiver_id":"petrstudynka.testnet","amount":"100"}' --accountId $CID1 
+near call $DCID treasury_near_send '{"proposal_id":2,"receiver_id":"petrstudynka.testnet","amount":"1"}' --accountId $CID1 --gas $TGAS_100

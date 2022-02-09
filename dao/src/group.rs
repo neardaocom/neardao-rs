@@ -33,10 +33,10 @@ impl GroupMembers {
     /// Overrides existing.
     /// Returns false if the member was not in the group before.
     pub fn add_member(&mut self, member: GroupMember) -> bool {
-       match self.0.insert(member.account_id, member.tags) {
-           Some(_) => true,
-           None => false,
-       }
+        match self.0.insert(member.account_id, member.tags) {
+            Some(_) => true,
+            None => false,
+        }
     }
 
     pub fn remove_member(&mut self, account_id: AccountId) -> Option<GroupMember> {
@@ -165,6 +165,10 @@ impl Group {
         members: Vec<GroupMember>,
         release: Release,
     ) -> Self {
+        assert!(
+            members.iter().any(|m| settings.leader == m.account_id),
+            "Leader must be contained in group members"
+        );
         Group {
             settings,
             members: members.into(),

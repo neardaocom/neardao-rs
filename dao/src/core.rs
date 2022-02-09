@@ -6,7 +6,12 @@ use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
 use crate::tags::{TagInput, Tags};
 use library::storage::StorageBucket;
-use library::workflow::{Instance, ProposeSettings, Template, TemplateSettings};
+use library::types::FnCallMetadata;
+use library::{
+    workflow::{Instance, ProposeSettings, Template, TemplateSettings},
+    FnCallId,
+};
+
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
 use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
 use near_contract_standards::storage_management::{
@@ -24,8 +29,7 @@ use near_sdk::{
 use crate::group::{Group, GroupInput};
 
 use crate::media::Media;
-use crate::FnCallId;
-use crate::{action::*, GroupId};
+use crate::GroupId;
 use crate::{proposal::*, StorageKey, TagCategory};
 
 near_sdk::setup_alloc!();
@@ -83,9 +87,8 @@ pub struct Contract {
     pub storage: UnorderedMap<StorageKey, StorageBucket>,
     pub tags: UnorderedMap<TagCategory, Tags>,
     pub media_last_id: u32,
-    pub media: LookupMap<u32, Media>, //TODO categorize??
-    pub function_call_metadata: LookupMap<FnCallId, Vec<FnCallMetadata>>,
-    pub function_calls: UnorderedMap<FnCallId, FnCallDefinition>,
+    pub media: LookupMap<u32, Media>,
+    pub function_call_metadata: UnorderedMap<FnCallId, Vec<FnCallMetadata>>,
     pub workflow_last_id: u16,
     pub workflow_template: UnorderedMap<u16, (Template, Vec<TemplateSettings>)>,
     pub workflow_instance: UnorderedMap<u32, (Instance, ProposeSettings)>,
@@ -102,7 +105,7 @@ impl Contract {
         groups: Vec<GroupInput>,
         media: Vec<Media>,
         tags: Vec<TagInput>,
-        function_calls: Vec<FnCallDefinition>,
+        function_calls: Vec<FnCallId>,
         function_call_metadata: Vec<Vec<FnCallMetadata>>,
         workflow_templates: Vec<Template>,
         workflow_template_settings: Vec<Vec<TemplateSettings>>,
@@ -127,8 +130,7 @@ impl Contract {
             tags: UnorderedMap::new(StorageKeys::Tags),
             media_last_id: 0,
             media: LookupMap::new(StorageKeys::Media),
-            function_call_metadata: LookupMap::new(StorageKeys::FunctionCallMetadata),
-            function_calls: UnorderedMap::new(StorageKeys::FunctionCalls),
+            function_call_metadata: UnorderedMap::new(StorageKeys::FunctionCallMetadata),
             workflow_last_id: 0,
             workflow_template: UnorderedMap::new(StorageKeys::WfTemplate),
             workflow_instance: UnorderedMap::new(StorageKeys::WfInstance),
@@ -136,12 +138,15 @@ impl Contract {
         };
 
         //register self and mint all FT
+
         let contract_acc = env::current_account_id();
         contract.ft.internal_register_account(&contract_acc);
         contract.ft.internal_deposit(
             &contract_acc,
             contract.ft_total_supply as u128 * contract.decimal_const,
         );
+        //substract self account
+        contract.ft.token_holders_count -= 1;
 
         contract.init_dao_settings(settings);
         contract.init_tags(tags);

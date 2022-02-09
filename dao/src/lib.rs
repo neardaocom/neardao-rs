@@ -1,6 +1,6 @@
 #![allow(unreachable_patterns)]
 
-use near_sdk::CryptoHash;
+use near_sdk::{CryptoHash, AccountId};
 
 //mod unit_tests;
 mod standard_impl;
@@ -23,8 +23,6 @@ pub mod view;
 
 pub(crate) type ProposalId = u32;
 pub(crate) type TagId = u16;
-/// Composite of "{receiver}_{function_call}" ident
-pub(crate) type FnCallId = String;
 pub(crate) type StorageKey = String;
 pub(crate) type TagCategory = String;
 pub(crate) type GroupId = u16; 

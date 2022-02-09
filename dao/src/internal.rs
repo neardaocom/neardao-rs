@@ -8,7 +8,6 @@ use near_sdk::{
 };
 
 use crate::{
-    action::{FnCallDefinition, FnCallMetadata},
     append,
     callbacks::ext_self,
     constants::{
@@ -30,10 +29,12 @@ use crate::{
 };
 use library::{
     storage::StorageBucket,
+    types::{DataType, FnCallMetadata},
     workflow::{
         ActivityResult, ActivityRight, Instance, InstanceState, Template, TemplateSettings,
         VoteScenario,
     },
+    FnCallId,
 };
 
 impl Contract {
@@ -76,16 +77,13 @@ impl Contract {
         self.media_last_id = media.len() as u32;
     }
 
-    #[inline]
     pub fn init_function_calls(
         &mut self,
-        calls: Vec<FnCallDefinition>,
+        calls: Vec<FnCallId>,
         metadata: Vec<Vec<FnCallMetadata>>,
     ) {
         for (i, c) in calls.iter().enumerate() {
-            let key = format!("{}_{}", c.name, c.receiver); //TODO replace format! with push_str
-            self.function_calls.insert(&key, &c);
-            self.function_call_metadata.insert(&key, &metadata[i]);
+            self.function_call_metadata.insert(c, &metadata[i]);
         }
     }
 
@@ -209,7 +207,6 @@ impl Contract {
         scenario: &VoteScenario,
         vote_target: &ActivityRight,
     ) -> (u128, [u128; 3]) {
-        // count votes
         let mut vote_result = [0 as u128; 3];
         let mut max_possible_amount: u128 = 0;
         match scenario {
@@ -233,8 +230,7 @@ impl Contract {
                         max_possible_amount = self.ft.token_holders_count as u128;
                     }
                     ActivityRight::Member => {
-                        // TODO only group members without token holders ??
-                        todo!()
+                        max_possible_amount = self.total_members_count as u128;
                     }
                     ActivityRight::GroupRole(g, r) => match self.groups.get(&g) {
                         Some(group) => {
@@ -278,19 +274,6 @@ impl Contract {
 
         (max_possible_amount, vote_result)
     }
-
-    /*     pub fn find_current_workflow_activity(&self, proposal_id: u32) -> Option<Instance> {
-        match self.workflow_instance.get(&proposal_id) {
-            Some(i) => match i.state {
-                InstanceState::Running => {
-                    //i.current_action
-                    None
-                }
-                _ => None,
-            },
-            None => None,
-        }
-    } */
 
     pub fn storage_bucket_add(&mut self, bucket_id: &str) {
         let bucket = StorageBucket::new(utils::get_bucket_id(bucket_id));
@@ -368,6 +351,14 @@ impl Contract {
         self.workflow_instance
             .insert(&proposal_id, &(wfi, settings));
         ActivityResult::ErrPostprocessing
+    }
+
+    // Returns dao specific value
+    pub fn dao_consts(&self) -> Box<dyn Fn(u8) -> DataType> {
+        Box::new(|id| match id {
+            0 => DataType::String(env::current_account_id()),
+            _ => unimplemented!(),
+        })
     }
 }
 

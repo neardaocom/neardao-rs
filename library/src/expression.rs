@@ -310,14 +310,14 @@ impl EOp {
                 };
 
                 let result = match o {
-                    AriOp::Add => lhs + rhs,
-                    AriOp::Subtract => lhs - rhs,
-                    AriOp::Multiply => lhs * rhs,
-                    AriOp::Divide => lhs / rhs,
-                    AriOp::Modulo => lhs % rhs,
+                    AriOp::Add => lhs.0 + rhs.0,
+                    AriOp::Subtract => lhs.0 - rhs.0,
+                    AriOp::Multiply => lhs.0 * rhs.0,
+                    AriOp::Divide => lhs.0 / rhs.0,
+                    AriOp::Modulo => lhs.0 % rhs.0,
                 };
 
-                DataType::U128(result)
+                DataType::U128(result.into())
             }
             EOp::Rel(o) => match (arg1, arg2) {
                 (DataType::Bool(lhs), DataType::Bool(rhs)) => match o {
@@ -337,10 +337,10 @@ impl EOp {
                 (DataType::U128(lhs), DataType::U128(rhs)) => match o {
                     RelOp::Eqs => DataType::Bool(lhs == rhs),
                     RelOp::NEqs => DataType::Bool(lhs != rhs),
-                    RelOp::Gt => DataType::Bool(lhs > rhs),
-                    RelOp::Lt => DataType::Bool(lhs < rhs),
-                    RelOp::GtE => DataType::Bool(lhs >= rhs),
-                    RelOp::LtE => DataType::Bool(lhs <= rhs),
+                    RelOp::Gt => DataType::Bool(lhs.0 > rhs.0),
+                    RelOp::Lt => DataType::Bool(lhs.0 < rhs.0),
+                    RelOp::GtE => DataType::Bool(lhs.0 >= rhs.0),
+                    RelOp::LtE => DataType::Bool(lhs.0 <= rhs.0),
                     _ => panic!("Invalid operands"),
                 },
                 (DataType::String(lhs), DataType::String(rhs)) => match o {

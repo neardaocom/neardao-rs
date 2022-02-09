@@ -1,7 +1,13 @@
 use library::types::{ActionIdent, DataType, DataTypeDef};
-use library::workflow::{
-    ActivityResult, Instance, InstanceState, ProposeSettings, TemplateActivity, TemplateSettings,
+use library::utils::{bind_args, validate_args};
+use library::{
+    workflow::{
+        ActivityResult, Instance, InstanceState, ProposeSettings, TemplateActivity,
+        TemplateSettings,
+    },
+    MethodName,
 };
+
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::{Base64VecU8, WrappedDuration, WrappedTimestamp, U128, U64};
 use near_sdk::serde::{self, Deserialize, Serialize};
@@ -26,159 +32,8 @@ use crate::{
     core::*,
     group::{GroupInput, GroupMember, GroupReleaseInput, GroupSettings},
     media::Media,
-    GroupId, GroupName, ProposalId, CID,
+    GroupId, ProposalId
 };
-
-// Represents object schema
-// Coz compiler yelling at me: "error[E0275]: overflow evaluating the requirement" on Borsh we do it this way
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct FnCallMetadata {
-    pub arg_names: Vec<String>,
-    pub arg_types: Vec<DataTypeDef>,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
-#[serde(crate = "near_sdk::serde")]
-pub struct FnCallDefinition {
-    pub name: String,
-    pub receiver: AccountId,
-}
-
-impl FnCallDefinition {
-    /*
-    Object example:
-    { name: test, value: { something1: something }, another_value2: { another:another}}
-
-    Input structure:
-    ArgIdents = [[name], [something1], [another_value2]]
-    ArgValues = [[test], [something], [another]]
-    Metadata: = [
-        { arg_names: [test, something1, another_value2], arg_types: [String, Object, Object]},
-        { arg_names: [something1], arg_types: [String]}
-        { arg_names: [another], arg_types: [String]}
-    ]
-    */
-
-    /// Bind function argument names with values
-    /// Returns serialized JSON object
-    pub fn bind_args(
-        &self,
-        arg_names: &Vec<Vec<String>>,
-        arg_values: &Vec<Option<Vec<Value>>>,
-        metadata: &Vec<FnCallMetadata>,
-        metadata_id: usize,
-    ) -> String {
-        // Create raw json object string
-        let mut args = String::with_capacity(64);
-        args.push('{');
-        for i in 0..metadata[metadata_id].arg_names.len() {
-            assert_eq!(
-                metadata[metadata_id].arg_names[i], arg_names[metadata_id][i],
-                "arg names must be equals"
-            );
-            args.push('"');
-            args.push_str(arg_names[metadata_id][i].as_str()); //json attribute
-            args.push('"');
-            args.push(':');
-            match &metadata[metadata_id].arg_types[i] {
-                DataTypeDef::Object(id) => {
-                    args.push_str(
-                        self.bind_args(arg_names, arg_values, metadata, *id as usize)
-                            .as_str(),
-                    );
-                }
-                DataTypeDef::NullableObject(id) => {
-                    match &arg_values[*id as usize] {
-                        None => {
-                            args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str());
-                            //TODO optimalize null value
-                        }
-                        _ => args.push_str(
-                            self.bind_args(arg_names, arg_values, metadata, *id as usize)
-                                .as_str(),
-                        ),
-                    }
-                }
-                DataTypeDef::String(opt) => {
-                    match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
-                        (true, Value::String(v)) | (false, Value::String(v)) => {
-                            args.push('"');
-                            args.push_str(v.as_str());
-                            args.push('"');
-                        }
-                        (true, Value::Null) => {
-                            args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
-                        }
-                        _ => panic!("Invalid type during parsing"),
-                    }
-                }
-                DataTypeDef::Bool(opt) => {
-                    match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
-                        (true, Value::Bool(v)) | (false, Value::Bool(v)) => {
-                            args.push_str(serde_json::to_string(v).unwrap().as_str());
-                        }
-                        (true, Value::Null) => {
-                            args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
-                        }
-                        _ => panic!("Invalid type during parsing"),
-                    }
-                }
-
-                DataTypeDef::U8(opt) | DataTypeDef::U16(opt) | DataTypeDef::U32(opt) => {
-                    match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
-                        (true, Value::Number(v)) | (false, Value::Number(v)) => {
-                            args.push_str(serde_json::to_string(v).unwrap().as_str());
-                        }
-                        (true, Value::Null) => {
-                            args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
-                        }
-                        _ => panic!("Invalid type during parsing"),
-                    }
-                }
-                DataTypeDef::U64(opt) | DataTypeDef::U128(opt) => {
-                    match (opt, &arg_values[metadata_id].as_ref().unwrap()[i]) {
-                        (true, Value::String(v)) | (false, Value::String(v)) => {
-                            args.push('"');
-                            args.push_str(serde_json::to_string(v).unwrap().as_str());
-                            args.push('"');
-                        }
-                        (true, Value::Null) => {
-                            args.push_str(serde_json::to_string(&Value::Null).unwrap().as_str())
-                        }
-                        _ => panic!("Invalid type during parsing"),
-                    }
-                }
-                // Assuming no API expects something like Option<Vec<_>>, but instead Vec<_> is just empty
-                DataTypeDef::VecString
-                | DataTypeDef::VecU8
-                | DataTypeDef::VecU16
-                | DataTypeDef::VecU32
-                | DataTypeDef::VecU64
-                | DataTypeDef::VecU128 => {
-                    if let Value::Array(v) = &arg_values[metadata_id].as_ref().unwrap()[i] {
-                        args.push('[');
-                        for v in v.iter() {
-                            args.push_str(serde_json::to_string(v).unwrap().as_str());
-                            args.push(',');
-                        }
-                        args.pop();
-                        args.push(']');
-                    } else {
-                        panic!("Invalid type during parsing")
-                    }
-                }
-                _ => panic!("Invalid type during parsing"),
-            }
-            args.push(',');
-        }
-        args.pop();
-        args.push('}');
-        args
-    }
-}
 
 #[near_bindgen]
 impl Contract {
@@ -216,6 +71,7 @@ impl Contract {
 
         let proposal = Proposal::new(
             env::block_timestamp(),
+            caller,
             template_id,
             template_settings_id,
             true,
@@ -542,23 +398,27 @@ impl Contract {
         let caller = env::predecessor_account_id();
         let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
+        // proposal state check
         assert!(proposal.state == ProposalState::Accepted);
 
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
 
-        //transition check
+        // transition check
         let (transition_id, activity_id): (u8, u8) = wfi
             .get_target_trans_with_act(&wft, ActionIdent::NearSend)
             .expect("Undefined transition");
 
-        //rights checks
+        // rights checks
         assert!(self.check_rights(
-            &wfs.activity_rights[activity_id as usize].as_slice(),
+            &wfs.activity_rights[activity_id as usize - 1].as_slice(),
             &caller
         ));
 
         let mut bucket = self.storage.get(&settings.storage_key).unwrap();
-        let mut args = vec![DataType::String(receiver_id), DataType::U128(amount.0)];
+        let mut args = vec![vec![
+            DataType::String(receiver_id),
+            DataType::U128(amount),
+        ]];
         let (result, postprocessing) = wfi.transition_to_next(
             activity_id,
             transition_id,
@@ -566,22 +426,42 @@ impl Contract {
             &settings,
             args.as_slice(),
             &mut bucket,
+            0,
         );
 
+        // arguments validation
+        if settings.obj_validators[activity_id as usize - 1].len() > 0
+            && !validate_args(
+                &settings.binds,
+                &settings.obj_validators[activity_id as usize - 1].as_slice(),
+                &settings.validator_exprs.as_slice(),
+                &bucket,
+                &mut args.as_slice(),
+                &mut vec![],
+                &[],
+            )
+        {
+            return PromiseOrValue::Value(ActivityResult::ErrValidation);
+        }
+
+        let dao_consts = self.dao_consts();
         let result = match result {
             ActivityResult::Ok => {
-                // bind args and check values
-                wfi.interpolate_args(
-                    &settings.activity_inputs[activity_id as usize].as_slice(),
-                    &settings.binds.as_slice(),
-                    &settings.validators.as_slice(),
-                    &mut args,
+                // bind args
+                bind_args(
+                    &dao_consts,
+                    settings.binds.as_slice(),
+                    settings.activity_inputs[activity_id as usize - 1].as_slice(),
                     &mut bucket,
+                    &mut args,
+                    &mut vec![],
+                    0,
+                    0,
                 );
 
                 PromiseOrValue::Promise(
-                    Promise::new(args.swap_remove(0).try_into_string().unwrap())
-                        .transfer(args.swap_remove(0).try_into_u128().unwrap())
+                    Promise::new(args[0].swap_remove(0).try_into_string().unwrap())
+                        .transfer(args[0].swap_remove(0).try_into_u128().unwrap())
                         .then(ext_self::postprocess(
                             proposal_id,
                             settings.storage_key.clone(),
@@ -601,6 +481,7 @@ impl Contract {
 
         result
     }
+
     pub fn treasury_ft_send(
         &mut self,
         proposal_id: ProposalId,
@@ -722,24 +603,59 @@ impl Contract {
         }
     }
 
-    // TODO own Value for inputs and use serde Value for transforming to JSON ??
-    // TODO write tests parsing arguments
     /// Invokes registered function call
     pub fn function_call(
         &mut self,
         proposal_id: ProposalId,
-        fncall_id: String,
-        deposit: U128,
+        //fncall_receiver: AccountId,
+        //fncall_method: MethodName,
+        arg_names: Vec<Vec<String>>,
+        mut arg_values: Vec<Vec<DataType>>,
+        deposit: u128,
         tgas: u16,
     ) {
         let caller = env::predecessor_account_id();
-        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
-        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
-        let fncall = self
-            .function_calls
-            .get(&fncall_id)
-            .expect(ERR_UNKNOWN_FNCALL);
+        assert!(proposal.state == ProposalState::Accepted);
+
+        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+
+        //transition check
+        let (transition_id, activity_id): (u8, u8) = wfi
+            .get_target_trans_with_act(&wft, ActionIdent::FnCall)
+            .expect("Undefined transition");
+
+        //rights checks
+        assert!(self.check_rights(
+            &wfs.activity_rights[activity_id as usize - 1].as_slice(),
+            &caller
+        ));
+
+        let mut bucket = self.storage.get(&settings.storage_key).unwrap();
+
+        // Everything should be provided by provider so unwraping is ok
+        let fncall_metadata = self.function_call_metadata.get(
+            &wft.activities[activity_id as usize]
+                .as_ref()
+                .unwrap()
+                .fncall_id
+                .as_ref()
+                .unwrap(),
+        );
+
+        // map metadata to check
+        //bind_args(&settings, &mut arg_values, &bucket);
+        /*
+        let mut args = vec![];
+        let (result, postprocessing) = wfi.transition_to_next(
+            activity_id,
+            transition_id,
+            &wft,
+            &settings,
+            args.as_slice(),
+            &mut bucket,
+        ); */
 
         // TODO get constrains and binds from workflow template and postprocessing
         // Should be some match for Option
@@ -750,21 +666,26 @@ impl Contract {
         //add postprocessing (save promise result - must be from workflow)
     }
 
-    pub fn function_call_add(&mut self, proposal_id: ProposalId, func: FnCallDefinition) {
-        let caller = env::predecessor_account_id();
+    pub fn function_call_add(
+        &mut self,
+        proposal_id: ProposalId,
+        receiver_id: AccountId,
+        method_name: MethodName,
+    ) {
+        /*         let caller = env::predecessor_account_id();
         let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
 
         assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         let id = format!("{}_{}", func.receiver, func.name);
-        self.function_calls.insert(&id, &func);
+        self.function_calls.insert(&id, &func); */
     }
     //TODO key as ID or func name
     pub fn function_call_remove(&mut self, proposal_id: ProposalId, id: String) {
-        let caller = env::predecessor_account_id();
+        /*         let caller = env::predecessor_account_id();
         let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
 
         assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
-        self.function_calls.remove(&id);
+        self.function_calls.remove(&id); */
     }
 
     pub fn workflow_install(&mut self, proposal_id: ProposalId) {
@@ -794,22 +715,14 @@ impl Contract {
             .get_target_trans_with_act(&wft, ActionIdent::WorkflowAdd)
             .expect("Undefined transition");
 
-        log!(
-            "{}, {}, {:?}",
-            transition_id,
-            activity_id,
-            wfi.transition_counter.clone()
-        );
-
         //rights checks
         assert!(self.check_rights(
-            &wfs.activity_rights[activity_id as usize].as_slice(),
+            &wfs.activity_rights[activity_id as usize - 1].as_slice(),
             &caller
         ));
 
-        //TODO remove unnecessary
         let mut bucket = self.storage.get(&settings.storage_key).unwrap();
-        let mut args = vec![DataType::U16(workflow_id)];
+        let mut args = vec![vec![DataType::U16(workflow_id)]];
         let (result, postprocessing) = wfi.transition_to_next(
             activity_id,
             transition_id,
@@ -817,14 +730,22 @@ impl Contract {
             &settings,
             args.as_slice(),
             &mut bucket,
+            0,
         );
 
-        log!(
-            "{}, {}, {:?}",
-            transition_id,
-            activity_id,
-            wfi.transition_counter.clone()
-        );
+        if settings.obj_validators[activity_id as usize - 1].len() > 0
+            && !validate_args(
+                &settings.binds,
+                &settings.obj_validators[activity_id as usize - 1].as_slice(),
+                &settings.validator_exprs.as_slice(),
+                &bucket,
+                &mut args.as_slice(),
+                &mut vec![],
+                &[],
+            )
+        {
+            return PromiseOrValue::Value(ActivityResult::ErrValidation);
+        }
 
         let dao_settings: DaoSettings = self.settings.get().unwrap().into();
         let acc = env::current_account_id();
@@ -836,7 +757,7 @@ impl Contract {
                         b"get".to_vec(),
                         format!(
                             "{{\"id\":{}}}",
-                            args.pop().unwrap().try_into_u128().unwrap()
+                            args[0].pop().unwrap().try_into_u128().unwrap()
                         )
                         .into_bytes(),
                         0,
@@ -867,20 +788,18 @@ impl Contract {
 
         result
     }
-    // TODO workflow settings??
 }
-
+/* // TODO fix tests
 #[cfg(test)]
 mod test {
+    use library::types::FnCallMetadata;
     use near_sdk::{
         json_types::{U128, U64},
         serde::{Deserialize, Serialize},
         serde_json::{self, Number, Value},
     };
 
-    use crate::action::{DataTypeDef, FnCallDefinition};
-
-    use super::FnCallMetadata;
+    use crate::action::DataTypeDef;
 
     /* ---------- TEST OBJECTS ---------- */
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -1226,4 +1145,6 @@ mod test {
             serde_json::to_string(&expected_result).unwrap(),
         );
     }
+
 }
+*/

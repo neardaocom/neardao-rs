@@ -1,8 +1,8 @@
 #!/bin/bash
 
-#source ./near_cli_test/constants.sh
-#source ./near_cli_test/init_env.sh
-#near call $CID new '{"tags":["dao","test","podilnik"]}' --accountId $CID
+source ./near_cli_test/constants.sh
+source ./near_cli_test/init_env.sh
+near call $CID new '{"tags":["dao","test","podilnik"]}' --accountId $CID
 
 ##
 ### init factory
@@ -16,10 +16,10 @@ S_SETTINGS='{"name":"My first dao","purpose":"just testing","tags":[0,1,2],"dao_
 S_GROUPS='[{"settings":{"name":"council","leader":"'$CID1'"},"members":[{"account_id":"'$CID1'","tags":[1]},{"account_id":"'$CID2'","tags":[3,4]},{"account_id":"'$CID3'","tags":[4]}],"release":{"amount":100000000,"init_distribution":10000000,"start_from":0,"duration":1000000000,"model":"Linear"}}]'
 S_MEDIA='[]'
 S_TAGS='[{"category":"global","values":["test dao", "new", "top"]},{"category":"group","values":["CEO", "CTO", "no idea", "good guy"]},{"category":"media","values":["very important", "probably virus"]}]'
-S_FNCALLS='[{"name":"test","receiver": "'$DCID'"}]'
-S_FNCALL_META='[ [{"arg_names":["name1", "nullable_obj", "name2", "name3", "obj"], "arg_types":[{"String": false}, {"NullableObject": 1}, "VecString", "VecU128",{"Object":2}]}, {"arg_names": ["test"], "arg_types": [ {"U8":true} ]},{"arg_names":["nested_1_arr_8", "nested_1_obj"], "arg_types":["VecU8",{"Object":3}]},{"arg_names":["nested_2_arr_u64", "bool_val"],"arg_types":["VecU64",{"Bool":false}]}] ]'
-S_WFT='[{"name":"wf_add","version":1,"activities":[null,{"code":"wf_add","exec_condition":null,"action":"WorkflowAdd","fncall_id":null,"gas":0,"deposit":0,"arg_types":[{"U16":false},{"Object":0}],"postprocessing":null}],"transitions":[[1],[1]],"binds":[],"start":[0],"end":[1]}]'
-S_WFS='[[{"allowed_proposers":[{"Group":1}],"allowed_voters":"TokenHolder","scenario":"TokenWeighted","activity_rights":[[],[{"GroupLeader":1}]], "duration": 300, "quorum": 30,"approve_threshold": 51,"vote_only_once":true,"spam_threshold":80,"deposit_propose":1000000000000000000000000,"deposit_vote":1000, "deposit_propose_return": 50}]]'
+S_FNCALLS='[]'
+S_FNCALL_META='[]'
+S_WFT='[{"name":"wf_add","version":1,"activities":[null,{"code":"wf_add","exec_condition":null,"action":"WorkflowAdd","fncall_id":null,"tgas":0,"deposit":0,"arg_types":[{"U16":false},{"Object":0}],"postprocessing":null}],"transitions":[[1]],"binds":[],"start":[0],"end":[1]}]'
+S_WFS='[[{"allowed_proposers":[{"Group":1}],"allowed_voters":"TokenHolder","activity_rights":[[{"GroupLeader":1}]],"scenario":"TokenWeighted","duration":60,"quorum":51,"approve_threshold":20,"spam_threshold":80,"vote_only_once":true,"deposit_propose":1,"deposit_vote":1000,"deposit_propose_return":0}]]'
 
 ARGS=`echo '{"total_supply":1000000000,"ft_metadata":'$S_FT_META',"settings":'$S_SETTINGS',"groups":'$S_GROUPS',"media":'$S_MEDIA',"tags":'$S_TAGS',"function_calls":'$S_FNCALLS',"function_call_metadata":'$S_FNCALL_META',"workflow_templates":'$S_WFT',"workflow_template_settings":'$S_WFS'}' | base64`
 near call $CID create '{"acc_name": "dao", "dao_info": {"founded_s":9999, "name": "My first dao","description": "Just for testing purposes", "ft_name": "BRO","ft_amount": 1000000000,"tags": [0,1,2]}, "args":"'$ARGS'"}' --accountId $CID --amount $DEPOSIT_CREATE_DAO --gas $MAX_GAS
@@ -38,7 +38,7 @@ near call $CID create '{"acc_name": "dao", "dao_info": {"founded_s":9999, "name"
 
 #near state $DCID
 #near view $DCID groups ''
-#near view $DCID stats_ft ''
+#near view $DCID stats ''
 #near view $DCID wf_template '{"id":1}'
 #near view $DCID wf_templates ''
 #near view $DCID check_condition '{"proposal_id": 1, "args": [], "activity_id": 1, "transition_id":null}'

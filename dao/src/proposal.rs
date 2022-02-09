@@ -58,6 +58,7 @@ pub enum VoteResult {
 #[serde(crate = "near_sdk::serde")]
 pub struct Proposal {
     pub created: u64,
+    pub created_by: AccountId,
     pub votes: HashMap<AccountId, u8>,
     pub state: ProposalState,
     pub workflow_id: u16,
@@ -67,9 +68,16 @@ pub struct Proposal {
 
 impl Proposal {
     #[inline]
-    pub fn new(created: u64, workflow_id: u16, workflow_settings_id: u8, workflow_add_settings_id: bool) -> Self {
+    pub fn new(
+        created: u64,
+        created_by: AccountId,
+        workflow_id: u16,
+        workflow_settings_id: u8,
+        workflow_add_settings_id: bool,
+    ) -> Self {
         Proposal {
             created,
+            created_by,
             votes: HashMap::new(),
             state: ProposalState::InProgress,
             workflow_id,

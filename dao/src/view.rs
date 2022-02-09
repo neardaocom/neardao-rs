@@ -29,8 +29,10 @@ impl Contract {
         }
     }
 
-    pub fn proposal(&self, proposal_id: u32) -> Option<VProposal> {
-        self.proposals.get(&proposal_id)
+    pub fn proposal(&self, proposal_id: u32) -> Option<(VProposal, Option<Vec<TemplateSettings>>)> {
+        self.proposals
+            .get(&proposal_id)
+            .map(|p| (p, self.proposed_workflow_settings.get(&proposal_id)))
     }
 
     pub fn proposals(&self, from_index: u64, limit: u64) -> Vec<(u32, VProposal)> {
@@ -49,7 +51,7 @@ impl Contract {
         self.workflow_template.get(&id)
     }
 
-    pub fn wf_templates(self) -> Vec<(u16,(Template, Vec<TemplateSettings>))> {
+    pub fn wf_templates(self) -> Vec<(u16, (Template, Vec<TemplateSettings>))> {
         self.workflow_template.to_vec()
     }
 
@@ -165,9 +167,9 @@ impl Contract {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Stats {
-    pub ft_total_distributed: u32,
-    pub ft_total_locked: u32,
     pub ft_total_supply: u32,
+    pub ft_total_locked: u32,
+    pub ft_total_distributed: u32,
     pub ft_token_holders_count: u32,
     pub total_members_count: u32,
 }

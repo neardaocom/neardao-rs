@@ -2,7 +2,7 @@
 target/
 
 # near dev testnet
-neardev/
+neardev*/
 
 Cargo.lock
 .vscode

@@ -9,7 +9,7 @@ Workflow templates for providers
 mod test {
     use library::{
         expression::{EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
-        types::{ActionIdent, DataType, DataTypeDef},
+        types::{ActionIdent, DataType, DataTypeDef, ValidatorType},
         workflow::{
             ActivityRight, ArgType, ExprArg, Expression, ProposeSettings, Template,
             TemplateActivity, TemplateSettings, TransitionConstraint, VoteScenario,
@@ -29,7 +29,7 @@ mod test {
                     exec_condition: None,
                     action: ActionIdent::WorkflowAdd,
                     fncall_id: None,
-                    gas: Some(0),
+                    tgas: Some(0),
                     deposit: Some(0),
                     arg_types: vec![DataTypeDef::U16(false), DataTypeDef::Object(0)],
                     postprocessing: None,
@@ -59,7 +59,7 @@ mod test {
                     exec_condition: None,
                     action: ActionIdent::NearSend,
                     fncall_id: None,
-                    gas: None,
+                    tgas: None,
                     deposit: None,
                     arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: None,
@@ -80,7 +80,7 @@ mod test {
     #[test]
     fn settings() {
         let settings = ProposeSettings {
-            activity_inputs: vec![vec![ArgType::Free]],
+            activity_inputs: vec![vec![vec![ArgType::Free]]],
             transition_constraints: vec![
                 vec![TransitionConstraint {
                     transition_limit: 1,
@@ -92,8 +92,9 @@ mod test {
                 }],
             ],
             binds: vec![],
-            validators: vec![],
-            storage_key: "test".into(),
+            storage_key: "wf_add_wf_1".into(),
+            obj_validators: vec![vec![]],
+            validator_exprs: vec![],
         };
 
         println!(
@@ -102,7 +103,7 @@ mod test {
         );
 
         let wfs = TemplateSettings {
-            activity_rights: vec![vec![], vec![ActivityRight::GroupLeader(1)]],
+            activity_rights: vec![vec![ActivityRight::GroupLeader(1)]],
             allowed_proposers: vec![ActivityRight::Group(1)],
             allowed_voters: ActivityRight::TokenHolder,
             scenario: VoteScenario::TokenWeighted,
@@ -122,7 +123,7 @@ mod test {
         );
 
         let wfs = TemplateSettings {
-            activity_rights: vec![vec![], vec![ActivityRight::GroupLeader(1)]],
+            activity_rights: vec![vec![ActivityRight::GroupLeader(1)]],
             allowed_proposers: vec![ActivityRight::Group(1)],
             allowed_voters: ActivityRight::TokenHolder,
             scenario: VoteScenario::TokenWeighted,
@@ -142,7 +143,7 @@ mod test {
         );
 
         let propose_settings = ProposeSettings {
-            activity_inputs: vec![vec![ArgType::Free, ArgType::Checked(0)]],
+            activity_inputs: vec![vec![vec![ArgType::Free, ArgType::Free]]],
             transition_constraints: vec![
                 vec![TransitionConstraint {
                     transition_limit: 1,
@@ -153,18 +154,19 @@ mod test {
                     cond: None,
                 }],
             ],
-            binds: vec![DataType::U8(100)],
-            validators: vec![Expression {
+            binds: vec![DataType::U128(10u128.pow(24).into())],
+            obj_validators: vec![vec![ValidatorType::Primitive(0)]],
+            validator_exprs: vec![Expression {
                 args: vec![ExprArg::User(1), ExprArg::Bind(0)],
                 expr: EExpr::Boolean(TExpr {
                     operators: vec![Op {
-                        op_type: EOp::Rel(RelOp::Gt),
+                        op_type: EOp::Rel(RelOp::GtE),
                         operands_ids: [0, 1],
                     }],
                     terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
                 }),
             }],
-            storage_key: "test".into(),
+            storage_key: "wf_send_near_1".into(),
         };
 
         println!(

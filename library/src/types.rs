@@ -1,7 +1,25 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    json_types::{U128, U64},
     serde::{Deserialize, Serialize},
 };
+
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
+#[serde(crate = "near_sdk::serde")]
+pub enum ValidatorType {
+    Primitive(u8),
+    Collection(u8),
+}
+
+impl ValidatorType {
+    pub fn get_id(&self) -> u8 {
+        match self {
+            ValidatorType::Primitive(id) => *id,
+            ValidatorType::Collection(id) => *id,
+        }
+    }
+}
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
@@ -28,7 +46,6 @@ pub enum ActionIdent {
     WorkflowAdd,
     WorkflowChange,
 }
-
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
@@ -62,15 +79,15 @@ pub enum DataType {
     U8(u8),
     U16(u16),
     U32(u32),
-    U64(u64),
-    U128(u128),
+    U64(U64),
+    U128(U128),
     VecString(Vec<String>),
     VecBool(Vec<bool>),
     VecU8(Vec<u8>),
     VecU16(Vec<u16>),
     VecU32(Vec<u32>),
-    VecU64(Vec<u64>),
-    VecU128(Vec<u128>),
+    VecU64(Vec<U64>),
+    VecU128(Vec<U128>),
 }
 
 impl DataType {
@@ -93,9 +110,38 @@ impl DataType {
             DataType::U8(b) => Ok(b as u128),
             DataType::U16(b) => Ok(b as u128),
             DataType::U32(b) => Ok(b as u128),
-            DataType::U64(b) => Ok(b as u128),
-            DataType::U128(b) => Ok(b as u128),
+            DataType::U64(b) => Ok(b.0 as u128),
+            DataType::U128(b) => Ok(b.0 as u128),
             _ => Err("DataType is not integer".into()),
         }
     }
 }
+
+// Represents object schema
+// Coz compiler yelling at me: "error[E0275]: overflow evaluating the requirement" on Borsh we do it this way
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Clone))]
+#[serde(crate = "near_sdk::serde")]
+pub struct FnCallMetadata {
+    pub arg_names: Vec<String>,
+    pub arg_types: Vec<DataTypeDef>,
+}
+/*  TODO remove
+impl FnCallMetadata {
+
+    /// Returns indexes of object with Vec objects
+    pub fn vec_object_indexes(&self) -> Vec<u8> {
+        self.arg_types
+            .iter()
+            .filter(|s| match s {
+                DataTypeDef::VecObject(_) => true,
+                _ => false,
+            })
+            .map(|s| match s {
+                DataTypeDef::VecObject(e) => *e,
+                _ => unreachable!(),
+            })
+            .collect()
+    }
+}
+ */
