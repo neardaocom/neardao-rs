@@ -1,24 +1,31 @@
-/*
-
-Workflow templates for providers
 
 
-*/
 
-#[cfg(test)]
+
+/********************  WF DATA FOR PROVIDER  ********************/
+
+
+
+
 mod test {
-    use library::{
-        expression::{EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
-        types::{ActionIdent, DataType, DataTypeDef, ValidatorType},
+    use crate::{
+        expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
+        types::{ActionIdent, DataType, DataTypeDef, FnCallMetadata, ValidatorType},
         workflow::{
-            ActivityRight, ArgType, ExprArg, Expression, ProposeSettings, Template,
+            ActivityRight, ArgType, ExprArg, Expression, Postprocessing, ProposeSettings, Template,
             TemplateActivity, TemplateSettings, TransitionConstraint, VoteScenario,
         },
+        FnCallId,
     };
+
+    use crate::data::skyward::{
+        workflow_skyward_template_data_1, workflow_skyward_template_settings_data_1,
+    };
+
     use near_sdk::serde_json;
 
     #[test]
-    fn add_workflow() {
+    fn output_workflow_add_wf() {
         let wf = Template {
             name: "wf_add".into(),
             version: 1,
@@ -29,8 +36,8 @@ mod test {
                     exec_condition: None,
                     action: ActionIdent::WorkflowAdd,
                     fncall_id: None,
-                    tgas: Some(0),
-                    deposit: Some(0),
+                    tgas: 0,
+                    deposit: 0,
                     arg_types: vec![DataTypeDef::U16(false), DataTypeDef::Object(0)],
                     postprocessing: None,
                 }),
@@ -48,7 +55,7 @@ mod test {
     }
 
     #[test]
-    fn payout_workflow() {
+    fn output_workflow_payout() {
         let wf = Template {
             name: "wf_near_send".into(),
             version: 1,
@@ -59,8 +66,8 @@ mod test {
                     exec_condition: None,
                     action: ActionIdent::NearSend,
                     fncall_id: None,
-                    tgas: None,
-                    deposit: None,
+                    tgas: 0,
+                    deposit: 0,
                     arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: None,
                 }),
@@ -78,7 +85,42 @@ mod test {
     }
 
     #[test]
-    fn settings() {
+    pub fn output_workflow_skyward_template_1() {
+        let (wf, fncalls, metadata) = workflow_skyward_template_data_1();
+
+        println!(
+            "------------------------------ WORKFLOW SKYWARD ------------------------------\n{}",
+            serde_json::to_string(&wf).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW SKYWARD FNCALLS ------------------------------\n{}",
+            serde_json::to_string(&fncalls).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW SKYWARD FN_METADATA ------------------------------\n{}",
+            serde_json::to_string(&metadata).unwrap()
+        );
+    }
+
+    #[test]
+    fn output_workflow_skyward_settings_1() {
+        let (wfs, settings) = workflow_skyward_template_settings_data_1();
+
+        println!(
+            "------------------------------ WORKFLOW SKYWARD TEMPLATE SETTINGS ------------------------------\n{}",
+            serde_json::to_string(&wfs).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW SKYWARD PROPOSE SETTINGS ------------------------------\n{}",
+            serde_json::to_string(&settings).unwrap()
+        );
+    }
+
+    #[test]
+    fn output_settings() {
         let settings = ProposeSettings {
             activity_inputs: vec![vec![vec![ArgType::Free]]],
             transition_constraints: vec![

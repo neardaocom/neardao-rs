@@ -6,8 +6,6 @@ use near_sdk::collections::{LookupMap, UnorderedMap};
 use near_sdk::serde::Serialize;
 use near_sdk::{env, near_bindgen, BorshStorageKey};
 
-mod test;
-
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
     WorkflowTemplate,

@@ -59,6 +59,13 @@ impl Contract {
         self.workflow_instance.get(&proposal_id)
     }
 
+    pub fn wf_instances(self) -> Vec<Option<(Instance, ProposeSettings)>> {
+        (1..=self.proposal_last_id)
+            .into_iter()
+            .map(|i| self.workflow_instance.get(&i))
+            .collect()
+    }
+
     pub fn check_condition(
         self,
         proposal_id: u32,
@@ -69,6 +76,7 @@ impl Contract {
         let (_, wft, _) = self.get_wf_and_proposal(proposal_id);
         let (_, settings) = self.workflow_instance.get(&proposal_id).unwrap();
         let bucket = self.storage.get(&settings.storage_key).unwrap();
+        let dao_consts = self.dao_consts();
 
         match transition_id {
             None => {
@@ -79,7 +87,7 @@ impl Contract {
                     .exec_condition
                     .as_ref()
                     .map(|e| {
-                        e.bind_and_eval(&bucket, settings.binds.as_slice(), &args)
+                        e.bind_and_eval(&dao_consts, &bucket, settings.binds.as_slice(), &args)
                             .try_into_bool()
                             .unwrap()
                     })
@@ -93,7 +101,7 @@ impl Contract {
                     .cond
                     .as_ref()
                     .map(|e| {
-                        e.bind_and_eval(&bucket, settings.binds.as_slice(), &args)
+                        e.bind_and_eval(&dao_consts, &bucket, settings.binds.as_slice(), &args)
                             .try_into_bool()
                             .unwrap()
                     })

@@ -1,14 +1,15 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    json_types::{U128, U64},
     serde::{Deserialize, Serialize},
-    AccountId,
+    serde_json, AccountId,
 };
 
 use crate::{
     expression::{Condition, EExpr},
     storage::StorageBucket,
-    types::{ActionIdent, DataType, DataTypeDef, FnCallMetadata, ValidatorType},
-    BindId, FnCallId,
+    types::{ActionIdent, DataType, DataTypeDef, ValidatorType},
+    BindId, Consts, FnCallId,
 };
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
@@ -77,8 +78,8 @@ pub struct TemplateActivity {
     pub exec_condition: Option<Expression>,
     pub action: ActionIdent,
     pub fncall_id: Option<FnCallId>,
-    pub tgas: Option<u32>,
-    pub deposit: Option<u128>,
+    pub tgas: u16,
+    pub deposit: u128,
     pub arg_types: Vec<DataTypeDef>,
     //pub arg_validators: Vec<Expression>,
     //pub binds: Vec<DataType>,
@@ -151,6 +152,7 @@ pub struct Expression {
 impl Expression {
     pub fn bind_and_eval(
         &self,
+        consts: &Consts,
         storage: &StorageBucket,
         binds: &[DataType],
         args: &[DataType],
@@ -158,6 +160,7 @@ impl Expression {
         let mut binded_args: Vec<DataType> = Vec::with_capacity(args.len());
 
         for arg in self.args.iter() {
+            //dbg!("bind and eval");
             match arg {
                 ExprArg::User(id) => {
                     binded_args.push(args[*id as usize].clone());
@@ -168,9 +171,13 @@ impl Expression {
                 ExprArg::Storage(key) => {
                     binded_args.push(storage.get_data(key).unwrap().clone());
                 }
+                ExprArg::Const(const_id) => {
+                    binded_args.push(consts(*const_id));
+                }
             }
         }
-
+        //dbg!("binded_args");
+        //dbg!(binded_args.clone());
         self.expr.eval(&mut binded_args)
     }
 }
@@ -181,6 +188,7 @@ impl Expression {
 pub enum ExprArg {
     User(u8),
     Bind(u8),
+    Const(u8),
     Storage(String),
 }
 
@@ -218,6 +226,15 @@ pub enum CondOrExpr {
     Expr(EExpr),
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum PostprocessingType {
+    SaveValue(DataType),
+    SaveUserValue((u8, u8)), //object id - value pos
+    FnCallResult(DataTypeDef),
+}
+
 /// Simple post-fncall instructions which say what to do based on FnCall result
 /// ATM Used its only used to save fncall action result to the storage
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
@@ -225,7 +242,7 @@ pub enum CondOrExpr {
 #[serde(crate = "near_sdk::serde")]
 pub struct Postprocessing {
     pub storage_key: String,
-    pub fn_call_result_type: DataTypeDef,
+    pub op_type: PostprocessingType,
     pub instructions: Vec<CondOrExpr>,
 }
 
@@ -244,6 +261,79 @@ impl Postprocessing {
                 }
             }
         };
+    }
+
+    pub fn try_to_get_user_value(&self, user_inputs: &[Vec<DataType>]) -> Option<DataType> {
+        match self.op_type {
+            PostprocessingType::SaveUserValue((obj_id, arg_pos)) => Some(
+                // Should panic if value is not there to signal wrong workflow structure
+                user_inputs
+                    .get(obj_id as usize)
+                    .unwrap()
+                    .get(arg_pos as usize)
+                    .unwrap()
+                    .clone(),
+            ),
+            _ => None,
+        }
+    }
+
+    // TODO handle parse error
+    pub fn postprocess(self, fn_result_val: Vec<u8>, user_value: Option<DataType>) -> DataType {
+        match self.op_type {
+            PostprocessingType::SaveUserValue(_) => user_value.unwrap(),
+            PostprocessingType::FnCallResult(t) => match t {
+                DataTypeDef::String(_) => {
+                    DataType::String(serde_json::from_slice::<String>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::Bool(_) => {
+                    DataType::Bool(serde_json::from_slice::<bool>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::U8(_) => {
+                    DataType::U8(serde_json::from_slice::<u8>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::U16(_) => {
+                    DataType::U16(serde_json::from_slice::<u16>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::U32(_) => {
+                    DataType::U32(serde_json::from_slice::<u32>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::U64(_) => {
+                    DataType::U64(serde_json::from_slice::<U64>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::U128(_) => {
+                    DataType::U128(serde_json::from_slice::<U128>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::VecString => DataType::VecString(
+                    serde_json::from_slice::<Vec<String>>(&fn_result_val).unwrap(),
+                ),
+                DataTypeDef::VecU8 => {
+                    DataType::VecU8(serde_json::from_slice::<Vec<u8>>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::VecU16 => {
+                    DataType::VecU16(serde_json::from_slice::<Vec<u16>>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::VecU32 => {
+                    DataType::VecU32(serde_json::from_slice::<Vec<u32>>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::VecU64 => {
+                    DataType::VecU64(serde_json::from_slice::<Vec<U64>>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::VecU128 => {
+                    DataType::VecU128(serde_json::from_slice::<Vec<U128>>(&fn_result_val).unwrap())
+                }
+                DataTypeDef::Object(_) => {
+                    unimplemented!("object is not supported yet");
+                }
+                DataTypeDef::NullableObject(_) => {
+                    unimplemented!("object is not supported yet");
+                }
+                DataTypeDef::VecObject(_) => {
+                    unimplemented!("object is not supported yet");
+                }
+            },
+            PostprocessingType::SaveValue(val) => val,
+        }
     }
 }
 
@@ -286,11 +376,13 @@ impl Instance {
         }
     }
 
+    // TODO optimalize so we dont have to substract index by one each time
     /// Finds id of desired activity if theres existing transition from current to desired
     pub fn get_target_trans_with_act(
         &self,
         wft: &Template,
         action_ident: ActionIdent,
+        fncall_id: Option<FnCallId>,
     ) -> Option<(TransitionId, ActivityId)> {
         wft.transitions
             .get(self.current_activity_id as usize)
@@ -299,12 +391,18 @@ impl Instance {
                     .enumerate()
                     .find(|(_, act_id)| {
                         wft.activities[**act_id as usize].as_ref().unwrap().action == action_ident
+                            && wft.activities[**act_id as usize]
+                                .as_ref()
+                                .unwrap()
+                                .fncall_id
+                                == fncall_id
                     })
                     .map(|(t_id, act_id)| (t_id as u8, *act_id))
             })
             .flatten()
     }
 
+    // TODO pos_level seems redundant - remove
     /// Tries to advance to next activity in workflow.
     /// Panics if anything is wrong - for now.
     pub fn transition_to_next(
@@ -312,6 +410,7 @@ impl Instance {
         activity_id: u8,
         transition_id: u8,
         wft: &Template,
+        consts: &Consts,
         settings: &ProposeSettings,
         action_args: &[Vec<DataType>],
         storage_bucket: &StorageBucket,
@@ -332,6 +431,7 @@ impl Instance {
         let transition_cond_result = match &transition_settings.cond {
             Some(c) => c
                 .bind_and_eval(
+                    consts,
                     storage_bucket,
                     settings.binds.as_slice(),
                     &action_args[pos_level],
@@ -359,6 +459,7 @@ impl Instance {
         let wanted_activity = wft.activities[activity_id as usize].as_ref().unwrap();
         let can_be_exec = match wanted_activity.exec_condition {
             Some(ref e) => e.bind_and_eval(
+                consts,
                 storage_bucket,
                 settings.binds.as_slice(),
                 &action_args[pos_level],
@@ -385,8 +486,9 @@ mod test {
         types::{ActionIdent, DataType, DataTypeDef, FnCallMetadata, ValidatorType},
         utils::{bind_args, validate_args},
         workflow::{
-            ActivityResult, ActivityRight, ExprArg, InstanceState, ProposeSettings,
-            TemplateActivity, TemplateSettings, TransitionConstraint, VoteScenario,
+            ActivityResult, ActivityRight, ExprArg, InstanceState, PostprocessingType,
+            ProposeSettings, TemplateActivity, TemplateSettings, TransitionConstraint,
+            VoteScenario,
         },
     };
 
@@ -397,7 +499,7 @@ mod test {
     pub fn workflow_simple_1() {
         let pp = Some(Postprocessing {
             storage_key: "activity_1_postprocessing".into(),
-            fn_call_result_type: DataTypeDef::String(false),
+            op_type: PostprocessingType::FnCallResult(DataTypeDef::String(false)),
             instructions: vec![],
         });
 
@@ -414,8 +516,8 @@ mod test {
                     exec_condition: None,
                     action: ActionIdent::NearSend,
                     fncall_id: None,
-                    tgas: None,
-                    deposit: None,
+                    tgas: 0,
+                    deposit: 0,
                     arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: pp.clone(),
                 }),
@@ -424,8 +526,8 @@ mod test {
                     exec_condition: None,
                     action: ActionIdent::GroupAdd,
                     fncall_id: None,
-                    tgas: None,
-                    deposit: None,
+                    tgas: 0,
+                    deposit: 0,
                     arg_types: vec![
                         DataTypeDef::String(false),
                         DataTypeDef::String(false),
@@ -512,16 +614,22 @@ mod test {
         wfi.state = InstanceState::Running;
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::NearSend)
+            .get_target_trans_with_act(&wft, ActionIdent::NearSend, None)
             .unwrap();
 
         assert_eq!(activity_id, 1);
         assert_eq!(transition_id, 0);
 
+        let dao_consts = Box::new(|id: u8| match id {
+            0 => DataType::String("neardao.near".into()),
+            _ => unimplemented!(),
+        });
+
         let result = wfi.transition_to_next(
             activity_id,
             transition_id,
             &wft,
+            &dao_consts,
             &settings,
             &user_args,
             &mut bucket,
@@ -529,6 +637,7 @@ mod test {
         );
 
         assert!(validate_args(
+            &dao_consts,
             &settings.binds,
             &settings.obj_validators[activity_id as usize].as_slice(),
             &settings.validator_exprs.as_slice(),
@@ -542,11 +651,6 @@ mod test {
 
         assert_eq!(result, expected_result);
         assert_eq!(wfi.current_activity_id, 1);
-
-        let dao_consts = Box::new(|id: u8| match id {
-            0 => DataType::String("neardao.near".into()),
-            _ => unimplemented!(),
-        });
 
         bind_args(
             &dao_consts,
@@ -569,7 +673,7 @@ mod test {
         ]];
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::GroupAdd)
+            .get_target_trans_with_act(&wft, ActionIdent::GroupAdd, None)
             .unwrap();
 
         assert_eq!(activity_id, 2);
@@ -579,6 +683,7 @@ mod test {
             activity_id,
             transition_id,
             &wft,
+            &dao_consts,
             &settings,
             &user_args,
             &bucket,
@@ -586,6 +691,7 @@ mod test {
         );
 
         assert!(validate_args(
+            &dao_consts,
             &settings.binds,
             &settings.obj_validators[activity_id as usize].as_slice(),
             &settings.validator_exprs.as_slice(),
@@ -622,7 +728,7 @@ mod test {
     fn workflow_simple_loop() {
         let pp = Some(Postprocessing {
             storage_key: "activity_1_postprocessing".into(),
-            fn_call_result_type: DataTypeDef::String(false),
+            op_type: PostprocessingType::FnCallResult(DataTypeDef::String(false)),
             instructions: vec![],
         });
 
@@ -637,8 +743,8 @@ mod test {
                     exec_condition: None,
                     action: ActionIdent::NearSend,
                     fncall_id: None,
-                    tgas: None,
-                    deposit: None,
+                    tgas: 0,
+                    deposit: 0,
                     arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: pp.clone(),
                 }),
@@ -717,7 +823,7 @@ mod test {
         // Execute Workflow
         for i in 0..5 {
             let (transition_id, activity_id) = wfi
-                .get_target_trans_with_act(&wft, ActionIdent::NearSend)
+                .get_target_trans_with_act(&wft, ActionIdent::NearSend, None)
                 .unwrap();
 
             assert_eq!(activity_id, 1);
@@ -727,6 +833,7 @@ mod test {
                 activity_id,
                 transition_id,
                 &wft,
+                &dao_consts,
                 &settings,
                 &user_args,
                 &mut bucket,
@@ -735,6 +842,7 @@ mod test {
             let expected_result = (ActivityResult::Ok, pp.clone());
 
             assert!(validate_args(
+                &dao_consts,
                 &settings.binds,
                 &settings.obj_validators[activity_id as usize].as_slice(),
                 &settings.validator_exprs.as_slice(),
@@ -763,13 +871,14 @@ mod test {
         }
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::NearSend)
+            .get_target_trans_with_act(&wft, ActionIdent::NearSend, None)
             .unwrap();
 
         let result = wfi.transition_to_next(
             activity_id,
             transition_id,
             &wft,
+            &dao_consts,
             &settings,
             &user_args,
             &mut bucket,
@@ -801,178 +910,13 @@ mod test {
         assert_eq!(wfi.transition_counter[1][0], 4);
     }
 
-    /*
-       #[test]
-       fn workflow_skyward_finance() {
-           let input: Vec<DataType> = vec![];
-
-           let pp = Some(Postprocessing {
-               storage_key: "activity_1_postprocessing".into(),
-               fn_call_result_type: DataTypeDef::String(false),
-               instructions: vec![],
-           });
-
-           // Template
-           let wft = Template {
-               name: "wf_skyward".into(),
-               version: 1,
-               activities: vec![
-                   None,
-                   Some(TemplateActivity {
-                       code: "register_tokens".into(),
-                       exec_condition: None,
-                       action: ActionIdent::FnCall,
-                       fncall_id: Some(("skyward.near".into(), "register_tokens".into())),
-                       tgas: Some(15),
-                       deposit: Some(20_000_000_000_000_000_000_000),
-                       metadata: vec![DataTypeDef::Object(0)],
-                       postprocessing: pp.clone(),
-                   }),
-                   Some(TemplateActivity {
-                       code: "storage_deposit".into(),
-                       exec_condition: None,
-                       action: ActionIdent::FnCall,
-                       fncall_id: Some(("self".into(), "storage_deposit".into())),
-                       tgas: Some(10),
-                       deposit: Some(20_000_000_000_000_000_000_000),
-                       metadata: vec![DataTypeDef::Object(0)],
-                       postprocessing: pp.clone(),
-                   }),
-                   Some(TemplateActivity {
-                       code: "storage_deposit".into(),
-                       exec_condition: None,
-                       action: ActionIdent::FnCall,
-                       fncall_id: Some(("skyward.near".into(), "storage_deposit".into())),
-                       tgas: Some(10),
-                       deposit: Some(1_250_000_000_000_000_000_000),
-                       metadata: vec![DataTypeDef::Object(0)],
-                       postprocessing: pp.clone(),
-                   }),
-                   Some(TemplateActivity {
-                       code: "ft_transfer_call".into(),
-                       exec_condition: None,
-                       action: ActionIdent::FnCall,
-                       fncall_id: Some(("self".into(), "ft_transfer_call".into())),
-                       tgas: Some(30),
-                       deposit: Some(0),
-                       metadata: vec![DataTypeDef::Object(0)],
-                       postprocessing: pp.clone(),
-                   }),
-                   Some(TemplateActivity {
-                       code: "sale_create".into(),
-                       exec_condition: None,
-                       action: ActionIdent::FnCall,
-                       fncall_id: Some(("skyward.near".into(), "sale_create".into())),
-                       tgas: Some(50),
-                       deposit: Some(2_000_000_000_000_000_000_000_000_000),
-                       metadata: vec![DataTypeDef::Object(0)],
-                       postprocessing: pp.clone(),
-                   }),
-               ],
-               transitions: vec![vec![1], vec![2], vec![3], vec![4], vec![5]],
-               binds: vec![],
-               start: vec![0],
-               end: vec![5],
-           };
-
-           //Template Settings example
-           let wfs = TemplateSettings {
-               activity_rights: vec![
-                   vec![],
-                   vec![ActivityRight::GroupLeader(1)],
-                   vec![ActivityRight::GroupLeader(1)],
-                   vec![ActivityRight::GroupLeader(1)],
-               ],
-               allowed_proposers: vec![ActivityRight::Group(1)],
-               allowed_voters: ActivityRight::TokenHolder,
-               scenario: VoteScenario::TokenWeighted,
-               duration: 3600,
-               quorum: 51,
-               approve_threshold: 20,
-               spam_threshold: 80,
-               vote_only_once: true,
-               deposit_propose: Some(1),
-               deposit_vote: Some(1000),
-               deposit_propose_return: 0,
-           };
-
-           // User proposed settings type
-           let settings = ProposeSettings {
-               activity_inputs: vec![
-                   // register tokens
-                   vec![ArgType::Expression(Expression {
-                       args: vec![ExprArg::User(0), ExprArg::Bind(0)],
-                       expr: EExpr::Fn(FnName::ArrayMerge),
-                   })],
-                   // storage_deposit on self
-                   vec![ArgType::Bind(1)],
-                   // storage_deposit on other token
-                   vec![ArgType::Bind(1)],
-                   // ft_transfer_call on self
-                   vec![
-                       ArgType::Bind(1),
-                       ArgType::Checked(0),
-                       ArgType::Free,
-                       ArgType::Bind(2),
-                   ],
-                   // sale_create
-                   vec![ArgType::Object(0)],
-               ],
-               transition_constraints: vec![
-                   vec![TransitionConstraint {
-                       transition_limit: 1,
-                       cond: None,
-                   }],
-                   vec![TransitionConstraint {
-                       transition_limit: 4,
-                       cond: None,
-                   }],
-               ],
-               object_inputs: vec![
-                   vec![
-                       ArgType::Free,                                        //title
-                       ArgType::Free,                                        //url
-                       ArgType::Bind(0),                                     //permissions_contract_id
-                       ArgType::VecObject(1),                                //out_tokens
-                       ArgType::Storage("activity_1_postprocessing".into()), //in_token_account_id - eg. wnear
-                       ArgType::Free,                                        //start_time
-                       ArgType::Free,                                        //duration
-                   ],
-                   vec![
-                       ArgType::Bind(3),                                     //token_account_id
-                       ArgType::Storage("activity_4_postprocessing".into()), //balance
-                       ArgType::Free,                                        //referral_bpt - optional
-                   ],
-               ],
-               binds: vec![
-                   DataType::VecString(vec!["self".into()]),
-                   DataType::String("skyward.near".into()),
-                   DataType::String("\"AccountDeposit\"".into()),
-                   DataType::String("self".into()),
-                   DataType::U128(1_000_000_000),
-               ],
-               validators: vec![Expression {
-                   args: vec![ExprArg::User(0), ExprArg::Bind(4)],
-                   expr: EExpr::Boolean(TExpr {
-                       operators: vec![Op {
-                           op_type: EOp::Rel(RelOp::Gt),
-                           operands_ids: [0, 1],
-                       }],
-                       terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
-                   }),
-               }],
-               storage_key: "wf_simple_loop".into(),
-           };
-       }
-    */
-
     #[test]
     fn postprocessing_with_cond() {
         // FnCall result > 5 then 20 else 40
         let input: Vec<DataType> = vec![DataType::U8(1)];
         let postprocessing = Postprocessing {
             storage_key: "key".into(),
-            fn_call_result_type: DataTypeDef::String(false),
+            op_type: PostprocessingType::FnCallResult(DataTypeDef::String(false)),
             instructions: vec![
                 CondOrExpr::Cond(Condition {
                     expr: EExpr::Boolean(TExpr {

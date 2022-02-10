@@ -2,19 +2,15 @@ use std::collections::HashMap;
 
 use near_sdk::{
     env::{self},
-    log,
-    serde::{Deserialize, Serialize},
-    AccountId, Balance, IntoStorageKey, Promise,
+    AccountId,
 };
 
 use crate::{
-    append,
-    callbacks::ext_self,
     constants::{
         ACC_REF_FINANCE, ACC_SKYWARD_FINANCE, ACC_WNEAR, DEFAULT_DOC_CAT, DEPOSIT_STANDARD_STORAGE,
         GROUP_PREFIX, GROUP_RELEASE_PREFIX,
     },
-    core::{Contract, StorageKeyWrapper},
+    core::Contract,
     errors::{
         ERR_DISTRIBUTION_ACC_EMPTY, ERR_DISTRIBUTION_MIN_VALUE, ERR_DISTRIBUTION_NOT_ENOUGH_FT,
         ERR_GROUP_NOT_FOUND, ERR_LOCK_AMOUNT_ABOVE, ERR_STORAGE_BUCKET_EXISTS,
@@ -22,19 +18,17 @@ use crate::{
     group::{Group, GroupInput},
     media::Media,
     proposal::Proposal,
-    release::{Release, ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel},
+    release::Release,
     settings::DaoSettings,
     tags::{TagInput, Tags},
-    GroupId, ProposalId,
 };
 use library::{
     storage::StorageBucket,
     types::{DataType, FnCallMetadata},
     workflow::{
-        ActivityResult, ActivityRight, Instance, InstanceState, Template, TemplateSettings,
-        VoteScenario,
+        ActivityResult, ActivityRight, InstanceState, Template, TemplateSettings, VoteScenario,
     },
-    FnCallId,
+    Consts, FnCallId,
 };
 
 impl Contract {
@@ -354,7 +348,7 @@ impl Contract {
     }
 
     // Returns dao specific value
-    pub fn dao_consts(&self) -> Box<dyn Fn(u8) -> DataType> {
+    pub fn dao_consts(&self) -> Box<Consts> {
         Box::new(|id| match id {
             0 => DataType::String(env::current_account_id()),
             _ => unimplemented!(),

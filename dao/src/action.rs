@@ -1,16 +1,11 @@
-use library::types::{ActionIdent, DataType, DataTypeDef};
+use library::types::{ActionIdent, DataType};
 use library::utils::{bind_args, validate_args};
 use library::{
-    workflow::{
-        ActivityResult, Instance, InstanceState, ProposeSettings, TemplateActivity,
-        TemplateSettings,
-    },
+    workflow::{ActivityResult, Instance, InstanceState, ProposeSettings, TemplateSettings},
     MethodName,
 };
 
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::{Base64VecU8, WrappedDuration, WrappedTimestamp, U128, U64};
-use near_sdk::serde::{self, Deserialize, Serialize};
 use near_sdk::serde_json::{self, Value};
 use near_sdk::{env, near_bindgen, AccountId, Promise};
 use near_sdk::{log, PromiseOrValue};
@@ -20,8 +15,6 @@ use crate::constants::TGAS;
 use crate::errors::{
     ERR_GROUP_NOT_FOUND, ERR_NO_ACCESS, ERR_STORAGE_BUCKET_EXISTS, ERR_UNKNOWN_FNCALL,
 };
-use crate::group::Group;
-use crate::internal::utils;
 use crate::proposal::{Proposal, ProposalState, VProposal};
 use crate::release::ReleaseDb;
 use crate::settings::assert_valid_dao_settings;
@@ -32,7 +25,7 @@ use crate::{
     core::*,
     group::{GroupInput, GroupMember, GroupReleaseInput, GroupSettings},
     media::Media,
-    GroupId, ProposalId
+    GroupId, ProposalId,
 };
 
 #[near_bindgen]
@@ -405,7 +398,7 @@ impl Contract {
 
         // transition check
         let (transition_id, activity_id): (u8, u8) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::NearSend)
+            .get_target_trans_with_act(&wft, ActionIdent::NearSend, None)
             .expect("Undefined transition");
 
         // rights checks
@@ -414,15 +407,14 @@ impl Contract {
             &caller
         ));
 
+        let dao_consts = self.dao_consts();
         let mut bucket = self.storage.get(&settings.storage_key).unwrap();
-        let mut args = vec![vec![
-            DataType::String(receiver_id),
-            DataType::U128(amount),
-        ]];
+        let mut args = vec![vec![DataType::String(receiver_id), DataType::U128(amount)]];
         let (result, postprocessing) = wfi.transition_to_next(
             activity_id,
             transition_id,
             &wft,
+            &dao_consts,
             &settings,
             args.as_slice(),
             &mut bucket,
@@ -432,6 +424,7 @@ impl Contract {
         // arguments validation
         if settings.obj_validators[activity_id as usize - 1].len() > 0
             && !validate_args(
+                &dao_consts,
                 &settings.binds,
                 &settings.obj_validators[activity_id as usize - 1].as_slice(),
                 &settings.validator_exprs.as_slice(),
@@ -444,7 +437,6 @@ impl Contract {
             return PromiseOrValue::Value(ActivityResult::ErrValidation);
         }
 
-        let dao_consts = self.dao_consts();
         let result = match result {
             ActivityResult::Ok => {
                 // bind args
@@ -459,6 +451,11 @@ impl Contract {
                     0,
                 );
 
+                let user_value = postprocessing
+                    .as_ref()
+                    .map(|p| p.try_to_get_user_value(args.as_slice()))
+                    .flatten();
+
                 PromiseOrValue::Promise(
                     Promise::new(args[0].swap_remove(0).try_into_string().unwrap())
                         .transfer(args[0].swap_remove(0).try_into_u128().unwrap())
@@ -466,6 +463,7 @@ impl Contract {
                             proposal_id,
                             settings.storage_key.clone(),
                             postprocessing,
+                            user_value,
                             &env::current_account_id(),
                             0,
                             30 * TGAS,
@@ -603,16 +601,15 @@ impl Contract {
         }
     }
 
-    /// Invokes registered function call
+    /// Invokes custom function call
+    /// FnCall arguments MUST have same datatypes as specified in its FnCallMetadata
     pub fn function_call(
         &mut self,
         proposal_id: ProposalId,
-        //fncall_receiver: AccountId,
-        //fncall_method: MethodName,
-        arg_names: Vec<Vec<String>>,
+        fncall_receiver: AccountId,
+        fncall_method: MethodName,
         mut arg_values: Vec<Vec<DataType>>,
-        deposit: u128,
-        tgas: u16,
+        mut arg_values_collection: Vec<Vec<DataType>>,
     ) {
         let caller = env::predecessor_account_id();
         let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
@@ -623,7 +620,11 @@ impl Contract {
 
         //transition check
         let (transition_id, activity_id): (u8, u8) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::FnCall)
+            .get_target_trans_with_act(
+                &wft,
+                ActionIdent::FnCall,
+                Some((fncall_receiver, fncall_method)),
+            )
             .expect("Undefined transition");
 
         //rights checks
@@ -712,7 +713,7 @@ impl Contract {
 
         //transition check
         let (transition_id, activity_id): (u8, u8) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::WorkflowAdd)
+            .get_target_trans_with_act(&wft, ActionIdent::WorkflowAdd, None)
             .expect("Undefined transition");
 
         //rights checks
@@ -721,12 +722,14 @@ impl Contract {
             &caller
         ));
 
+        let dao_consts = self.dao_consts();
         let mut bucket = self.storage.get(&settings.storage_key).unwrap();
         let mut args = vec![vec![DataType::U16(workflow_id)]];
         let (result, postprocessing) = wfi.transition_to_next(
             activity_id,
             transition_id,
             &wft,
+            &dao_consts,
             &settings,
             args.as_slice(),
             &mut bucket,
@@ -735,6 +738,7 @@ impl Contract {
 
         if settings.obj_validators[activity_id as usize - 1].len() > 0
             && !validate_args(
+                &dao_consts,
                 &settings.binds,
                 &settings.obj_validators[activity_id as usize - 1].as_slice(),
                 &settings.validator_exprs.as_slice(),
@@ -774,6 +778,7 @@ impl Contract {
                         proposal_id,
                         settings.storage_key.clone(),
                         postprocessing,
+                        None,
                         &acc,
                         0,
                         30 * TGAS,

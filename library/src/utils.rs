@@ -1,14 +1,16 @@
-use near_sdk::{serde_json, Metadata};
+use near_sdk::serde_json;
 
 use crate::{
     storage::StorageBucket,
     types::{DataType, DataTypeDef, FnCallMetadata, ValidatorType},
     workflow::{ArgType, Expression},
+    Consts,
 };
 
 /// Validates args by validators
 /// Only FnCalls require
 pub fn validate_args(
+    consts: &Consts,
     binds: &[DataType],
     obj_validator: &[ValidatorType],
     validator_expr: &[Expression],
@@ -24,8 +26,8 @@ pub fn validate_args(
         match validator_type {
             // if structure contains vec<obj> then we check for each vec<obj>
             // this way we can validate values for each obj in vec<obj>
-            ValidatorType::Collection(_) => {
-                let current_metadata = &metadata[validator_type.get_id() as usize];
+            ValidatorType::Collection(id) => {
+                let current_metadata = &metadata[*id as usize];
                 let params_len = current_metadata.arg_types.len();
                 let collection = &args_collections[next_args_vec_idx];
 
@@ -44,7 +46,7 @@ pub fn validate_args(
                 // apply validator for each obj params in collection
                 for (i, _) in collection.iter().enumerate().step_by(params_len) {
                     if !expr
-                        .bind_and_eval(storage, binds, &collection[i..i + params_len])
+                        .bind_and_eval(consts, storage, binds, &collection[i..i + params_len])
                         .try_into_bool()
                         .unwrap()
                     {
@@ -58,7 +60,7 @@ pub fn validate_args(
             ValidatorType::Primitive(id) => {
                 // else just check that object
                 if !expr
-                    .bind_and_eval(storage, binds, &args[*id as usize])
+                    .bind_and_eval(consts, storage, binds, &args[*id as usize])
                     .try_into_bool()
                     .unwrap()
                 {
@@ -74,13 +76,12 @@ pub fn validate_args(
 // TODO beautify
 /// Binds values by defined schema input_defs.
 pub fn bind_args(
-    consts: &dyn Fn(u8) -> DataType, //dao specific values
+    consts: &Consts, //dao specific values
     binds: &[DataType],
     input_defs: &[Vec<ArgType>],
     storage: &StorageBucket,
     mut args: &mut Vec<Vec<DataType>>,
     mut args_collections: &mut Vec<Vec<DataType>>,
-    //metadata: &[FnCallMetadata],
     metadata_pos: usize,
     mut next_collection_obj_idx: usize,
 ) {
@@ -103,7 +104,12 @@ pub fn bind_args(
                 result_args.push(storage.get_data(key).unwrap());
             }
             ArgType::Const(const_id) => result_args.push(consts(*const_id)),
-            ArgType::Expression(expr) => unimplemented!(),
+            ArgType::Expression(expr) => result_args.push(expr.bind_and_eval(
+                consts,
+                storage,
+                binds,
+                args[metadata_pos].as_slice(),
+            )),
             ArgType::Object(id) => {
                 result_args.push(DataType::Null);
 
@@ -114,7 +120,6 @@ pub fn bind_args(
                     &storage,
                     &mut args,
                     &mut args_collections,
-                    //metadata,
                     *id as usize - next_collection_obj_idx,
                     next_collection_obj_idx,
                 );
@@ -257,7 +262,7 @@ pub fn args_to_json(
     args
 }
 
-/// Creates JSON representation of value by data_type_def and pushes it buffer
+/// Creates JSON representation of value by data_type_def and pushes it to the buffer
 pub(crate) fn primitive_arg_to_json(
     buffer: &mut String,
     data_type_def: &DataTypeDef,
@@ -431,7 +436,7 @@ mod test {
 
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     #[serde(crate = "near_sdk::serde")]
-    pub struct SaleCreateArgOjb {
+    pub struct SaleCreateInput {
         pub sale: SaleInput,
     }
 
@@ -545,7 +550,13 @@ mod test {
 
         let storage = StorageBucket::new(b"abc".to_vec());
 
+        let dao_consts = Box::new(|id: u8| match id {
+            0 => DataType::String("neardao.near".into()),
+            _ => unimplemented!(),
+        });
+
         assert!(validate_args(
+            &dao_consts,
             binds.as_slice(),
             obj_validators.as_slice(),
             validator_expr.as_slice(),
@@ -557,10 +568,6 @@ mod test {
 
         /* ------------------ Binding ------------------ */
 
-        let dao_consts = Box::new(|id: u8| match id {
-            0 => DataType::String("neardao.near".into()),
-            _ => unimplemented!(),
-        });
         let activity_inputs = vec![
             vec![ArgType::Object(1)],
             vec![
@@ -611,7 +618,7 @@ mod test {
         assert_eq!(user_inputs, expected_bind_result);
         assert_eq!(user_collection_inputs, expected_bind_collection_result);
 
-        /* ------------------ Parsing to JSON ------------------ */
+        /* ------------------ Serializing to JSON ------------------ */
 
         let out_tokens = SaleInputOutToken {
             token_account_id: ValidAccountId::try_from("neardao.near").unwrap(),
@@ -629,7 +636,7 @@ mod test {
         };
 
         // Wanted arg object
-        let args = SaleCreateArgOjb {
+        let args = SaleCreateInput {
             sale: sale_create_input,
         };
 
@@ -642,7 +649,7 @@ mod test {
         let expected_json_string = serde_json::to_string(&args).unwrap();
         assert_eq!(result_json_string, expected_json_string);
         assert_eq!(
-            serde_json::from_str::<SaleCreateArgOjb>(&result_json_string).unwrap(),
+            serde_json::from_str::<SaleCreateInput>(&result_json_string).unwrap(),
             args
         );
     }

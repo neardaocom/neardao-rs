@@ -5,7 +5,6 @@ use near_sdk::{
 
 use crate::types::DataType;
 
-type ExprNode = Box<TExpr>;
 type ArgId = u8;
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
@@ -133,8 +132,6 @@ impl EExpr {
         }
 
         Ok(results.pop().unwrap())
-
-        //Err("undefined".into())
     }
 
     fn eval_fn(&self, fn_name: &FnName, args: &[DataType]) -> DataType {
@@ -151,6 +148,20 @@ impl EExpr {
                 }
                 DataType::String(result)
             }
+            FnName::ArrayMerge => match &args[0] {
+                DataType::String(s) => {
+                    let mut result = Vec::with_capacity(args.len());
+                    for arg in args.iter() {
+                        result.push(
+                            arg.clone()
+                                .try_into_string()
+                                .expect("Expected string datatype"),
+                        );
+                    }
+                    DataType::VecString(result)
+                }
+                _ => panic!("Array merge is not yet supported for other types"),
+            },
             /*
             FnName::InString => {
                 let arg1 = parse_fn_arg(&args, 0, vmap)?;
