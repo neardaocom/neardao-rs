@@ -23,6 +23,6 @@ Shared crate Library provides necessary data types / functions for other NearDAO
 - defines storage structures
 
 ## TBD: 
-1. Json schema
+1. FnMetadata schema
 2. Storage deposit for self
-3. Optimalizations all kinds (obviously)
+3. Optimalizations all kinds in general

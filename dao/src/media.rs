@@ -5,6 +5,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum MediaType {
+    Text(String),
     Link(String),
     CID(CIDInfo),
 }
@@ -28,5 +29,5 @@ pub struct Media {
     pub media_type: MediaType,
     pub tags: Vec<usize>,
     pub version: String,
-    pub valid: bool
+    pub valid: bool,
 }

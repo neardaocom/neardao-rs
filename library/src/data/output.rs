@@ -1,22 +1,7 @@
-
-
-
-
 /********************  WF DATA FOR PROVIDER  ********************/
 
-
-
-
 mod test {
-    use crate::{
-        expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
-        types::{ActionIdent, DataType, DataTypeDef, FnCallMetadata, ValidatorType},
-        workflow::{
-            ActivityRight, ArgType, ExprArg, Expression, Postprocessing, ProposeSettings, Template,
-            TemplateActivity, TemplateSettings, TransitionConstraint, VoteScenario,
-        },
-        FnCallId,
-    };
+    use crate::{data::basic_workflows::*, types::DataType, workflow::ProposeSettings};
 
     use crate::data::skyward::{
         workflow_skyward_template_data_1, workflow_skyward_template_settings_data_1,
@@ -25,62 +10,65 @@ mod test {
     use near_sdk::serde_json;
 
     #[test]
-    fn output_workflow_add_wf() {
-        let wf = Template {
-            name: "wf_add".into(),
-            version: 1,
-            activities: vec![
-                None,
-                Some(TemplateActivity {
-                    code: "wf_add".into(),
-                    exec_condition: None,
-                    action: ActionIdent::WorkflowAdd,
-                    fncall_id: None,
-                    tgas: 0,
-                    deposit: 0,
-                    arg_types: vec![DataTypeDef::U16(false), DataTypeDef::Object(0)],
-                    postprocessing: None,
-                }),
-            ],
-            transitions: vec![vec![1]],
-            start: vec![0],
-            end: vec![1],
-            binds: vec![],
-        };
-
+    fn output_workflows_basic() {
         println!(
             "------------------------------ WORKFLOW ADD ------------------------------\n{}",
-            serde_json::to_string(&wf).unwrap()
+            serde_json::to_string(&workflow_wf_add()).unwrap()
         );
-    }
 
-    #[test]
-    fn output_workflow_payout() {
-        let wf = Template {
-            name: "wf_near_send".into(),
-            version: 1,
-            activities: vec![
-                None,
-                Some(TemplateActivity {
-                    code: "near_send".into(),
-                    exec_condition: None,
-                    action: ActionIdent::NearSend,
-                    fncall_id: None,
-                    tgas: 0,
-                    deposit: 0,
-                    arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
-                    postprocessing: None,
-                }),
-            ],
-            transitions: vec![vec![1], vec![1]],
-            binds: vec![],
-            start: vec![0],
-            end: vec![1],
-        };
+        println!(
+            "------------------------------ WORKFLOW PAYOUT NEAR IN LOOP ------------------------------\n{}",
+            serde_json::to_string(&workflow_treasury_send_near_loop()).unwrap()
+        );
 
         println!(
             "------------------------------ WORKFLOW PAYOUT NEAR ------------------------------\n{}",
-            serde_json::to_string(&wf).unwrap()
+            serde_json::to_string(&workflow_treasury_send_near()).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW PAYOUT FT ------------------------------\n{}",
+            serde_json::to_string(&workflow_treasury_send_ft()).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW ADD GROUP ------------------------------\n{}",
+            serde_json::to_string(&workflow_group_add()).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW ADD GROUP MEMBERS ------------------------------\n{}",
+            serde_json::to_string(&workflow_group_members_add()).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW REMOVE GROUP MEMBER ------------------------------\n{}",
+            serde_json::to_string(&workflow_group_member_remove()).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW REMOVE GROUP ------------------------------\n{}",
+            serde_json::to_string(&workflow_group_remove()).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW TAG ADD ------------------------------\n{}",
+            serde_json::to_string(&workflow_tag_add()).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW TAG EDIT ------------------------------\n{}",
+            serde_json::to_string(&workflow_tag_edit()).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW FT DISTRIBUTE ------------------------------\n{}",
+            serde_json::to_string(&workflow_ft_distribute()).unwrap()
+        );
+
+        println!(
+            "------------------------------ WORKFLOW MEDIA ADD ------------------------------\n{}",
+            serde_json::to_string(&workflow_media_add()).unwrap()
         );
     }
 
@@ -121,99 +109,39 @@ mod test {
 
     #[test]
     fn output_settings() {
-        let settings = ProposeSettings {
-            activity_inputs: vec![vec![vec![ArgType::Free]]],
-            transition_constraints: vec![
-                vec![TransitionConstraint {
-                    transition_limit: 1,
-                    cond: None,
-                }],
-                vec![TransitionConstraint {
-                    transition_limit: 0,
-                    cond: None,
-                }],
-            ],
-            binds: vec![],
+        println!(
+            "------------------------------ TEMPLATE SETTINGS ADD WORFLOW ------------------------------\n{}",
+            serde_json::to_string(&workflow_settings_wf_add()).unwrap()
+        );
+
+        let wf_settings_add_wf = ProposeSettings {
+            binds: vec![DataType::U16(2)],
             storage_key: "wf_add_wf_1".into(),
-            obj_validators: vec![vec![]],
-            validator_exprs: vec![],
         };
 
         println!(
             "------------------------------ PROPOSE SETTINGS ADD WORKFLOW ------------------------------\n{}",
-            serde_json::to_string(&settings).unwrap()
+            serde_json::to_string(&wf_settings_add_wf).unwrap()
         );
-
-        let wfs = TemplateSettings {
-            activity_rights: vec![vec![ActivityRight::GroupLeader(1)]],
-            allowed_proposers: vec![ActivityRight::Group(1)],
-            allowed_voters: ActivityRight::TokenHolder,
-            scenario: VoteScenario::TokenWeighted,
-            duration: 60,
-            quorum: 51,
-            approve_threshold: 20,
-            spam_threshold: 80,
-            vote_only_once: true,
-            deposit_propose: Some(1),
-            deposit_vote: Some(1000),
-            deposit_propose_return: 0,
-        };
-
-        println!(
-            "------------------------------ TEMPLATE SETTINGS ADD WORFLOW ------------------------------\n{}",
-            serde_json::to_string(&wfs).unwrap()
-        );
-
-        let wfs = TemplateSettings {
-            activity_rights: vec![vec![ActivityRight::GroupLeader(1)]],
-            allowed_proposers: vec![ActivityRight::Group(1)],
-            allowed_voters: ActivityRight::TokenHolder,
-            scenario: VoteScenario::TokenWeighted,
-            duration: 60,
-            quorum: 51,
-            approve_threshold: 20,
-            spam_threshold: 80,
-            vote_only_once: true,
-            deposit_propose: Some(1),
-            deposit_vote: Some(1000),
-            deposit_propose_return: 0,
-        };
 
         println!(
             "------------------------------ TEMPLATE SETTINGS SEND NEAR WORKFLOW ------------------------------\n{}",
-            serde_json::to_string(&wfs).unwrap()
+            serde_json::to_string(&workflow_settings_treasury_send_near()).unwrap()
         );
 
-        let propose_settings = ProposeSettings {
-            activity_inputs: vec![vec![vec![ArgType::Free, ArgType::Free]]],
-            transition_constraints: vec![
-                vec![TransitionConstraint {
-                    transition_limit: 1,
-                    cond: None,
-                }],
-                vec![TransitionConstraint {
-                    transition_limit: 4,
-                    cond: None,
-                }],
-            ],
+        println!(
+            "------------------------------ TEMPLATE SETTINGS SEND NEAR IN LOOP WORKFLOW ------------------------------\n{}",
+            serde_json::to_string(&workflow_settings_treasury_send_near_loop()).unwrap()
+        );
+
+        let wf_settings_near_send = ProposeSettings {
             binds: vec![DataType::U128(10u128.pow(24).into())],
-            obj_validators: vec![vec![ValidatorType::Primitive(0)]],
-            validator_exprs: vec![Expression {
-                args: vec![ExprArg::User(1), ExprArg::Bind(0)],
-                expr: EExpr::Boolean(TExpr {
-                    operators: vec![Op {
-                        op_type: EOp::Rel(RelOp::GtE),
-                        operands_ids: [0, 1],
-                    }],
-                    terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
-                }),
-            }],
             storage_key: "wf_send_near_1".into(),
         };
 
         println!(
-            "------------------------------ PROPOSE SETTINGS PAYOUT ------------------------------\n{}",
-            serde_json::to_string(&propose_settings).unwrap()
+            "------------------------------ PROPOSE SETTINGS SEND NEAR IN LOOP WORKFLOW ------------------------------\n{}",
+            serde_json::to_string(&wf_settings_near_send).unwrap()
         );
     }
 }

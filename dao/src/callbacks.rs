@@ -15,7 +15,7 @@ trait ExtSelf {
         instance_id: u32,
         storage_key: String,
         postprocessing: Option<Postprocessing>,
-        user_value: Option<DataType>,
+        inner_value: Option<DataType>,
     ) -> ActivityResult;
 
     fn store_workflow(
@@ -34,7 +34,7 @@ impl Contract {
         instance_id: u32,
         storage_key: String,
         postprocessing: Option<Postprocessing>,
-        user_value: Option<DataType>,
+        inner_value: Option<DataType>,
     ) -> ActivityResult {
         assert_eq!(
             env::promise_results_count(),
@@ -47,11 +47,10 @@ impl Contract {
             PromiseResult::Successful(val) => match postprocessing {
                 Some(p) => {
                     let mut bucket = self.storage.get(&storage_key).unwrap();
-                    bucket.add_data(&p.storage_key.clone(), &p.postprocess(val, user_value));
+                    bucket.add_data(&p.storage_key.clone(), &p.postprocess(val, inner_value));
                     self.storage.insert(&storage_key, &bucket);
                     true
                 }
-
                 None => true,
             },
             PromiseResult::Failed => false,

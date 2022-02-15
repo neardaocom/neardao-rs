@@ -10,7 +10,7 @@ use crate::{
         ACC_REF_FINANCE, ACC_SKYWARD_FINANCE, ACC_WNEAR, DEFAULT_DOC_CAT, DEPOSIT_STANDARD_STORAGE,
         GROUP_PREFIX, GROUP_RELEASE_PREFIX,
     },
-    core::Contract,
+    core::{ActivityLog, Contract},
     errors::{
         ERR_DISTRIBUTION_ACC_EMPTY, ERR_DISTRIBUTION_MIN_VALUE, ERR_DISTRIBUTION_NOT_ENOUGH_FT,
         ERR_GROUP_NOT_FOUND, ERR_LOCK_AMOUNT_ABOVE, ERR_STORAGE_BUCKET_EXISTS,
@@ -21,10 +21,11 @@ use crate::{
     release::Release,
     settings::DaoSettings,
     tags::{TagInput, Tags},
+    ProposalId,
 };
 use library::{
     storage::StorageBucket,
-    types::{DataType, FnCallMetadata},
+    types::{ActionIdent, DataType, FnCallMetadata},
     workflow::{
         ActivityResult, ActivityRight, InstanceState, Template, TemplateSettings, VoteScenario,
     },
@@ -81,23 +82,25 @@ impl Contract {
         }
     }
 
+    // Each workflow must have at least one setting
     #[inline]
     pub fn init_workflows(
         &mut self,
         mut workflows: Vec<Template>,
         mut workflow_template_settings: Vec<Vec<TemplateSettings>>,
     ) {
-        // Each workflow must have at least one setting
-        for _ in 0..workflows.len() {
-            self.workflow_last_id += 1;
+        let len = workflows.len();
+        for i in 0..len {
             self.workflow_template.insert(
-                &self.workflow_last_id,
+                &((len - i) as u16),
                 &(
                     workflows.pop().unwrap(),
                     workflow_template_settings.pop().unwrap(),
                 ),
             );
         }
+
+        self.workflow_last_id += len as u16;
     }
 
     pub fn get_wf_and_proposal(&self, proposal_id: u32) -> (Proposal, Template, TemplateSettings) {
@@ -347,12 +350,38 @@ impl Contract {
         ActivityResult::ErrPostprocessing
     }
 
-    // Returns dao specific value
+    /// Returns dao specific values which needed in WF
     pub fn dao_consts(&self) -> Box<Consts> {
         Box::new(|id| match id {
             0 => DataType::String(env::current_account_id()),
             _ => unimplemented!(),
         })
+    }
+
+    /// Action logging method
+    /// Will be moved to indexer when its ready
+    pub fn log_action(
+        &mut self,
+        proposal_id: ProposalId,
+        caller: &str,
+        action_id: u8,
+        args: &[Vec<DataType>],
+        args_collections: Option<&[Vec<DataType>]>,
+    ) {
+        let mut logs = self
+            .workflow_activity_log
+            .get(&proposal_id)
+            .unwrap_or_else(|| Vec::with_capacity(1));
+
+        logs.push(ActivityLog {
+            caller: caller.to_string(),
+            action_id,
+            timestamp: env::block_timestamp() / 10u64.pow(9),
+            args: args.to_vec(),
+            args_collections: args_collections.map(|a| a.to_vec()),
+        });
+
+        self.workflow_activity_log.insert(&proposal_id, &logs);
     }
 }
 

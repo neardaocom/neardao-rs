@@ -6,7 +6,7 @@ mod skyward;
 
 pub fn get_dao_consts() -> Box<dyn Fn(u8) -> DataType> {
     Box::new(|id: u8| match id {
-        0 => DataType::String("neardao.near".into()),
+        0 => DataType::String("neardao.testnet".into()),
         _ => unimplemented!(),
     })
 }

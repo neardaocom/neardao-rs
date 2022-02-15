@@ -50,7 +50,7 @@ impl Contract {
     }
 
     /// Returns Workflow with corresponding FnCalls and their metadata
-    pub fn get(self, id: u16) -> Option<(Template, Vec<FnCallId>, Vec<Vec<FnCallMetadata>>)> {
+    pub fn wf_template(self, id: u16) -> Option<(Template, Vec<FnCallId>, Vec<Vec<FnCallMetadata>>)> {
         match self.workflows.get(&id) {
             Some(t) => match self.workflow_fncalls.get(&id) {
                 Some(fncalls) => {

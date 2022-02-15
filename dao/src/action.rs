@@ -1,20 +1,16 @@
 use library::types::{ActionIdent, DataType};
-use library::utils::{bind_args, validate_args};
+use library::utils::{args_to_json, bind_args, validate_args};
 use library::{
     workflow::{ActivityResult, Instance, InstanceState, ProposeSettings, TemplateSettings},
     MethodName,
 };
 
-use near_sdk::json_types::{Base64VecU8, WrappedDuration, WrappedTimestamp, U128, U64};
-use near_sdk::serde_json::{self, Value};
+use near_sdk::json_types::U128;
 use near_sdk::{env, near_bindgen, AccountId, Promise};
 use near_sdk::{log, PromiseOrValue};
 
 use crate::callbacks::ext_self;
 use crate::constants::TGAS;
-use crate::errors::{
-    ERR_GROUP_NOT_FOUND, ERR_NO_ACCESS, ERR_STORAGE_BUCKET_EXISTS, ERR_UNKNOWN_FNCALL,
-};
 use crate::proposal::{Proposal, ProposalState, VProposal};
 use crate::release::ReleaseDb;
 use crate::settings::assert_valid_dao_settings;
@@ -44,7 +40,7 @@ impl Contract {
             .get(template_settings_id as usize)
             .expect("Undefined settings id");
 
-        assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or(0));
+        assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or(0.into()).0);
 
         if !self.check_rights(&settings.allowed_proposers, &caller) {
             panic!("You have no rights to propose this");
@@ -63,12 +59,14 @@ impl Contract {
         }
 
         let proposal = Proposal::new(
-            env::block_timestamp(),
+            env::block_timestamp() / 10u64.pow(9),
             caller,
             template_id,
             template_settings_id,
             true,
         );
+        assert!(self.storage.get(&propose_settings.storage_key).is_none());
+
         self.proposals
             .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
         self.workflow_instance.insert(
@@ -91,14 +89,14 @@ impl Contract {
         let caller = env::predecessor_account_id();
         let (mut proposal, _, wfs) = self.get_wf_and_proposal(proposal_id);
 
-        assert!(env::attached_deposit() >= wfs.deposit_vote.unwrap_or(0));
+        assert!(env::attached_deposit() >= wfs.deposit_vote.unwrap_or(0.into()).0);
 
         if !self.check_rights(&[wfs.allowed_voters.clone()], &caller) {
             return false;
         }
 
         if proposal.state != ProposalState::InProgress
-            || proposal.created + (wfs.duration) as u64 * 10u64.pow(9) < env::block_timestamp()
+            || proposal.created + (wfs.duration as u64) < env::block_timestamp() / 10u64.pow(9)
         {
             //TODO update expired proposal state
             return false;
@@ -122,7 +120,7 @@ impl Contract {
 
         let new_state = match proposal.state {
             ProposalState::InProgress => {
-                if proposal.created + (wfs.duration) as u64 * 1000 > env::block_timestamp() {
+                if proposal.created + wfs.duration as u64 > env::block_timestamp() / 10u64.pow(9) {
                     None
                 } else {
                     // count votes
@@ -178,7 +176,7 @@ impl Contract {
         }
     }
 
-    pub fn group_create(
+    pub fn group_add(
         &mut self,
         proposal_id: ProposalId,
         settings: GroupSettings,
@@ -230,21 +228,126 @@ impl Contract {
         proposal_id: ProposalId,
         id: GroupId,
         members: Vec<GroupMember>,
-    ) {
+    ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
-        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
-        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
+        // proposal state check
+        assert!(proposal.state == ProposalState::Accepted);
 
-        match self.groups.get(&id) {
-            Some(mut group) => {
-                self.total_members_count += group.add_members(members);
-                self.groups.insert(&id, &group);
-            }
-            _ => (),
+        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+
+        if wfi.state == InstanceState::Finished {
+            return PromiseOrValue::Value(ActivityResult::Finished);
         }
+
+        // transition check
+        let (transition_id, activity_id): (u8, u8) = wfi
+            .get_target_trans_with_act(&wft, ActionIdent::GroupAddMembers, None)
+            .expect("Undefined transition");
+
+        // rights checks
+        assert!(self.check_rights(
+            &wfs.activity_rights[activity_id as usize - 1].as_slice(),
+            &caller
+        ));
+
+        let dao_consts = self.dao_consts();
+        let mut bucket = self.storage.get(&settings.storage_key).unwrap();
+        let mut args = vec![vec![DataType::U16(id)]];
+        let mut args_collections = vec![vec![]];
+        let (result, postprocessing) = wfi.transition_to_next(
+            activity_id,
+            transition_id,
+            &wft,
+            &dao_consts,
+            &wfs,
+            &settings,
+            args.as_slice(),
+            &mut bucket,
+            0,
+        );
+
+        // arguments validation TODO
+        if wft.obj_validators[activity_id as usize - 1].len() > 0
+            && !validate_args(
+                &dao_consts,
+                &settings.binds,
+                &wft.obj_validators[activity_id as usize - 1].as_slice(),
+                &wft.validator_exprs.as_slice(),
+                &bucket,
+                &mut args.as_slice(),
+                &mut args_collections.as_slice(),
+                &[],
+            )
+        {
+            return PromiseOrValue::Value(ActivityResult::ErrValidation);
+        }
+
+        let result = match result {
+            ActivityResult::Ok => {
+                self.log_action(
+                    proposal_id,
+                    caller.as_str(),
+                    activity_id,
+                    args.as_slice(),
+                    None,
+                );
+
+                match self.groups.get(&id) {
+                    Some(mut group) => {
+                        self.total_members_count += group.add_members(members);
+                        self.groups.insert(&id, &group);
+                    }
+                    _ => (),
+                }
+
+                let user_value = postprocessing
+                    .as_ref()
+                    .map(|p| p.try_to_get_inner_value(args.as_slice(), settings.binds.as_slice()))
+                    .flatten();
+                /*
+
+                bind_args(
+                    &dao_consts,
+                    settings.binds.as_slice(),
+                    wft.activities[activity_id as usize]
+                        .as_ref()
+                        .unwrap()
+                        .activity_inputs
+                        .as_slice(),
+                    &mut bucket,
+                    &mut args,
+                    &mut vec![],
+                    0,
+                    0,
+                ); */
+
+                //TODO
+                if postprocessing.is_some() {
+                    PromiseOrValue::Promise(ext_self::postprocess(
+                        proposal_id,
+                        settings.storage_key.clone(),
+                        postprocessing,
+                        user_value,
+                        &env::current_account_id(),
+                        0,
+                        30 * TGAS,
+                    ))
+                } else {
+                    PromiseOrValue::Value(result)
+                }
+            }
+            _ => PromiseOrValue::Value(result),
+        };
+
+        self.workflow_instance
+            .insert(&proposal_id, &(wfi, settings))
+            .unwrap();
+
+        result
     }
-    pub fn group_remove_member(&mut self, proposal_id: ProposalId, id: GroupId, member: AccountId) {
+    pub fn group_(&mut self, proposal_id: ProposalId, id: GroupId, member: AccountId) {
         let caller = env::predecessor_account_id();
         let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
 
@@ -267,14 +370,124 @@ impl Contract {
         assert_valid_dao_settings(&settings);
         self.settings.replace(&settings.into());
     }
-    pub fn media_add(&mut self, proposal_id: ProposalId, media: Media) {
+    //TODO
+    pub fn media_add(
+        &mut self,
+        proposal_id: ProposalId,
+        media: Media,
+    ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
-        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
-        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
+        // proposal state check
+        assert!(proposal.state == ProposalState::Accepted);
 
-        self.media_last_id += 1;
-        self.media.insert(&self.media_last_id, &media);
+        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+
+        if wfi.state == InstanceState::Finished {
+            return PromiseOrValue::Value(ActivityResult::Finished);
+        }
+
+        // transition check
+        let (transition_id, activity_id): (u8, u8) = wfi
+            .get_target_trans_with_act(&wft, ActionIdent::MediaAdd, None)
+            .expect("Undefined transition");
+
+        // rights checks
+        assert!(self.check_rights(
+            &wfs.activity_rights[activity_id as usize - 1].as_slice(),
+            &caller
+        ));
+
+        let dao_consts = self.dao_consts();
+        let mut bucket = self.storage.get(&settings.storage_key).unwrap();
+        let mut args = vec![vec![]];
+        let mut args_collections = vec![vec![]];
+        let (result, postprocessing) = wfi.transition_to_next(
+            activity_id,
+            transition_id,
+            &wft,
+            &dao_consts,
+            &wfs,
+            &settings,
+            args.as_slice(),
+            &mut bucket,
+            0,
+        );
+
+        // arguments validation TODO
+        if wft.obj_validators[activity_id as usize - 1].len() > 0
+            && !validate_args(
+                &dao_consts,
+                &settings.binds,
+                &wft.obj_validators[activity_id as usize - 1].as_slice(),
+                &wft.validator_exprs.as_slice(),
+                &bucket,
+                &mut args.as_slice(),
+                &mut args_collections.as_slice(),
+                &[],
+            )
+        {
+            return PromiseOrValue::Value(ActivityResult::ErrValidation);
+        }
+
+        let result = match result {
+            ActivityResult::Ok => {
+                self.log_action(
+                    proposal_id,
+                    caller.as_str(),
+                    activity_id,
+                    args.as_slice(),
+                    None,
+                );
+
+                self.media_last_id += 1;
+                self.media.insert(&self.media_last_id, &media);
+
+                let user_value = postprocessing
+                    .as_ref()
+                    .map(|p| p.try_to_get_inner_value(args.as_slice(), settings.binds.as_slice()))
+                    .flatten();
+                /*
+
+                bind_args(
+                    &dao_consts,
+                    settings.binds.as_slice(),
+                    wft.activities[activity_id as usize]
+                        .as_ref()
+                        .unwrap()
+                        .activity_inputs
+                        .as_slice(),
+                    &mut bucket,
+                    &mut args,
+                    &mut vec![],
+                    0,
+                    0,
+                ); */
+
+                //TODO
+                if postprocessing.is_some() {
+                    PromiseOrValue::Promise(ext_self::postprocess(
+                        proposal_id,
+                        settings.storage_key.clone(),
+                        postprocessing,
+                        user_value,
+                        &env::current_account_id(),
+                        0,
+                        30 * TGAS,
+                    ))
+                } else {
+                    PromiseOrValue::Value(result)
+                }
+            }
+            _ => PromiseOrValue::Value(result),
+        };
+
+        self.workflow_instance
+            .insert(&proposal_id, &(wfi, settings))
+            .unwrap();
+
+        result
     }
     pub fn media_invalidate(&mut self, proposal_id: ProposalId, id: u32) {
         let caller = env::predecessor_account_id();
@@ -297,7 +510,7 @@ impl Contract {
         self.media.remove(&id)
     }
 
-    pub fn tag_insert(
+    pub fn tag_add(
         &mut self,
         proposal_id: ProposalId,
         category: TagCategory,
@@ -318,7 +531,7 @@ impl Contract {
         proposal_id: ProposalId,
         category: TagCategory,
         id: TagId,
-        name: String,
+        value: String,
     ) {
         let caller = env::predecessor_account_id();
         let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
@@ -326,14 +539,14 @@ impl Contract {
         assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
         match self.tags.get(&category) {
             Some(mut t) => {
-                t.rename(id, name);
+                t.rename(id, value);
                 self.tags.insert(&category, &t);
             }
             None => (),
         }
     }
 
-    pub fn tag_clear(&mut self, proposal_id: ProposalId, category: TagCategory, id: TagId) {
+    pub fn tag_remove(&mut self, proposal_id: ProposalId, category: TagCategory, id: TagId) {
         let caller = env::predecessor_account_id();
         let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
 
@@ -348,6 +561,7 @@ impl Contract {
         }
     }
 
+    //TODO add rights ??
     pub fn ft_unlock(&mut self, proposal_id: ProposalId, group_ids: Vec<GroupId>) -> Vec<u32> {
         let mut released = Vec::with_capacity(group_ids.len());
         for id in group_ids.into_iter() {
@@ -364,25 +578,128 @@ impl Contract {
         group_id: u16,
         amount: u32,
         account_ids: Vec<AccountId>,
-    ) -> bool {
+    ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
-        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
-        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
-        if let Some(mut group) = self.groups.get(&group_id) {
-            match group.distribute_ft(amount) && account_ids.len() > 0 {
-                true => {
-                    self.groups.insert(&group_id, &group);
-                    self.distribute_ft(amount, &account_ids);
-                    true
-                }
-                false => false,
-            }
-        } else {
-            false
+        // proposal state check
+        assert!(proposal.state == ProposalState::Accepted);
+
+        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+
+        if wfi.state == InstanceState::Finished {
+            return PromiseOrValue::Value(ActivityResult::Finished);
         }
+
+        // transition check
+        let (transition_id, activity_id): (u8, u8) = wfi
+            .get_target_trans_with_act(&wft, ActionIdent::FtDistribute, None)
+            .expect("Undefined transition");
+
+        // rights checks
+        assert!(self.check_rights(
+            &wfs.activity_rights[activity_id as usize - 1].as_slice(),
+            &caller
+        ));
+
+        let dao_consts = self.dao_consts();
+        let mut bucket = self.storage.get(&settings.storage_key).unwrap();
+        let mut args = vec![vec![]];
+        let mut args_collections = vec![vec![]];
+        let (result, postprocessing) = wfi.transition_to_next(
+            activity_id,
+            transition_id,
+            &wft,
+            &dao_consts,
+            &wfs,
+            &settings,
+            args.as_slice(),
+            &mut bucket,
+            0,
+        );
+
+        // arguments validation TODO
+        if wft.obj_validators[activity_id as usize - 1].len() > 0
+            && !validate_args(
+                &dao_consts,
+                &settings.binds,
+                &wft.obj_validators[activity_id as usize - 1].as_slice(),
+                &wft.validator_exprs.as_slice(),
+                &bucket,
+                &mut args.as_slice(),
+                &mut args_collections.as_slice(),
+                &[],
+            )
+        {
+            return PromiseOrValue::Value(ActivityResult::ErrValidation);
+        }
+
+        let result = match result {
+            ActivityResult::Ok => {
+                self.log_action(
+                    proposal_id,
+                    caller.as_str(),
+                    activity_id,
+                    args.as_slice(),
+                    None,
+                );
+
+                if let Some(mut group) = self.groups.get(&group_id) {
+                    match group.distribute_ft(amount) && account_ids.len() > 0 {
+                        true => {
+                            self.groups.insert(&group_id, &group);
+                            self.distribute_ft(amount, &account_ids);
+                        }
+                        _ => (),
+                    }
+                }
+
+                let user_value = postprocessing
+                    .as_ref()
+                    .map(|p| p.try_to_get_inner_value(args.as_slice(), settings.binds.as_slice()))
+                    .flatten();
+                /*
+
+                bind_args(
+                    &dao_consts,
+                    settings.binds.as_slice(),
+                    wft.activities[activity_id as usize]
+                        .as_ref()
+                        .unwrap()
+                        .activity_inputs
+                        .as_slice(),
+                    &mut bucket,
+                    &mut args,
+                    &mut vec![],
+                    0,
+                    0,
+                ); */
+
+                //TODO
+                if postprocessing.is_some() {
+                    PromiseOrValue::Promise(ext_self::postprocess(
+                        proposal_id,
+                        settings.storage_key.clone(),
+                        postprocessing,
+                        user_value,
+                        &env::current_account_id(),
+                        0,
+                        30 * TGAS,
+                    ))
+                } else {
+                    PromiseOrValue::Value(result)
+                }
+            }
+            _ => PromiseOrValue::Value(result),
+        };
+
+        self.workflow_instance
+            .insert(&proposal_id, &(wfi, settings))
+            .unwrap();
+
+        result
     }
-    pub fn treasury_near_send(
+    pub fn treasury_send_near(
         &mut self,
         proposal_id: ProposalId,
         receiver_id: AccountId,
@@ -396,9 +713,13 @@ impl Contract {
 
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
 
+        if wfi.state == InstanceState::Finished {
+            return PromiseOrValue::Value(ActivityResult::Finished);
+        }
+
         // transition check
         let (transition_id, activity_id): (u8, u8) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::NearSend, None)
+            .get_target_trans_with_act(&wft, ActionIdent::TreasurySendNear, None)
             .expect("Undefined transition");
 
         // rights checks
@@ -415,6 +736,7 @@ impl Contract {
             transition_id,
             &wft,
             &dao_consts,
+            &wfs,
             &settings,
             args.as_slice(),
             &mut bucket,
@@ -422,12 +744,12 @@ impl Contract {
         );
 
         // arguments validation
-        if settings.obj_validators[activity_id as usize - 1].len() > 0
+        if wft.obj_validators[activity_id as usize - 1].len() > 0
             && !validate_args(
                 &dao_consts,
                 &settings.binds,
-                &settings.obj_validators[activity_id as usize - 1].as_slice(),
-                &settings.validator_exprs.as_slice(),
+                &wft.obj_validators[activity_id as usize - 1].as_slice(),
+                &wft.validator_exprs.as_slice(),
                 &bucket,
                 &mut args.as_slice(),
                 &mut vec![],
@@ -439,11 +761,22 @@ impl Contract {
 
         let result = match result {
             ActivityResult::Ok => {
-                // bind args
+                self.log_action(
+                    proposal_id,
+                    caller.as_str(),
+                    activity_id,
+                    args.as_slice(),
+                    None,
+                );
+
                 bind_args(
                     &dao_consts,
                     settings.binds.as_slice(),
-                    settings.activity_inputs[activity_id as usize - 1].as_slice(),
+                    wft.activities[activity_id as usize]
+                        .as_ref()
+                        .unwrap()
+                        .activity_inputs
+                        .as_slice(),
                     &mut bucket,
                     &mut args,
                     &mut vec![],
@@ -453,7 +786,7 @@ impl Contract {
 
                 let user_value = postprocessing
                     .as_ref()
-                    .map(|p| p.try_to_get_user_value(args.as_slice()))
+                    .map(|p| p.try_to_get_inner_value(args.as_slice(), settings.binds.as_slice()))
                     .flatten();
 
                 PromiseOrValue::Promise(
@@ -480,7 +813,7 @@ impl Contract {
         result
     }
 
-    pub fn treasury_ft_send(
+    pub fn treasury_send_ft(
         &mut self,
         proposal_id: ProposalId,
         ft_account_id: AccountId,
@@ -489,45 +822,150 @@ impl Contract {
         amount_ft: U128,
         memo: Option<String>,
         msg: String,
-    ) -> Promise {
+    ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
-        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
-        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
+        // proposal state check
+        assert!(proposal.state == ProposalState::Accepted);
 
-        let promise = Promise::new(ft_account_id);
-        if is_contract {
-            //TODO test formating memo
-            promise.function_call(
-                b"ft_transfer_call".to_vec(),
-                format!(
-                    "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":\"{}\",\"msg\":\"{}\"}}",
-                    receiver_id,
-                    amount_ft.0,
-                    memo.unwrap_or("".into()),
-                    msg
-                )
-                .as_bytes()
-                .to_vec(),
-                0,
-                TGAS,
-            )
-        } else {
-            promise.function_call(
-                b"ft_transfer".to_vec(),
-                format!(
-                    "{{\"receiver_id\":{},\"amount\":\"{}\",\"msg\":\"{}\"}}",
-                    receiver_id, amount_ft.0, msg
-                )
-                .as_bytes()
-                .to_vec(),
-                0,
-                TGAS,
-            )
+        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+
+        if wfi.state == InstanceState::Finished {
+            return PromiseOrValue::Value(ActivityResult::Finished);
         }
+
+        // transition check
+        let (transition_id, activity_id): (u8, u8) = wfi
+            .get_target_trans_with_act(&wft, ActionIdent::TreasurySendFt, None)
+            .expect("Undefined transition");
+
+        // rights checks
+        assert!(self.check_rights(
+            &wfs.activity_rights[activity_id as usize - 1].as_slice(),
+            &caller
+        ));
+
+        let dao_consts = self.dao_consts();
+        let mut bucket = self.storage.get(&settings.storage_key).unwrap();
+        let mut args = vec![vec![]];
+        let mut args_collections = vec![vec![]];
+        let (result, postprocessing) = wfi.transition_to_next(
+            activity_id,
+            transition_id,
+            &wft,
+            &dao_consts,
+            &wfs,
+            &settings,
+            args.as_slice(),
+            &mut bucket,
+            0,
+        );
+
+        // arguments validation TODO
+        if wft.obj_validators[activity_id as usize - 1].len() > 0
+            && !validate_args(
+                &dao_consts,
+                &settings.binds,
+                &wft.obj_validators[activity_id as usize - 1].as_slice(),
+                &wft.validator_exprs.as_slice(),
+                &bucket,
+                &mut args.as_slice(),
+                &mut args_collections.as_slice(),
+                &[],
+            )
+        {
+            return PromiseOrValue::Value(ActivityResult::ErrValidation);
+        }
+
+        let result = match result {
+            ActivityResult::Ok => {
+                self.log_action(
+                    proposal_id,
+                    caller.as_str(),
+                    activity_id,
+                    args.as_slice(),
+                    None,
+                );
+
+                let user_value = postprocessing
+                    .as_ref()
+                    .map(|p| p.try_to_get_inner_value(args.as_slice(), settings.binds.as_slice()))
+                    .flatten();
+                /*
+
+                bind_args(
+                    &dao_consts,
+                    settings.binds.as_slice(),
+                    wft.activities[activity_id as usize]
+                        .as_ref()
+                        .unwrap()
+                        .activity_inputs
+                        .as_slice(),
+                    &mut bucket,
+                    &mut args,
+                    &mut vec![],
+                    0,
+                    0,
+                ); */
+
+                let mut promise = Promise::new(ft_account_id);
+                if is_contract {
+                    //TODO test formating memo
+                    promise = promise.function_call(
+                        b"ft_transfer_call".to_vec(),
+                        format!(
+                            "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":\"{}\",\"msg\":\"{}\"}}",
+                            receiver_id,
+                            amount_ft.0,
+                            memo.unwrap_or("".into()),
+                            msg
+                        )
+                        .as_bytes()
+                        .to_vec(),
+                        0,
+                        TGAS,
+                    );
+                } else {
+                    promise = promise.function_call(
+                        b"ft_transfer".to_vec(),
+                        format!(
+                            "{{\"receiver_id\":{},\"amount\":\"{}\",\"msg\":\"{}\"}}",
+                            receiver_id, amount_ft.0, msg
+                        )
+                        .as_bytes()
+                        .to_vec(),
+                        0,
+                        TGAS,
+                    );
+                }
+
+                //TODO
+                if postprocessing.is_some() {
+                    PromiseOrValue::Promise(promise.then(ext_self::postprocess(
+                        proposal_id,
+                        settings.storage_key.clone(),
+                        postprocessing,
+                        user_value,
+                        &env::current_account_id(),
+                        0,
+                        30 * TGAS,
+                    )))
+                } else {
+                    PromiseOrValue::Promise(promise)
+                }
+            }
+            _ => PromiseOrValue::Value(result),
+        };
+
+        self.workflow_instance
+            .insert(&proposal_id, &(wfi, settings))
+            .unwrap();
+
+        result
     }
     //TODO check correct NFT usage
-    pub fn treasury_nft_send(
+    pub fn treasury_send_nft(
         &mut self,
         proposal_id: ProposalId,
         nft_account_id: AccountId,
@@ -538,6 +976,8 @@ impl Contract {
         memo: Option<String>,
         msg: String,
     ) -> Promise {
+        unimplemented!();
+
         let caller = env::predecessor_account_id();
         let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
 
@@ -565,7 +1005,7 @@ impl Contract {
     }
 
     //TODO move to internal when properly tested
-    pub fn storage_add_bucket(&mut self, bucket_id: String) {
+    /*     pub fn storage_add_bucket(&mut self, bucket_id: String) {
         self.storage_bucket_add(&bucket_id);
     }
     pub fn storage_remove_bucket(&mut self, bucket_id: String) {
@@ -599,18 +1039,18 @@ impl Contract {
             }
             None => None,
         }
-    }
+    } */
 
     /// Invokes custom function call
     /// FnCall arguments MUST have same datatypes as specified in its FnCallMetadata
-    pub fn function_call(
+    pub fn fn_call(
         &mut self,
         proposal_id: ProposalId,
         fncall_receiver: AccountId,
         fncall_method: MethodName,
         mut arg_values: Vec<Vec<DataType>>,
         mut arg_values_collection: Vec<Vec<DataType>>,
-    ) {
+    ) -> PromiseOrValue<ActivityResult> {
         let caller = env::predecessor_account_id();
         let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
 
@@ -618,14 +1058,20 @@ impl Contract {
 
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
 
+        if wfi.state == InstanceState::Finished {
+            return PromiseOrValue::Value(ActivityResult::Finished);
+        }
+
         //transition check
         let (transition_id, activity_id): (u8, u8) = wfi
             .get_target_trans_with_act(
                 &wft,
                 ActionIdent::FnCall,
-                Some((fncall_receiver, fncall_method)),
+                Some((fncall_receiver.clone(), fncall_method.clone())),
             )
             .expect("Undefined transition");
+
+        log!("aid: {}, tid: {}", activity_id, transition_id);
 
         //rights checks
         assert!(self.check_rights(
@@ -634,59 +1080,113 @@ impl Contract {
         ));
 
         let mut bucket = self.storage.get(&settings.storage_key).unwrap();
+        let activity = wft.activities[activity_id as usize].as_ref().unwrap();
 
-        // Everything should be provided by provider so unwraping is ok
-        let fncall_metadata = self.function_call_metadata.get(
-            &wft.activities[activity_id as usize]
-                .as_ref()
-                .unwrap()
-                .fncall_id
-                .as_ref()
-                .unwrap(),
-        );
+        log!("tgas: {}, deposit: {}", activity.tgas, activity.deposit.0);
 
-        // map metadata to check
-        //bind_args(&settings, &mut arg_values, &bucket);
-        /*
-        let mut args = vec![];
+        let receiver = if fncall_receiver.as_str() == "self" {
+            env::current_account_id()
+        } else {
+            fncall_receiver.clone()
+        };
+
+        let dao_consts = self.dao_consts();
+
+        // Everything should be provided by provider in correct format so unwraping is ok
+        let fn_metadata = self
+            .function_call_metadata
+            .get(&(fncall_receiver, fncall_method.clone()))
+            .unwrap();
+
         let (result, postprocessing) = wfi.transition_to_next(
             activity_id,
             transition_id,
             &wft,
+            &dao_consts,
+            &wfs,
             &settings,
-            args.as_slice(),
+            arg_values.as_slice(),
             &mut bucket,
-        ); */
+            0,
+        );
 
-        // TODO get constrains and binds from workflow template and postprocessing
-        // Should be some match for Option
+        if wft.obj_validators[activity_id as usize - 1].len() > 0
+            && !validate_args(
+                &dao_consts,
+                &settings.binds,
+                &wft.obj_validators[activity_id as usize - 1].as_slice(),
+                &wft.validator_exprs.as_slice(),
+                &bucket,
+                arg_values.as_slice(),
+                arg_values_collection.as_slice(),
+                fn_metadata.as_slice(),
+            )
+        {
+            return PromiseOrValue::Value(ActivityResult::ErrValidation);
+        }
 
-        // TODO validate fn args
-        //fncall.bind_args()
+        let result = match result {
+            ActivityResult::Ok => {
+                let inner_value = postprocessing
+                    .as_ref()
+                    .map(|p| {
+                        p.try_to_get_inner_value(arg_values.as_slice(), settings.binds.as_slice())
+                    })
+                    .flatten();
 
-        //add postprocessing (save promise result - must be from workflow)
-    }
+                log!("inner_value: {:#?}", inner_value);
 
-    pub fn function_call_add(
-        &mut self,
-        proposal_id: ProposalId,
-        receiver_id: AccountId,
-        method_name: MethodName,
-    ) {
-        /*         let caller = env::predecessor_account_id();
-        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+                // bind args
+                bind_args(
+                    &dao_consts,
+                    settings.binds.as_slice(),
+                    wft.activities[activity_id as usize]
+                        .as_ref()
+                        .unwrap()
+                        .activity_inputs
+                        .as_slice(),
+                    &mut bucket,
+                    &mut arg_values,
+                    &mut arg_values_collection,
+                    0,
+                    0,
+                );
 
-        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
-        let id = format!("{}_{}", func.receiver, func.name);
-        self.function_calls.insert(&id, &func); */
-    }
-    //TODO key as ID or func name
-    pub fn function_call_remove(&mut self, proposal_id: ProposalId, id: String) {
-        /*         let caller = env::predecessor_account_id();
-        let (_, _, wfs) = self.get_wf_and_proposal(proposal_id);
+                //parse json object
+                let args = args_to_json(
+                    arg_values.as_slice(),
+                    arg_values_collection.as_slice(),
+                    &fn_metadata,
+                    0,
+                );
 
-        assert!(!self.check_rights(&wfs.allowed_proposers, &caller));
-        self.function_calls.remove(&id); */
+                PromiseOrValue::Promise(
+                    Promise::new(receiver)
+                        .function_call(
+                            fncall_method.into_bytes(),
+                            args.into_bytes(),
+                            activity.deposit.0,
+                            (activity.tgas as u64 * 10u64.pow(12)) as u64,
+                        )
+                        .then(ext_self::postprocess(
+                            proposal_id,
+                            settings.storage_key.clone(),
+                            postprocessing,
+                            inner_value,
+                            &env::current_account_id(),
+                            0,
+                            30 * TGAS,
+                        )),
+                )
+            }
+            _ => PromiseOrValue::Value(result),
+        };
+
+        self.workflow_instance
+            .insert(&proposal_id, &(wfi, settings))
+            .unwrap();
+
+        result
     }
 
     pub fn workflow_install(&mut self, proposal_id: ProposalId) {
@@ -697,7 +1197,6 @@ impl Contract {
         todo!()
     }
 
-    // It makes no sense to check for something else than right to call this action in this case
     pub fn workflow_add(
         &mut self,
         proposal_id: ProposalId,
@@ -708,8 +1207,11 @@ impl Contract {
 
         assert!(proposal.state == ProposalState::Accepted);
 
-        let (wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
-        let (mut wfi, settings) = (wfi, settings);
+        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+
+        if wfi.state == InstanceState::Finished {
+            return PromiseOrValue::Value(ActivityResult::Finished);
+        }
 
         //transition check
         let (transition_id, activity_id): (u8, u8) = wfi
@@ -730,18 +1232,19 @@ impl Contract {
             transition_id,
             &wft,
             &dao_consts,
+            &wfs,
             &settings,
             args.as_slice(),
             &mut bucket,
             0,
         );
 
-        if settings.obj_validators[activity_id as usize - 1].len() > 0
+        if wft.obj_validators[activity_id as usize - 1].len() > 0
             && !validate_args(
                 &dao_consts,
                 &settings.binds,
-                &settings.obj_validators[activity_id as usize - 1].as_slice(),
-                &settings.validator_exprs.as_slice(),
+                &wft.obj_validators[activity_id as usize - 1].as_slice(),
+                &wft.validator_exprs.as_slice(),
                 &bucket,
                 &mut args.as_slice(),
                 &mut vec![],
@@ -755,35 +1258,61 @@ impl Contract {
         let acc = env::current_account_id();
         let workflow_settings = self.proposed_workflow_settings.get(&proposal_id).unwrap();
         let result = match result {
-            ActivityResult::Ok => PromiseOrValue::Promise(
-                Promise::new(dao_settings.workflow_provider)
-                    .function_call(
-                        b"get".to_vec(),
-                        format!(
-                            "{{\"id\":{}}}",
-                            args[0].pop().unwrap().try_into_u128().unwrap()
+            ActivityResult::Ok => {
+                self.log_action(
+                    proposal_id,
+                    caller.as_str(),
+                    activity_id,
+                    args.as_slice(),
+                    None,
+                );
+
+                // Not needed ATM
+                //bind_args(
+                //    &dao_consts,
+                //    settings.binds.as_slice(),
+                //    wft.activities[activity_id as usize]
+                //        .as_ref()
+                //        .unwrap()
+                //        .activity_inputs
+                //        .as_slice(),
+                //    &mut bucket,
+                //    &mut args,
+                //    &mut vec![],
+                //    0,
+                //    0,
+                //);
+
+                PromiseOrValue::Promise(
+                    Promise::new(dao_settings.workflow_provider)
+                        .function_call(
+                            b"wf_template".to_vec(),
+                            format!(
+                                "{{\"id\":{}}}",
+                                args[0].pop().unwrap().try_into_u128().unwrap()
+                            )
+                            .into_bytes(),
+                            0,
+                            50 * TGAS,
                         )
-                        .into_bytes(),
-                        0,
-                        50 * TGAS,
-                    )
-                    .then(ext_self::store_workflow(
-                        proposal_id,
-                        workflow_settings,
-                        &acc,
-                        0,
-                        50 * TGAS,
-                    ))
-                    .then(ext_self::postprocess(
-                        proposal_id,
-                        settings.storage_key.clone(),
-                        postprocessing,
-                        None,
-                        &acc,
-                        0,
-                        30 * TGAS,
-                    )),
-            ),
+                        .then(ext_self::store_workflow(
+                            proposal_id,
+                            workflow_settings,
+                            &acc,
+                            0,
+                            50 * TGAS,
+                        ))
+                        .then(ext_self::postprocess(
+                            proposal_id,
+                            settings.storage_key.clone(),
+                            postprocessing,
+                            None,
+                            &acc,
+                            0,
+                            30 * TGAS,
+                        )),
+                )
+            }
             _ => PromiseOrValue::Value(result),
         };
 
@@ -793,363 +1322,31 @@ impl Contract {
 
         result
     }
+
+    //TODO resolve other state combinations eg. FatalError on instance
+    /// Changes workflow instance state to finish
+    /// Rights to close are same as the "end" activity rights
+    pub fn wf_finish(&mut self, proposal_id: u32) -> bool {
+        let caller = env::predecessor_account_id();
+        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(proposal.state == ProposalState::Accepted);
+
+        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+
+        if wfi.state == InstanceState::FatalError
+            || self.check_rights(
+                &wfs.activity_rights[wfi.current_activity_id as usize - 1].as_slice(),
+                &caller,
+            )
+        {
+            let result = wfi.finish(&wft);
+            self.workflow_instance
+                .insert(&proposal_id, &(wfi, settings));
+
+            result
+        } else {
+            false
+        }
+    }
 }
-/* // TODO fix tests
-#[cfg(test)]
-mod test {
-    use library::types::FnCallMetadata;
-    use near_sdk::{
-        json_types::{U128, U64},
-        serde::{Deserialize, Serialize},
-        serde_json::{self, Number, Value},
-    };
-
-    use crate::action::DataTypeDef;
-
-    /* ---------- TEST OBJECTS ---------- */
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    #[serde(crate = "near_sdk::serde")]
-    pub struct TestObject {
-        name1: String,
-        nullable_obj: Option<InnerNullableTestObj>,
-        name2: Vec<String>,
-        name3: Vec<U128>,
-        obj: InnerTestObject,
-    }
-
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    #[serde(crate = "near_sdk::serde")]
-    pub struct InnerTestObject {
-        nested_1_arr_8: Vec<u8>,
-        nested_1_obj: Inner2TestObject,
-    }
-
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    #[serde(crate = "near_sdk::serde")]
-    pub struct Inner2TestObject {
-        nested_2_arr_u64: Vec<U64>,
-        bool_val: bool,
-    }
-
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    #[serde(crate = "near_sdk::serde")]
-    pub struct InnerNullableTestObj {
-        test: Option<u8>,
-    }
-
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    #[serde(crate = "near_sdk::serde")]
-    struct ObjOptCase {
-        optional_str: Option<String>,
-        optional_obj: Option<ObjOptCaseInner>,
-    }
-
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    #[serde(crate = "near_sdk::serde")]
-    struct ObjOptCaseInner {
-        optional_str: Option<String>,
-        vec_u8: Vec<u8>,
-    }
-
-    fn get_metadata_case_1() -> Vec<FnCallMetadata> {
-        vec![
-            FnCallMetadata {
-                arg_names: vec!["optional_str".into(), "optional_obj".into()],
-                arg_types: vec![DataTypeDef::String(true), DataTypeDef::NullableObject(1)],
-            },
-            FnCallMetadata {
-                arg_names: vec!["optional_str".into(), "vec_u8".into()],
-                arg_types: vec![DataTypeDef::String(true), DataTypeDef::VecU8],
-            },
-        ]
-    }
-
-    fn get_names_case_1() -> Vec<Vec<String>> {
-        vec![
-            vec!["optional_str".into(), "optional_obj".into()],
-            vec!["optional_str".into(), "vec_u8".into()],
-        ]
-    }
-
-    /* ---------- TEST CASES ---------- */
-
-    #[test]
-    fn bind_fn_args_optional_case_1() {
-        let fncall = FnCallDefinition {
-            receiver: "test".into(),
-            name: "test".into(),
-        };
-
-        let metadata = get_metadata_case_1();
-        let names = get_names_case_1();
-
-        let values = vec![
-            Some(vec![Value::String("outer_opt_str".into()), Value::Null]),
-            Some(vec![
-                Value::String("inner_opt_str".into()),
-                Value::Array(vec![
-                    Value::Number(Number::from(1)),
-                    Value::Number(Number::from(2)),
-                    Value::Number(Number::from(3)),
-                    Value::Number(Number::from(4)),
-                    Value::Number(Number::from(5)),
-                ]),
-            ]),
-        ];
-
-        let result_string = fncall.bind_args(&names, &values, &metadata, 0);
-        dbg!(result_string.clone());
-        let result: ObjOptCase = serde_json::from_str(result_string.as_str()).unwrap();
-
-        let expected_result = ObjOptCase {
-            optional_str: Some("outer_opt_str".into()),
-            optional_obj: Some(ObjOptCaseInner {
-                optional_str: Some("inner_opt_str".into()),
-                vec_u8: vec![1, 2, 3, 4, 5],
-            }),
-        };
-
-        assert_eq!(result, expected_result);
-
-        assert_eq!(
-            serde_json::to_string(&result).unwrap(),
-            serde_json::to_string(&expected_result).unwrap(),
-        );
-    }
-
-    #[test]
-    fn bind_fn_args_optional_case_2() {
-        let fncall = FnCallDefinition {
-            receiver: "test".into(),
-            name: "test".into(),
-        };
-
-        let metadata = get_metadata_case_1();
-        let names = get_names_case_1();
-
-        let values = vec![
-            Some(vec![Value::Null, Value::Null]),
-            Some(vec![
-                Value::String("inner_opt_str".into()),
-                Value::Array(vec![
-                    Value::Number(Number::from(1)),
-                    Value::Number(Number::from(2)),
-                    Value::Number(Number::from(3)),
-                    Value::Number(Number::from(4)),
-                    Value::Number(Number::from(5)),
-                ]),
-            ]),
-        ];
-
-        let result_string = fncall.bind_args(&names, &values, &metadata, 0);
-        dbg!(result_string.clone());
-        let result: ObjOptCase = serde_json::from_str(result_string.as_str()).unwrap();
-
-        let expected_result = ObjOptCase {
-            optional_str: None,
-            optional_obj: Some(ObjOptCaseInner {
-                optional_str: Some("inner_opt_str".into()),
-                vec_u8: vec![1, 2, 3, 4, 5],
-            }),
-        };
-
-        assert_eq!(result, expected_result);
-
-        assert_eq!(
-            serde_json::to_string(&result).unwrap(),
-            serde_json::to_string(&expected_result).unwrap(),
-        );
-    }
-
-    #[test]
-    fn bind_fn_args_optional_case_3() {
-        let fncall = FnCallDefinition {
-            receiver: "test".into(),
-            name: "test".into(),
-        };
-
-        let metadata = get_metadata_case_1();
-        let names = get_names_case_1();
-
-        let values = vec![Some(vec![Value::Null, Value::Null]), None];
-
-        let result_string = fncall.bind_args(&names, &values, &metadata, 0);
-        dbg!(result_string.clone());
-        let result: ObjOptCase = serde_json::from_str(result_string.as_str()).unwrap();
-
-        let expected_result = ObjOptCase {
-            optional_str: None,
-            optional_obj: None,
-        };
-
-        assert_eq!(result, expected_result);
-
-        assert_eq!(
-            serde_json::to_string(&result).unwrap(),
-            serde_json::to_string(&expected_result).unwrap(),
-        );
-    }
-
-    #[test]
-    fn bind_fn_args_optional_case_4() {
-        let fncall = FnCallDefinition {
-            receiver: "test".into(),
-            name: "test".into(),
-        };
-
-        let metadata = get_metadata_case_1();
-        let names = get_names_case_1();
-
-        let values = vec![
-            Some(vec![Value::String("outer_opt_str".into()), Value::Null]),
-            Some(vec![
-                Value::Null,
-                Value::Array(vec![
-                    Value::Number(Number::from(1)),
-                    Value::Number(Number::from(2)),
-                    Value::Number(Number::from(3)),
-                    Value::Number(Number::from(4)),
-                    Value::Number(Number::from(5)),
-                ]),
-            ]),
-        ];
-
-        let result_string = fncall.bind_args(&names, &values, &metadata, 0);
-        dbg!(result_string.clone());
-        let result: ObjOptCase = serde_json::from_str(result_string.as_str()).unwrap();
-
-        let expected_result = ObjOptCase {
-            optional_str: Some("outer_opt_str".into()),
-            optional_obj: Some(ObjOptCaseInner {
-                optional_str: None,
-                vec_u8: vec![1, 2, 3, 4, 5],
-            }),
-        };
-
-        assert_eq!(result, expected_result);
-
-        assert_eq!(
-            serde_json::to_string(&result).unwrap(),
-            serde_json::to_string(&expected_result).unwrap(),
-        );
-    }
-
-    #[test]
-    fn bind_fn_args_complex() {
-        let fncall = FnCallDefinition {
-            receiver: "test".into(),
-            name: "test".into(),
-        };
-        let metadata = vec![
-            FnCallMetadata {
-                arg_names: vec![
-                    "name1".into(),
-                    "nullable_obj".into(),
-                    "name2".into(),
-                    "name3".into(),
-                    "obj".into(),
-                ],
-                arg_types: vec![
-                    DataTypeDef::String(false),
-                    DataTypeDef::NullableObject(1),
-                    DataTypeDef::VecString,
-                    DataTypeDef::VecU128,
-                    DataTypeDef::Object(2),
-                ],
-            },
-            FnCallMetadata {
-                arg_names: vec!["test".into()],
-                arg_types: vec![DataTypeDef::U8(true)],
-            },
-            FnCallMetadata {
-                arg_names: vec!["nested_1_arr_8".into(), "nested_1_obj".into()],
-                arg_types: vec![DataTypeDef::VecU8, DataTypeDef::Object(3)],
-            },
-            FnCallMetadata {
-                arg_names: vec!["nested_2_arr_u64".into(), "bool_val".into()],
-                arg_types: vec![DataTypeDef::VecU64, DataTypeDef::Bool(false)],
-            },
-        ];
-
-        // Inputs
-        let names: Vec<Vec<String>> = vec![
-            vec![
-                "name1".into(),
-                "nullable_obj".into(),
-                "name2".into(),
-                "name3".into(),
-                "obj".into(),
-            ],
-            vec!["test".into()],
-            vec!["nested_1_arr_8".into(), "nested_1_obj".into()],
-            vec!["nested_2_arr_u64".into(), "bool_val".into()],
-        ];
-
-        let values: Vec<Option<Vec<Value>>> = vec![
-            Some(vec![
-                Value::String("string value".into()),
-                Value::Null,
-                Value::Array(vec![
-                    Value::String("string arr val 1".into()),
-                    Value::String("string arr val 2".into()),
-                    Value::String("string arr val 3".into()),
-                ]),
-                Value::Array(vec![
-                    "100000000000000000000000000".into(),
-                    "200".into(),
-                    "300".into(),
-                ]),
-                Value::Null,
-            ]),
-            Some(vec![Value::Number(Number::from(77))]),
-            Some(vec![Value::Array(vec![
-                Value::Number(Number::from(1)),
-                Value::Number(Number::from(2)),
-                Value::Number(Number::from(3)),
-                Value::Number(Number::from(4)),
-                Value::Number(Number::from(5)),
-                Value::Number(Number::from(255)),
-                Value::Number(Number::from(111)),
-            ])]),
-            Some(vec![
-                Value::Array(vec![
-                    Value::String("9007199254740993".into()),
-                    Value::String("123".into()),
-                    Value::String("456".into()),
-                ]),
-                Value::Bool(true),
-            ]),
-        ];
-
-        // Test
-        let result_string = fncall.bind_args(&names, &values, &metadata, 0);
-        dbg!(result_string.clone());
-        let result: TestObject = serde_json::from_str(result_string.as_str()).unwrap();
-
-        let expected_result = TestObject {
-            name1: "string value".into(),
-            nullable_obj: Some(InnerNullableTestObj { test: Some(77) }),
-            name2: vec![
-                "string arr val 1".into(),
-                "string arr val 2".into(),
-                "string arr val 3".into(),
-            ],
-            name3: vec![U128(100000000000000000000000000), U128(200), U128(300)],
-            obj: InnerTestObject {
-                nested_1_arr_8: vec![1, 2, 3, 4, 5, 255, 111],
-                nested_1_obj: Inner2TestObject {
-                    nested_2_arr_u64: vec![U64(9007199254740993), U64(123), U64(456)],
-                    bool_val: true,
-                },
-            },
-        };
-        assert_eq!(result, expected_result);
-
-        assert_eq!(
-            serde_json::to_string(&result).unwrap(),
-            serde_json::to_string(&expected_result).unwrap(),
-        );
-    }
-
-}
-*/

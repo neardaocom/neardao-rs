@@ -10,7 +10,8 @@ mod test {
     use near_sdk::{serde_json, testing_env, AccountId};
 
     use crate::data::skyward::{
-        workflow_skyward_template_data_1, workflow_skyward_template_settings_data_1,
+        workflow_skyward_template_data_1, workflow_skyward_template_settings_data_1, SKYWARD_ACC,
+        WNEAR_ACC,
     };
 
     use crate::unit_tests::{get_dao_consts, ONE_NEAR};
@@ -42,8 +43,8 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
     #[serde(crate = "near_sdk::serde")]
     pub struct FtTransferCallInput {
-        amount: U128,
         memo: Option<String>,
+        amount: U128,
         receiver_id: AccountId,
         msg: String,
     }
@@ -89,24 +90,24 @@ mod test {
         let (wfs, settings) = workflow_skyward_template_settings_data_1();
 
         let mut wfi = Instance::new(1, &wft.transitions);
-        let mut bucket = StorageBucket::new(b"simple_wf".to_vec());
+        let mut bucket = StorageBucket::new(b"wf_skyward".to_vec());
         wfi.state = InstanceState::Running;
 
         // 1. Register tokens
 
         // Execute Workflow
         let expected_args = vec![vec![DataType::VecString(vec![
-            "neardao.near".into(),
-            "wrap.near".into(),
+            "neardao.testnet".into(),
+            WNEAR_ACC.into(),
         ])]];
-        let mut user_args = vec![vec![DataType::String("wrap.near".into())]];
+        let mut user_args = vec![vec![DataType::String(WNEAR_ACC.into())]];
         let mut user_args_collection = vec![];
 
         let (transition_id, activity_id) = wfi
             .get_target_trans_with_act(
                 &wft,
                 ActionIdent::FnCall,
-                Some(("skyward.near".into(), "register_tokens".into())),
+                Some((SKYWARD_ACC.into(), "register_tokens".into())),
             )
             .unwrap();
 
@@ -120,6 +121,7 @@ mod test {
             transition_id,
             &wft,
             &dao_consts,
+            &wfs[0],
             &settings,
             &user_args,
             &mut bucket,
@@ -142,8 +144,8 @@ mod test {
         assert!(validate_args(
             &dao_consts,
             &settings.binds,
-            &settings.obj_validators[activity_id as usize - 1].as_slice(),
-            &settings.validator_exprs.as_slice(),
+            &wft.obj_validators[activity_id as usize - 1].as_slice(),
+            &wft.validator_exprs.as_slice(),
             &bucket,
             user_args.as_slice(),
             user_args_collection.as_slice(),
@@ -158,16 +160,22 @@ mod test {
             .as_ref()
             .unwrap();
 
-        // Save wrap.near to storage so activity storage_deposit and sale_create get the right values
-        let user_value = pp.try_to_get_user_value(user_args.as_slice()).unwrap();
-        assert_eq!(user_value, DataType::String("wrap.near".into()));
+        let inner_value = pp
+            .try_to_get_inner_value(user_args.as_slice(), settings.binds.as_slice())
+            .unwrap();
+        assert_eq!(inner_value, DataType::String(WNEAR_ACC.into()));
 
-        bucket.add_data(&pp.storage_key, &user_value);
+        // Save wrap.near to storage so activity storage_deposit and sale_create get the right values
+        bucket.add_data(&pp.storage_key, &inner_value);
 
         bind_args(
             &dao_consts,
             settings.binds.as_slice(),
-            settings.activity_inputs[activity_id as usize - 1].as_slice(),
+            wft.activities[activity_id as usize]
+                .as_ref()
+                .unwrap()
+                .activity_inputs
+                .as_slice(),
             &mut bucket,
             &mut user_args,
             &mut user_args_collection,
@@ -185,14 +193,14 @@ mod test {
         );
 
         let expected_obj = RegisterTokensInput {
-            token_account_ids: vec!["neardao.near".into(), "wrap.near".into()],
+            token_account_ids: vec!["neardao.testnet".into(), WNEAR_ACC.into()],
         };
 
         assert_eq!(args, serde_json::to_string(&expected_obj).unwrap());
 
         // 2. Storage deposit on self
 
-        let expected_args = vec![vec![DataType::String("skyward.near".into())]];
+        let expected_args = vec![vec![DataType::String(SKYWARD_ACC.into())]];
         let mut user_args = vec![vec![]];
         let mut user_args_collection = vec![];
 
@@ -212,6 +220,7 @@ mod test {
             transition_id,
             &wft,
             &dao_consts,
+            &wfs[0],
             &settings,
             &user_args,
             &mut bucket,
@@ -232,8 +241,8 @@ mod test {
         assert!(validate_args(
             &dao_consts,
             &settings.binds,
-            &settings.obj_validators[activity_id as usize - 1].as_slice(),
-            &settings.validator_exprs.as_slice(),
+            &wft.obj_validators[activity_id as usize - 1].as_slice(),
+            &wft.validator_exprs.as_slice(),
             &bucket,
             user_args.as_slice(),
             user_args_collection.as_slice(),
@@ -248,13 +257,18 @@ mod test {
             .as_ref()
             .unwrap();
 
-        let user_value = pp.try_to_get_user_value(user_args.as_slice());
-        assert_eq!(user_value, None);
+        let inner_value =
+            pp.try_to_get_inner_value(user_args.as_slice(), settings.binds.as_slice());
+        assert_eq!(inner_value, None);
 
         bind_args(
             &dao_consts,
             settings.binds.as_slice(),
-            settings.activity_inputs[activity_id as usize - 1].as_slice(),
+            wft.activities[activity_id as usize]
+                .as_ref()
+                .unwrap()
+                .activity_inputs
+                .as_slice(),
             &mut bucket,
             &mut user_args,
             &mut user_args_collection,
@@ -272,20 +286,20 @@ mod test {
         );
 
         let expected_obj = StorageDepositInput {
-            account_id: "skyward.near".into(),
+            account_id: SKYWARD_ACC.into(),
         };
 
         assert_eq!(args, serde_json::to_string(&expected_obj).unwrap());
 
         // Assuming storage deposit fn call result was ok
-        let user_value = pp.clone().postprocess(vec![], user_value);
-        assert_eq!(user_value, DataType::Bool(true));
+        let inner_value = pp.clone().postprocess(vec![], inner_value);
+        assert_eq!(inner_value, DataType::Bool(true));
 
-        bucket.add_data(&pp.storage_key, &user_value);
+        bucket.add_data(&pp.storage_key, &inner_value);
 
         // 3. Storage deposit wrap.near
 
-        let expected_args = vec![vec![DataType::String("skyward.near".into())]];
+        let expected_args = vec![vec![DataType::String(SKYWARD_ACC.into())]];
         let mut user_args = vec![vec![]];
         let mut user_args_collection = vec![];
 
@@ -293,7 +307,7 @@ mod test {
             .get_target_trans_with_act(
                 &wft,
                 ActionIdent::FnCall,
-                Some(("wrap.near".into(), "storage_deposit".into())),
+                Some((WNEAR_ACC.into(), "storage_deposit".into())),
             )
             .unwrap();
 
@@ -305,6 +319,7 @@ mod test {
             transition_id,
             &wft,
             &dao_consts,
+            &wfs[0],
             &settings,
             &user_args,
             &mut bucket,
@@ -325,8 +340,8 @@ mod test {
         assert!(validate_args(
             &dao_consts,
             &settings.binds,
-            &settings.obj_validators[activity_id as usize - 1].as_slice(),
-            &settings.validator_exprs.as_slice(),
+            &wft.obj_validators[activity_id as usize - 1].as_slice(),
+            &wft.validator_exprs.as_slice(),
             &bucket,
             user_args.as_slice(),
             user_args_collection.as_slice(),
@@ -341,13 +356,18 @@ mod test {
             .as_ref()
             .unwrap();
 
-        let user_value = pp.try_to_get_user_value(user_args.as_slice());
-        assert_eq!(user_value, None);
+        let inner_value =
+            pp.try_to_get_inner_value(user_args.as_slice(), settings.binds.as_slice());
+        assert_eq!(inner_value, None);
 
         bind_args(
             &dao_consts,
             settings.binds.as_slice(),
-            settings.activity_inputs[activity_id as usize - 1].as_slice(),
+            wft.activities[activity_id as usize]
+                .as_ref()
+                .unwrap()
+                .activity_inputs
+                .as_slice(),
             &mut bucket,
             &mut user_args,
             &mut user_args_collection,
@@ -365,29 +385,26 @@ mod test {
         );
 
         let expected_obj = StorageDepositInput {
-            account_id: "skyward.near".into(),
+            account_id: SKYWARD_ACC.into(),
         };
 
         assert_eq!(args, serde_json::to_string(&expected_obj).unwrap());
 
         // Assuming storage deposit fn call result was ok
-        let user_value = pp.clone().postprocess(vec![], user_value);
-        assert_eq!(user_value, DataType::Bool(true));
+        let inner_value = pp.clone().postprocess(vec![], inner_value);
+        assert_eq!(inner_value, DataType::Bool(true));
 
-        bucket.add_data(&pp.storage_key, &user_value);
+        bucket.add_data(&pp.storage_key, &inner_value);
 
         // 4. FT transfer call on self
         // 1 NEAR
         let expected_args = vec![vec![
-            DataType::U128(ONE_NEAR.into()),
             DataType::String("memo msg".into()),
-            DataType::String("skyward.near".into()),
+            DataType::U128(1000.into()),
+            DataType::String(SKYWARD_ACC.into()),
             DataType::String("\\\"AccountDeposit\\\"".into()),
         ]];
-        let mut user_args = vec![vec![
-            DataType::U128(ONE_NEAR.into()),
-            DataType::String("memo msg".into()),
-        ]];
+        let mut user_args = vec![vec![DataType::String("memo msg".into())]];
         let mut user_args_collection = vec![];
 
         let (transition_id, activity_id) = wfi
@@ -406,6 +423,7 @@ mod test {
             transition_id,
             &wft,
             &dao_consts,
+            &wfs[0],
             &settings,
             &user_args,
             &mut bucket,
@@ -426,8 +444,8 @@ mod test {
         assert!(validate_args(
             &dao_consts,
             &settings.binds,
-            &settings.obj_validators[activity_id as usize - 1].as_slice(),
-            &settings.validator_exprs.as_slice(),
+            &wft.obj_validators[activity_id as usize - 1].as_slice(),
+            &wft.validator_exprs.as_slice(),
             &bucket,
             user_args.as_slice(),
             user_args_collection.as_slice(),
@@ -442,13 +460,18 @@ mod test {
             .as_ref()
             .unwrap();
 
-        let user_value = pp.try_to_get_user_value(user_args.as_slice());
-        assert_eq!(user_value, Some(DataType::U128(ONE_NEAR.into())));
+        let inner_value =
+            pp.try_to_get_inner_value(user_args.as_slice(), settings.binds.as_slice());
+        assert_eq!(inner_value, Some(DataType::U128(1000.into())));
 
         bind_args(
             &dao_consts,
             settings.binds.as_slice(),
-            settings.activity_inputs[activity_id as usize - 1].as_slice(),
+            wft.activities[activity_id as usize]
+                .as_ref()
+                .unwrap()
+                .activity_inputs
+                .as_slice(),
             &mut bucket,
             &mut user_args,
             &mut user_args_collection,
@@ -466,8 +489,8 @@ mod test {
         );
 
         let expected_obj = FtTransferCallInput {
-            receiver_id: "skyward.near".into(),
-            amount: ONE_NEAR.into(),
+            receiver_id: SKYWARD_ACC.into(),
+            amount: 1000.into(),
             memo: Some("memo msg".into()),
             msg: "\"AccountDeposit\"".into(),
         };
@@ -475,10 +498,10 @@ mod test {
         assert_eq!(args, serde_json::to_string(&expected_obj).unwrap());
 
         // Assuming storage deposit fn call result was ok
-        let user_value = pp.clone().postprocess(vec![], user_value);
-        assert_eq!(user_value, DataType::U128(ONE_NEAR.into()));
+        let inner_value = pp.clone().postprocess(vec![], inner_value);
+        assert_eq!(inner_value, DataType::U128(1000.into()));
 
-        bucket.add_data(&pp.storage_key, &user_value);
+        bucket.add_data(&pp.storage_key, &inner_value);
 
         // 5. Sale create on skyward.near
         let mut user_args = vec![
@@ -488,7 +511,7 @@ mod test {
                 DataType::String("www.neardao.com".into()),
                 DataType::String("neardao.testnet".into()),
                 DataType::Null,
-                DataType::String("wrap.near".into()),
+                DataType::String(WNEAR_ACC.into()),
                 DataType::U64(0.into()),
                 DataType::U64(3600.into()),
             ],
@@ -504,17 +527,17 @@ mod test {
             vec![
                 DataType::String("Neardao token auction".into()),
                 DataType::String("www.neardao.com".into()),
-                DataType::String("neardao.near".into()),
+                DataType::String("neardao.testnet".into()),
                 DataType::Null,
-                DataType::String("wrap.near".into()),
+                DataType::String(WNEAR_ACC.into()),
                 DataType::U64(0.into()),
                 DataType::U64(3600.into()),
             ],
         ];
 
         let expected_args_collection = vec![vec![
-            DataType::String("neardao.near".into()),
-            DataType::U128(ONE_NEAR.into()),
+            DataType::String("neardao.testnet".into()),
+            DataType::U128(1000.into()),
             DataType::Null,
         ]];
 
@@ -522,7 +545,7 @@ mod test {
             .get_target_trans_with_act(
                 &wft,
                 ActionIdent::FnCall,
-                Some(("skyward.near".into(), "sale_create".into())),
+                Some((SKYWARD_ACC.into(), "sale_create".into())),
             )
             .unwrap();
 
@@ -534,6 +557,7 @@ mod test {
             transition_id,
             &wft,
             &dao_consts,
+            &wfs[0],
             &settings,
             &user_args,
             &mut bucket,
@@ -554,8 +578,8 @@ mod test {
         assert!(validate_args(
             &dao_consts,
             &settings.binds,
-            &settings.obj_validators[activity_id as usize - 1].as_slice(),
-            &settings.validator_exprs.as_slice(),
+            &wft.obj_validators[activity_id as usize - 1].as_slice(),
+            &wft.validator_exprs.as_slice(),
             &bucket,
             user_args.as_slice(),
             user_args_collection.as_slice(),
@@ -565,7 +589,11 @@ mod test {
         bind_args(
             &dao_consts,
             settings.binds.as_slice(),
-            settings.activity_inputs[activity_id as usize - 1].as_slice(),
+            wft.activities[activity_id as usize]
+                .as_ref()
+                .unwrap()
+                .activity_inputs
+                .as_slice(),
             &mut bucket,
             &mut user_args,
             &mut user_args_collection,
@@ -577,16 +605,18 @@ mod test {
         assert_eq!(user_args_collection, expected_args_collection);
 
         let out_tokens = SaleInputOutToken {
-            token_account_id: ValidAccountId::try_from("neardao.near").unwrap(),
-            balance: ONE_NEAR.into(),
+            token_account_id: ValidAccountId::try_from("neardao.testnet").unwrap(),
+            balance: 1000.into(),
             referral_bpt: None,
         };
+
+        let token_account_id: String = WNEAR_ACC.into();
         let sale_create_input = SaleInput {
             title: "Neardao token auction".into(),
             url: Some("www.neardao.com".into()),
-            permissions_contract_id: Some(ValidAccountId::try_from("neardao.near").unwrap()),
+            permissions_contract_id: Some(ValidAccountId::try_from("neardao.testnet").unwrap()),
             out_tokens: vec![out_tokens],
-            in_token_account_id: ValidAccountId::try_from("wrap.near").unwrap(),
+            in_token_account_id: ValidAccountId::try_from(token_account_id).unwrap(),
             start_time: 0.into(),
             duration: 3600.into(),
         };

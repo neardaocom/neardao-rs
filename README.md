@@ -1,6 +1,11 @@
 # Near DAO prototype
 
-- version 0.5.0
+- Metabuild 2 version
+
+## TBD
+1. Finish Workflows
+2. Unit tests
+3. Refactoring and optimalizations
 
 ## Compiling
 - standardized build via contract-builder

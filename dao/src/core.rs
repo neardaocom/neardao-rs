@@ -6,7 +6,7 @@ use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
 use crate::tags::{TagInput, Tags};
 use library::storage::StorageBucket;
-use library::types::FnCallMetadata;
+use library::types::{ActionIdent, DataType, FnCallMetadata};
 use library::{
     workflow::{Instance, ProposeSettings, Template, TemplateSettings},
     FnCallId,
@@ -21,6 +21,7 @@ use near_contract_standards::storage_management::{
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
 use near_sdk::json_types::{ValidAccountId, U128};
+use near_sdk::serde::Serialize;
 use near_sdk::{
     env, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault, Promise,
     PromiseOrValue,
@@ -29,10 +30,21 @@ use near_sdk::{
 use crate::group::{Group, GroupInput};
 
 use crate::media::Media;
-use crate::GroupId;
 use crate::{proposal::*, StorageKey, TagCategory};
+use crate::{GroupId, ProposalId};
 
 near_sdk::setup_alloc!();
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct ActivityLog {
+    pub caller: AccountId,
+    pub action_id: u8,
+    pub timestamp: u64,
+    pub args: Vec<Vec<DataType>>,
+    pub args_collections: Option<Vec<Vec<DataType>>>,
+}
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
@@ -66,6 +78,7 @@ pub enum StorageKeys {
     WfTemplate,
     WfTemplateSettings,
     ProposedWfTemplateSettings, //for proposal workflow add template
+    ActivityLog,
     WfInstance,
 }
 
@@ -92,7 +105,8 @@ pub struct Contract {
     pub workflow_last_id: u16,
     pub workflow_template: UnorderedMap<u16, (Template, Vec<TemplateSettings>)>,
     pub workflow_instance: UnorderedMap<u32, (Instance, ProposeSettings)>,
-    pub proposed_workflow_settings: LookupMap<u32, Vec<TemplateSettings>>,
+    pub proposed_workflow_settings: LookupMap<ProposalId, Vec<TemplateSettings>>,
+    pub workflow_activity_log: LookupMap<ProposalId, Vec<ActivityLog>>, // Logs will be moved to indexer when its ready
 }
 
 #[near_bindgen]
@@ -135,6 +149,7 @@ impl Contract {
             workflow_template: UnorderedMap::new(StorageKeys::WfTemplate),
             workflow_instance: UnorderedMap::new(StorageKeys::WfInstance),
             proposed_workflow_settings: LookupMap::new(StorageKeys::ProposedWfTemplateSettings),
+            workflow_activity_log: LookupMap::new(StorageKeys::ActivityLog),
         };
 
         //register self and mint all FT

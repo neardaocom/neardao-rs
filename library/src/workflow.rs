@@ -2,7 +2,7 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::{U128, U64},
     serde::{Deserialize, Serialize},
-    serde_json, AccountId,
+    serde_json, AccountId, Balance,
 };
 
 use crate::{
@@ -20,43 +20,6 @@ pub enum VoteScenario {
     TokenWeighted,
 }
 
-/*
-Scenario
-Simple dao call:
-- users sends inputs, dao puts them into vec<vec<inputs>>
-- wfi finds transition and activity - checks rights
-- wfi evaluates transition cond
-- wfi evaluates activity cond
-- bind args - binds values from templates
-- calls dao fn with args
-
-FnCall:
-- user sends inputs in vec<vec<input>>,
-- wfi finds transition and activity - checks rights
-- wfi evaluates transition cond
-- wfi evaluates activity cond
-- bind args - binds values from templates
-- parses binded args into json and calls fn call
-
-How to solve array of objects???
-
-primitive/object(...)/array[]
-values: [[first object][second object][third object]...]
-
-[
-    [name1, name2, obj]
-    [nested_obj_1_name, nested_obj_1_array]
-    [VecObjValue1, VecObjValue2]
-]
-    [value1, value2, Obj(1)]
-    [nested_obj_1_value1, VecObj(2)]
-    [vec_obj_value1, vec_obj_value2]
-]
-
-*/
-
-// Issue: ATM we are not able to bind/validate non-primitive data types, eg. bind GroupSettings type to WF
-// TODO use the schema in ::actions
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -64,8 +27,10 @@ pub struct Template {
     pub name: String,
     pub version: u8,
     pub activities: Vec<Option<TemplateActivity>>, // pos is ActivityId, None is always at 0. index as start activity
-    pub transitions: Vec<Vec<u8>>,                 //u8 as ActivityId
-    pub binds: Vec<DataType>,                      // TODO ??
+    pub obj_validators: Vec<Vec<ValidatorType>>,
+    pub validator_exprs: Vec<Expression>,
+    pub transitions: Vec<Vec<u8>>, //u8 as ActivityId
+    pub binds: Vec<DataType>,      // TODO
     pub start: Vec<u8>,
     pub end: Vec<u8>,
 }
@@ -79,10 +44,9 @@ pub struct TemplateActivity {
     pub action: ActionIdent,
     pub fncall_id: Option<FnCallId>,
     pub tgas: u16,
-    pub deposit: u128,
+    pub deposit: U128,
     pub arg_types: Vec<DataTypeDef>,
-    //pub arg_validators: Vec<Expression>,
-    //pub binds: Vec<DataType>,
+    pub activity_inputs: Vec<Vec<ArgType>>, //arguments for each activity
     pub postprocessing: Option<Postprocessing>,
 }
 
@@ -93,16 +57,15 @@ pub struct TemplateSettings {
     pub allowed_proposers: Vec<ActivityRight>,
     pub allowed_voters: ActivityRight,
     pub activity_rights: Vec<Vec<ActivityRight>>, //ActivityRight
-    //pub constants: Vec<DataType>,       // ??
-    //pub validators: Vec<Vec<DataType>>, //[activity_id][argument pos] = validator
+    pub transition_constraints: Vec<Vec<TransitionConstraint>>,
     pub scenario: VoteScenario,
     pub duration: u32,
     pub quorum: u8,
     pub approve_threshold: u8,
     pub spam_threshold: u8,
     pub vote_only_once: bool,
-    pub deposit_propose: Option<u128>,
-    pub deposit_vote: Option<u128>, // Near
+    pub deposit_propose: Option<U128>,
+    pub deposit_vote: Option<U128>, //
     pub deposit_propose_return: u8, // how many percent of propose deposit to return
 }
 
@@ -110,7 +73,7 @@ pub struct TemplateSettings {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct TransitionConstraint {
-    pub transition_limit: u8,
+    pub transition_limit: u16,
     pub cond: Option<Expression>,
 }
 
@@ -119,11 +82,7 @@ pub struct TransitionConstraint {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProposeSettings {
-    pub activity_inputs: Vec<Vec<Vec<ArgType>>>, //arguments for each activity
-    pub transition_constraints: Vec<Vec<TransitionConstraint>>,
     pub binds: Vec<DataType>,
-    pub obj_validators: Vec<Vec<ValidatorType>>,
-    pub validator_exprs: Vec<Expression>,
     pub storage_key: String,
 }
 
@@ -230,6 +189,7 @@ pub enum CondOrExpr {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum PostprocessingType {
+    SaveBind(u8),
     SaveValue(DataType),
     SaveUserValue((u8, u8)), //object id - value pos
     FnCallResult(DataTypeDef),
@@ -263,7 +223,11 @@ impl Postprocessing {
         };
     }
 
-    pub fn try_to_get_user_value(&self, user_inputs: &[Vec<DataType>]) -> Option<DataType> {
+    pub fn try_to_get_inner_value(
+        &self,
+        user_inputs: &[Vec<DataType>],
+        binds: &[DataType],
+    ) -> Option<DataType> {
         match self.op_type {
             PostprocessingType::SaveUserValue((obj_id, arg_pos)) => Some(
                 // Should panic if value is not there to signal wrong workflow structure
@@ -274,14 +238,16 @@ impl Postprocessing {
                     .unwrap()
                     .clone(),
             ),
+            PostprocessingType::SaveBind(bind_id) => Some(binds[bind_id as usize].clone()),
             _ => None,
         }
     }
 
     // TODO handle parse error
-    pub fn postprocess(self, fn_result_val: Vec<u8>, user_value: Option<DataType>) -> DataType {
+    pub fn postprocess(self, fn_result_val: Vec<u8>, inner_value: Option<DataType>) -> DataType {
         match self.op_type {
-            PostprocessingType::SaveUserValue(_) => user_value.unwrap(),
+            PostprocessingType::SaveBind(_) => inner_value.unwrap(),
+            PostprocessingType::SaveUserValue(_) => inner_value.unwrap(),
             PostprocessingType::FnCallResult(t) => match t {
                 DataTypeDef::String(_) => {
                     DataType::String(serde_json::from_slice::<String>(&fn_result_val).unwrap())
@@ -353,7 +319,7 @@ pub enum InstanceState {
 pub struct Instance {
     pub state: InstanceState,
     pub current_activity_id: u8,
-    pub transition_counter: Vec<Vec<u8>>,
+    pub transition_counter: Vec<Vec<u16>>,
     pub template_id: u16,
 }
 
@@ -376,7 +342,7 @@ impl Instance {
         }
     }
 
-    // TODO optimalize so we dont have to substract index by one each time
+    // TODO optimalize so we dont have to subtract index by one each time
     /// Finds id of desired activity if theres existing transition from current to desired
     pub fn get_target_trans_with_act(
         &self,
@@ -404,13 +370,15 @@ impl Instance {
 
     // TODO pos_level seems redundant - remove
     /// Tries to advance to next activity in workflow.
-    /// Panics if anything is wrong - for now.
+    /// Returns transition result + Postprocessing if theres some
+    /// Conditions might panics underneath
     pub fn transition_to_next(
         &mut self,
         activity_id: u8,
         transition_id: u8,
         wft: &Template,
         consts: &Consts,
+        wfs: &TemplateSettings,
         settings: &ProposeSettings,
         action_args: &[Vec<DataType>],
         storage_bucket: &StorageBucket,
@@ -421,10 +389,8 @@ impl Instance {
             return (ActivityResult::Finished, None);
         }
 
-        assert_eq!(self.state, InstanceState::Running);
-
-        let transition_settings = &settings.transition_constraints
-            [self.current_activity_id as usize][transition_id as usize];
+        let transition_settings =
+            &wfs.transition_constraints[self.current_activity_id as usize][transition_id as usize];
 
         // TODO trans and activity cond should required only validation against storage
         //check transition cond
@@ -471,9 +437,16 @@ impl Instance {
             return (ActivityResult::ActivityCondFailed, None);
         }
 
-        // TODO to end transition - should by done by app
-
         (ActivityResult::Ok, wanted_activity.postprocessing.clone())
+    }
+
+    pub fn finish(&mut self, wft: &Template) -> bool {
+        if wft.end.contains(&self.current_activity_id) {
+            self.state = InstanceState::Finished;
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -514,12 +487,13 @@ mod test {
                 Some(TemplateActivity {
                     code: "near_send".into(),
                     exec_condition: None,
-                    action: ActionIdent::NearSend,
+                    action: ActionIdent::TreasurySendNear,
                     fncall_id: None,
                     tgas: 0,
-                    deposit: 0,
+                    deposit: 0.into(),
                     arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: pp.clone(),
+                    activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
                 }),
                 Some(TemplateActivity {
                     code: "group_add".into(),
@@ -527,15 +501,27 @@ mod test {
                     action: ActionIdent::GroupAdd,
                     fncall_id: None,
                     tgas: 0,
-                    deposit: 0,
+                    deposit: 0.into(),
                     arg_types: vec![
                         DataTypeDef::String(false),
                         DataTypeDef::String(false),
                         DataTypeDef::String(false),
                     ],
                     postprocessing: pp.clone(),
+                    activity_inputs: vec![vec![ArgType::Bind(0), ArgType::Free, ArgType::Free]],
                 }),
             ],
+            obj_validators: vec![vec![], vec![ValidatorType::Primitive(0)], vec![]],
+            validator_exprs: vec![Expression {
+                args: vec![ExprArg::User(1), ExprArg::Bind(1)],
+                expr: EExpr::Boolean(TExpr {
+                    operators: vec![Op {
+                        op_type: EOp::Rel(RelOp::Gt),
+                        operands_ids: [0, 1],
+                    }],
+                    terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
+                }),
+            }],
             transitions: vec![vec![1], vec![2]],
             binds: vec![],
             start: vec![0],
@@ -544,6 +530,16 @@ mod test {
 
         //Template Settings example
         let wfs = TemplateSettings {
+            transition_constraints: vec![
+                vec![TransitionConstraint {
+                    transition_limit: 1,
+                    cond: None,
+                }],
+                vec![TransitionConstraint {
+                    transition_limit: 1,
+                    cond: None,
+                }],
+            ],
             activity_rights: vec![
                 vec![ActivityRight::Group(1)],
                 vec![ActivityRight::GroupLeader(1)],
@@ -556,48 +552,18 @@ mod test {
             approve_threshold: 20,
             spam_threshold: 80,
             vote_only_once: true,
-            deposit_propose: Some(1),
-            deposit_vote: Some(1000),
+            deposit_propose: Some(1.into()),
+            deposit_vote: Some(1000.into()),
             deposit_propose_return: 0,
         };
 
         //User proposed settings type
         let settings = ProposeSettings {
-            activity_inputs: vec![
-                vec![],
-                vec![vec![ArgType::Free, ArgType::Free]],
-                vec![vec![ArgType::Bind(0), ArgType::Free, ArgType::Free]],
-            ],
-            transition_constraints: vec![
-                vec![TransitionConstraint {
-                    transition_limit: 1,
-                    cond: None,
-                }],
-                vec![TransitionConstraint {
-                    transition_limit: 1,
-                    cond: None,
-                }],
-                vec![TransitionConstraint {
-                    transition_limit: 1,
-                    cond: None,
-                }],
-            ],
             binds: vec![
                 DataType::String("rustaceans_group".into()),
                 DataType::U8(100),
             ],
             storage_key: "wf_simple".into(),
-            obj_validators: vec![vec![], vec![ValidatorType::Primitive(0)], vec![]],
-            validator_exprs: vec![Expression {
-                args: vec![ExprArg::User(1), ExprArg::Bind(1)],
-                expr: EExpr::Boolean(TExpr {
-                    operators: vec![Op {
-                        op_type: EOp::Rel(RelOp::Gt),
-                        operands_ids: [0, 1],
-                    }],
-                    terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
-                }),
-            }],
         };
 
         let mut wfi = Instance::new(1, &wft.transitions);
@@ -614,7 +580,7 @@ mod test {
         wfi.state = InstanceState::Running;
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::NearSend, None)
+            .get_target_trans_with_act(&wft, ActionIdent::TreasurySendNear, None)
             .unwrap();
 
         assert_eq!(activity_id, 1);
@@ -630,6 +596,7 @@ mod test {
             transition_id,
             &wft,
             &dao_consts,
+            &wfs,
             &settings,
             &user_args,
             &mut bucket,
@@ -639,8 +606,8 @@ mod test {
         assert!(validate_args(
             &dao_consts,
             &settings.binds,
-            &settings.obj_validators[activity_id as usize].as_slice(),
-            &settings.validator_exprs.as_slice(),
+            &wft.obj_validators[activity_id as usize].as_slice(),
+            &wft.validator_exprs.as_slice(),
             &bucket,
             user_args.as_slice(),
             user_args_collection.as_slice(),
@@ -655,7 +622,11 @@ mod test {
         bind_args(
             &dao_consts,
             settings.binds.as_slice(),
-            settings.activity_inputs[activity_id as usize].as_slice(),
+            wft.activities[activity_id as usize]
+                .as_ref()
+                .unwrap()
+                .activity_inputs
+                .as_slice(),
             &mut bucket,
             &mut user_args,
             &mut user_args_collection,
@@ -684,6 +655,7 @@ mod test {
             transition_id,
             &wft,
             &dao_consts,
+            &wfs,
             &settings,
             &user_args,
             &bucket,
@@ -693,8 +665,8 @@ mod test {
         assert!(validate_args(
             &dao_consts,
             &settings.binds,
-            &settings.obj_validators[activity_id as usize].as_slice(),
-            &settings.validator_exprs.as_slice(),
+            &wft.obj_validators[activity_id as usize].as_slice(),
+            &wft.validator_exprs.as_slice(),
             &bucket,
             user_args.as_slice(),
             user_args_collection.as_slice(),
@@ -704,7 +676,11 @@ mod test {
         bind_args(
             &dao_consts,
             settings.binds.as_slice(),
-            settings.activity_inputs[activity_id as usize].as_slice(),
+            wft.activities[activity_id as usize]
+                .as_ref()
+                .unwrap()
+                .activity_inputs
+                .as_slice(),
             &mut bucket,
             &mut user_args,
             &mut user_args_collection,
@@ -741,14 +717,26 @@ mod test {
                 Some(TemplateActivity {
                     code: "near_send".into(),
                     exec_condition: None,
-                    action: ActionIdent::NearSend,
+                    action: ActionIdent::TreasurySendNear,
                     fncall_id: None,
                     tgas: 0,
-                    deposit: 0,
+                    deposit: 0.into(),
                     arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: pp.clone(),
+                    activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
                 }),
             ],
+            obj_validators: vec![vec![], vec![ValidatorType::Primitive(0)], vec![]],
+            validator_exprs: vec![Expression {
+                args: vec![ExprArg::User(1), ExprArg::Bind(0)],
+                expr: EExpr::Boolean(TExpr {
+                    operators: vec![Op {
+                        op_type: EOp::Rel(RelOp::Gt),
+                        operands_ids: [0, 1],
+                    }],
+                    terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
+                }),
+            }],
             transitions: vec![vec![1], vec![1]],
             binds: vec![],
             start: vec![0],
@@ -757,6 +745,16 @@ mod test {
 
         //Template Settings example
         let wfs = TemplateSettings {
+            transition_constraints: vec![
+                vec![TransitionConstraint {
+                    transition_limit: 1,
+                    cond: None,
+                }],
+                vec![TransitionConstraint {
+                    transition_limit: 4,
+                    cond: None,
+                }],
+            ],
             activity_rights: vec![
                 vec![],
                 vec![ActivityRight::Group(1)],
@@ -770,36 +768,14 @@ mod test {
             approve_threshold: 20,
             spam_threshold: 80,
             vote_only_once: true,
-            deposit_propose: Some(1),
-            deposit_vote: Some(1000),
+            deposit_propose: Some(1.into()),
+            deposit_vote: Some(1000.into()),
             deposit_propose_return: 0,
         };
 
         //User proposed settings type
         let settings = ProposeSettings {
-            activity_inputs: vec![vec![], vec![vec![ArgType::Free, ArgType::Free]]],
-            transition_constraints: vec![
-                vec![TransitionConstraint {
-                    transition_limit: 1,
-                    cond: None,
-                }],
-                vec![TransitionConstraint {
-                    transition_limit: 4,
-                    cond: None,
-                }],
-            ],
             binds: vec![DataType::U8(100)],
-            obj_validators: vec![vec![], vec![ValidatorType::Primitive(0)], vec![]],
-            validator_exprs: vec![Expression {
-                args: vec![ExprArg::User(1), ExprArg::Bind(0)],
-                expr: EExpr::Boolean(TExpr {
-                    operators: vec![Op {
-                        op_type: EOp::Rel(RelOp::Gt),
-                        operands_ids: [0, 1],
-                    }],
-                    terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
-                }),
-            }],
             storage_key: "wf_simple_loop".into(),
         };
 
@@ -823,7 +799,7 @@ mod test {
         // Execute Workflow
         for i in 0..5 {
             let (transition_id, activity_id) = wfi
-                .get_target_trans_with_act(&wft, ActionIdent::NearSend, None)
+                .get_target_trans_with_act(&wft, ActionIdent::TreasurySendNear, None)
                 .unwrap();
 
             assert_eq!(activity_id, 1);
@@ -834,6 +810,7 @@ mod test {
                 transition_id,
                 &wft,
                 &dao_consts,
+                &wfs,
                 &settings,
                 &user_args,
                 &mut bucket,
@@ -844,8 +821,8 @@ mod test {
             assert!(validate_args(
                 &dao_consts,
                 &settings.binds,
-                &settings.obj_validators[activity_id as usize].as_slice(),
-                &settings.validator_exprs.as_slice(),
+                &wft.obj_validators[activity_id as usize].as_slice(),
+                &wft.validator_exprs.as_slice(),
                 &bucket,
                 user_args.as_slice(),
                 user_args_collection.as_slice(),
@@ -855,7 +832,11 @@ mod test {
             bind_args(
                 &dao_consts,
                 settings.binds.as_slice(),
-                settings.activity_inputs[activity_id as usize].as_slice(),
+                wft.activities[activity_id as usize]
+                    .as_ref()
+                    .unwrap()
+                    .activity_inputs
+                    .as_slice(),
                 &mut bucket,
                 &mut user_args,
                 &mut user_args_collection,
@@ -871,7 +852,7 @@ mod test {
         }
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::NearSend, None)
+            .get_target_trans_with_act(&wft, ActionIdent::TreasurySendNear, None)
             .unwrap();
 
         let result = wfi.transition_to_next(
@@ -879,6 +860,7 @@ mod test {
             transition_id,
             &wft,
             &dao_consts,
+            &wfs,
             &settings,
             &user_args,
             &mut bucket,
@@ -896,7 +878,11 @@ mod test {
         bind_args(
             &dao_consts,
             settings.binds.as_slice(),
-            settings.activity_inputs[activity_id as usize].as_slice(),
+            wft.activities[activity_id as usize]
+                .as_ref()
+                .unwrap()
+                .activity_inputs
+                .as_slice(),
             &mut bucket,
             &mut user_args,
             &mut user_args_collection,

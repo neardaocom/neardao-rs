@@ -10,6 +10,9 @@ use crate::{
     FnCallId,
 };
 
+pub const SKYWARD_ACC: &str = "demo-skyward.petrstudynka.testnet";
+pub const WNEAR_ACC: &str = "wrap.testnet";
+
 pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<FnCallMetadata>>) {
     let pp_register_tokens = Some(Postprocessing {
         storage_key: "pp_1".into(),
@@ -31,7 +34,7 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
 
     let pp_amount_send = Some(Postprocessing {
         storage_key: "pp_4".into(),
-        op_type: PostprocessingType::SaveUserValue((0, 0)),
+        op_type: PostprocessingType::SaveBind(2),
         instructions: vec![],
     });
 
@@ -44,11 +47,15 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
                 code: "register_tokens".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
-                fncall_id: Some(("skyward.near".into(), "register_tokens".into())),
+                fncall_id: Some((SKYWARD_ACC.into(), "register_tokens".into())),
                 tgas: 10,
-                deposit: 20_000_000_000_000_000_000_000,
+                deposit: 20_000_000_000_000_000_000_000.into(),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_register_tokens,
+                activity_inputs: vec![vec![ArgType::Expression(Expression {
+                    args: vec![ExprArg::Const(0), ExprArg::User(0)],
+                    expr: EExpr::Fn(FnName::ArrayMerge),
+                })]],
             }),
             Some(TemplateActivity {
                 code: "storage_deposit".into(),
@@ -56,54 +63,101 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
                 action: ActionIdent::FnCall,
                 fncall_id: Some(("self".into(), "storage_deposit".into())),
                 tgas: 10,
-                deposit: 1_250_000_000_000_000_000_000,
+                deposit: 1_250_000_000_000_000_000_000.into(),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_storage_deposit_1,
+                activity_inputs: vec![vec![ArgType::Bind(0)]],
             }),
             Some(TemplateActivity {
                 code: "storage_deposit".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
-                fncall_id: Some(("wrap.near".into(), "storage_deposit".into())),
+                fncall_id: Some((WNEAR_ACC.into(), "storage_deposit".into())),
                 tgas: 10,
-                deposit: 1_250_000_000_000_000_000_000,
+                deposit: 1_250_000_000_000_000_000_000.into(),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_storage_deposit_2,
+                activity_inputs: vec![vec![ArgType::Bind(0)]],
             }),
             Some(TemplateActivity {
                 code: "ft_transfer_call".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
                 fncall_id: Some(("self".into(), "ft_transfer_call".into())),
-                tgas: 30,
-                deposit: 0,
+                tgas: 60,
+                deposit: 1.into(),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_amount_send,
+                activity_inputs: vec![vec![
+                    ArgType::Free,
+                    ArgType::Bind(2),
+                    ArgType::Bind(0),
+                    ArgType::Bind(1),
+                ]],
             }),
             Some(TemplateActivity {
                 code: "sale_create".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
-                fncall_id: Some(("skyward.near".into(), "sale_create".into())),
+                fncall_id: Some((SKYWARD_ACC.into(), "sale_create".into())),
                 tgas: 50,
-                deposit: 2_000_000_000_000_000_000_000_000_000,
+                deposit: (3 * ONE_NEAR).into(),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: None,
+                activity_inputs: vec![
+                    vec![ArgType::Object(1)],
+                    vec![
+                        ArgType::Free,
+                        ArgType::Free,
+                        ArgType::Const(0),
+                        ArgType::VecObject(2),
+                        ArgType::Free,
+                        ArgType::Free,
+                        ArgType::Free,
+                    ],
+                    vec![
+                        ArgType::Const(0),
+                        ArgType::Storage("pp_4".into()),
+                        ArgType::Free,
+                    ],
+                ],
             }),
         ],
-        transitions: vec![vec![1], vec![2], vec![3], vec![4], vec![5]], //TODO skip storage
+        transitions: vec![vec![1], vec![2, 3, 4], vec![3, 4], vec![4], vec![5]], //TODO skip storage
         binds: vec![],
         start: vec![0],
         end: vec![5],
+        obj_validators: vec![
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            //vec![ValidatorType::Collection(2)],
+        ],
+        validator_exprs: vec![
+        /*  We dont need to validate the value now because its binded from ft_transfer_call result
+            Expression {
+            args: vec![ExprArg::Bind(2), ExprArg::User(1)],
+            expr: EExpr::Boolean(TExpr {
+                operators: vec![Op {
+                    op_type: EOp::Rel(RelOp::GtE),
+                    operands_ids: [0, 1],
+                }],
+                terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
+            }),
+            }
+        */
+        ],
     };
 
     //TODO be able to say we use receiver as from storage
     let fncalls: Vec<FnCallId> = vec![
-        ("skyward.near".into(), "register_tokens".into()),
+        (SKYWARD_ACC.into(), "register_tokens".into()),
         ("self".into(), "storage_deposit".into()),
-        ("wrap.near".into(), "storage_deposit".into()),
+        (WNEAR_ACC.into(), "storage_deposit".into()),
         ("self".into(), "ft_transfer_call".into()),
-        ("skyward.near".into(), "sale_create".into()),
+        (SKYWARD_ACC.into(), "sale_create".into()),
     ];
 
     let metadata_1 = vec![FnCallMetadata {
@@ -123,14 +177,14 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
 
     let metadata_4 = vec![FnCallMetadata {
         arg_names: vec![
-            "amount".into(),
             "memo".into(),
+            "amount".into(),
             "receiver_id".into(),
             "msg".into(),
         ],
         arg_types: vec![
-            DataTypeDef::U128(false),
             DataTypeDef::String(true),
+            DataTypeDef::U128(false),
             DataTypeDef::String(false),
             DataTypeDef::String(false),
         ],
@@ -192,67 +246,43 @@ pub fn workflow_skyward_template_settings_data_1() -> (Vec<TemplateSettings>, Pr
         allowed_proposers: vec![ActivityRight::Group(1)],
         allowed_voters: ActivityRight::TokenHolder,
         scenario: VoteScenario::TokenWeighted,
-        duration: 3600,
+        duration: 35,
         quorum: 51,
         approve_threshold: 20,
         spam_threshold: 80,
         vote_only_once: true,
-        deposit_propose: Some(1),
-        deposit_vote: Some(1000),
+        deposit_propose: Some(1.into()),
+        deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
-    }];
-
-    // User proposed settings type
-    let settings = ProposeSettings {
-        activity_inputs: vec![
-            // register tokens
-            vec![vec![ArgType::Expression(Expression {
-                args: vec![ExprArg::Const(0), ExprArg::User(0)],
-                expr: EExpr::Fn(FnName::ArrayMerge),
-            })]],
-            // storage_deposit on self
-            vec![vec![ArgType::Bind(0)]],
-            // storage_deposit on other token
-            vec![vec![ArgType::Bind(0)]],
-            // ft_transfer_call on self
-            vec![vec![
-                ArgType::Free,
-                ArgType::Free,
-                ArgType::Bind(0),
-                ArgType::Bind(1),
-            ]],
-            // sale_create
-            vec![
-                vec![ArgType::Object(1)],
-                vec![
-                    ArgType::Free,
-                    ArgType::Free,
-                    ArgType::Const(0),
-                    ArgType::VecObject(2),
-                    ArgType::Free,
-                    ArgType::Free,
-                    ArgType::Free,
-                ],
-                vec![
-                    ArgType::Const(0),
-                    ArgType::Storage("pp_4".into()),
-                    ArgType::Free,
-                ],
-            ],
-        ],
         transition_constraints: vec![
             vec![TransitionConstraint {
                 transition_limit: 1,
                 cond: None,
             }],
-            vec![TransitionConstraint {
-                transition_limit: 1,
-                cond: None,
-            }],
-            vec![TransitionConstraint {
-                transition_limit: 1,
-                cond: None,
-            }],
+            vec![
+                TransitionConstraint {
+                    transition_limit: 1,
+                    cond: None,
+                },
+                TransitionConstraint {
+                    transition_limit: 1,
+                    cond: None,
+                },
+                TransitionConstraint {
+                    transition_limit: 1,
+                    cond: None,
+                },
+            ],
+            vec![
+                TransitionConstraint {
+                    transition_limit: 1,
+                    cond: None,
+                },
+                TransitionConstraint {
+                    transition_limit: 1,
+                    cond: None,
+                },
+            ],
             vec![TransitionConstraint {
                 transition_limit: 1,
                 cond: None,
@@ -262,32 +292,14 @@ pub fn workflow_skyward_template_settings_data_1() -> (Vec<TemplateSettings>, Pr
                 cond: None,
             }],
         ],
+    }];
+
+    // User proposed settings type
+    let settings = ProposeSettings {
         binds: vec![
-            DataType::String("skyward.near".into()),
+            DataType::String(SKYWARD_ACC.into()),
             DataType::String("\\\"AccountDeposit\\\"".into()),
-            DataType::U128(ONE_NEAR.into()),
-        ],
-        obj_validators: vec![
-            vec![],
-            vec![],
-            vec![],
-            vec![],
-            vec![],
-            //vec![ValidatorType::Collection(2)],
-        ],
-        validator_exprs: vec![
-        /*  We dont need to validate the value now because its binded from ft_transfer_call result
-            Expression {
-            args: vec![ExprArg::Bind(2), ExprArg::User(1)],
-            expr: EExpr::Boolean(TExpr {
-                operators: vec![Op {
-                    op_type: EOp::Rel(RelOp::GtE),
-                    operands_ids: [0, 1],
-                }],
-                terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
-            }),
-            }
-        */
+            DataType::U128(1000.into()),
         ],
         storage_key: "wf_skyward_1".into(),
     };

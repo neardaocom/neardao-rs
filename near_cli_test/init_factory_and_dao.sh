@@ -1,25 +1,23 @@
 #!/bin/bash
 
-source ./near_cli_test/constants.sh
-source ./near_cli_test/init_env.sh
-near call $CID new '{"tags":["dao","test","podilnik"]}' --accountId $CID
+#source ./near_cli_test/constants.sh
+#source ./near_cli_test/init_env.sh
+#near call $CID new '{"tags":["dao","test","podilnik"]}' --accountId $CID
 
 ##
 ### init factory
 #near view $CID get_tags ''
 
-# prepare args for dao into base64 and init dao vie factory
-#ARGS=`echo '{"total_supply": 1000000000,"founders_init_distribution": 10000000,"ft_metadata": {"spec":"ft-1.0.0","name":"Example NEAR fungible token","symbol":"EXAMPLE","icon":"some_icon","reference":null,"reference_hash":null,"decimals":0},"config": {"name": "My first dao", "lang":"en","slogan":"BEST DAO IN EU", "council_share": 25, "description":"Just for testing purposes","vote_spam_threshold": 60},"release_config": [["Council", {"Linear": {"from":null, "duration":600}}]], "vote_policy_configs": [{"proposal_kind": "Pay","duration": 45000000000,"waiting_open_duration": 300000000000,"quorum": 20,"approve_threshold": 60,"vote_only_once": true},{"proposal_kind": "AddMember","duration": 45000000000,"waiting_open_duration": 300000000000,"quorum": 20,"approve_threshold": 60,"vote_only_once": true},{"proposal_kind": "RemoveMember","duration": 45000000000,"waiting_open_duration": 300000000000,"quorum": 20,"approve_threshold": 60,"vote_only_once": true},{"proposal_kind": "GeneralProposal","duration": 45000000000,"waiting_open_duration": 300000000000,"quorum": 20,"approve_threshold": 60,"vote_only_once": true},{"proposal_kind": "AddDocFile","duration": 45000000000,"waiting_open_duration": 300000000000,"quorum": 20,"approve_threshold": 60,"vote_only_once": true},{"proposal_kind": "InvalidateFile","duration": 45000000000,"waiting_open_duration": 300000000000,"quorum": 20,"approve_threshold": 60,"vote_only_once": true}, {"proposal_kind": "DistributeFT","duration": 45000000000,"waiting_open_duration": 300000000000,"quorum": 20,"approve_threshold": 60,"vote_only_once": true}, {"proposal_kind": "RightForActionCall","duration": 45000000000,"waiting_open_duration": 300000000000,"quorum": 20,"approve_threshold": 60,"vote_only_once": true}],"founders": ["'$CID1'", "'$CID2'", "'$CID3'"]}' | base64`
-
+# prepare args for dao into base64 and init dao via factory
 S_FT_META='{"spec":"ft-1.0.0","name":"Example NEAR fungible token","symbol":"EXAMPLE","icon":"some_icon","reference":null,"reference_hash":null,"decimals":0}'
-S_SETTINGS='{"name":"My first dao","purpose":"just testing","tags":[0,1,2],"dao_admin_account_id":"'$CID'","dao_admin_rights":["TODO"],"workflow_provider":"'$WID'"}'
+S_SETTINGS='{"name":"My first dao","purpose":"just testing","tags":[0,1,2],"dao_admin_account_id":"petrstudynka.testnet","dao_admin_rights":["TODO"],"workflow_provider":"'$WID'"}'
 S_GROUPS='[{"settings":{"name":"council","leader":"'$CID1'"},"members":[{"account_id":"'$CID1'","tags":[1]},{"account_id":"'$CID2'","tags":[3,4]},{"account_id":"'$CID3'","tags":[4]}],"release":{"amount":100000000,"init_distribution":10000000,"start_from":0,"duration":1000000000,"model":"Linear"}}]'
 S_MEDIA='[]'
 S_TAGS='[{"category":"global","values":["test dao", "new", "top"]},{"category":"group","values":["CEO", "CTO", "no idea", "good guy"]},{"category":"media","values":["very important", "probably virus"]}]'
 S_FNCALLS='[]'
 S_FNCALL_META='[]'
-S_WFT='[{"name":"wf_add","version":1,"activities":[null,{"code":"wf_add","exec_condition":null,"action":"WorkflowAdd","fncall_id":null,"tgas":0,"deposit":0,"arg_types":[{"U16":false},{"Object":0}],"postprocessing":null}],"transitions":[[1]],"binds":[],"start":[0],"end":[1]}]'
-S_WFS='[[{"allowed_proposers":[{"Group":1}],"allowed_voters":"TokenHolder","activity_rights":[[{"GroupLeader":1}]],"scenario":"TokenWeighted","duration":60,"quorum":51,"approve_threshold":20,"spam_threshold":80,"vote_only_once":true,"deposit_propose":1,"deposit_vote":1000,"deposit_propose_return":0}]]'
+S_WFT='[{"name":"wf_add","version":1,"activities":[null,{"code":"wf_add","exec_condition":null,"action":"WorkflowAdd","fncall_id":null,"tgas":0,"deposit":"0","arg_types":[{"U16":false}],"activity_inputs":[[{"Bind":0}]],"postprocessing":null}],"obj_validators":[[{"Primitive":0}]],"validator_exprs":[{"args":[{"User":0},{"Bind":0}],"expr":{"Boolean":{"operators":[{"operands_ids":[0,1],"op_type":{"Rel":"Eqs"}}],"terms":[{"Arg":1},{"Arg":0}]}}}],"transitions":[[1]],"binds":[],"start":[0],"end":[1]}]'
+S_WFS='[[{"allowed_proposers":[{"Group":1}],"allowed_voters":"TokenHolder","activity_rights":[[{"GroupLeader":1}]],"transition_constraints":[[{"transition_limit":1,"cond":null}]],"scenario":"TokenWeighted","duration":25,"quorum":51,"approve_threshold":20,"spam_threshold":80,"vote_only_once":true,"deposit_propose":"1","deposit_vote":"1000","deposit_propose_return":0}]]'
 
 ARGS=`echo '{"total_supply":1000000000,"ft_metadata":'$S_FT_META',"settings":'$S_SETTINGS',"groups":'$S_GROUPS',"media":'$S_MEDIA',"tags":'$S_TAGS',"function_calls":'$S_FNCALLS',"function_call_metadata":'$S_FNCALL_META',"workflow_templates":'$S_WFT',"workflow_template_settings":'$S_WFS'}' | base64`
 near call $CID create '{"acc_name": "dao", "dao_info": {"founded_s":9999, "name": "My first dao","description": "Just for testing purposes", "ft_name": "BRO","ft_amount": 1000000000,"tags": [0,1,2]}, "args":"'$ARGS'"}' --accountId $CID --amount $DEPOSIT_CREATE_DAO --gas $MAX_GAS
@@ -43,6 +41,7 @@ near call $CID create '{"acc_name": "dao", "dao_info": {"founded_s":9999, "name"
 #near view $DCID wf_templates ''
 #near view $DCID check_condition '{"proposal_id": 1, "args": [], "activity_id": 1, "transition_id":null}'
 #near view $DCID wf_instance '{"proposal_id":1}'
+#near view $DCID wf_log '{"proposal_id":1}'
 #near view $DCID group_names ''
 #near view $DCID group_members '{"id": 1}'
 #near view $DCID dao_settings ''
@@ -66,7 +65,6 @@ near call $CID create '{"acc_name": "dao", "dao_info": {"founded_s":9999, "name"
 #near call $DCID fn_call_validity_test '{"fncall_id": "test_'$DCID'", "names": [["name1", "nullable_obj", "name2", "name3", "obj"] , ["test"], ["nested_1_arr_8", "nested_1_obj"], ["nested_2_arr_u64", "bool_val"]], "args": [["string value", null, ["string arr val 1", "string arr val 2","string arr val 3"], ["100000000000000000000000000", "200","300"]], null, [[4,5,6,7,8,9]], [["9007199254740993", "123", "456"], true] ]}'  --accountId=$CID
 #near call $DCID fn_call_validity_test '{"fncall_id": "test_'$DCID'", "names": [["name1", "nullable_obj", "name2", "name3", "obj"] , ["test"], ["nested_1_arr_8", "nested_1_obj"], ["nested_2_arr_u64", "bool_val"]], "args": [["string value", null, ["string arr val 1", "string arr val 2","string arr val 3"], ["100000000000000000000000000", "200","300"]], [null], [[4,5,6,7,8,9]], [["9007199254740993", "123", "456"], true] ]}'  --accountId=$CID
 
-# init storage: 482301 bytes
 #near call $DCID storage_add_bucket '{"bucket_id": "workflow"}' --accountId=$CID
 #near call $DCID storage_add_data '{"bucket_id": "workflow", "data_id": "action_1_result", "data": { "String": "This is result from action 1"} }' --accountId=$CID
 #near call $DCID storage_add_data '{"bucket_id": "workflow", "data_id": "action_2_result", "data": { "VecString": ["This is result from action 2", "and its stored as", "array of strings"]} }' --accountId=$CID

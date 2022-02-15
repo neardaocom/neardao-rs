@@ -28,11 +28,12 @@ pub enum ActionIdent {
     GroupAdd,
     GroupRemove,
     GroupUpdate,
-    GroupMemberAdd,
-    GroupMemberRemove,
+    GroupAddMembers,
+    GroupRemoveMember,
     SettingsUpdate,
     MediaAdd,
     MediaInvalidate,
+    MediaRemove,
     FnCall,
     FnCallAdd,
     FnCallRemove,
@@ -40,9 +41,9 @@ pub enum ActionIdent {
     TagEdit,
     TagRemove,
     FtDistribute,
-    FtSend,
-    NftSend,
-    NearSend,
+    TreasurySendFt,
+    TreasurySendNft,
+    TreasurySendNear,
     WorkflowAdd,
     WorkflowChange,
 }
@@ -69,8 +70,9 @@ pub enum DataTypeDef {
     VecObject(u8),
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+//TODO remove debug in prod
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone,Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum DataType {
     Null,

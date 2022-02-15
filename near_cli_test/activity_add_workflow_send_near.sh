@@ -1,1 +1,0 @@
-near call $DCID workflow_add '{"proposal_id":1,"workflow_id":2}' --accountId $CID1 --gas $MAX_GAS

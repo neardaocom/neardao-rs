@@ -1,15 +1,9 @@
 use library::types::DataType;
 use library::workflow::{Instance, ProposeSettings, Template, TemplateSettings};
-use near_sdk::borsh::{self, BorshDeserialize};
+use near_sdk::near_bindgen;
 use near_sdk::serde::Serialize;
-use near_sdk::{env, IntoStorageKey};
-use near_sdk::{json_types::U128, near_bindgen, AccountId};
 
-use crate::constants::{
-    DEPOSIT_ADD_PROPOSAL, DEPOSIT_VOTE, GAS_ADD_PROPOSAL, GAS_FINISH_PROPOSAL, PROPOSAL_KIND_COUNT,
-    VERSION,
-};
-use crate::group::{Group, GroupMember, GroupOutput};
+use crate::group::{GroupMember, GroupOutput};
 use crate::media::Media;
 use crate::proposal::VProposal;
 use crate::settings::DaoSettings;
@@ -73,7 +67,7 @@ impl Contract {
         activity_id: u8,
         transition_id: Option<u8>,
     ) -> bool {
-        let (_, wft, _) = self.get_wf_and_proposal(proposal_id);
+        let (_, wft, wfs) = self.get_wf_and_proposal(proposal_id);
         let (_, settings) = self.workflow_instance.get(&proposal_id).unwrap();
         let bucket = self.storage.get(&settings.storage_key).unwrap();
         let dao_consts = self.dao_consts();
@@ -95,7 +89,7 @@ impl Contract {
             }
             Some(t_id) => {
                 let transition_settings =
-                    &settings.transition_constraints[activity_id as usize][t_id as usize];
+                    &wfs.transition_constraints[activity_id as usize][t_id as usize];
 
                 transition_settings
                     .cond
@@ -168,6 +162,10 @@ impl Contract {
             .get(&bucket_id)
             .map(|bucket| bucket.get_data(&data_id))
             .flatten()
+    }
+
+    pub fn wf_log(self, proposal_id: u32) -> Option<Vec<ActivityLog>> {
+        self.workflow_activity_log.get(&proposal_id)
     }
 }
 

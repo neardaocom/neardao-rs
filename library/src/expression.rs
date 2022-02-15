@@ -343,7 +343,16 @@ impl EOp {
                     RelOp::Lt => DataType::Bool(lhs < rhs),
                     RelOp::GtE => DataType::Bool(lhs >= rhs),
                     RelOp::LtE => DataType::Bool(lhs <= rhs),
-                    _ => panic!("Invalid operands"),
+                    _ => panic!("Invalid operation"),
+                },
+                (DataType::U16(lhs), DataType::U16(rhs)) => match o {
+                    RelOp::Eqs => DataType::Bool(lhs == rhs),
+                    RelOp::NEqs => DataType::Bool(lhs != rhs),
+                    RelOp::Gt => DataType::Bool(lhs > rhs),
+                    RelOp::Lt => DataType::Bool(lhs < rhs),
+                    RelOp::GtE => DataType::Bool(lhs >= rhs),
+                    RelOp::LtE => DataType::Bool(lhs <= rhs),
+                    _ => panic!("Invalid operation"),
                 },
                 (DataType::U128(lhs), DataType::U128(rhs)) => match o {
                     RelOp::Eqs => DataType::Bool(lhs == rhs),
@@ -352,7 +361,7 @@ impl EOp {
                     RelOp::Lt => DataType::Bool(lhs.0 < rhs.0),
                     RelOp::GtE => DataType::Bool(lhs.0 >= rhs.0),
                     RelOp::LtE => DataType::Bool(lhs.0 <= rhs.0),
-                    _ => panic!("Invalid operands"),
+                    _ => panic!("Invalid operation"),
                 },
                 (DataType::String(lhs), DataType::String(rhs)) => match o {
                     RelOp::Eqs => DataType::Bool(*lhs == *rhs),
@@ -361,7 +370,7 @@ impl EOp {
                     RelOp::Lt => DataType::Bool(*lhs < *rhs),
                     RelOp::GtE => DataType::Bool(*lhs >= *rhs),
                     RelOp::LtE => DataType::Bool(*lhs <= *rhs),
-                    _ => panic!("Invalid operands"),
+                    _ => panic!("Invalid operation"),
                 },
                 // TODO: which operations
                 //(DataType::VecString(lhs), DataType::VecString(rhs)) => match o {
