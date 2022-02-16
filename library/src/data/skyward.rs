@@ -1,6 +1,8 @@
 use crate::{
     expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
-    types::{ActionIdent, DataType, DataTypeDef, FnCallMetadata, ValidatorType},
+    types::{
+        ActionData, ActionIdent, DataType, DataTypeDef, FnCallData, FnCallMetadata, ValidatorType,
+    },
     unit_tests::ONE_NEAR,
     workflow::{
         ActivityRight, ArgType, CondOrExpr, ExprArg, Expression, Postprocessing,
@@ -10,10 +12,12 @@ use crate::{
     FnCallId,
 };
 
+use super::{TemplateData, TemplateUserSettings};
+
 pub const SKYWARD_ACC: &str = "demo-skyward.petrstudynka.testnet";
 pub const WNEAR_ACC: &str = "wrap.testnet";
 
-pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<FnCallMetadata>>) {
+pub fn workflow_skyward_template_data_1() -> TemplateData {
     let pp_register_tokens = Some(Postprocessing {
         storage_key: "pp_1".into(),
         op_type: PostprocessingType::SaveUserValue((0, 0)),
@@ -47,9 +51,11 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
                 code: "register_tokens".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
-                fncall_id: Some((SKYWARD_ACC.into(), "register_tokens".into())),
-                tgas: 10,
-                deposit: 20_000_000_000_000_000_000_000.into(),
+                action_data: Some(ActionData::FnCall(FnCallData {
+                    id: (SKYWARD_ACC.into(), "register_tokens".into()),
+                    tgas: 10,
+                    deposit: 20_000_000_000_000_000_000_000.into(),
+                })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_register_tokens,
                 activity_inputs: vec![vec![ArgType::Expression(Expression {
@@ -61,9 +67,11 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
                 code: "storage_deposit".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
-                fncall_id: Some(("self".into(), "storage_deposit".into())),
-                tgas: 10,
-                deposit: 1_250_000_000_000_000_000_000.into(),
+                action_data: Some(ActionData::FnCall(FnCallData {
+                    id: ("self".into(), "storage_deposit".into()),
+                    tgas: 10,
+                    deposit: 1_250_000_000_000_000_000_000.into(),
+                })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_storage_deposit_1,
                 activity_inputs: vec![vec![ArgType::Bind(0)]],
@@ -72,9 +80,11 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
                 code: "storage_deposit".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
-                fncall_id: Some((WNEAR_ACC.into(), "storage_deposit".into())),
-                tgas: 10,
-                deposit: 1_250_000_000_000_000_000_000.into(),
+                action_data: Some(ActionData::FnCall(FnCallData {
+                    id: (WNEAR_ACC.into(), "storage_deposit".into()),
+                    tgas: 10,
+                    deposit: 1_250_000_000_000_000_000_000.into(),
+                })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_storage_deposit_2,
                 activity_inputs: vec![vec![ArgType::Bind(0)]],
@@ -83,9 +93,11 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
                 code: "ft_transfer_call".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
-                fncall_id: Some(("self".into(), "ft_transfer_call".into())),
-                tgas: 60,
-                deposit: 1.into(),
+                action_data: Some(ActionData::FnCall(FnCallData {
+                    id: ("self".into(), "ft_transfer_call".into()),
+                    tgas: 60,
+                    deposit: 1.into(),
+                })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_amount_send,
                 activity_inputs: vec![vec![
@@ -99,9 +111,11 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
                 code: "sale_create".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
-                fncall_id: Some((SKYWARD_ACC.into(), "sale_create".into())),
-                tgas: 50,
-                deposit: (3 * ONE_NEAR).into(),
+                action_data: Some(ActionData::FnCall(FnCallData {
+                    id: (SKYWARD_ACC.into(), "sale_create".into()),
+                    tgas: 50,
+                    deposit: (3 * ONE_NEAR).into(),
+                })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: None,
                 activity_inputs: vec![
@@ -123,7 +137,7 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
                 ],
             }),
         ],
-        transitions: vec![vec![1], vec![2, 3, 4], vec![3, 4], vec![4], vec![5]], //TODO skip storage
+        transitions: vec![vec![1], vec![2, 3, 4], vec![3, 4], vec![4], vec![5]],
         binds: vec![],
         start: vec![0],
         end: vec![5],
@@ -233,7 +247,7 @@ pub fn workflow_skyward_template_data_1() -> (Template, Vec<FnCallId>, Vec<Vec<F
     (wf, fncalls, metadata)
 }
 
-pub fn workflow_skyward_template_settings_data_1() -> (Vec<TemplateSettings>, ProposeSettings) {
+pub fn workflow_skyward_template_settings_data_1() -> TemplateUserSettings {
     let wfs = vec![TemplateSettings {
         activity_rights: vec![
             vec![],

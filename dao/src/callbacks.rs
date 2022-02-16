@@ -1,5 +1,5 @@
 use library::types::FnCallMetadata;
-use library::workflow::{ActivityResult, Template, TemplateSettings};
+use library::workflow::{ActionResult, Template, TemplateSettings};
 use library::FnCallId;
 use near_sdk::serde_json;
 use near_sdk::{env, ext_contract, near_bindgen, PromiseResult};
@@ -16,13 +16,10 @@ trait ExtSelf {
         storage_key: String,
         postprocessing: Option<Postprocessing>,
         inner_value: Option<DataType>,
-    ) -> ActivityResult;
+    ) -> ActionResult;
 
-    fn store_workflow(
-        &mut self,
-        instance_id: u32,
-        settings: Vec<TemplateSettings>,
-    ) -> ActivityResult;
+    fn store_workflow(&mut self, instance_id: u32, settings: Vec<TemplateSettings>)
+        -> ActionResult;
 }
 
 #[near_bindgen]
@@ -35,7 +32,7 @@ impl Contract {
         storage_key: String,
         postprocessing: Option<Postprocessing>,
         inner_value: Option<DataType>,
-    ) -> ActivityResult {
+    ) -> ActionResult {
         assert_eq!(
             env::promise_results_count(),
             1,
@@ -47,7 +44,12 @@ impl Contract {
             PromiseResult::Successful(val) => match postprocessing {
                 Some(p) => {
                     let mut bucket = self.storage.get(&storage_key).unwrap();
-                    bucket.add_data(&p.storage_key.clone(), &p.postprocess(val, inner_value));
+
+                    let key = p.storage_key.clone();
+                    if let Some(val) = &p.postprocess(val, inner_value, &mut bucket) {
+                        bucket.add_data(&key, val);
+                    }
+
                     self.storage.insert(&storage_key, &bucket);
                     true
                 }
@@ -57,7 +59,7 @@ impl Contract {
         };
 
         match result {
-            true => ActivityResult::Ok,
+            true => ActionResult::Ok,
             false => self.postprocessing_fail_update(instance_id),
         }
     }
@@ -67,7 +69,7 @@ impl Contract {
         &mut self,
         instance_id: u32,
         settings: Vec<TemplateSettings>,
-    ) -> ActivityResult {
+    ) -> ActionResult {
         assert_eq!(
             env::promise_results_count(),
             1,
@@ -87,7 +89,7 @@ impl Contract {
                 self.workflow_template
                     .insert(&self.workflow_last_id, &(workflow, settings));
                 self.init_function_calls(fncalls, fncall_metadata);
-                ActivityResult::Ok
+                ActionResult::Ok
             }
             PromiseResult::Failed => self.postprocessing_fail_update(instance_id),
         }

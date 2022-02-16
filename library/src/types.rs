@@ -4,6 +4,8 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
+use crate::{EventCode, FnCallId};
+
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
@@ -35,17 +37,42 @@ pub enum ActionIdent {
     MediaInvalidate,
     MediaRemove,
     FnCall,
-    FnCallAdd,
-    FnCallRemove,
     TagAdd,
     TagEdit,
     TagRemove,
     FtDistribute,
     TreasurySendFt,
+    TreasurySendFtContract,
     TreasurySendNft,
+    TreasurySendNFtContract,
     TreasurySendNear,
     WorkflowAdd,
-    WorkflowChange,
+    Event,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
+#[serde(crate = "near_sdk::serde")]
+pub enum ActionData {
+    FnCall(FnCallData),
+    Event(EventData),
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
+#[serde(crate = "near_sdk::serde")]
+pub struct FnCallData {
+    pub id: FnCallId,
+    pub tgas: u16,
+    pub deposit: U128,
+}
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
+#[serde(crate = "near_sdk::serde")]
+pub struct EventData {
+    pub code: EventCode,
+    pub values: Vec<DataTypeDef>,
+    pub deposit_from_bind: Option<u8>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
@@ -71,7 +98,7 @@ pub enum DataTypeDef {
 }
 
 //TODO remove debug in prod
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone,Debug)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum DataType {
@@ -92,6 +119,7 @@ pub enum DataType {
     VecU128(Vec<U128>),
 }
 
+// TODO better error type
 impl DataType {
     pub fn try_into_bool(self) -> Result<bool, String> {
         match self {
@@ -102,19 +130,26 @@ impl DataType {
 
     pub fn try_into_string(self) -> Result<String, String> {
         match self {
-            DataType::String(b) => Ok(b),
+            DataType::String(s) => Ok(s),
             _ => Err("DataType is not string".into()),
         }
     }
 
     pub fn try_into_u128(self) -> Result<u128, String> {
         match self {
-            DataType::U8(b) => Ok(b as u128),
-            DataType::U16(b) => Ok(b as u128),
-            DataType::U32(b) => Ok(b as u128),
-            DataType::U64(b) => Ok(b.0 as u128),
-            DataType::U128(b) => Ok(b.0 as u128),
+            DataType::U8(n) => Ok(n as u128),
+            DataType::U16(n) => Ok(n as u128),
+            DataType::U32(n) => Ok(n as u128),
+            DataType::U64(n) => Ok(n.0 as u128),
+            DataType::U128(n) => Ok(n.0 as u128),
             _ => Err("DataType is not integer".into()),
+        }
+    }
+
+    pub fn try_into_vec_str(self) -> Result<Vec<String>, String> {
+        match self {
+            DataType::VecString(v) => Ok(v),
+            _ => Err("DataType is not VecString".into()),
         }
     }
 }
@@ -128,22 +163,3 @@ pub struct FnCallMetadata {
     pub arg_names: Vec<String>,
     pub arg_types: Vec<DataTypeDef>,
 }
-/*  TODO remove
-impl FnCallMetadata {
-
-    /// Returns indexes of object with Vec objects
-    pub fn vec_object_indexes(&self) -> Vec<u8> {
-        self.arg_types
-            .iter()
-            .filter(|s| match s {
-                DataTypeDef::VecObject(_) => true,
-                _ => false,
-            })
-            .map(|s| match s {
-                DataTypeDef::VecObject(e) => *e,
-                _ => unreachable!(),
-            })
-            .collect()
-    }
-}
- */

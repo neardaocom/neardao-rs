@@ -15,3 +15,6 @@ pub type FnCallId = (AccountId, MethodName);
 pub type ArgValidatorId = u8;
 pub type BindId = u8;
 pub type Consts = dyn Fn(u8) -> DataType;
+pub type EventCode = String;
+pub type TransitionId = u8;
+pub type ActivityId = u8;

@@ -2,14 +2,14 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::{U128, U64},
     serde::{Deserialize, Serialize},
-    serde_json, AccountId, Balance,
+    serde_json, AccountId,
 };
 
 use crate::{
     expression::{Condition, EExpr},
     storage::StorageBucket,
-    types::{ActionIdent, DataType, DataTypeDef, ValidatorType},
-    BindId, Consts, FnCallId,
+    types::{ActionData, ActionIdent, DataType, DataTypeDef, ValidatorType},
+    ActivityId, BindId, Consts, EventCode, FnCallId, TransitionId,
 };
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
@@ -40,11 +40,9 @@ pub struct Template {
 #[serde(crate = "near_sdk::serde")]
 pub struct TemplateActivity {
     pub code: String,
-    pub exec_condition: Option<Expression>,
+    pub exec_condition: Option<Expression>, //TODO remove??
     pub action: ActionIdent,
-    pub fncall_id: Option<FnCallId>,
-    pub tgas: u16,
-    pub deposit: U128,
+    pub action_data: Option<ActionData>,
     pub arg_types: Vec<DataTypeDef>,
     pub activity_inputs: Vec<Vec<ArgType>>, //arguments for each activity
     pub postprocessing: Option<Postprocessing>,
@@ -119,7 +117,6 @@ impl Expression {
         let mut binded_args: Vec<DataType> = Vec::with_capacity(args.len());
 
         for arg in self.args.iter() {
-            //dbg!("bind and eval");
             match arg {
                 ExprArg::User(id) => {
                     binded_args.push(args[*id as usize].clone());
@@ -135,8 +132,6 @@ impl Expression {
                 }
             }
         }
-        //dbg!("binded_args");
-        //dbg!(binded_args.clone());
         self.expr.eval(&mut binded_args)
     }
 }
@@ -164,12 +159,17 @@ pub enum ArgType {
     Const(u8), // dao specific value known at runtime, eg 0. is dao account name
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug))]
 #[serde(crate = "near_sdk::serde")]
-pub enum ActivityResult {
+pub enum ActionResult {
     Ok,
     Finished,
+    NoRights,
+    NotEnoughDeposit,
+    TransitionNotPossible,
+    ProposalNotAccepted,
+    Postprocessing,
     MaxTransitionLimitReached,
     TransitionCondFailed,
     ActivityCondFailed,
@@ -189,14 +189,15 @@ pub enum CondOrExpr {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum PostprocessingType {
+    RemoveActionStorage(String),
     SaveBind(u8),
     SaveValue(DataType),
     SaveUserValue((u8, u8)), //object id - value pos
     FnCallResult(DataTypeDef),
+    Instructions,
 }
 
-/// Simple post-fncall instructions which say what to do based on FnCall result
-/// ATM Used its only used to save fncall action result to the storage
+/// Simple post-fncall instructions which say what to do based on FnCall result.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -244,61 +245,78 @@ impl Postprocessing {
     }
 
     // TODO handle parse error
-    pub fn postprocess(self, fn_result_val: Vec<u8>, inner_value: Option<DataType>) -> DataType {
+    /// Executes postprocessing
+    ///
+    pub fn postprocess(
+        self,
+        fn_result_val: Vec<u8>,
+        inner_value: Option<DataType>,
+        storage: &mut StorageBucket,
+    ) -> Option<DataType> {
         match self.op_type {
-            PostprocessingType::SaveBind(_) => inner_value.unwrap(),
-            PostprocessingType::SaveUserValue(_) => inner_value.unwrap(),
-            PostprocessingType::FnCallResult(t) => match t {
-                DataTypeDef::String(_) => {
-                    DataType::String(serde_json::from_slice::<String>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::Bool(_) => {
-                    DataType::Bool(serde_json::from_slice::<bool>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::U8(_) => {
-                    DataType::U8(serde_json::from_slice::<u8>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::U16(_) => {
-                    DataType::U16(serde_json::from_slice::<u16>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::U32(_) => {
-                    DataType::U32(serde_json::from_slice::<u32>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::U64(_) => {
-                    DataType::U64(serde_json::from_slice::<U64>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::U128(_) => {
-                    DataType::U128(serde_json::from_slice::<U128>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::VecString => DataType::VecString(
-                    serde_json::from_slice::<Vec<String>>(&fn_result_val).unwrap(),
-                ),
-                DataTypeDef::VecU8 => {
-                    DataType::VecU8(serde_json::from_slice::<Vec<u8>>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::VecU16 => {
-                    DataType::VecU16(serde_json::from_slice::<Vec<u16>>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::VecU32 => {
-                    DataType::VecU32(serde_json::from_slice::<Vec<u32>>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::VecU64 => {
-                    DataType::VecU64(serde_json::from_slice::<Vec<U64>>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::VecU128 => {
-                    DataType::VecU128(serde_json::from_slice::<Vec<U128>>(&fn_result_val).unwrap())
-                }
-                DataTypeDef::Object(_) => {
-                    unimplemented!("object is not supported yet");
-                }
-                DataTypeDef::NullableObject(_) => {
-                    unimplemented!("object is not supported yet");
-                }
-                DataTypeDef::VecObject(_) => {
-                    unimplemented!("object is not supported yet");
-                }
-            },
-            PostprocessingType::SaveValue(val) => val,
+            PostprocessingType::RemoveActionStorage(key) => {
+                storage.remove_data(&key);
+                None
+            }
+            PostprocessingType::SaveBind(_) => Some(inner_value.unwrap()),
+            PostprocessingType::SaveUserValue(_) => Some(inner_value.unwrap()),
+            PostprocessingType::FnCallResult(t) => {
+                let result = match t {
+                    DataTypeDef::String(_) => {
+                        DataType::String(serde_json::from_slice::<String>(&fn_result_val).unwrap())
+                    }
+                    DataTypeDef::Bool(_) => {
+                        DataType::Bool(serde_json::from_slice::<bool>(&fn_result_val).unwrap())
+                    }
+                    DataTypeDef::U8(_) => {
+                        DataType::U8(serde_json::from_slice::<u8>(&fn_result_val).unwrap())
+                    }
+                    DataTypeDef::U16(_) => {
+                        DataType::U16(serde_json::from_slice::<u16>(&fn_result_val).unwrap())
+                    }
+                    DataTypeDef::U32(_) => {
+                        DataType::U32(serde_json::from_slice::<u32>(&fn_result_val).unwrap())
+                    }
+                    DataTypeDef::U64(_) => {
+                        DataType::U64(serde_json::from_slice::<U64>(&fn_result_val).unwrap())
+                    }
+                    DataTypeDef::U128(_) => {
+                        DataType::U128(serde_json::from_slice::<U128>(&fn_result_val).unwrap())
+                    }
+                    DataTypeDef::VecString => DataType::VecString(
+                        serde_json::from_slice::<Vec<String>>(&fn_result_val).unwrap(),
+                    ),
+                    DataTypeDef::VecU8 => {
+                        DataType::VecU8(serde_json::from_slice::<Vec<u8>>(&fn_result_val).unwrap())
+                    }
+                    DataTypeDef::VecU16 => DataType::VecU16(
+                        serde_json::from_slice::<Vec<u16>>(&fn_result_val).unwrap(),
+                    ),
+                    DataTypeDef::VecU32 => DataType::VecU32(
+                        serde_json::from_slice::<Vec<u32>>(&fn_result_val).unwrap(),
+                    ),
+                    DataTypeDef::VecU64 => DataType::VecU64(
+                        serde_json::from_slice::<Vec<U64>>(&fn_result_val).unwrap(),
+                    ),
+                    DataTypeDef::VecU128 => DataType::VecU128(
+                        serde_json::from_slice::<Vec<U128>>(&fn_result_val).unwrap(),
+                    ),
+                    DataTypeDef::Object(_) => {
+                        unimplemented!("object is not supported yet");
+                    }
+                    DataTypeDef::NullableObject(_) => {
+                        unimplemented!("object is not supported yet");
+                    }
+                    DataTypeDef::VecObject(_) => {
+                        unimplemented!("object is not supported yet");
+                    }
+                };
+                Some(result)
+            }
+            PostprocessingType::SaveValue(val) => Some(val),
+            PostprocessingType::Instructions => {
+                unimplemented!()
+            }
         }
     }
 }
@@ -323,9 +341,6 @@ pub struct Instance {
     pub template_id: u16,
 }
 
-pub type TransitionId = u8;
-pub type ActivityId = u8;
-
 impl Instance {
     pub fn new(template_id: u16, transitions: &Vec<Vec<u8>>) -> Self {
         let mut transition_counter = Vec::with_capacity(transitions.len());
@@ -343,12 +358,11 @@ impl Instance {
     }
 
     // TODO optimalize so we dont have to subtract index by one each time
-    /// Finds id of desired activity if theres existing transition from current to desired
-    pub fn get_target_trans_with_act(
+    /// Finds transition for dao action
+    pub fn get_target_trans_with_for_dao_action(
         &self,
         wft: &Template,
         action_ident: ActionIdent,
-        fncall_id: Option<FnCallId>,
     ) -> Option<(TransitionId, ActivityId)> {
         wft.transitions
             .get(self.current_activity_id as usize)
@@ -357,18 +371,85 @@ impl Instance {
                     .enumerate()
                     .find(|(_, act_id)| {
                         wft.activities[**act_id as usize].as_ref().unwrap().action == action_ident
-                            && wft.activities[**act_id as usize]
-                                .as_ref()
-                                .unwrap()
-                                .fncall_id
-                                == fncall_id
                     })
                     .map(|(t_id, act_id)| (t_id as u8, *act_id))
             })
             .flatten()
     }
 
-    // TODO pos_level seems redundant - remove
+    /// Finds transition for fncall
+    pub fn get_target_trans_with_for_fncall(
+        &self,
+        wft: &Template,
+        fn_call_ident: FnCallId,
+    ) -> Option<(TransitionId, ActivityId)> {
+        wft.transitions
+            .get(self.current_activity_id as usize)
+            .map(|t| {
+                t.iter()
+                    .enumerate()
+                    .find(|(_, act_id)| {
+                        if wft.activities[**act_id as usize].as_ref().unwrap().action
+                            != ActionIdent::FnCall
+                        {
+                            return false;
+                        }
+
+                        match wft.activities[**act_id as usize]
+                            .as_ref()
+                            .unwrap()
+                            .action_data
+                            .as_ref()
+                        {
+                            Some(data) => match data {
+                                ActionData::FnCall(fncall) => fncall.id == fn_call_ident,
+                                ActionData::Event(_) => false,
+                            },
+                            None => false,
+                        }
+                    })
+                    .map(|(t_id, act_id)| (t_id as u8, *act_id))
+            })
+            .flatten()
+    }
+
+    /// Finds transition for event
+    pub fn get_target_trans_with_for_event(
+        &self,
+        wft: &Template,
+        event_code: &EventCode,
+    ) -> Option<(TransitionId, ActivityId)> {
+        wft.transitions
+            .get(self.current_activity_id as usize)
+            .map(|t| {
+                t.iter()
+                    .enumerate()
+                    .find(|(_, act_id)| {
+                        if wft.activities[**act_id as usize].as_ref().unwrap().action
+                            != ActionIdent::Event
+                        {
+                            return false;
+                        }
+
+                        match wft.activities[**act_id as usize]
+                            .as_ref()
+                            .unwrap()
+                            .action_data
+                            .as_ref()
+                        {
+                            Some(data) => match data {
+                                ActionData::FnCall(_) => false,
+                                ActionData::Event(e) => e.code == *event_code,
+                            },
+                            None => false,
+                        }
+                    })
+                    .map(|(t_id, act_id)| (t_id as u8, *act_id))
+            })
+            .flatten()
+    }
+
+    // TODO remove pos_level when cond is changed
     /// Tries to advance to next activity in workflow.
     /// Returns transition result + Postprocessing if theres some
     /// Conditions might panics underneath
@@ -383,16 +464,16 @@ impl Instance {
         action_args: &[Vec<DataType>],
         storage_bucket: &StorageBucket,
         pos_level: usize,
-    ) -> (ActivityResult, Option<Postprocessing>) {
+    ) -> (ActionResult, Option<Postprocessing>) {
         //TODO switching to finish state
         if self.state == InstanceState::Finished {
-            return (ActivityResult::Finished, None);
+            return (ActionResult::Finished, None);
         }
 
         let transition_settings =
             &wfs.transition_constraints[self.current_activity_id as usize][transition_id as usize];
 
-        // TODO trans and activity cond should required only validation against storage
+        // TODO trans and activity cond should be required only validation against storage
         //check transition cond
         let transition_cond_result = match &transition_settings.cond {
             Some(c) => c
@@ -408,14 +489,14 @@ impl Instance {
         };
 
         if !transition_cond_result {
-            return (ActivityResult::TransitionCondFailed, None);
+            return (ActionResult::TransitionCondFailed, None);
         }
 
         // check transition counter
         if self.transition_counter[self.current_activity_id as usize][transition_id as usize] + 1
             > transition_settings.transition_limit
         {
-            return (ActivityResult::MaxTransitionLimitReached, None);
+            return (ActionResult::MaxTransitionLimitReached, None);
         }
 
         self.transition_counter[self.current_activity_id as usize][transition_id as usize] += 1;
@@ -434,10 +515,10 @@ impl Instance {
         };
 
         if !can_be_exec.try_into_bool().unwrap() {
-            return (ActivityResult::ActivityCondFailed, None);
+            return (ActionResult::ActivityCondFailed, None);
         }
 
-        (ActivityResult::Ok, wanted_activity.postprocessing.clone())
+        (ActionResult::Ok, wanted_activity.postprocessing.clone())
     }
 
     pub fn finish(&mut self, wft: &Template) -> bool {
@@ -454,12 +535,12 @@ impl Instance {
 
 mod test {
     use crate::{
-        expression::{Condition, EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
+        expression::{Condition, EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
         storage::StorageBucket,
         types::{ActionIdent, DataType, DataTypeDef, FnCallMetadata, ValidatorType},
         utils::{bind_args, validate_args},
         workflow::{
-            ActivityResult, ActivityRight, ExprArg, InstanceState, PostprocessingType,
+            ActionResult, ActivityRight, ExprArg, InstanceState, PostprocessingType,
             ProposeSettings, TemplateActivity, TemplateSettings, TransitionConstraint,
             VoteScenario,
         },
@@ -488,9 +569,7 @@ mod test {
                     code: "near_send".into(),
                     exec_condition: None,
                     action: ActionIdent::TreasurySendNear,
-                    fncall_id: None,
-                    tgas: 0,
-                    deposit: 0.into(),
+                    action_data: None,
                     arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: pp.clone(),
                     activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
@@ -499,9 +578,7 @@ mod test {
                     code: "group_add".into(),
                     exec_condition: None,
                     action: ActionIdent::GroupAdd,
-                    fncall_id: None,
-                    tgas: 0,
-                    deposit: 0.into(),
+                    action_data: None,
                     arg_types: vec![
                         DataTypeDef::String(false),
                         DataTypeDef::String(false),
@@ -580,7 +657,7 @@ mod test {
         wfi.state = InstanceState::Running;
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::TreasurySendNear, None)
+            .get_target_trans_with_for_dao_action(&wft, ActionIdent::TreasurySendNear)
             .unwrap();
 
         assert_eq!(activity_id, 1);
@@ -614,7 +691,7 @@ mod test {
             metadata.as_slice(),
         ));
 
-        let expected_result = (ActivityResult::Ok, pp.clone());
+        let expected_result = (ActionResult::Ok, pp.clone());
 
         assert_eq!(result, expected_result);
         assert_eq!(wfi.current_activity_id, 1);
@@ -644,7 +721,7 @@ mod test {
         ]];
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::GroupAdd, None)
+            .get_target_trans_with_for_dao_action(&wft, ActionIdent::GroupAdd)
             .unwrap();
 
         assert_eq!(activity_id, 2);
@@ -688,7 +765,7 @@ mod test {
             0,
         );
 
-        let expected_result = (ActivityResult::Ok, pp.clone());
+        let expected_result = (ActionResult::Ok, pp.clone());
         let expected_args = vec![vec![
             DataType::String("rustaceans_group".into()),
             DataType::String("leaderisme".into()),
@@ -718,9 +795,7 @@ mod test {
                     code: "near_send".into(),
                     exec_condition: None,
                     action: ActionIdent::TreasurySendNear,
-                    fncall_id: None,
-                    tgas: 0,
-                    deposit: 0.into(),
+                    action_data: None,
                     arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: pp.clone(),
                     activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
@@ -799,7 +874,7 @@ mod test {
         // Execute Workflow
         for i in 0..5 {
             let (transition_id, activity_id) = wfi
-                .get_target_trans_with_act(&wft, ActionIdent::TreasurySendNear, None)
+                .get_target_trans_with_for_dao_action(&wft, ActionIdent::TreasurySendNear)
                 .unwrap();
 
             assert_eq!(activity_id, 1);
@@ -816,7 +891,7 @@ mod test {
                 &mut bucket,
                 0,
             );
-            let expected_result = (ActivityResult::Ok, pp.clone());
+            let expected_result = (ActionResult::Ok, pp.clone());
 
             assert!(validate_args(
                 &dao_consts,
@@ -852,7 +927,7 @@ mod test {
         }
 
         let (transition_id, activity_id) = wfi
-            .get_target_trans_with_act(&wft, ActionIdent::TreasurySendNear, None)
+            .get_target_trans_with_for_dao_action(&wft, ActionIdent::TreasurySendNear)
             .unwrap();
 
         let result = wfi.transition_to_next(
@@ -873,7 +948,7 @@ mod test {
         ]];
 
         let mut user_args = expected_args.clone();
-        let expected_result = (ActivityResult::MaxTransitionLimitReached, None);
+        let expected_result = (ActionResult::MaxTransitionLimitReached, None);
 
         bind_args(
             &dao_consts,

@@ -2,6 +2,7 @@
 
 use crate::types::DataType;
 
+mod bounty;
 mod skyward;
 
 pub fn get_dao_consts() -> Box<dyn Fn(u8) -> DataType> {

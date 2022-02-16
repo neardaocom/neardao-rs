@@ -29,6 +29,7 @@ pub enum FnName {
     ArrayPop, // TODO remove?? when we have array_remove
     ArrayMerge,
     ArrayLen,
+    ValueExists,
 }
 
 // Recursive structure does not work with deserializer
@@ -161,6 +162,10 @@ impl EExpr {
                     DataType::VecString(result)
                 }
                 _ => panic!("Array merge is not yet supported for other types"),
+            },
+            FnName::ValueExists => match &args.get(0) {
+                Some(_) => DataType::Bool(true),
+                None => DataType::Bool(false),
             },
             /*
             FnName::InString => {
