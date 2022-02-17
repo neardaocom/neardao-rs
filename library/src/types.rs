@@ -163,3 +163,11 @@ pub struct FnCallMetadata {
     pub arg_names: Vec<String>,
     pub arg_types: Vec<DataTypeDef>,
 }
+
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum VoteScenario {
+    Democratic,
+    TokenWeighted,
+}

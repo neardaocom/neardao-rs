@@ -77,6 +77,7 @@ pub fn validate_args(
 /// Binds values by defined schema input_defs.
 pub fn bind_args(
     consts: &Consts, //dao specific values
+    binds_tpl: &[DataType],
     binds: &[DataType],
     input_defs: &[Vec<ArgType>],
     storage: &StorageBucket,
@@ -100,6 +101,7 @@ pub fn bind_args(
                 DataType::Null,
             )),
             ArgType::Bind(id) => result_args.push(binds[*id as usize].clone()),
+            ArgType::BindTpl(id) => result_args.push(binds_tpl[*id as usize].clone()),
             ArgType::Storage(key) => {
                 result_args.push(storage.get_data(key).unwrap());
             }
@@ -115,6 +117,7 @@ pub fn bind_args(
 
                 bind_args(
                     consts,
+                    binds_tpl,
                     binds,
                     input_defs,
                     &storage,
@@ -128,6 +131,7 @@ pub fn bind_args(
             ArgType::VecObject(id) => {
                 bind_vec_obj_args(
                     consts,
+                    binds_tpl,
                     binds,
                     input_defs[*id as usize].as_slice(),
                     storage,
@@ -144,6 +148,7 @@ pub fn bind_args(
 
 pub(crate) fn bind_vec_obj_args(
     consts: &dyn Fn(u8) -> DataType,
+    binds_tpl: &[DataType],
     binds: &[DataType],
     input_defs: &[ArgType],
     storage: &StorageBucket,
@@ -156,6 +161,7 @@ pub(crate) fn bind_vec_obj_args(
         match &input_defs[input_defs_pos] {
             ArgType::Free => result_args.push(data.clone()),
             ArgType::Bind(id) => result_args.push(binds[*id as usize].clone()),
+            ArgType::BindTpl(id) => result_args.push(binds_tpl[*id as usize].clone()),
             ArgType::Storage(key) => {
                 result_args.push(storage.get_data(&key).unwrap());
             }
@@ -180,18 +186,11 @@ pub fn args_to_json(
     arg_collection_values: &[Vec<DataType>],
     metadata: &[FnCallMetadata],
     metadata_id: usize,
-    //    collection_pos: Option<usize>,
 ) -> String {
     let mut next_collection_obj_idx: usize = 0;
     // Create raw json object string
     let mut args = String::with_capacity(128);
     args.push('{');
-
-    /*     let source = match collection_pos {
-        Some(pos) => &[vec![arg_collection_values[pos]]],
-        None => arg_values,
-    }; */
-
     for i in 0..metadata[metadata_id].arg_names.len() {
         args.push('"');
         args.push_str(metadata[metadata_id].arg_names[i].as_str()); //json attribute
@@ -222,7 +221,6 @@ pub fn args_to_json(
                 args.push('[');
 
                 let metadata_id = *id as usize;
-                //let metadata = &metadata[metadata_id];
                 let params_len = &metadata[metadata_id].arg_types.len();
                 let collection = &arg_collection_values[next_collection_obj_idx];
 
@@ -514,6 +512,7 @@ mod test {
             },
         ];
 
+        let binds_tpl = vec![];
         let binds = vec![DataType::U128(U128::from(1000))];
         let obj_validators = vec![ValidatorType::Collection(2)];
         let validator_expr = vec![
@@ -587,6 +586,7 @@ mod test {
 
         bind_args(
             &dao_consts,
+            binds_tpl.as_slice(),
             binds.as_slice(),
             activity_inputs.as_slice(),
             &storage,

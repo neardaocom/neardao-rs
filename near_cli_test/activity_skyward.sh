@@ -30,18 +30,13 @@ METHOD_5='sale_create'
 ARGS_5='[["Null"],[{"String":"Neardao auction"},{"String":"www.neardao.com"},{"String":"'$DCID'"},"Null",{"String":"wrap.testnet"},{"U64":"1647777423000000000"},{"U64":"604800000000000"}]]'
 ARGS_COL_5='[[{"String":"'$DCID'"},{"U128":"2000"},"Null"]]'
 
-
-
-ARGS_SALE_CREATE='[]'
-
-RECEIVER=$RECEIVER_5
-METHOD=$METHOD_5
-ARGS=$ARGS_5
-ARGS_COLLECTION=$ARGS_COL_5
+RECEIVER=$RECEIVER_1
+METHOD=$METHOD_1
+ARGS=$ARGS_1
+ARGS_COLLECTION=$ARGS_COL_1
 
 near call $DCID fn_call '{"proposal_id":2,"fncall_receiver":"'$RECEIVER'","fncall_method":"'$METHOD'","arg_values":'$ARGS', "arg_values_collection":'$ARGS_COLLECTION'}' --accountId $CID1 --gas $TGAS_200
 
-
 # checks
-#near view $DCID storage_bucket_data_all '{"bucket_id":"wf_skyward_1"}'
+near view $DCID storage_bucket_data_all '{"bucket_id":"wf_skyward_1"}'
 #near view $SID get_sales '{"account_id": "'$DCID'"}'

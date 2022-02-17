@@ -8,17 +8,9 @@ use near_sdk::{
 use crate::{
     expression::{Condition, EExpr},
     storage::StorageBucket,
-    types::{ActionData, ActionIdent, DataType, DataTypeDef, ValidatorType},
+    types::{ActionData, ActionIdent, DataType, DataTypeDef, ValidatorType, VoteScenario},
     ActivityId, BindId, Consts, EventCode, FnCallId, TransitionId,
 };
-
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum VoteScenario {
-    Democratic,
-    TokenWeighted,
-}
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
@@ -28,9 +20,9 @@ pub struct Template {
     pub version: u8,
     pub activities: Vec<Option<TemplateActivity>>, // pos is ActivityId, None is always at 0. index as start activity
     pub obj_validators: Vec<Vec<ValidatorType>>,
-    pub validator_exprs: Vec<Expression>,
-    pub transitions: Vec<Vec<u8>>, //u8 as ActivityId
-    pub binds: Vec<DataType>,      // TODO
+    pub validator_exprs: Vec<Expression>, //TODO move to matrix, this wont work in all scenarios
+    pub transitions: Vec<Vec<ActivityId>>,
+    pub binds: Vec<DataType>,
     pub start: Vec<u8>,
     pub end: Vec<u8>,
 }
@@ -44,8 +36,9 @@ pub struct TemplateActivity {
     pub action: ActionIdent,
     pub action_data: Option<ActionData>,
     pub arg_types: Vec<DataTypeDef>,
-    pub activity_inputs: Vec<Vec<ArgType>>, //arguments for each activity
+    pub activity_inputs: Vec<Vec<ArgType>>,
     pub postprocessing: Option<Postprocessing>,
+    pub must_succeed: bool,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
@@ -54,7 +47,7 @@ pub struct TemplateActivity {
 pub struct TemplateSettings {
     pub allowed_proposers: Vec<ActivityRight>,
     pub allowed_voters: ActivityRight,
-    pub activity_rights: Vec<Vec<ActivityRight>>, //ActivityRight
+    pub activity_rights: Vec<Vec<ActivityRight>>,
     pub transition_constraints: Vec<Vec<TransitionConstraint>>,
     pub scenario: VoteScenario,
     pub duration: u32,
@@ -63,8 +56,8 @@ pub struct TemplateSettings {
     pub spam_threshold: u8,
     pub vote_only_once: bool,
     pub deposit_propose: Option<U128>,
-    pub deposit_vote: Option<U128>, //
-    pub deposit_propose_return: u8, // how many percent of propose deposit to return
+    pub deposit_vote: Option<U128>,
+    pub deposit_propose_return: u8, // how many percent of propose deposit to return, TODO implement
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
@@ -84,7 +77,7 @@ pub struct ProposeSettings {
     pub storage_key: String,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)] //Remove clone + debug
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)] //Remove clone + debug in prod
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum ActivityRight {
@@ -151,7 +144,8 @@ pub enum ExprArg {
 #[serde(crate = "near_sdk::serde")]
 pub enum ArgType {
     Free,
-    Bind(BindId), // Template hardcoded,
+    Bind(BindId),    // Bind from proposal settings
+    BindTpl(BindId), // Bind from template
     Storage(String),
     Expression(Expression),
     Object(u8),
@@ -301,14 +295,8 @@ impl Postprocessing {
                     DataTypeDef::VecU128 => DataType::VecU128(
                         serde_json::from_slice::<Vec<U128>>(&fn_result_val).unwrap(),
                     ),
-                    DataTypeDef::Object(_) => {
-                        unimplemented!("object is not supported yet");
-                    }
-                    DataTypeDef::NullableObject(_) => {
-                        unimplemented!("object is not supported yet");
-                    }
-                    DataTypeDef::VecObject(_) => {
-                        unimplemented!("object is not supported yet");
+                    _ => {
+                        unimplemented!();
                     }
                 };
                 Some(result)
@@ -337,6 +325,7 @@ pub enum InstanceState {
 pub struct Instance {
     pub state: InstanceState,
     pub current_activity_id: u8,
+    pub previous_activity_id: u8,
     pub transition_counter: Vec<Vec<u16>>,
     pub template_id: u16,
 }
@@ -352,6 +341,7 @@ impl Instance {
         Instance {
             state: InstanceState::Waiting,
             current_activity_id: 0,
+            previous_activity_id: 0,
             transition_counter,
             template_id,
         }
@@ -449,10 +439,9 @@ impl Instance {
             .flatten()
     }
 
-    // TODO remove pos_level when cond is changed
-    /// Tries to advance to next activity in workflow.
-    /// Returns transition result + Postprocessing if theres some
-    /// Conditions might panics underneath
+    // TODO figure out cond eval and pos_level
+    /// Tries to advance to next activity in workflow and updates counter.
+    /// Conditions might panics underneath.
     pub fn transition_to_next(
         &mut self,
         activity_id: u8,
@@ -500,6 +489,7 @@ impl Instance {
         }
 
         self.transition_counter[self.current_activity_id as usize][transition_id as usize] += 1;
+        self.previous_activity_id = self.current_activity_id;
         self.current_activity_id = activity_id;
 
         // check if we can run this
@@ -537,12 +527,11 @@ mod test {
     use crate::{
         expression::{Condition, EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
         storage::StorageBucket,
-        types::{ActionIdent, DataType, DataTypeDef, FnCallMetadata, ValidatorType},
+        types::{ActionIdent, DataType, DataTypeDef, FnCallMetadata, ValidatorType, VoteScenario},
         utils::{bind_args, validate_args},
         workflow::{
             ActionResult, ActivityRight, ExprArg, InstanceState, PostprocessingType,
             ProposeSettings, TemplateActivity, TemplateSettings, TransitionConstraint,
-            VoteScenario,
         },
     };
 
@@ -573,6 +562,7 @@ mod test {
                     arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: pp.clone(),
                     activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                    must_succeed: true,
                 }),
                 Some(TemplateActivity {
                     code: "group_add".into(),
@@ -586,6 +576,7 @@ mod test {
                     ],
                     postprocessing: pp.clone(),
                     activity_inputs: vec![vec![ArgType::Bind(0), ArgType::Free, ArgType::Free]],
+                    must_succeed: true,
                 }),
             ],
             obj_validators: vec![vec![], vec![ValidatorType::Primitive(0)], vec![]],
@@ -698,6 +689,7 @@ mod test {
 
         bind_args(
             &dao_consts,
+            wft.binds.as_slice(),
             settings.binds.as_slice(),
             wft.activities[activity_id as usize]
                 .as_ref()
@@ -752,6 +744,7 @@ mod test {
 
         bind_args(
             &dao_consts,
+            wft.binds.as_slice(),
             settings.binds.as_slice(),
             wft.activities[activity_id as usize]
                 .as_ref()
@@ -799,6 +792,7 @@ mod test {
                     arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                     postprocessing: pp.clone(),
                     activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                    must_succeed: true,
                 }),
             ],
             obj_validators: vec![vec![], vec![ValidatorType::Primitive(0)], vec![]],
@@ -906,6 +900,7 @@ mod test {
 
             bind_args(
                 &dao_consts,
+                wft.binds.as_slice(),
                 settings.binds.as_slice(),
                 wft.activities[activity_id as usize]
                     .as_ref()
@@ -952,6 +947,7 @@ mod test {
 
         bind_args(
             &dao_consts,
+            wft.binds.as_slice(),
             settings.binds.as_slice(),
             wft.activities[activity_id as usize]
                 .as_ref()

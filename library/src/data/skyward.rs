@@ -1,13 +1,12 @@
 use crate::{
-    expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
+    expression::{EExpr, FnName},
     types::{
-        ActionData, ActionIdent, DataType, DataTypeDef, FnCallData, FnCallMetadata, ValidatorType,
+        ActionData, ActionIdent, DataType, DataTypeDef, FnCallData, FnCallMetadata, VoteScenario,
     },
     unit_tests::ONE_NEAR,
     workflow::{
-        ActivityRight, ArgType, CondOrExpr, ExprArg, Expression, Postprocessing,
-        PostprocessingType, ProposeSettings, Template, TemplateActivity, TemplateSettings,
-        TransitionConstraint, VoteScenario,
+        ActivityRight, ArgType, ExprArg, Expression, Postprocessing, PostprocessingType,
+        ProposeSettings, Template, TemplateActivity, TemplateSettings, TransitionConstraint,
     },
     FnCallId,
 };
@@ -36,9 +35,11 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
         instructions: vec![],
     });
 
-    let pp_amount_send = Some(Postprocessing {
-        storage_key: "pp_4".into(),
-        op_type: PostprocessingType::SaveBind(2),
+    let pp_amount_send = None;
+
+    let pp_sale_create = Some(Postprocessing {
+        storage_key: "pp_5".into(),
+        op_type: PostprocessingType::FnCallResult(DataTypeDef::U32(false)), //might overflow in future coz skyward returns u64 but we have U64 only
         instructions: vec![],
     });
 
@@ -62,9 +63,10 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                     args: vec![ExprArg::Const(0), ExprArg::User(0)],
                     expr: EExpr::Fn(FnName::ArrayMerge),
                 })]],
+                must_succeed: true,
             }),
             Some(TemplateActivity {
-                code: "storage_deposit".into(),
+                code: "transfer_tokens".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
@@ -74,10 +76,11 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_storage_deposit_1,
-                activity_inputs: vec![vec![ArgType::Bind(0)]],
+                activity_inputs: vec![vec![ArgType::BindTpl(0)]],
+                must_succeed: false,
             }),
             Some(TemplateActivity {
-                code: "storage_deposit".into(),
+                code: "transfer_tokens".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
@@ -87,10 +90,11 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_storage_deposit_2,
-                activity_inputs: vec![vec![ArgType::Bind(0)]],
+                activity_inputs: vec![vec![ArgType::BindTpl(0)]],
+                must_succeed: false,
             }),
             Some(TemplateActivity {
-                code: "ft_transfer_call".into(),
+                code: "transfer_tokens".into(),
                 exec_condition: None,
                 action: ActionIdent::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
@@ -102,10 +106,11 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 postprocessing: pp_amount_send,
                 activity_inputs: vec![vec![
                     ArgType::Free,
-                    ArgType::Bind(2),
                     ArgType::Bind(0),
-                    ArgType::Bind(1),
+                    ArgType::BindTpl(0),
+                    ArgType::BindTpl(1),
                 ]],
+                must_succeed: true,
             }),
             Some(TemplateActivity {
                 code: "sale_create".into(),
@@ -117,7 +122,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                     deposit: (3 * ONE_NEAR).into(),
                 })),
                 arg_types: vec![DataTypeDef::Object(0)],
-                postprocessing: None,
+                postprocessing: pp_sale_create,
                 activity_inputs: vec![
                     vec![ArgType::Object(1)],
                     vec![
@@ -129,40 +134,20 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                         ArgType::Free,
                         ArgType::Free,
                     ],
-                    vec![
-                        ArgType::Const(0),
-                        ArgType::Storage("pp_4".into()),
-                        ArgType::Free,
-                    ],
+                    vec![ArgType::Const(0), ArgType::Bind(0), ArgType::Free],
                 ],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1], vec![2, 3, 4], vec![3, 4], vec![4], vec![5]],
-        binds: vec![],
+        binds: vec![
+            DataType::String(SKYWARD_ACC.into()),
+            DataType::String("\\\"AccountDeposit\\\"".into()),
+        ],
         start: vec![0],
         end: vec![5],
-        obj_validators: vec![
-            vec![],
-            vec![],
-            vec![],
-            vec![],
-            vec![],
-            //vec![ValidatorType::Collection(2)],
-        ],
-        validator_exprs: vec![
-        /*  We dont need to validate the value now because its binded from ft_transfer_call result
-            Expression {
-            args: vec![ExprArg::Bind(2), ExprArg::User(1)],
-            expr: EExpr::Boolean(TExpr {
-                operators: vec![Op {
-                    op_type: EOp::Rel(RelOp::GtE),
-                    operands_ids: [0, 1],
-                }],
-                terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
-            }),
-            }
-        */
-        ],
+        obj_validators: vec![vec![], vec![], vec![], vec![], vec![]],
+        validator_exprs: vec![],
     };
 
     //TODO be able to say we use receiver as from storage
@@ -250,7 +235,6 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
 pub fn workflow_skyward_template_settings_data_1() -> TemplateUserSettings {
     let wfs = vec![TemplateSettings {
         activity_rights: vec![
-            vec![],
             vec![ActivityRight::GroupLeader(1)],
             vec![ActivityRight::GroupLeader(1)],
             vec![ActivityRight::GroupLeader(1)],
@@ -310,11 +294,7 @@ pub fn workflow_skyward_template_settings_data_1() -> TemplateUserSettings {
 
     // User proposed settings type
     let settings = ProposeSettings {
-        binds: vec![
-            DataType::String(SKYWARD_ACC.into()),
-            DataType::String("\\\"AccountDeposit\\\"".into()),
-            DataType::U128(1000.into()),
-        ],
+        binds: vec![DataType::U128(1000.into())],
         storage_key: "wf_skyward_1".into(),
     };
 

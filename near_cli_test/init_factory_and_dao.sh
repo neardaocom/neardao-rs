@@ -1,8 +1,8 @@
 #!/bin/bash
 
-#source ./near_cli_test/constants.sh
-#source ./near_cli_test/init_env.sh
-#near call $CID new '{"tags":["dao","test","podilnik"]}' --accountId $CID
+source ./near_cli_test/constants.sh
+source ./near_cli_test/init_env.sh
+near call $CID new '{"tags":["dao","test","podilnik"]}' --accountId $CID
 
 ##
 ### init factory
@@ -16,7 +16,7 @@ S_MEDIA='[]'
 S_TAGS='[{"category":"global","values":["test dao", "new", "top"]},{"category":"group","values":["CEO", "CTO", "no idea", "good guy"]},{"category":"media","values":["very important", "probably virus"]}]'
 S_FNCALLS='[]'
 S_FNCALL_META='[]'
-S_WFT='[{"name":"wf_add","version":1,"activities":[null,{"code":"wf_add","exec_condition":null,"action":"WorkflowAdd","fncall_id":null,"tgas":0,"deposit":"0","arg_types":[{"U16":false}],"activity_inputs":[[{"Bind":0}]],"postprocessing":null}],"obj_validators":[[{"Primitive":0}]],"validator_exprs":[{"args":[{"User":0},{"Bind":0}],"expr":{"Boolean":{"operators":[{"operands_ids":[0,1],"op_type":{"Rel":"Eqs"}}],"terms":[{"Arg":1},{"Arg":0}]}}}],"transitions":[[1]],"binds":[],"start":[0],"end":[1]}]'
+S_WFT='[{"name":"wf_add","version":1,"activities":[null,{"code":"wf_add","exec_condition":null,"action":"WorkflowAdd","action_data":null,"arg_types":[{"U16":false}],"activity_inputs":[[{"Bind":0}]],"postprocessing":null,"must_succeed":true}],"obj_validators":[[{"Primitive":0}]],"validator_exprs":[{"args":[{"User":0},{"Bind":0}],"expr":{"Boolean":{"operators":[{"operands_ids":[0,1],"op_type":{"Rel":"Eqs"}}],"terms":[{"Arg":1},{"Arg":0}]}}}],"transitions":[[1]],"binds":[],"start":[0],"end":[1]}]'
 S_WFS='[[{"allowed_proposers":[{"Group":1}],"allowed_voters":"TokenHolder","activity_rights":[[{"GroupLeader":1}]],"transition_constraints":[[{"transition_limit":1,"cond":null}]],"scenario":"TokenWeighted","duration":25,"quorum":51,"approve_threshold":20,"spam_threshold":80,"vote_only_once":true,"deposit_propose":"1","deposit_vote":"1000","deposit_propose_return":0}]]'
 
 ARGS=`echo '{"total_supply":1000000000,"ft_metadata":'$S_FT_META',"settings":'$S_SETTINGS',"groups":'$S_GROUPS',"media":'$S_MEDIA',"tags":'$S_TAGS',"function_calls":'$S_FNCALLS',"function_call_metadata":'$S_FNCALL_META',"workflow_templates":'$S_WFT',"workflow_template_settings":'$S_WFS'}' | base64`

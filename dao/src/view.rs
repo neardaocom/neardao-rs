@@ -60,48 +60,14 @@ impl Contract {
             .collect()
     }
 
-    pub fn check_condition(
+    pub fn check_transition(
         self,
         proposal_id: u32,
         args: Vec<DataType>,
         activity_id: u8,
         transition_id: Option<u8>,
     ) -> bool {
-        let (_, wft, wfs) = self.get_wf_and_proposal(proposal_id);
-        let (_, settings) = self.workflow_instance.get(&proposal_id).unwrap();
-        let bucket = self.storage.get(&settings.storage_key).unwrap();
-        let dao_consts = self.dao_consts();
-
-        match transition_id {
-            None => {
-                let activity = wft.activities.get(activity_id as usize).unwrap().as_ref();
-
-                activity
-                    .unwrap()
-                    .exec_condition
-                    .as_ref()
-                    .map(|e| {
-                        e.bind_and_eval(&dao_consts, &bucket, settings.binds.as_slice(), &args)
-                            .try_into_bool()
-                            .unwrap()
-                    })
-                    .unwrap_or(true)
-            }
-            Some(t_id) => {
-                let transition_settings =
-                    &wfs.transition_constraints[activity_id as usize][t_id as usize];
-
-                transition_settings
-                    .cond
-                    .as_ref()
-                    .map(|e| {
-                        e.bind_and_eval(&dao_consts, &bucket, settings.binds.as_slice(), &args)
-                            .try_into_bool()
-                            .unwrap()
-                    })
-                    .unwrap_or(true)
-            }
-        }
+        unimplemented!()
     }
 
     pub fn groups(self) -> Vec<GroupOutput> {

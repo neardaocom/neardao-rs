@@ -1,31 +1,21 @@
 use std::vec;
 
 use crate::{
-    expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
+    expression::{EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
     types::{
-        ActionData, ActionIdent, DataType, DataTypeDef, EventData, FnCallMetadata, ValidatorType,
+        ActionData, ActionIdent, DataType, DataTypeDef, EventData, ValidatorType, VoteScenario,
     },
     unit_tests::ONE_NEAR,
     workflow::{
-        ActivityRight, ArgType, CondOrExpr, ExprArg, Expression, Postprocessing,
-        PostprocessingType, ProposeSettings, Template, TemplateActivity, TemplateSettings,
-        TransitionConstraint, VoteScenario,
+        ActivityRight, ArgType, ExprArg, Expression, Postprocessing, PostprocessingType,
+        ProposeSettings, Template, TemplateActivity, TemplateSettings, TransitionConstraint,
     },
-    FnCallId,
 };
 
 use super::{TemplateData, TemplateUserSettings};
 
-// Activities:
-//
-//  1. CheckIn (accountId) - save account to storage
-//     Unrealized (accountId) - remove account from storage
-//     Approve (accountId, State) - true: save else: remove account from storage // tcond = pp_1 exists // pp - true => save_value_true, pp - false => save_value_false // tcond = pp_3 = false
-//     Done (accountId, note) - check account, // tcond = pp_3 = true, pp - save user value 2
-//     Approve Done (accountId, state, note) tcond = pp4 exists
-//     Payout (accountId, amount)
+// This wf does not return bounty + deposit
 pub fn workflow_bounty_template_data_1() -> TemplateData {
-    //TODO event deposit
     let wf = Template {
         name: "wf_bounty".into(),
         version: 1,
@@ -38,7 +28,7 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
                 action_data: Some(ActionData::Event(EventData {
                     code: "checkin".into(),
                     values: vec![DataTypeDef::String(false)],
-                    deposit_from_bind: Some(0),
+                    deposit_from_bind: Some(1),
                 })),
                 arg_types: vec![],
                 activity_inputs: vec![vec![ArgType::Free]],
@@ -47,6 +37,7 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
                     op_type: PostprocessingType::SaveUserValue((0, 0)),
                     instructions: vec![],
                 }),
+                must_succeed: true,
             }),
             Some(TemplateActivity {
                 code: "event_unrealized".into(),
@@ -64,6 +55,7 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
                     op_type: PostprocessingType::RemoveActionStorage("pp_1".into()),
                     instructions: vec![],
                 }),
+                must_succeed: true,
             }),
             Some(TemplateActivity {
                 code: "event_approve".into(),
@@ -81,6 +73,7 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
                     op_type: PostprocessingType::SaveUserValue((0, 1)),
                     instructions: vec![],
                 }),
+                must_succeed: true,
             }),
             Some(TemplateActivity {
                 code: "event_done".into(),
@@ -98,6 +91,7 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
                     op_type: PostprocessingType::SaveUserValue((0, 1)),
                     instructions: vec![],
                 }),
+                must_succeed: true,
             }),
             Some(TemplateActivity {
                 code: "event_done_approve".into(),
@@ -105,16 +99,21 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
                 action: ActionIdent::Event,
                 action_data: Some(ActionData::Event(EventData {
                     code: "done_approve".into(),
-                    values: vec![DataTypeDef::String(false), DataTypeDef::Bool(false)],
+                    values: vec![
+                        DataTypeDef::String(false),
+                        DataTypeDef::Bool(false),
+                        DataTypeDef::String(false),
+                    ],
                     deposit_from_bind: None,
                 })),
                 arg_types: vec![],
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgType::Free, ArgType::Free, ArgType::Free]],
                 postprocessing: Some(Postprocessing {
                     storage_key: "pp_5".into(),
                     op_type: PostprocessingType::SaveUserValue((0, 1)),
                     instructions: vec![],
                 }),
+                must_succeed: true,
             }),
             Some(TemplateActivity {
                 code: "send_near".into(),
@@ -122,21 +121,41 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
                 action: ActionIdent::TreasurySendNear,
                 action_data: None,
                 arg_types: vec![],
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgType::Storage("pp_1".into()), ArgType::Free]],
                 postprocessing: None,
+                must_succeed: true,
             }),
         ],
-        obj_validators: vec![vec![ValidatorType::Primitive(0)]],
-        validator_exprs: vec![Expression {
-            args: vec![ExprArg::Bind(0), ExprArg::User(1)],
-            expr: EExpr::Boolean(TExpr {
-                operators: vec![Op {
-                    op_type: EOp::Rel(RelOp::GtE),
-                    operands_ids: [0, 1],
-                }],
-                terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
-            }),
-        }],
+        obj_validators: vec![
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![ValidatorType::Primitive(0), ValidatorType::Primitive(0)],
+        ],
+        validator_exprs: vec![
+            Expression {
+                args: vec![ExprArg::Bind(0), ExprArg::User(1)],
+                expr: EExpr::Boolean(TExpr {
+                    operators: vec![Op {
+                        op_type: EOp::Rel(RelOp::GtE),
+                        operands_ids: [0, 1],
+                    }],
+                    terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
+                }),
+            },
+            Expression {
+                args: vec![ExprArg::Storage("pp_1".into()), ExprArg::User(0)],
+                expr: EExpr::Boolean(TExpr {
+                    operators: vec![Op {
+                        op_type: EOp::Rel(RelOp::Eqs),
+                        operands_ids: [0, 1],
+                    }],
+                    terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
+                }),
+            },
+        ],
         transitions: vec![
             vec![1],
             vec![2, 3],
@@ -159,7 +178,6 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
 pub fn workflow_bounty_template_settings_data_1() -> TemplateUserSettings {
     let wfs = vec![TemplateSettings {
         activity_rights: vec![
-            vec![],
             vec![ActivityRight::Anyone],
             vec![ActivityRight::Anyone],
             vec![ActivityRight::Group(1)],
@@ -179,7 +197,6 @@ pub fn workflow_bounty_template_settings_data_1() -> TemplateUserSettings {
         deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
         transition_constraints: vec![
-            // TODO conds
             vec![TransitionConstraint {
                 transition_limit: 1,
                 cond: None,
@@ -215,7 +232,7 @@ pub fn workflow_bounty_template_settings_data_1() -> TemplateUserSettings {
                 TransitionConstraint {
                     transition_limit: 4,
                     cond: Some(Expression {
-                        args: vec![ExprArg::Storage("pp_1".into()), ExprArg::User(1)],
+                        args: vec![ExprArg::Storage("pp_1".into()), ExprArg::User(0)],
                         expr: EExpr::Boolean(TExpr {
                             operators: vec![Op {
                                 op_type: EOp::Rel(RelOp::Eqs),
@@ -251,7 +268,10 @@ pub fn workflow_bounty_template_settings_data_1() -> TemplateUserSettings {
     }];
 
     let propose_setting = ProposeSettings {
-        binds: vec![DataType::U128((5 * ONE_NEAR).into())],
+        binds: vec![
+            DataType::U128((5 * ONE_NEAR).into()),
+            DataType::U128(ONE_NEAR.into()),
+        ],
         storage_key: "wf_bounty_1".into(),
     };
 

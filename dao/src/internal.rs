@@ -2,7 +2,7 @@ use std::{collections::HashMap, thread::AccessError};
 
 use near_sdk::{
     env::{self},
-    AccountId, Promise, Balance,
+    AccountId, Promise, Balance, log,
 };
 
 use crate::{
@@ -26,11 +26,10 @@ use crate::{
 };
 use library::{
     storage::StorageBucket,
-    types::{ActionIdent, DataType, EventData, FnCallData, FnCallMetadata, ActionData},
+    types::{VoteScenario, ActionIdent, DataType, EventData, FnCallData, FnCallMetadata, ActionData},
     utils::{args_to_json, bind_args, validate_args},
     workflow::{
         ActionResult, ActivityRight, InstanceState, Postprocessing, Template, TemplateSettings,
-        VoteScenario,
     },
     Consts, EventCode, FnCallId,
 };
@@ -344,10 +343,13 @@ impl Contract {
         }
     }
 
-    pub fn postprocessing_fail_update(&mut self, proposal_id: u32) -> ActionResult {
+    // TODO required success vs optional
+    pub fn postprocessing_fail_update(&mut self, proposal_id: u32, must_succeed: bool) -> ActionResult {
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
-        wfi.current_activity_id -= 1;
-        wfi.state = InstanceState::FatalError;
+        if must_succeed {
+            wfi.current_activity_id = wfi.previous_activity_id;
+            wfi.state = InstanceState::FatalError;
+        }
         self.workflow_instance
             .insert(&proposal_id, &(wfi, settings));
         ActionResult::ErrPostprocessing
@@ -434,13 +436,14 @@ impl Contract {
 
         let activity =  wft.activities[activity_id as usize].as_ref().unwrap();
 
+        // Deposit check in case of event
         if  activity.action == ActionIdent::Event {
             match activity.action_data.as_ref().unwrap() {
                 ActionData::Event(data) => {
                     match data.deposit_from_bind {
                         Some(b_id) => {
-                            if settings.binds.get(b_id as usize).unwrap_or(&DataType::U128(0.into())).clone().try_into_u128().unwrap() <= deposit.unwrap_or(0) {
-                                return ActionResult::NotEnoughDeposit
+                            if settings.binds.get(b_id as usize).unwrap_or(&DataType::U128(0.into())).clone().try_into_u128().unwrap() > deposit.unwrap_or(0) {
+                                return ActionResult::NotEnoughDeposit;
                             }
                         }
                         None => (),
@@ -490,6 +493,7 @@ impl Contract {
                         fn_metadata.as_slice(),
                     )
                 {
+                    wfi.current_activity_id = wfi.previous_activity_id;
                     return ActionResult::ErrValidation;
                 }
 
@@ -503,23 +507,26 @@ impl Contract {
                 );
 
                 // In some scenarios workflow might require to save some user provided values for use later
-                let user_value = postprocessing
+                let inner_value = postprocessing
                     .as_ref()
                     .map(|p| p.try_to_get_inner_value(args.as_slice(), settings.binds.as_slice()))
                     .flatten();
 
-                bind_args(
-                    &dao_consts,
-                    settings.binds.as_slice(),
-                    activity
-                        .activity_inputs
-                        .as_slice(),
-                    &mut bucket,
-                    args,
-                    args_collections,
-                    0,
-                    0,
-                );
+                if activity.action != ActionIdent::Event  {
+                    bind_args(
+                        &dao_consts,
+                        wft.binds.as_slice(),
+                        settings.binds.as_slice(),
+                        activity
+                            .activity_inputs
+                            .as_slice(),
+                        &mut bucket,
+                        args,
+                        args_collections,
+                        0,
+                        0,
+                    );
+                }
 
                 let promise = match action_ident {
                     ActionIdent::TreasurySendNear => Some(
@@ -607,7 +614,7 @@ impl Contract {
                             workflow_settings,
                             &env::current_account_id(),
                             0,
-                            50 * TGAS,
+                            80 * TGAS,
                         )))
                     },
                     ActionIdent::FnCall => {
@@ -616,198 +623,73 @@ impl Contract {
                            receiver = env::current_account_id()
                         }
 
-                    let args = args_to_json(
-                                    args.as_slice(),
-                                    args_collections.as_slice(),
-                                    &fn_metadata,
-                                    0,
-                                );
+                        let args = args_to_json(
+                                        args.as_slice(),
+                                        args_collections.as_slice(),
+                                        &fn_metadata,
+                                        0,
+                                    );
 
-                    let fn_data: &FnCallData = match wft.activities[activity_id as usize].as_ref().unwrap().action_data.as_ref().unwrap() {
-                        ActionData::FnCall(data) => data,
-                        _ => panic!("Bad template structure, expected FnCallData"),
-                    };
+                        let fn_data: &FnCallData = match activity.action_data.as_ref().unwrap() {
+                            ActionData::FnCall(data) => data,
+                            _ => panic!("Bad template structure, expected FnCallData"),
+                        };
 
-                    Some(Promise::new(receiver)
-                    .function_call(
-                        method.into_bytes(),
-                        args.into_bytes(),
-                        fn_data.deposit.0,
-                        (fn_data.tgas as u64 * 10u64.pow(12)) as u64,
-                    ))
+                        Some(Promise::new(receiver)
+                        .function_call(
+                            method.into_bytes(),
+                            args.into_bytes(),
+                            fn_data.deposit.0,
+                            fn_data.tgas as u64 * TGAS,
+                        ))
                     },
                     _ => None,
                 };
-                match promise {
-                    Some(pr) => {
+
+                let result= match (promise, postprocessing) {
+                    (Some(pr), Some(pp)) => {
                         pr.then(ext_self::postprocess(
                             proposal_id,
                             settings.storage_key.clone(),
-                            postprocessing,
-                            user_value,
+                            Some(pp),
+                            inner_value,
+                            activity.must_succeed,
+                            &env::current_account_id(),
+                            0,
+                            80 * TGAS,
+                        ));
+                        ActionResult::Postprocessing
+                    }
+                    (None, None) => result,
+                    (None, Some(pp)) => {
+                        let key = pp.storage_key.clone();
+                        if let Some(val) = &pp.postprocess(vec![], inner_value, &mut bucket) {
+                            bucket.add_data(&key, val);
+                        }
+    
+                        self.storage.insert(&settings.storage_key, &bucket);
+                        result
+                    },
+                    (Some(pr), None) =>{
+                        pr.then(ext_self::postprocess(
+                            proposal_id,
+                            settings.storage_key.clone(),
+                            None,
+                            inner_value,
+                            activity.must_succeed,
                             &env::current_account_id(),
                             0,
                             50 * TGAS,
                         ));
-                    }
-                    None => {
-                        ext_self::postprocess(
-                        proposal_id,
-                        settings.storage_key.clone(),
-                        postprocessing,
-                        user_value,
-                        &env::current_account_id(),
-                        0,
-                        50 * TGAS,
-                    );
-                
-                }
-            }
+                        ActionResult::Postprocessing
+                    },
+                };
 
                 self.workflow_instance
                 .insert(&proposal_id, &(wfi, settings))
                 .unwrap();
 
-                ActionResult::Postprocessing
-
-                /*
-                                //Send Near
-
-
-                                //Send FT
-                                                let mut promise = Promise::new(ft_account_id);
-                                if is_contract {
-                                    //TODO test formating memo
-                                    promise = promise.function_call(
-                                        b"ft_transfer_call".to_vec(),
-                                        format!(
-                                            "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":\"{}\",\"msg\":\"{}\"}}",
-                                            receiver_id,
-                                            amount_ft.0,
-                                            memo.unwrap_or("".into()),
-                                            msg
-                                        )
-                                        .as_bytes()
-                                        .to_vec(),
-                                        0,
-                                        TGAS,
-                                    );
-                                } else {
-                                    promise = promise.function_call(
-                                        b"ft_transfer".to_vec(),
-                                        format!(
-                                            "{{\"receiver_id\":{},\"amount\":\"{}\",\"msg\":\"{}\"}}",
-                                            receiver_id, amount_ft.0, msg
-                                        )
-                                        .as_bytes()
-                                        .to_vec(),
-                                        0,
-                                        TGAS,
-                                    );
-                                }
-                            //Send NFT
-                                let promise = Promise::new(nft_account_id);
-                        if is_contract {
-                            //TODO test formating memo
-                            promise.function_call(b"nft_transfer_call".to_vec(), format!("{{\"receiver_id\":\"{}\",\"token_id\":\"{}\",\"approval_id\":{},\"memo\":\"{}\",\"msg\":\"{}\"}}", receiver_id, nft_id, approval_id, memo.unwrap_or("".into()), msg).as_bytes().to_vec(), 0, TGAS)
-                        } else {
-                            promise.function_call(
-                                b"nft_transfer".to_vec(),
-                                format!(
-                                    "{{\"receiver_id\":{},\"token_id\":\"{}\",\"approval_id\":{},\"memo\":\"{}\"}}",
-                                    receiver_id,
-                                    nft_id,
-                                    approval_id,
-                                    memo.unwrap_or("".into())
-                                )
-                                .as_bytes()
-                                .to_vec(),
-                                0,
-                                TGAS,
-                            )
-                        }
-
-                       let receiver = if fncall_receiver.as_str() == "self" {
-                    env::current_account_id()
-                } else {
-                    fncall_receiver.clone()
-                };
-                        FNCall
-                                        let args = args_to_json(
-                            arg_values.as_slice(),
-                            arg_values_collection.as_slice(),
-                            &fn_metadata,
-                            0,
-                        );
-
-                        PromiseOrValue::Promise(
-                            Promise::new(receiver)
-                                .function_call(
-                                    fncall_method.into_bytes(),
-                                    args.into_bytes(),
-                                    activity.deposit.0,
-                                    (activity.tgas as u64 * 10u64.pow(12)) as u64,
-                                )
-                                .then(ext_self::postprocess(
-                                    proposal_id,
-                                    settings.storage_key.clone(),
-                                    postprocessing,
-                                    inner_value,
-                                    &env::current_account_id(),
-                                    0,
-                                    30 * TGAS,
-                                )),
-                        )
-
-                        WFADd
-                                        PromiseOrValue::Promise(
-                            Promise::new(dao_settings.workflow_provider)
-                                .function_call(
-                                    b"wf_template".to_vec(),
-                                    format!(
-                                        "{{\"id\":{}}}",
-                                        args[0].pop().unwrap().try_into_u128().unwrap()
-                                    )
-                                    .into_bytes(),
-                                    0,
-                                    50 * TGAS,
-                                )
-                                .then(ext_self::store_workflow(
-                                    proposal_id,
-                                    workflow_settings,
-                                    &acc,
-                                    0,
-                                    50 * TGAS,
-                                ))
-                                .then(ext_self::postprocess(
-                                    proposal_id,
-                                    settings.storage_key.clone(),
-                                    postprocessing,
-                                    None,
-                                    &acc,
-                                    0,
-                                    30 * TGAS,
-                                )),
-                        )
-
-                        // TODO remove
-                                        // TODO scenarios workflow_add + fncall
-                if postprocessing.is_some() {
-                    ext_self::postprocess(
-                        proposal_id,
-                        settings.storage_key.clone(),
-                        postprocessing,
-                        user_value,
-                        &env::current_account_id(),
-                        0,
-                        50 * 10u64.pow(24),
-                    );
-
-                    ActionResult::Postprocessing
-                } else {
-                    result
-                }
-                                */
+                result
             }
             _ => result,
         }

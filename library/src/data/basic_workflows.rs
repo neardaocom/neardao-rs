@@ -1,11 +1,13 @@
 use crate::{
     expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
-    types::{ActionIdent, DataType, DataTypeDef, FnCallData, FnCallMetadata, ValidatorType},
+    types::{
+        ActionIdent, DataType, DataTypeDef, FnCallData, FnCallMetadata, ValidatorType, VoteScenario,
+    },
     unit_tests::ONE_NEAR,
     workflow::{
         ActivityRight, ArgType, CondOrExpr, ExprArg, Expression, Postprocessing,
         PostprocessingType, ProposeSettings, Template, TemplateActivity, TemplateSettings,
-        TransitionConstraint, VoteScenario,
+        TransitionConstraint,
     },
     FnCallId,
 };
@@ -24,6 +26,7 @@ pub fn workflow_wf_add() -> Template {
                 arg_types: vec![DataTypeDef::U16(false)],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Bind(0)]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1]],
@@ -79,6 +82,7 @@ pub fn workflow_treasury_send_near_loop() -> Template {
                 arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1], vec![1]],
@@ -140,6 +144,7 @@ pub fn workflow_treasury_send_near() -> Template {
                 arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1]],
@@ -220,6 +225,7 @@ pub fn workflow_treasury_send_ft() -> Template {
                     ArgType::Free,
                     ArgType::Free,
                 ]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1]],
@@ -278,6 +284,7 @@ pub fn workflow_treasury_send_ft_contract() -> Template {
                     ArgType::Free,
                     ArgType::Free,
                 ]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1]],
@@ -310,7 +317,6 @@ pub fn workflow_settings_treasury_send_ft_contract() -> TemplateSettings {
     }
 }
 
-
 pub fn workflow_group_add() -> Template {
     Template {
         name: "wf_group_add".into(),
@@ -329,6 +335,7 @@ pub fn workflow_group_add() -> Template {
                 ],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free, ArgType::Free, ArgType::Free]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1], vec![1]],
@@ -353,6 +360,7 @@ pub fn workflow_group_members_add() -> Template {
                 arg_types: vec![DataTypeDef::U16(false), DataTypeDef::VecObject(1)],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1]],
@@ -408,6 +416,7 @@ pub fn workflow_group_remove() -> Template {
                 arg_types: vec![DataTypeDef::U16(false)],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1], vec![1]],
@@ -432,6 +441,7 @@ pub fn workflow_group_member_remove() -> Template {
                 arg_types: vec![DataTypeDef::U16(false), DataTypeDef::String(false)],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1], vec![1]],
@@ -456,6 +466,7 @@ pub fn workflow_tag_add() -> Template {
                 arg_types: vec![DataTypeDef::String(false), DataTypeDef::VecString],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1], vec![1]],
@@ -484,6 +495,7 @@ pub fn workflow_tag_edit() -> Template {
                 ],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free, ArgType::Free, ArgType::Free]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1], vec![1]],
@@ -512,6 +524,7 @@ pub fn workflow_ft_distribute() -> Template {
                 ],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free, ArgType::Free, ArgType::Free]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1]],
@@ -537,6 +550,7 @@ pub fn workflow_media_add() -> Template {
                 arg_types: vec![DataTypeDef::Object(1)],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free]],
+                must_succeed: true,
             }),
         ],
         transitions: vec![vec![1]],

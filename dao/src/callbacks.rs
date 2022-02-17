@@ -16,6 +16,7 @@ trait ExtSelf {
         storage_key: String,
         postprocessing: Option<Postprocessing>,
         inner_value: Option<DataType>,
+        must_succeed: bool,
     ) -> ActionResult;
 
     fn store_workflow(&mut self, instance_id: u32, settings: Vec<TemplateSettings>)
@@ -26,12 +27,15 @@ trait ExtSelf {
 impl Contract {
     // TODO finish error handling
     #[private]
+    /// Private callback to check Promise result.
+    /// If there is postprocessing, then also processes result or just save provided value to the storage.
     pub fn postprocess(
         &mut self,
         instance_id: u32,
         storage_key: String,
         postprocessing: Option<Postprocessing>,
         inner_value: Option<DataType>,
+        must_succeed: bool,
     ) -> ActionResult {
         assert_eq!(
             env::promise_results_count(),
@@ -60,7 +64,7 @@ impl Contract {
 
         match result {
             true => ActionResult::Ok,
-            false => self.postprocessing_fail_update(instance_id),
+            false => self.postprocessing_fail_update(instance_id, must_succeed),
         }
     }
 
@@ -91,7 +95,7 @@ impl Contract {
                 self.init_function_calls(fncalls, fncall_metadata);
                 ActionResult::Ok
             }
-            PromiseResult::Failed => self.postprocessing_fail_update(instance_id),
+            PromiseResult::Failed => self.postprocessing_fail_update(instance_id, true),
         }
     }
 }

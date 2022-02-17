@@ -57,11 +57,8 @@ pub struct SaleInput {
     pub title: String,
     pub url: Option<String>,
     pub permissions_contract_id: Option<ValidAccountId>,
-
     pub out_tokens: Vec<SaleInputOutToken>,
-
     pub in_token_account_id: ValidAccountId,
-
     pub start_time: WrappedTimestamp,
     pub duration: WrappedDuration,
 }
@@ -169,6 +166,7 @@ fn workflow_skyward_finance() {
 
     bind_args(
         &dao_consts,
+        wft.binds.as_slice(),
         settings.binds.as_slice(),
         wft.activities[activity_id as usize]
             .as_ref()
@@ -261,6 +259,7 @@ fn workflow_skyward_finance() {
 
     bind_args(
         &dao_consts,
+        wft.binds.as_slice(),
         settings.binds.as_slice(),
         wft.activities[activity_id as usize]
             .as_ref()
@@ -361,6 +360,7 @@ fn workflow_skyward_finance() {
 
     bind_args(
         &dao_consts,
+        wft.binds.as_slice(),
         settings.binds.as_slice(),
         wft.activities[activity_id as usize]
             .as_ref()
@@ -453,19 +453,9 @@ fn workflow_skyward_finance() {
         fn_metadata[activity_id as usize - 1].as_slice(),
     ));
 
-    // Postprocess before binding
-    let pp = wft.activities[activity_id as usize]
-        .as_ref()
-        .unwrap()
-        .postprocessing
-        .as_ref()
-        .unwrap();
-
-    let inner_value = pp.try_to_get_inner_value(user_args.as_slice(), settings.binds.as_slice());
-    assert_eq!(inner_value, Some(DataType::U128(1000.into())));
-
     bind_args(
         &dao_consts,
+        wft.binds.as_slice(),
         settings.binds.as_slice(),
         wft.activities[activity_id as usize]
             .as_ref()
@@ -496,14 +486,6 @@ fn workflow_skyward_finance() {
     };
 
     assert_eq!(args, serde_json::to_string(&expected_obj).unwrap());
-
-    // Assuming storage deposit fn call result was ok
-    let inner_value = pp.clone().postprocess(vec![], inner_value, &mut bucket);
-    assert_eq!(inner_value, Some(DataType::U128(1000.into())));
-
-    if let Some(val) = inner_value {
-        bucket.add_data(&pp.storage_key, &val);
-    }
 
     // 5. Sale create on skyward.near
     let mut user_args = vec![
@@ -590,6 +572,7 @@ fn workflow_skyward_finance() {
 
     bind_args(
         &dao_consts,
+        wft.binds.as_slice(),
         settings.binds.as_slice(),
         wft.activities[activity_id as usize]
             .as_ref()
