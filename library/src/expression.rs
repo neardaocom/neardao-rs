@@ -7,6 +7,11 @@ use crate::types::DataType;
 
 type ArgId = u8;
 
+// TODO error trait
+pub const ERR_OPERANDS: &str = "Incompatible operands";
+pub const ERR_OPERATION: &str = "Invalid operation";
+pub const ERR_DATATYPE: &str = "Invalid datatype";
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -27,8 +32,8 @@ pub enum FnName {
     ArrayRemove,
     ArrayPush,
     ArrayPop, // TODO remove?? when we have array_remove
-    ArrayMerge,
     ArrayLen,
+    ToArray,
     ValueExists,
 }
 
@@ -58,7 +63,7 @@ impl Condition {
                 false => self.false_path,
             }
         } else {
-            panic!("{}", "Cond expr must return bool");
+            panic!("{}", ERR_DATATYPE);
         }
     }
 }
@@ -144,118 +149,26 @@ impl EExpr {
                     // cannot be None coz we iterate by the array
                     match args.get(i).unwrap() {
                         DataType::String(ref v) => result.push_str(v),
-                        _ => panic!("{}", "Expected DataType::VecString"),
+                        _ => panic!("{}", ERR_DATATYPE),
                     };
                 }
                 DataType::String(result)
             }
-            FnName::ArrayMerge => match &args[0] {
-                DataType::String(s) => {
+            FnName::ToArray => match &args[0] {
+                DataType::String(_) => {
                     let mut result = Vec::with_capacity(args.len());
                     for arg in args.iter() {
-                        result.push(
-                            arg.clone()
-                                .try_into_string()
-                                .expect("Expected string datatype"),
-                        );
+                        result.push(arg.clone().try_into_string().expect(ERR_DATATYPE));
                     }
                     DataType::VecString(result)
                 }
-                _ => panic!("Array merge is not yet supported for other types"),
+                _ => panic!("{}", ERR_OPERATION),
             },
             FnName::ValueExists => match &args.get(0) {
                 Some(_) => DataType::Bool(true),
                 None => DataType::Bool(false),
             },
-            /*
-            FnName::InString => {
-                let arg1 = parse_fn_arg(&args, 0, vmap)?;
-                let arg2 = parse_fn_arg(&args, 1, vmap)?;
-
-                match (arg1, arg2) {
-                    (Some(Value::String(value)), Some(Value::String(haystack))) => {
-                        Ok(Value::Boolean(haystack.contains(value)))
-                    }
-                    _ => Err(RuntimeErr::InvalidFunctionArgument),
-                }
-            }
-            FnName::InArray => {
-                let arg1 = parse_fn_arg(&args, 0, vmap)?;
-                let arg2 = parse_fn_arg(&args, 1, vmap)?;
-                match (arg1, arg2) {
-                    (Some(Value::String(value)), Some(Value::ArrString(arr))) => {
-                        Ok(Value::Boolean(arr.contains(value)))
-                    }
-                    (Some(Value::Integer(value)), Some(Value::ArrInteger(arr))) => {
-                        Ok(Value::Boolean(arr.contains(value)))
-                    }
-                    _ => Err(RuntimeErr::InvalidFunctionArgument),
-                }
-            }
-            FnName::ArrayAtIdx => {
-                let arg1 = parse_fn_arg(&args, 0, vmap)?;
-                let arg2 = parse_fn_arg(&args, 1, vmap)?;
-                match (arg1, arg2) {
-                    (Some(Value::Integer(value)), Some(Value::ArrString(arr))) => {
-                        let result = if let Some(v) = arr.get(*value as usize) {
-                            Value::String(v.into())
-                        } else {
-                            Value::Null
-                        };
-                        Ok(result)
-                    }
-                    (Some(Value::Integer(value)), Some(Value::ArrInteger(arr))) => {
-                        let result = if let Some(v) = arr.get(*value as usize) {
-                            Value::Integer(*v)
-                        } else {
-                            Value::Null
-                        };
-                        Ok(result)
-                    }
-                    _ => Err(RuntimeErr::InvalidFunctionArgument),
-                }
-            }
-            FnName::ArrayPush => {
-                //array insert
-                let arg1 = parse_fn_arg(&args, 0, vmap)?;
-                let arg2 = parse_fn_arg(&args, 1, vmap)?;
-                match (arg1, arg2) {
-                    (Some(Value::String(value)), Some(Value::ArrString(arr))) => {
-                        //TODO: mutate or let it clone new vec?
-                        let mut new_arr = arr.to_owned();
-                        new_arr.push(value.into());
-                        Ok(Value::ArrString(new_arr))
-                    }
-                    (Some(Value::Integer(value)), Some(Value::ArrInteger(arr))) => {
-                        //TODO: mutate or let it clone new vec?
-                        let mut new_arr = arr.to_owned();
-                        new_arr.push(*value);
-                        Ok(Value::ArrInteger(new_arr))
-                    }
-                    _ => Err(RuntimeErr::InvalidFunctionArgument),
-                }
-            }
-            //Array remove instead ??
-            FnName::ArrayPop => {
-                match parse_fn_arg(&args, 0, vmap)? {
-                    Some(Value::ArrString(arr)) => {
-                        //TODO: mutate or let it clone new vec?
-                        let mut new_arr = arr.to_owned();
-                        new_arr.pop();
-                        Ok(Value::ArrString(new_arr))
-                    }
-                    Some(Value::ArrInteger(arr)) => {
-                        //TODO: mutate or let it clone new vec?
-                        let mut new_arr = arr.to_owned();
-                        new_arr.pop();
-                        Ok(Value::ArrInteger(new_arr))
-                    }
-                    _ => Err(RuntimeErr::InvalidFunctionArgument),
-                }
-            }
-              */
-            // TODO array len?
-            _ => panic!("{}", "Fn eval error"),
+            _ => panic!("{}", ERR_OPERATION),
         }
     }
 }
@@ -303,43 +216,36 @@ pub enum EOp {
 impl EOp {
     pub fn operate(&self, arg1: &DataType, arg2: &DataType) -> DataType {
         match self {
-            EOp::Ari(o) => {
-                let (lhs, rhs) = match (arg1, arg2) {
-                    (DataType::U8(lhs), DataType::U8(rhs)) => (*lhs, *rhs),
-                    _ => panic!("Invalid operands for aritmetic operation"),
-                };
+            EOp::Ari(o) => match (arg1, arg2) {
+                (DataType::U8(lhs), DataType::U8(rhs)) => {
+                    let result = match o {
+                        AriOp::Add => lhs + rhs,
+                        AriOp::Subtract => lhs - rhs,
+                        AriOp::Multiply => lhs * rhs,
+                        AriOp::Divide => lhs / rhs,
+                        AriOp::Modulo => lhs % rhs,
+                    };
 
-                let result = match o {
-                    AriOp::Add => lhs + rhs,
-                    AriOp::Subtract => lhs - rhs,
-                    AriOp::Multiply => lhs * rhs,
-                    AriOp::Divide => lhs / rhs,
-                    AriOp::Modulo => lhs % rhs,
-                };
+                    DataType::U8(result)
+                }
+                (DataType::U128(lhs), DataType::U128(rhs)) => {
+                    let result = match o {
+                        AriOp::Add => lhs.0 + rhs.0,
+                        AriOp::Subtract => lhs.0 - rhs.0,
+                        AriOp::Multiply => lhs.0 * rhs.0,
+                        AriOp::Divide => lhs.0 / rhs.0,
+                        AriOp::Modulo => lhs.0 % rhs.0,
+                    };
 
-                DataType::U8(result)
-            }
-            EOp::Ari(o) => {
-                let (lhs, rhs) = match (arg1, arg2) {
-                    (DataType::U128(lhs), DataType::U128(rhs)) => (*lhs, *rhs),
-                    _ => panic!("Invalid operands for aritmetic operation"),
-                };
-
-                let result = match o {
-                    AriOp::Add => lhs.0 + rhs.0,
-                    AriOp::Subtract => lhs.0 - rhs.0,
-                    AriOp::Multiply => lhs.0 * rhs.0,
-                    AriOp::Divide => lhs.0 / rhs.0,
-                    AriOp::Modulo => lhs.0 % rhs.0,
-                };
-
-                DataType::U128(result.into())
-            }
+                    DataType::U128(result.into())
+                }
+                _ => panic!("Invalid operands for aritmetic operation"),
+            },
             EOp::Rel(o) => match (arg1, arg2) {
                 (DataType::Bool(lhs), DataType::Bool(rhs)) => match o {
                     RelOp::Eqs => DataType::Bool(*lhs == *rhs),
                     RelOp::NEqs => DataType::Bool(*lhs != *rhs),
-                    _ => panic!("Invalid operation"),
+                    _ => panic!("{}", ERR_OPERATION),
                 },
                 (DataType::U8(lhs), DataType::U8(rhs)) => match o {
                     RelOp::Eqs => DataType::Bool(lhs == rhs),
@@ -348,7 +254,6 @@ impl EOp {
                     RelOp::Lt => DataType::Bool(lhs < rhs),
                     RelOp::GtE => DataType::Bool(lhs >= rhs),
                     RelOp::LtE => DataType::Bool(lhs <= rhs),
-                    _ => panic!("Invalid operation"),
                 },
                 (DataType::U16(lhs), DataType::U16(rhs)) => match o {
                     RelOp::Eqs => DataType::Bool(lhs == rhs),
@@ -357,7 +262,6 @@ impl EOp {
                     RelOp::Lt => DataType::Bool(lhs < rhs),
                     RelOp::GtE => DataType::Bool(lhs >= rhs),
                     RelOp::LtE => DataType::Bool(lhs <= rhs),
-                    _ => panic!("Invalid operation"),
                 },
                 (DataType::U128(lhs), DataType::U128(rhs)) => match o {
                     RelOp::Eqs => DataType::Bool(lhs == rhs),
@@ -366,7 +270,6 @@ impl EOp {
                     RelOp::Lt => DataType::Bool(lhs.0 < rhs.0),
                     RelOp::GtE => DataType::Bool(lhs.0 >= rhs.0),
                     RelOp::LtE => DataType::Bool(lhs.0 <= rhs.0),
-                    _ => panic!("Invalid operation"),
                 },
                 (DataType::String(lhs), DataType::String(rhs)) => match o {
                     RelOp::Eqs => DataType::Bool(*lhs == *rhs),
@@ -375,24 +278,15 @@ impl EOp {
                     RelOp::Lt => DataType::Bool(*lhs < *rhs),
                     RelOp::GtE => DataType::Bool(*lhs >= *rhs),
                     RelOp::LtE => DataType::Bool(*lhs <= *rhs),
-                    _ => panic!("Invalid operation"),
                 },
-                // TODO: which operations
-                //(DataType::VecString(lhs), DataType::VecString(rhs)) => match o {
-                //    _ => panic!("Invalid operation"),
-                //},
-                //(DataType::ArrInteger(lhs), DataType::ArrInteger(rhs)) => match o {
-                //    _ => panic!("Invalid operation"),
-                //},
-                _ => panic!("Invalid operand types for this operation"),
+                _ => panic!("{}", ERR_OPERANDS),
             },
             EOp::Log(o) => match (arg1, arg2) {
                 (DataType::Bool(lhs), DataType::Bool(rhs)) => match o {
                     LogOp::And => DataType::Bool(*lhs && *rhs),
                     LogOp::Or => DataType::Bool(*lhs || *rhs),
-                    _ => panic!("Invalid operation"),
                 },
-                _ => panic!("Invalid operand tyes for this operation"),
+                _ => panic!("{}", ERR_OPERATION),
             },
         }
     }

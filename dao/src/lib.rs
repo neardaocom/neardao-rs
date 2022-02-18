@@ -1,22 +1,19 @@
 #![allow(unreachable_patterns)]
-
-use near_sdk::{CryptoHash, AccountId};
-
-//mod unit_tests;
 mod standard_impl;
+mod unit_tests;
 
 pub mod constants;
 pub mod errors;
 pub mod tags;
 
-pub mod settings;
+pub mod action;
+pub mod callbacks;
 pub mod group;
+pub mod internal;
 pub mod media;
 pub mod proposal;
 pub mod release;
-pub mod action;
-pub mod callbacks;
-pub mod internal;
+pub mod settings;
 
 pub mod core;
 pub mod view;
@@ -25,15 +22,12 @@ pub(crate) type ProposalId = u32;
 pub(crate) type TagId = u16;
 pub(crate) type StorageKey = String;
 pub(crate) type TagCategory = String;
-pub(crate) type GroupId = u16; 
+pub(crate) type GroupId = u16;
 pub(crate) type GroupName = String;
-pub(crate) type GroupStorageKey = u8;
-pub(crate) type UUID = CryptoHash;
-pub(crate) type CID = String; // IPFS address
 
 /// Calculates votes as percents
 #[inline]
-pub fn calc_percent_u128_unchecked(value: u128, total: u128, decimals: u128) -> u8 {
+pub(crate) fn calc_percent_u128_unchecked(value: u128, total: u128, decimals: u128) -> u8 {
     ((value / decimals) as f64 / (total / decimals) as f64 * 100.0).round() as u8
 }
 

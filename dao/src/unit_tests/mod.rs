@@ -1,6 +1,7 @@
 #![allow(unused, dead_code)]
+#![cfg(test)]
 
-mod dao;
+//mod dao; // Require refactoring to match new structure
 mod release;
 
 pub const DURATION_1Y_S: u32 = 31_536_000;
@@ -16,8 +17,6 @@ pub const DURATION_3Y: u64 = 94_608_000_000_000_000;
 #[macro_export]
 macro_rules! create_val_to_percent_closure {
     ($e:expr, $t:ty) => {
-        |p| {
-            ($e as u128 * p / 100) as $t
-        }
+        |p| ($e as u128 * p / 100) as $t
     };
 }

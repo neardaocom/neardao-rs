@@ -99,12 +99,12 @@ fn output_workflow_skyward_settings_1() {
     let (wfs, settings) = workflow_skyward_template_settings_data_1();
 
     println!(
-            "------------------------------ WORKFLOW SKYWARD TEMPLATE SETTINGS ------------------------------\n{}",
+            "------------------------------ TEMPLATE SETTINGS SKYWARD ------------------------------\n{}",
             serde_json::to_string(&wfs).unwrap()
         );
 
     println!(
-            "------------------------------ WORKFLOW SKYWARD PROPOSE SETTINGS ------------------------------\n{}",
+            "------------------------------ PROPOSE SETTINGS SKYWARD ------------------------------\n{}",
             serde_json::to_string(&settings).unwrap()
         );
 }
@@ -124,12 +124,12 @@ fn output_workflow_bounty_settings_1() {
     let (wfs, settings) = workflow_bounty_template_settings_data_1();
 
     println!(
-            "------------------------------ WORKFLOW BOUNTY TEMPLATE SETTINGS ------------------------------\n{}",
+            "------------------------------ TEMPLATE SETTINGS BOUNTY  ------------------------------\n{}",
             serde_json::to_string(&wfs).unwrap()
         );
 
     println!(
-            "------------------------------ WORKFLOW BOUNTY PROPOSE SETTINGS ------------------------------\n{}",
+            "------------------------------ PROPOSE SETTINGS BOUNTY  ------------------------------\n{}",
             serde_json::to_string(&settings).unwrap()
         );
 }
@@ -152,8 +152,8 @@ fn output_settings() {
         );
 
     println!(
-            "------------------------------ TEMPLATE SETTINGS SEND NEAR WORKFLOW ------------------------------\n{}",
-            serde_json::to_string(&workflow_settings_treasury_send_near()).unwrap()
+            "------------------------------ TEMPLATE SETTINGS BASIC WORKFLOW ------------------------------\n{}",
+            serde_json::to_string(&workflow_settings_basic()).unwrap()
         );
 
     println!(

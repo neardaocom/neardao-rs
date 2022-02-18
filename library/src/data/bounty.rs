@@ -99,15 +99,11 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
                 action: ActionIdent::Event,
                 action_data: Some(ActionData::Event(EventData {
                     code: "done_approve".into(),
-                    values: vec![
-                        DataTypeDef::String(false),
-                        DataTypeDef::Bool(false),
-                        DataTypeDef::String(false),
-                    ],
+                    values: vec![DataTypeDef::String(false), DataTypeDef::String(false)],
                     deposit_from_bind: None,
                 })),
                 arg_types: vec![],
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
                 postprocessing: Some(Postprocessing {
                     storage_key: "pp_5".into(),
                     op_type: PostprocessingType::SaveUserValue((0, 1)),

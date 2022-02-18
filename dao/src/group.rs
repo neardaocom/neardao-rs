@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::LazyOption,
-    env,
     serde::{Deserialize, Serialize},
     AccountId, IntoStorageKey,
 };

@@ -31,7 +31,6 @@ near call $CID create '{"acc_name": "dao", "dao_info": {"founded_s":9999, "name"
 #near view $CID get_stats
 #near view $CID version_hash '{"version":0}'
 
-
 ###### NEW VIEW CALLS ######
 
 #near state $DCID

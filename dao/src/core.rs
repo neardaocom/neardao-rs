@@ -1,12 +1,11 @@
-use std::u128;
-
 use crate::constants::MAX_FT_TOTAL_SUPPLY;
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
 use crate::tags::{TagInput, Tags};
 use library::storage::StorageBucket;
-use library::types::{ActionIdent, DataType, FnCallMetadata};
+use library::types::{DataType, FnCallMetadata};
+use library::workflow::InstanceState;
 use library::{
     workflow::{Instance, ProposeSettings, Template, TemplateSettings},
     FnCallId,
@@ -23,14 +22,14 @@ use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
 use near_sdk::json_types::{ValidAccountId, U128};
 use near_sdk::serde::Serialize;
 use near_sdk::{
-    env, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault, Promise,
+    env, log, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault, Promise,
     PromiseOrValue,
 };
 
 use crate::group::{Group, GroupInput};
 
 use crate::media::Media;
-use crate::{proposal::*, StorageKey, TagCategory};
+use crate::{calc_percent_u128_unchecked, proposal::*, StorageKey, TagCategory};
 use crate::{GroupId, ProposalId};
 
 near_sdk::setup_alloc!();
@@ -173,16 +172,226 @@ impl Contract {
         contract
     }
 
+    #[private]
+    #[init(ignore_state)]
+    pub fn upgrade() -> Self {
+        assert!(env::storage_remove(
+            &StorageKeys::NewVersionCode.into_storage_key()
+        ));
+        let mut _dao: Contract = env::state_read().expect("Failed to migrate");
+
+        // ADD migration here
+
+        _dao
+    }
+
+    #[payable]
+    pub fn propose(
+        &mut self,
+        template_id: u16,
+        template_settings_id: u8,
+        propose_settings: ProposeSettings,
+        template_settings: Option<Vec<TemplateSettings>>,
+        desc: String,
+    ) -> u32 {
+        let caller = env::predecessor_account_id();
+        let (wft, wfs) = self.workflow_template.get(&template_id).unwrap();
+        let settings = wfs
+            .get(template_settings_id as usize)
+            .expect("Undefined settings id");
+
+        assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or(0.into()).0);
+
+        if !self.check_rights(&settings.allowed_proposers, &caller) {
+            panic!("You have no rights to propose this");
+        }
+        self.proposal_last_id += 1;
+
+        //Assuming template_id for WorkflowAdd is always first wf added during dao init
+        if template_id == 1 {
+            assert!(
+                template_settings.is_some(),
+                "{}",
+                "Expected template settings for 'WorkflowAdd' proposal"
+            );
+            self.proposed_workflow_settings
+                .insert(&self.proposal_last_id, &template_settings.unwrap());
+        }
+
+        let proposal = Proposal::new(
+            env::block_timestamp() / 10u64.pow(9) / 60 * 60 + 60, // Rounded up to minutes
+            caller,
+            template_id,
+            template_settings_id,
+            true,
+            desc,
+        );
+        assert!(self.storage.get(&propose_settings.storage_key).is_none());
+
+        self.proposals
+            .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
+        self.workflow_instance.insert(
+            &self.proposal_last_id,
+            &(
+                Instance::new(template_id, &wft.transitions),
+                propose_settings,
+            ),
+        );
+
+        self.proposal_last_id
+    }
+
+    #[payable]
+    pub fn vote(&mut self, proposal_id: u32, vote_kind: u8) -> bool {
+        if vote_kind > 2 {
+            return false;
+        }
+
+        let caller = env::predecessor_account_id();
+        let (mut proposal, _, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(env::attached_deposit() >= wfs.deposit_vote.unwrap_or(0.into()).0);
+
+        if !self.check_rights(&[wfs.allowed_voters.clone()], &caller) {
+            return false;
+        }
+
+        if proposal.state != ProposalState::InProgress
+            || proposal.created + (wfs.duration as u64) < env::block_timestamp() / 10u64.pow(9)
+        {
+            //TODO update expired proposal state
+            return false;
+        }
+
+        if wfs.vote_only_once && proposal.votes.contains_key(&caller) {
+            return false;
+        }
+
+        proposal.votes.insert(caller, vote_kind);
+
+        self.proposals
+            .insert(&proposal_id, &VProposal::Curr(proposal));
+
+        true
+    }
+
+    pub fn finish_proposal(&mut self, proposal_id: u32) -> ProposalState {
+        let (mut proposal, _, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (mut instance, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+
+        let new_state = match proposal.state {
+            ProposalState::InProgress => {
+                if proposal.created + wfs.duration as u64 > env::block_timestamp() / 10u64.pow(9) {
+                    None
+                } else {
+                    // count votes
+                    let (max_possible_amount, vote_results) =
+                        self.calculate_votes(&proposal.votes, &wfs.scenario, &wfs.allowed_voters);
+                    log!("Votes: {}, {:?}", max_possible_amount, vote_results);
+                    // check spam
+                    if calc_percent_u128_unchecked(
+                        vote_results[0],
+                        max_possible_amount,
+                        self.decimal_const,
+                    ) >= wfs.spam_threshold
+                    {
+                        Some(ProposalState::Spam)
+                    } else if calc_percent_u128_unchecked(
+                        vote_results.iter().sum(),
+                        max_possible_amount,
+                        self.decimal_const,
+                    ) < wfs.quorum
+                    {
+                        // not enough quorum
+                        Some(ProposalState::Invalid)
+                    } else if calc_percent_u128_unchecked(
+                        vote_results[1],
+                        max_possible_amount,
+                        self.decimal_const,
+                    ) < wfs.approve_threshold
+                    {
+                        // not enough voters to accept
+                        Some(ProposalState::Rejected)
+                    } else {
+                        // proposal is accepted, create new workflow activity with its storage
+                        instance.state = InstanceState::Running;
+                        // Storage key must be unique among all proposals
+                        self.storage_bucket_add(settings.storage_key.as_str());
+                        Some(ProposalState::Accepted)
+                    }
+                }
+            }
+            _ => None,
+        };
+
+        match new_state {
+            Some(state) => {
+                self.workflow_instance
+                    .insert(&proposal_id, &(instance, settings));
+                proposal.state = state.clone();
+                self.proposals
+                    .insert(&proposal_id, &VProposal::Curr(proposal));
+                state
+            }
+            None => proposal.state,
+        }
+    }
+
+    //TODO resolve other state combinations eg. FatalError on instance.
+    /// Changes workflow instance state to finish.
+    /// Rights to close are same as the "end" activity rights.
+    pub fn wf_finish(&mut self, proposal_id: u32) -> bool {
+        let caller = env::predecessor_account_id();
+        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+
+        assert!(proposal.state == ProposalState::Accepted);
+
+        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+
+        if wfi.state == InstanceState::FatalError
+            || self.check_rights(
+                &wfs.activity_rights[wfi.current_activity_id as usize - 1].as_slice(),
+                &caller,
+            )
+        {
+            let result = wfi.finish(&wft);
+            self.workflow_instance
+                .insert(&proposal_id, &(wfi, settings));
+
+            result
+        } else {
+            false
+        }
+    }
+
+    pub fn ft_unlock(&mut self, group_ids: Vec<GroupId>) -> Vec<u32> {
+        let mut released = Vec::with_capacity(group_ids.len());
+        for id in group_ids.into_iter() {
+            if let Some(mut group) = self.groups.get(&id) {
+                released.push(group.unlock_ft(env::block_timestamp()));
+                self.groups.insert(&id, &group);
+            }
+        }
+        released
+    }
+
     /// For dev/testing purposes only
     #[cfg(feature = "testnet")]
     pub fn clean_self(&mut self) {
+        self.workflow_template.clear();
+        self.workflow_instance.clear();
+        self.function_call_metadata.clear();
+
+        let settings: DaoSettings = self.settings.get().unwrap().into();
+        assert_eq!(settings.dao_admin_account_id, env::predecessor_account_id());
         env::storage_remove(&StorageKeys::NewVersionCode.into_storage_key());
     }
 
     /// For dev/testing purposes only
     #[cfg(feature = "testnet")]
-    pub fn delete_self(self) -> Promise {
+    pub fn delete_self(&mut self) -> Promise {
         let settings: DaoSettings = self.settings.get().unwrap().into();
+        assert_eq!(settings.dao_admin_account_id, env::predecessor_account_id());
         Promise::new(env::current_account_id()).delete_account(settings.dao_admin_account_id)
     }
 }
@@ -302,7 +511,7 @@ impl StorageManagement for Contract {
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn download_new_version() {
-    use crate::constants::{GAS_MIN_DOWNLOAD_LIMIT, VERSION};
+    use crate::constants::{GAS_DOWNLOAD_NEW_VERSION, VERSION};
     use env::BLOCKCHAIN_INTERFACE;
 
     env::setup_panic_hook();
@@ -318,7 +527,7 @@ pub extern "C" fn download_new_version() {
         env::predecessor_account_id()
     );
 
-    let factory_acc = env::storage_read(&StorageKeys::FactoryAcc.into_storage_key()).unwrap();
+    let factory_acc = dao_settings.dao_admin_account_id;
     let method_name = b"download_dao_bin".to_vec();
 
     unsafe {
@@ -331,7 +540,7 @@ pub extern "C" fn download_new_version() {
                 1 as _,
                 [VERSION].to_vec().as_ptr() as _,
                 0,
-                GAS_MIN_DOWNLOAD_LIMIT,
+                GAS_DOWNLOAD_NEW_VERSION,
             );
         });
     }
@@ -344,11 +553,13 @@ pub extern "C" fn download_new_version() {
 pub extern "C" fn store_new_version() {
     env::setup_panic_hook();
     env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
+
+    let contract: Contract = env::state_read().unwrap();
+    let dao_settings: DaoSettings = contract.settings.get().unwrap().into();
+
     assert_eq!(
-        env::predecessor_account_id(),
-        String::from_utf8(env::storage_read(&StorageKeys::FactoryAcc.into_storage_key()).unwrap())
-            .unwrap()
-            .to_string()
+        dao_settings.dao_admin_account_id,
+        env::predecessor_account_id()
     );
     env::storage_write(
         &StorageKeys::NewVersionCode.into_storage_key(),
@@ -359,7 +570,7 @@ pub extern "C" fn store_new_version() {
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn upgrade_self() {
-    use crate::constants::GAS_MIN_UPGRADE_LIMIT;
+    use crate::constants::GAS_UPGRADE;
     use near_sdk::env::BLOCKCHAIN_INTERFACE;
 
     env::setup_panic_hook();
@@ -375,7 +586,7 @@ pub extern "C" fn upgrade_self() {
     );
 
     let current_acc = env::current_account_id().into_bytes();
-    let method_name = "migrate".as_bytes().to_vec();
+    let method_name = "upgrade".as_bytes().to_vec();
     let key = StorageKeys::NewVersionCode.into_storage_key();
 
     unsafe {
@@ -407,7 +618,7 @@ pub extern "C" fn upgrade_self() {
                     0 as _,
                     0 as _,
                     0 as _,
-                    GAS_MIN_UPGRADE_LIMIT,
+                    GAS_UPGRADE,
                 );
         });
     }

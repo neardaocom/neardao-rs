@@ -38,5 +38,6 @@ ARGS_COLLECTION=$ARGS_COL_1
 near call $DCID fn_call '{"proposal_id":2,"fncall_receiver":"'$RECEIVER'","fncall_method":"'$METHOD'","arg_values":'$ARGS', "arg_values_collection":'$ARGS_COLLECTION'}' --accountId $CID1 --gas $TGAS_200
 
 # checks
+near view $DCID wf_instance '{"proposal_id": 2}'
 near view $DCID storage_bucket_data_all '{"bucket_id":"wf_skyward_1"}'
 #near view $SID get_sales '{"account_id": "'$DCID'"}'

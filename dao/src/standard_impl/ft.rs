@@ -114,7 +114,13 @@ impl FungibleToken {
     pub fn internal_unwrap_balance_of(&self, account_id: &AccountId) -> Balance {
         match self.accounts.get(&account_id) {
             Some(balance) => balance,
-            None => env::panic(format!("The account {} is not registered", &account_id).as_bytes()),
+            None => {
+                if env::predecessor_account_id() == env::current_account_id() {
+                    0
+                } else {
+                    env::panic(format!("The account {} is not registered", &account_id).as_bytes());
+                }
+            }
         }
     }
 

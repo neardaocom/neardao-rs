@@ -64,6 +64,7 @@ pub struct Proposal {
     pub workflow_id: u16,
     pub workflow_settings_id: u8,
     pub workflow_add_settings_id: bool,
+    pub desc: String,
 }
 
 impl Proposal {
@@ -74,6 +75,7 @@ impl Proposal {
         workflow_id: u16,
         workflow_settings_id: u8,
         workflow_add_settings_id: bool,
+        desc: String,
     ) -> Self {
         Proposal {
             created,
@@ -83,6 +85,7 @@ impl Proposal {
             workflow_id,
             workflow_settings_id,
             workflow_add_settings_id,
+            desc,
         }
     }
 }

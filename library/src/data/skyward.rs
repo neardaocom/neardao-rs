@@ -23,18 +23,8 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
         instructions: vec![],
     });
 
-    let pp_storage_deposit_1 = Some(Postprocessing {
-        storage_key: "pp_2".into(),
-        op_type: PostprocessingType::SaveValue(DataType::Bool(true)),
-        instructions: vec![],
-    });
-
-    let pp_storage_deposit_2 = Some(Postprocessing {
-        storage_key: "pp_3".into(),
-        op_type: PostprocessingType::SaveValue(DataType::Bool(true)),
-        instructions: vec![],
-    });
-
+    let pp_storage_deposit_1 = None;
+    let pp_storage_deposit_2 = None;
     let pp_amount_send = None;
 
     let pp_sale_create = Some(Postprocessing {
@@ -54,14 +44,14 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 action: ActionIdent::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
                     id: (SKYWARD_ACC.into(), "register_tokens".into()),
-                    tgas: 10,
+                    tgas: 30,
                     deposit: 20_000_000_000_000_000_000_000.into(),
                 })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_register_tokens,
                 activity_inputs: vec![vec![ArgType::Expression(Expression {
                     args: vec![ExprArg::Const(0), ExprArg::User(0)],
-                    expr: EExpr::Fn(FnName::ArrayMerge),
+                    expr: EExpr::Fn(FnName::ToArray),
                 })]],
                 must_succeed: true,
             }),
@@ -99,7 +89,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 action: ActionIdent::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
                     id: ("self".into(), "ft_transfer_call".into()),
-                    tgas: 60,
+                    tgas: 100,
                     deposit: 1.into(),
                 })),
                 arg_types: vec![DataTypeDef::Object(0)],

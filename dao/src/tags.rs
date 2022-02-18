@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, hash_map::Iter}, iter::FromIterator};
+use std::collections::{hash_map::Iter, HashMap};
 
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
@@ -34,7 +34,6 @@ impl Tags {
     /// Inserts new tags and returns tuple with new first id and last id.
     /// Does NOT check for duplicates - It's caller's responsibility not to insert already existing tags
     pub fn insert(&mut self, new_tags: Vec<String>) -> Option<(u16, u16)> {
-
         if new_tags.is_empty() {
             return None;
         }
@@ -52,7 +51,7 @@ impl Tags {
         self.map.remove(&id);
     }
 
-    pub fn rename(&mut self, id:TagId, name: String) {
+    pub fn rename(&mut self, id: TagId, name: String) {
         if let Some(t) = self.map.get_mut(&id) {
             *t = name;
         }
@@ -83,7 +82,10 @@ mod test {
         expected_hm.insert(1, "tag1".into());
         expected_hm.insert(2, "tag2".into());
         expected_hm.insert(3, "tag3".into());
-        let expected_tags = Tags { last_id: 3, map: expected_hm.clone()};
+        let expected_tags = Tags {
+            last_id: 3,
+            map: expected_hm.clone(),
+        };
 
         assert_eq!(tags, expected_tags);
 
@@ -95,14 +97,20 @@ mod test {
         expected_hm.insert(4, "tag4".into());
         expected_hm.insert(5, "tag5".into());
         expected_hm.insert(6, "tag6".into());
-        let expected_tags = Tags { last_id: 6, map: expected_hm.clone()};
+        let expected_tags = Tags {
+            last_id: 6,
+            map: expected_hm.clone(),
+        };
 
         assert_eq!(tags, expected_tags);
 
         tags.rename(2, "yolo tag".into());
 
         expected_hm.insert(2, "yolo tag".into());
-        let expected_tags = Tags { last_id: 6, map: expected_hm.clone()};
+        let expected_tags = Tags {
+            last_id: 6,
+            map: expected_hm.clone(),
+        };
 
         assert_eq!(tags, expected_tags);
 

@@ -1,15 +1,10 @@
 use crate::{
-    expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
-    types::{
-        ActionIdent, DataType, DataTypeDef, FnCallData, FnCallMetadata, ValidatorType, VoteScenario,
-    },
-    unit_tests::ONE_NEAR,
+    expression::{EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
+    types::{ActionIdent, DataTypeDef, ValidatorType, VoteScenario},
     workflow::{
-        ActivityRight, ArgType, CondOrExpr, ExprArg, Expression, Postprocessing,
-        PostprocessingType, ProposeSettings, Template, TemplateActivity, TemplateSettings,
+        ActivityRight, ArgType, ExprArg, Expression, Template, TemplateActivity, TemplateSettings,
         TransitionConstraint,
     },
-    FnCallId,
 };
 
 pub fn workflow_wf_add() -> Template {
@@ -180,7 +175,7 @@ pub fn workflow_treasury_send_near() -> Template {
     }
 }
 
-pub fn workflow_settings_treasury_send_near() -> TemplateSettings {
+pub fn workflow_settings_basic() -> TemplateSettings {
     TemplateSettings {
         activity_rights: vec![vec![ActivityRight::GroupLeader(1)]],
         allowed_proposers: vec![ActivityRight::Group(1)],
@@ -232,8 +227,43 @@ pub fn workflow_treasury_send_ft() -> Template {
         binds: vec![],
         start: vec![0],
         end: vec![1],
-        obj_validators: vec![vec![]],
-        validator_exprs: vec![],
+        obj_validators: vec![vec![
+            ValidatorType::Primitive(0),
+            ValidatorType::Primitive(0),
+            ValidatorType::Primitive(0),
+        ]],
+        validator_exprs: vec![
+            Expression {
+                args: vec![ExprArg::User(0), ExprArg::Bind(0)],
+                expr: EExpr::Boolean(TExpr {
+                    operators: vec![Op {
+                        op_type: EOp::Rel(RelOp::Eqs),
+                        operands_ids: [0, 1],
+                    }],
+                    terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
+                }),
+            },
+            Expression {
+                args: vec![ExprArg::User(1), ExprArg::Bind(1)],
+                expr: EExpr::Boolean(TExpr {
+                    operators: vec![Op {
+                        op_type: EOp::Rel(RelOp::Eqs),
+                        operands_ids: [0, 1],
+                    }],
+                    terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
+                }),
+            },
+            Expression {
+                args: vec![ExprArg::User(2), ExprArg::Bind(2)],
+                expr: EExpr::Boolean(TExpr {
+                    operators: vec![Op {
+                        op_type: EOp::Rel(RelOp::GtE),
+                        operands_ids: [0, 1],
+                    }],
+                    terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
+                }),
+            },
+        ],
     }
 }
 
@@ -548,6 +578,32 @@ pub fn workflow_media_add() -> Template {
                 action: ActionIdent::MediaAdd,
                 action_data: None,
                 arg_types: vec![DataTypeDef::Object(1)],
+                postprocessing: None,
+                activity_inputs: vec![vec![ArgType::Free]],
+                must_succeed: true,
+            }),
+        ],
+        transitions: vec![vec![1]],
+        binds: vec![],
+        start: vec![0],
+        end: vec![1],
+        obj_validators: vec![vec![]],
+        validator_exprs: vec![],
+    }
+}
+
+pub fn workflow_media_invalidate() -> Template {
+    Template {
+        name: "wf_media_invalidate".into(),
+        version: 1,
+        activities: vec![
+            None,
+            Some(TemplateActivity {
+                code: "media_invalidate".into(),
+                exec_condition: None,
+                action: ActionIdent::MediaInvalidate,
+                action_data: None,
+                arg_types: vec![DataTypeDef::U16(false)],
                 postprocessing: None,
                 activity_inputs: vec![vec![ArgType::Free]],
                 must_succeed: true,

@@ -1,16 +1,13 @@
-use std::{collections::HashMap, thread::AccessError};
+use std::{collections::HashMap};
 
 use near_sdk::{
     env::{self},
-    AccountId, Promise, Balance, log,
+    AccountId, Promise, Balance, log
 };
 
 use crate::{
     callbacks::ext_self,
-    constants::{
-        ACC_REF_FINANCE, ACC_SKYWARD_FINANCE, ACC_WNEAR, DEFAULT_DOC_CAT, DEPOSIT_STANDARD_STORAGE,
-        GROUP_PREFIX, GROUP_RELEASE_PREFIX, TGAS,
-    },
+    constants::TGAS,
     core::{ActivityLog, Contract},
     errors::{
         ERR_DISTRIBUTION_ACC_EMPTY, ERR_DISTRIBUTION_MIN_VALUE, ERR_DISTRIBUTION_NOT_ENOUGH_FT,
@@ -26,10 +23,10 @@ use crate::{
 };
 use library::{
     storage::StorageBucket,
-    types::{VoteScenario, ActionIdent, DataType, EventData, FnCallData, FnCallMetadata, ActionData},
+    types::{VoteScenario, ActionIdent, DataType, FnCallData, FnCallMetadata, ActionData},
     utils::{args_to_json, bind_args, validate_args},
     workflow::{
-        ActionResult, ActivityRight, InstanceState, Postprocessing, Template, TemplateSettings,
+        ActionResult, ActivityRight, InstanceState, Template, TemplateSettings,
     },
     Consts, EventCode, FnCallId,
 };
@@ -343,7 +340,6 @@ impl Contract {
         }
     }
 
-    // TODO required success vs optional
     pub fn postprocessing_fail_update(&mut self, proposal_id: u32, must_succeed: bool) -> ActionResult {
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
         if must_succeed {
@@ -389,6 +385,7 @@ impl Contract {
         self.workflow_activity_log.insert(&proposal_id, &logs);
     }
 
+    // TODO refactoring
     /// Workflow execution logic
     pub fn execute_action(
         &mut self,
@@ -471,6 +468,17 @@ impl Contract {
         match result {
             // Transition is possible
             ActionResult::Ok => {
+
+                //We do not process further following dao actions:
+                match action_ident {
+                    ActionIdent::MediaAdd | ActionIdent::GroupAdd | ActionIdent::GroupAddMembers | ActionIdent::GroupUpdate => {
+                        self.workflow_instance
+                        .insert(&proposal_id, &(wfi, settings));
+                        return result;
+                    },
+                    _ => (),
+                }
+
                 let fn_metadata: Vec<FnCallMetadata> =
                     if let Some((fncall_receiver, fncall_method)) = fncall.clone() {
                         // Everything should be provided by provider in correct format so unwraping is ok
@@ -534,64 +542,92 @@ impl Contract {
                             .transfer(args[0].swap_remove(0).try_into_u128().unwrap()),
                     ),
                     ActionIdent::TreasurySendFt => {
-                        Some(Promise::new(args[0].swap_remove(0).try_into_string().unwrap()).function_call(
+
+                        let memo = args[0].pop().unwrap().try_into_string().unwrap();
+                        let amount = args[0].pop().unwrap().try_into_u128().unwrap();
+                        let receiver_id = args[0].pop().unwrap().try_into_string().unwrap();
+                        let acc = args[0].pop().unwrap().try_into_string().unwrap();
+
+                        Some(Promise::new(acc).function_call(
                             b"ft_transfer".to_vec(),
                             format!(
-                                "{{\"memo\":\"{}\",\"receiver_id\":{},\"amount\":\"{}\"}}",
-                                args[0].pop().unwrap().try_into_string().unwrap(), 
-                                args[0].pop().unwrap().try_into_u128().unwrap(), 
-                                args[0].pop().unwrap().try_into_string().unwrap() //TODO null value might do problems
+                                "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":\"{}\"}}",
+                                receiver_id,
+                                amount,
+                                memo, //TODO null value might do problems
                             )
                             .as_bytes()
                             .to_vec(),
-                            0,
+                            1,
                             10 * TGAS,
                         ))
                     },
                     ActionIdent::TreasurySendFtContract => {
-                        Some(Promise::new(args[0].swap_remove(0).try_into_string().unwrap()).function_call(
+
+                        let msg = args[0].pop().unwrap().try_into_string().unwrap();
+                        let memo = args[0].pop().unwrap().try_into_string().unwrap();
+                        let amount = args[0].pop().unwrap().try_into_u128().unwrap();
+                        let receiver_id = args[0].pop().unwrap().try_into_string().unwrap();
+                        let acc = args[0].pop().unwrap().try_into_string().unwrap();
+
+                        Some(Promise::new(acc).function_call(
                             b"ft_transfer_call".to_vec(),
                             format!(
-                                "{{\"msg\":\"{}\",\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":\"{}\"}}",
-                                args[0].pop().unwrap().try_into_string().unwrap(), 
-                                args[0].pop().unwrap().try_into_string().unwrap(),
-                                args[0].pop().unwrap().try_into_u128().unwrap(),    
-                                args[0].pop().unwrap().try_into_string().unwrap(),  //TODO null value might do problems
+                                "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":\"{}\",\"msg\":\"{}\"}}",
+                                receiver_id,
+                                amount,
+                                memo, //TODO null value might do problems
+                                msg,
                             )
                             .as_bytes()
                             .to_vec(),
-                            0,
+                            1,
                             20 * TGAS,
                         ))
                     },
                     ActionIdent::TreasurySendNft => {
-                        Some(Promise::new(args[0].swap_remove(0).try_into_string().unwrap()).function_call(b"nft_transfer".to_vec(),
+
+                        let approval_id = args[0].pop().unwrap().try_into_u128().unwrap();
+                        let memo = args[0].pop().unwrap().try_into_string().unwrap();
+                        let nft_id = args[0].pop().unwrap().try_into_string().unwrap();
+                        let receiver_id = args[0].pop().unwrap().try_into_string().unwrap();
+                        let acc = args[0].pop().unwrap().try_into_string().unwrap();
+
+                        Some(Promise::new(acc).function_call(b"nft_transfer".to_vec(),
                         format!(
-                            "{{\"approval_id\":{},\"receiver_id\":{},\"token_id\":\"{}\",\"memo\":\"{}\"}}",
-                            args[0].pop().unwrap().try_into_u128().unwrap(), 
-                            args[0].pop().unwrap().try_into_string().unwrap(),
-                            args[0].pop().unwrap().try_into_string().unwrap(),    
-                            args[0].pop().unwrap().try_into_string().unwrap(),  //TODO null value might do problems
+                            "{{\"receiver_id\":\"{}\",\"token_id\":\"{}\",\"approval_id\":{},\"memo\":\"{}\"}}",
+                            receiver_id,
+                            nft_id,
+                            approval_id,
+                            memo, //TODO null value might do problems
                         )
                         .as_bytes()
                         .to_vec(),
-                        0,
+                        1,
                         30 * TGAS
                     ))
                     }
                     ActionIdent::TreasurySendNFtContract => {
-                        Some(Promise::new(args[0].swap_remove(0).try_into_string().unwrap()).function_call(b"nft_transfer_call".to_vec(), 
+
+                        let msg = args[0].pop().unwrap().try_into_string().unwrap();
+                        let approval_id = args[0].pop().unwrap().try_into_u128().unwrap();
+                        let memo = args[0].pop().unwrap().try_into_string().unwrap();
+                        let nft_id = args[0].pop().unwrap().try_into_string().unwrap();
+                        let receiver_id = args[0].pop().unwrap().try_into_string().unwrap();
+                        let acc = args[0].pop().unwrap().try_into_string().unwrap();
+                    
+                        Some(Promise::new(acc).function_call(b"nft_transfer_call".to_vec(), 
                         format!(
-                            "{{\"msg\":\"{}\",\"receiver_id\":\"{}\",\"token_id\":\"{}\",\"approval_id\":{},\"memo\":\"{}\"}}",
-                            args[0].pop().unwrap().try_into_string().unwrap(), 
-                            args[0].pop().unwrap().try_into_string().unwrap(),
-                            args[0].pop().unwrap().try_into_u128().unwrap(),
-                            args[0].pop().unwrap().try_into_u128().unwrap(),    
-                            args[0].pop().unwrap().try_into_string().unwrap(),  //TODO null value might do problems
+                            "{{\"receiver_id\":\"{}\",\"token_id\":\"{}\",\"approval_id\":{},\"memo\":\"{}\",\"msg\":\"{}\"}}",
+                            receiver_id,
+                            nft_id,
+                            approval_id,
+                            memo, //TODO null value might do problems
+                            msg,
                             )
                             .as_bytes()
                             .to_vec(), 
-                            0, 
+                            1, 
                             30 * TGAS
                         ))
                     },
@@ -686,8 +722,7 @@ impl Contract {
                 };
 
                 self.workflow_instance
-                .insert(&proposal_id, &(wfi, settings))
-                .unwrap();
+                .insert(&proposal_id, &(wfi, settings));
 
                 result
             }

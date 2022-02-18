@@ -3,11 +3,11 @@
 #source ./near_cli_test/init_factory_and_dao.sh
 
 WFT_ID=2
-STORAGE_KEY="wf_bounty_1"
-S_PROPOSE_SETTINGS='{"binds":[{"U128":"5000000000000000000000000"},{"U128":"1000000000000000000000000"}],"storage_key":"'$STORAGE_KEY'"}'
+STORAGE_KEY="wf_send_ft_1"
+S_PROPOSE_SETTINGS='{"binds":[{"String":"'$DCID'"},{"String":"petrstudynka.testnet"},{"U128":"420"}],"storage_key":"'$STORAGE_KEY'"}'
 S_TEMPLATE_SETTINGS='null'
 
-PUUID=$(near call $DCID propose '{"desc":"test","template_id":'$WFT_ID',"template_settings_id":0,"propose_settings":'$S_PROPOSE_SETTINGS',"template_settings":'$S_TEMPLATE_SETTINGS'}' --amount 1 --gas $TGAS_100 --accountId $CID1 | tail -n1 | tr -d '[:space:]')
+PUUID=$(near call $DCID propose '{"desc":"test","template_id":'$WFT_ID',"template_settings_id":0,"propose_settings":'$S_PROPOSE_SETTINGS',"template_settings": '$S_TEMPLATE_SETTINGS'}' --amount 1 --gas $TGAS_100 --accountId $CID1 | tail -n1 | tr -d '[:space:]')
 echo "Created proposal UUID: $PUUID"
 
 near call $DCID vote '{"proposal_id":'$PUUID',"vote_kind": 1}' --gas $TGAS_10 --amount $DEPOSIT_VOTE  --accountId $CID1

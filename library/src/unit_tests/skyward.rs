@@ -251,11 +251,9 @@ fn workflow_skyward_finance() {
         .as_ref()
         .unwrap()
         .postprocessing
-        .as_ref()
-        .unwrap();
+        .as_ref();
 
-    let inner_value = pp.try_to_get_inner_value(user_args.as_slice(), settings.binds.as_slice());
-    assert_eq!(inner_value, None);
+    assert_eq!(pp, None);
 
     bind_args(
         &dao_consts,
@@ -287,14 +285,6 @@ fn workflow_skyward_finance() {
     };
 
     assert_eq!(args, serde_json::to_string(&expected_obj).unwrap());
-
-    // Assuming storage deposit fn call result was ok
-    let inner_value = pp.clone().postprocess(vec![], inner_value, &mut bucket);
-    assert_eq!(inner_value, Some(DataType::Bool(true)));
-
-    if let Some(val) = inner_value {
-        bucket.add_data(&pp.storage_key, &val);
-    }
 
     // 3. Storage deposit wrap.near
 
@@ -352,11 +342,9 @@ fn workflow_skyward_finance() {
         .as_ref()
         .unwrap()
         .postprocessing
-        .as_ref()
-        .unwrap();
+        .as_ref();
 
-    let inner_value = pp.try_to_get_inner_value(user_args.as_slice(), settings.binds.as_slice());
-    assert_eq!(inner_value, None);
+    assert_eq!(pp, None);
 
     bind_args(
         &dao_consts,
@@ -388,14 +376,6 @@ fn workflow_skyward_finance() {
     };
 
     assert_eq!(args, serde_json::to_string(&expected_obj).unwrap());
-
-    // Assuming storage deposit fn call result was ok
-    let inner_value = pp.clone().postprocess(vec![], inner_value, &mut bucket);
-    assert_eq!(inner_value, Some(DataType::Bool(true)));
-
-    if let Some(val) = inner_value {
-        bucket.add_data(&pp.storage_key, &val);
-    }
 
     // 4. FT transfer call on self
     // 1 NEAR

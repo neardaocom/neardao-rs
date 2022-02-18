@@ -60,6 +60,7 @@ impl Contract {
             .collect()
     }
 
+    #[allow(unused_variables)]
     pub fn check_transition(
         self,
         proposal_id: u32,

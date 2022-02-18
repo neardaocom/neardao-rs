@@ -7,8 +7,7 @@ SID=demo-skyward.petrstudynka.testnet
 RID=ref.petrstudynka.testnet
 
 # deploy workflow provider
-near create-account $WID --masterAccount $CID
-near deploy --wasmFile res/workflow_provider.wasm --accountId $WID
+near create-account $WID --masterAccount $CID --initialBalance 15; near deploy --wasmFile res/workflow_provider.wasm --accountId $WID
 
 # setup other accounts 
 near create-account $CID1 --masterAccount $CID --initialBalance 15; \

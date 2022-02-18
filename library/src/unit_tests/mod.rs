@@ -1,5 +1,5 @@
 #![cfg(test)]
-
+#![allow(unused)]
 use crate::types::DataType;
 
 mod bounty;

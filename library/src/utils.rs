@@ -391,9 +391,7 @@ mod test {
     use std::convert::TryFrom;
 
     use near_sdk::{
-        json_types::{
-            ValidAccountId, WrappedBalance, WrappedDuration, WrappedTimestamp, U128, U64,
-        },
+        json_types::{ValidAccountId, WrappedBalance, WrappedDuration, WrappedTimestamp, U128},
         serde::{Deserialize, Serialize},
         serde_json,
     };
@@ -407,6 +405,7 @@ mod test {
     };
 
     /******  Skyward sale_create structures  ******/
+
     type BasicPoints = u16;
 
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -442,37 +441,6 @@ mod test {
 
     #[test]
     fn full_scenario_mapping_skyward_sale_create() {
-        /*
-        Testcase object structure - Skyward - sale_create input:
-        {sale:
-            {
-                title: String
-                url: String (optional)
-                permissions_contract_id: String (optional)
-                out_tokens: [
-                    {
-                        token_account_id: String
-                        balance: u128
-                        referral_bpt: u16 (optional)
-                    }
-                ]
-                in_token_account_id: String
-                start_time: u64,
-                duration: u64,
-            }
-        }
-
-        Metadata mapping:
-
-        types: [String, U128, obj(1)] [String, VecObj(2), NullableObj(3)] [String, VecString] [String] //defines object schema
-        values: ["from.near", "1000", null] ["dao.near", null] ["420"]                  //object values
-        obj_collections: [ [amount,["msg1", "msg2"], amount,["msg1", "msg2"]] ] //object arrays
-
-        obj_validator = [obj_id] in schema, pos is same for its validator
-        validator_expr = which value(pos) in the object provided by user to validate
-
-        */
-
         let metadata = vec![
             FnCallMetadata {
                 arg_names: vec!["sale".into()],
@@ -580,9 +548,6 @@ mod test {
             ],
             vec![ArgType::Const(0), ArgType::Free, ArgType::Free],
         ];
-
-        //TODO implement and test expr
-        let activity_expr: Vec<Expression> = vec![];
 
         bind_args(
             &dao_consts,
