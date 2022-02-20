@@ -17,12 +17,7 @@ pub const SKYWARD_ACC: &str = "demo-skyward.petrstudynka.testnet";
 pub const WNEAR_ACC: &str = "wrap.testnet";
 
 pub fn workflow_skyward_template_data_1() -> TemplateData {
-    let pp_register_tokens = Some(Postprocessing {
-        storage_key: "pp_1".into(),
-        op_type: PostprocessingType::SaveUserValue((0, 0)),
-        instructions: vec![],
-    });
-
+    let pp_register_tokens = None;
     let pp_storage_deposit_1 = None;
     let pp_storage_deposit_2 = None;
     let pp_amount_send = None;
@@ -50,7 +45,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_register_tokens,
                 activity_inputs: vec![vec![ArgType::Expression(Expression {
-                    args: vec![ExprArg::Const(0), ExprArg::User(0)],
+                    args: vec![ExprArg::Const(0), ExprArg::Bind(0)],
                     expr: EExpr::Fn(FnName::ToArray),
                 })]],
                 must_succeed: true,
@@ -74,7 +69,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 exec_condition: None,
                 action: ActionIdent::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
-                    id: (WNEAR_ACC.into(), "storage_deposit".into()),
+                    id: (WNEAR_ACC.into(), "storage_deposit".into()), //TODO dynamic receiver
                     tgas: 10,
                     deposit: 1_250_000_000_000_000_000_000.into(),
                 })),
@@ -96,7 +91,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 postprocessing: pp_amount_send,
                 activity_inputs: vec![vec![
                     ArgType::Free,
-                    ArgType::Bind(0),
+                    ArgType::Bind(1),
                     ArgType::BindTpl(0),
                     ArgType::BindTpl(1),
                 ]],
@@ -116,15 +111,15 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 activity_inputs: vec![
                     vec![ArgType::Object(1)],
                     vec![
-                        ArgType::Free,
-                        ArgType::Free,
+                        ArgType::Bind(2),
+                        ArgType::Bind(3),
                         ArgType::Const(0),
                         ArgType::VecObject(2),
-                        ArgType::Free,
-                        ArgType::Free,
-                        ArgType::Free,
+                        ArgType::Bind(0),
+                        ArgType::Bind(4),
+                        ArgType::Bind(5),
                     ],
-                    vec![ArgType::Const(0), ArgType::Bind(0), ArgType::Free],
+                    vec![ArgType::Const(0), ArgType::Bind(1), ArgType::BindTpl(2)],
                 ],
                 must_succeed: true,
             }),
@@ -133,6 +128,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
         binds: vec![
             DataType::String(SKYWARD_ACC.into()),
             DataType::String("\\\"AccountDeposit\\\"".into()),
+            DataType::Null,
         ],
         start: vec![0],
         end: vec![5],
@@ -284,7 +280,14 @@ pub fn workflow_skyward_template_settings_data_1() -> TemplateUserSettings {
 
     // User proposed settings type
     let settings = ProposeSettings {
-        binds: vec![DataType::U128(1000.into())],
+        binds: vec![
+            DataType::String(WNEAR_ACC.into()),
+            DataType::U128(1000.into()),
+            DataType::String("NearDAO auction".into()),
+            DataType::String("www.neardao.com".into()),
+            DataType::U64(1653304093000000000.into()),
+            DataType::U64(604800000000000.into()),
+        ],
         storage_key: "wf_skyward_1".into(),
     };
 

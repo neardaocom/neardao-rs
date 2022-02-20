@@ -27,17 +27,17 @@ ARGS_COL_4='[]'
 # 5. activity
 RECEIVER_5=$SID
 METHOD_5='sale_create'
-ARGS_5='[["Null"],[{"String":"Neardao auction"},{"String":"www.neardao.com"},{"String":"'$DCID'"},"Null",{"String":"wrap.testnet"},{"U64":"1647777423000000000"},{"U64":"604800000000000"}]]'
-ARGS_COL_5='[[{"String":"'$DCID'"},{"U128":"2000"},"Null"]]'
+ARGS_5='[[],[]]' # Binded from proposal settings
+ARGS_COL_5='[["Null","Null","Null"]]' # Requires placeholder values for now, will be fixed
 
-RECEIVER=$RECEIVER_1
-METHOD=$METHOD_1
-ARGS=$ARGS_1
-ARGS_COLLECTION=$ARGS_COL_1
+RECEIVER=$RECEIVER_5
+METHOD=$METHOD_5
+ARGS=$ARGS_5
+ARGS_COLLECTION=$ARGS_COL_5
 
-near call $DCID fn_call '{"proposal_id":2,"fncall_receiver":"'$RECEIVER'","fncall_method":"'$METHOD'","arg_values":'$ARGS', "arg_values_collection":'$ARGS_COLLECTION'}' --accountId $CID1 --gas $TGAS_200
+near call $DCID fn_call '{"proposal_id":4,"fncall_receiver":"'$RECEIVER'","fncall_method":"'$METHOD'","arg_values":'$ARGS', "arg_values_collection":'$ARGS_COLLECTION'}' --accountId $CID1 --gas $TGAS_200
 
 # checks
-near view $DCID wf_instance '{"proposal_id": 2}'
-near view $DCID storage_bucket_data_all '{"bucket_id":"wf_skyward_1"}'
+near view $DCID wf_instance '{"proposal_id": 4}'
+near view $DCID storage_bucket_data_all '{"bucket_id":"wf_skyward_2"}'
 #near view $SID get_sales '{"account_id": "'$DCID'"}'

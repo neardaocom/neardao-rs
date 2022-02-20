@@ -3,6 +3,8 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 use std::collections::HashMap;
 
+use crate::media::Media;
+
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize)]
@@ -51,8 +53,6 @@ pub enum VoteResult {
     VoteEnded,
 }
 
-// ---------------- NEW ----------------
-
 #[derive(BorshSerialize, BorshDeserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -65,6 +65,7 @@ pub struct Proposal {
     pub workflow_settings_id: u8,
     pub workflow_add_settings_id: bool,
     pub desc: String,
+    pub content: Option<ProposalContent>,
 }
 
 impl Proposal {
@@ -76,6 +77,7 @@ impl Proposal {
         workflow_settings_id: u8,
         workflow_add_settings_id: bool,
         desc: String,
+        content: Option<ProposalContent>,
     ) -> Self {
         Proposal {
             created,
@@ -86,6 +88,14 @@ impl Proposal {
             workflow_settings_id,
             workflow_add_settings_id,
             desc,
+            content,
         }
     }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum ProposalContent {
+    Media(Media),
 }

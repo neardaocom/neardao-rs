@@ -10,7 +10,7 @@ near call $CID new '{"tags":["dao","test","podilnik"]}' --accountId $CID
 
 # prepare args for dao into base64 and init dao via factory
 S_FT_META='{"spec":"ft-1.0.0","name":"Example NEAR fungible token","symbol":"EXAMPLE","icon":"some_icon","reference":null,"reference_hash":null,"decimals":0}'
-S_SETTINGS='{"name":"My first dao","purpose":"just testing","tags":[0,1,2],"dao_admin_account_id":"petrstudynka.testnet","dao_admin_rights":["TODO"],"workflow_provider":"'$WID'"}'
+S_SETTINGS='{"name":"My first dao","purpose":"just testing","tags":[0,1,2],"dao_admin_account_id":"'$CID'","dao_admin_rights":["TODO"],"workflow_provider":"'$WID'"}'
 S_GROUPS='[{"settings":{"name":"council","leader":"'$CID1'"},"members":[{"account_id":"'$CID1'","tags":[1]},{"account_id":"'$CID2'","tags":[3,4]},{"account_id":"'$CID3'","tags":[4]}],"release":{"amount":100000000,"init_distribution":10000000,"start_from":0,"duration":1000000000,"model":"Linear"}}]'
 S_MEDIA='[]'
 S_TAGS='[{"category":"global","values":["test dao", "new", "top"]},{"category":"group","values":["CEO", "CTO", "no idea", "good guy"]},{"category":"media","values":["very important", "probably virus"]}]'

@@ -193,6 +193,7 @@ impl Contract {
         propose_settings: ProposeSettings,
         template_settings: Option<Vec<TemplateSettings>>,
         desc: String,
+        content: Option<ProposalContent>,
     ) -> u32 {
         let caller = env::predecessor_account_id();
         let (wft, wfs) = self.workflow_template.get(&template_id).unwrap();
@@ -225,6 +226,7 @@ impl Contract {
             template_settings_id,
             true,
             desc,
+            content,
         );
         assert!(self.storage.get(&propose_settings.storage_key).is_none());
 

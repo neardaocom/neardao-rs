@@ -4,6 +4,7 @@ use library::{workflow::ActionResult, MethodName};
 use near_sdk::json_types::U128;
 use near_sdk::{env, near_bindgen, AccountId};
 
+use crate::proposal::{Proposal, ProposalContent};
 use crate::release::ReleaseDb;
 use crate::settings::DaoSettings;
 use crate::tags::Tags;
@@ -174,7 +175,7 @@ impl Contract {
         */
     }
 
-    pub fn media_add(&mut self, proposal_id: ProposalId, media: Media) -> ActionResult {
+    pub fn media_add(&mut self, proposal_id: ProposalId) -> ActionResult {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
@@ -187,6 +188,12 @@ impl Contract {
         );
 
         if result == ActionResult::Ok || result == ActionResult::Postprocessing {
+            let proposal: Proposal = self.proposals.get(&proposal_id).unwrap().into();
+
+            let media = match proposal.content.unwrap() {
+                ProposalContent::Media(m) => m,
+            };
+
             self.media_last_id += 1;
             self.media.insert(&self.media_last_id, &media);
         }

@@ -97,7 +97,7 @@ fn workflow_skyward_finance() {
         "neardao.testnet".into(),
         WNEAR_ACC.into(),
     ])]];
-    let mut user_args = vec![vec![DataType::String(WNEAR_ACC.into())]];
+    let mut user_args = vec![vec![]];
     let mut user_args_collection = vec![];
 
     let (transition_id, activity_id) = wfi
@@ -153,16 +153,9 @@ fn workflow_skyward_finance() {
         .as_ref()
         .unwrap()
         .postprocessing
-        .as_ref()
-        .unwrap();
+        .as_ref();
 
-    let inner_value = pp
-        .try_to_get_inner_value(user_args.as_slice(), settings.binds.as_slice())
-        .unwrap();
-    assert_eq!(inner_value, DataType::String(WNEAR_ACC.into()));
-
-    // Save wrap.near to storage so activity storage_deposit and sale_create get the right values
-    bucket.add_data(&pp.storage_key, &inner_value);
+    assert_eq!(pp, None);
 
     bind_args(
         &dao_consts,
@@ -468,34 +461,19 @@ fn workflow_skyward_finance() {
     assert_eq!(args, serde_json::to_string(&expected_obj).unwrap());
 
     // 5. Sale create on skyward.near
-    let mut user_args = vec![
-        vec![DataType::Null],
-        vec![
-            DataType::String("Neardao token auction".into()),
-            DataType::String("www.neardao.com".into()),
-            DataType::String("neardao.testnet".into()),
-            DataType::Null,
-            DataType::String(WNEAR_ACC.into()),
-            DataType::U64(0.into()),
-            DataType::U64(3600.into()),
-        ],
-    ];
-    let mut user_args_collection = vec![vec![
-        DataType::String("neardao.testnet".into()),
-        DataType::U128((2 * ONE_NEAR).into()),
-        DataType::Null,
-    ]];
+    let mut user_args = vec![vec![], vec![]];
+    let mut user_args_collection = vec![vec![DataType::Null, DataType::Null, DataType::Null]];
 
     let expected_args = vec![
         vec![DataType::Null],
         vec![
-            DataType::String("Neardao token auction".into()),
+            DataType::String("NearDAO auction".into()),
             DataType::String("www.neardao.com".into()),
             DataType::String("neardao.testnet".into()),
             DataType::Null,
             DataType::String(WNEAR_ACC.into()),
-            DataType::U64(0.into()),
-            DataType::U64(3600.into()),
+            DataType::U64(1653304093000000000.into()),
+            DataType::U64(604800000000000.into()),
         ],
     ];
 
@@ -577,13 +555,13 @@ fn workflow_skyward_finance() {
 
     let token_account_id: String = WNEAR_ACC.into();
     let sale_create_input = SaleInput {
-        title: "Neardao token auction".into(),
+        title: "NearDAO auction".into(),
         url: Some("www.neardao.com".into()),
         permissions_contract_id: Some(ValidAccountId::try_from("neardao.testnet").unwrap()),
         out_tokens: vec![out_tokens],
         in_token_account_id: ValidAccountId::try_from(token_account_id).unwrap(),
-        start_time: 0.into(),
-        duration: 3600.into(),
+        start_time: 1653304093000000000.into(),
+        duration: 604800000000000.into(),
     };
 
     let args = SaleCreateInput {
