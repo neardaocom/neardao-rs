@@ -7,7 +7,7 @@ M_LINK='{"Link":"link"}'
 M_CID='{"CID":{"ipfs":"web3.storage.com","cid":"1234567890","mimetype":"image/jpeg"}}'
 
 # Type CID
-MEDIA='{"name":"NearDAO logo","category":"logo","media_type":'$M_CID',"tags":[0,3],"version":"1.0","valid":true}'
+MEDIA='{"proposal_id":0,"name":"NearDAO logo","category":"logo","media_type":'$M_CID',"tags":[0,3],"version":"1.0","valid":true}'
 
 WFT_ID=2
 STORAGE_KEY="wf_media_add_1"

@@ -2,7 +2,7 @@ use std::{collections::HashMap};
 
 use near_sdk::{
     env::{self},
-    AccountId, Promise, Balance, log
+    AccountId, Promise, Balance
 };
 
 use crate::{
@@ -472,6 +472,14 @@ impl Contract {
                 //We do not process further following dao actions:
                 match action_ident {
                     ActionIdent::MediaAdd | ActionIdent::GroupAdd | ActionIdent::GroupAddMembers | ActionIdent::GroupUpdate => {
+                        self.log_action(
+                            proposal_id,
+                            caller.as_str(),
+                            activity_id,
+                            args.as_slice(),
+                            None,
+                        );
+
                         self.workflow_instance
                         .insert(&proposal_id, &(wfi, settings));
                         return result;

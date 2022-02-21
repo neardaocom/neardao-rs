@@ -11,7 +11,6 @@ use crate::tags::Tags;
 use crate::{
     core::*,
     group::{GroupInput, GroupMember, GroupReleaseInput, GroupSettings},
-    media::Media,
     GroupId, ProposalId,
 };
 use crate::{TagCategory, TagId};
@@ -190,10 +189,11 @@ impl Contract {
         if result == ActionResult::Ok || result == ActionResult::Postprocessing {
             let proposal: Proposal = self.proposals.get(&proposal_id).unwrap().into();
 
-            let media = match proposal.content.unwrap() {
+            let mut media = match proposal.content.unwrap() {
                 ProposalContent::Media(m) => m,
             };
 
+            media.proposal_id = proposal_id;
             self.media_last_id += 1;
             self.media.insert(&self.media_last_id, &media);
         }

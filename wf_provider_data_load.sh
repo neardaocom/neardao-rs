@@ -7,8 +7,8 @@ NC='\033[0m'
 
 # ------------ SETTINGS ------------ #
 
-WFSTART=12
-WFCOUNT=12
+WFSTART=1
+WFCOUNT=13
 WID=$1
 
 if [ -z $WID ]; then
