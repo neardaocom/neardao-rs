@@ -308,7 +308,7 @@ impl Contract {
                         Some(ProposalState::Invalid)
                     } else if calc_percent_u128_unchecked(
                         vote_results[1],
-                        max_possible_amount,
+                        vote_results.iter().sum(),
                         self.decimal_const,
                     ) < wfs.approve_threshold
                     {

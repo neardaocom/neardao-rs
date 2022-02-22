@@ -19,7 +19,7 @@ use crate::{
     release::Release,
     settings::DaoSettings,
     tags::{TagInput, Tags},
-    ProposalId,
+    ProposalId, CalculatedVoteResults, Votes, VoteTotalPossible,
 };
 use library::{
     storage::StorageBucket,
@@ -202,9 +202,9 @@ impl Contract {
         votes: &HashMap<String, u8>,
         scenario: &VoteScenario,
         vote_target: &ActivityRight,
-    ) -> (u128, [u128; 3]) {
-        let mut vote_result = [0 as u128; 3];
-        let mut max_possible_amount: u128 = 0;
+    ) -> CalculatedVoteResults {
+        let mut vote_result: Votes = [0 as u128; 3];
+        let mut max_possible_amount: VoteTotalPossible = 0;
         match scenario {
             VoteScenario::Democratic => {
                 match vote_target {
@@ -230,7 +230,7 @@ impl Contract {
                     }
                     ActivityRight::GroupRole(g, r) => match self.groups.get(&g) {
                         Some(group) => {
-                            max_possible_amount = group.get_members_by_role(*r).len() as u128;
+                            max_possible_amount = group.get_members_accounts_by_role(*r).len() as u128;
                         }
                         None => panic!("{}", ERR_GROUP_NOT_FOUND),
                     },
@@ -242,19 +242,61 @@ impl Contract {
                 }
             }
             VoteScenario::TokenWeighted => match vote_target {
-                ActivityRight::Anyone | ActivityRight::TokenHolder | ActivityRight::Member => {
+                ActivityRight::Anyone | ActivityRight::TokenHolder => { //TODO refactor Member - wont be calculated correctly
                     max_possible_amount = self.ft_total_distributed as u128 * self.decimal_const;
 
                     for (voter, vote_value) in votes.iter() {
-                        vote_result[*vote_value as usize] +=
-                            self.ft.accounts.get(voter).unwrap_or(0);
+                        vote_result[*vote_value as usize] += self.ft.accounts.get(voter).unwrap_or(0);
                     }
                 }
-                ActivityRight::Group(_) | ActivityRight::GroupRole(_, _) => {
+                // This is expensive scenario
+                ActivityRight::Member => {
+                    let mut map = HashMap::with_capacity(64);
+                    for group in self.groups.values_as_vector().iter() {
+                        let members = group.get_members_accounts();
+                        for member in members.into_iter() {
+                            let amount = self.ft.accounts.get(&member).unwrap_or(0);
+
+                            // AccountId can be in multiple groups
+                            if map.insert(member,amount).is_none() {
+                                max_possible_amount += amount;
+                            }
+                        }
+                    }
+
                     for (voter, vote_value) in votes.iter() {
-                        let value = self.ft.accounts.get(voter).unwrap_or(0);
-                        vote_result[*vote_value as usize] += value;
-                        max_possible_amount += value;
+                        vote_result[*vote_value as usize] += *map.get(voter).unwrap_or(&0);
+                    }
+                }
+                ActivityRight::Group(gid) => {
+                    let group = self.groups.get(&gid).unwrap();
+                    let members: Vec<AccountId> = group.get_members_accounts();
+
+                    // Store it in temp hashmap so we dont have to IO ft_amount for each member again
+                    let mut map = HashMap::with_capacity(members.len());
+                    for member in members.into_iter() {
+                        let amount = self.ft.accounts.get(&member).unwrap_or(0);
+                        map.insert(member,amount);
+                        max_possible_amount += amount;
+                    } 
+
+                    for (voter, vote_value) in votes.iter() {
+                        vote_result[*vote_value as usize] += *map.get(voter).unwrap_or(&0);
+                    }
+                },
+                ActivityRight::GroupRole(gid, rid) => {
+                    let group = self.groups.get(&gid).unwrap();
+                    let members: Vec<AccountId> = group.get_members_accounts_by_role(*rid);
+
+                    let mut map = HashMap::with_capacity(members.len());
+                    for member in members.into_iter() {
+                        let amount = self.ft.accounts.get(&member).unwrap_or(0);
+                        map.insert(member,amount);
+                        max_possible_amount += amount;
+                    } 
+
+                    for (voter, vote_value) in votes.iter() {
+                        vote_result[*vote_value as usize] += *map.get(voter).unwrap_or(&0);
                     }
                 }
                 ActivityRight::GroupMember(_, _)

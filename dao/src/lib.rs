@@ -24,6 +24,9 @@ pub(crate) type StorageKey = String;
 pub(crate) type TagCategory = String;
 pub(crate) type GroupId = u16;
 pub(crate) type GroupName = String;
+pub(crate) type VoteTotalPossible = u128;
+pub(crate) type Votes = [u128; 3];
+pub(crate) type CalculatedVoteResults = (VoteTotalPossible, Votes);
 
 /// Calculates votes as percents
 #[inline]

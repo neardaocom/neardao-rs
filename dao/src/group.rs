@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::LazyOption,
+    env,
     serde::{Deserialize, Serialize},
     AccountId, IntoStorageKey,
 };
@@ -90,17 +91,24 @@ pub struct GroupReleaseInput {
 }
 
 impl From<GroupReleaseInput> for Release {
-    fn from(input: GroupReleaseInput) -> Self {
+    fn from(mut input: GroupReleaseInput) -> Self {
         assert!(
             input.amount >= input.init_distribution,
             "{}",
             ERR_INVALID_AMOUNT
         );
         let rel_model = match input.model {
-            ReleaseModelInput::Linear => ReleaseModel::Linear {
-                duration: input.duration,
-                release_end: input.start_from + input.duration,
-            },
+            ReleaseModelInput::Linear => {
+                //TODO move up to remove env dependency
+                if input.start_from == 0 {
+                    input.start_from = (env::block_timestamp() / 10u64.pow(9)) as u32;
+                }
+
+                ReleaseModel::Linear {
+                    duration: input.duration,
+                    release_end: input.start_from + input.duration,
+                }
+            }
             ReleaseModelInput::None => ReleaseModel::None,
         };
 
@@ -229,6 +237,14 @@ impl Group {
         unlocked
     }
 
+    pub fn get_members_accounts(&self) -> Vec<AccountId> {
+        self.members
+            .get_members()
+            .into_iter()
+            .map(|member| member.account_id)
+            .collect()
+    }
+
     pub fn get_member_by_account(&self, account_id: &str) -> Option<GroupMember> {
         self.members
             .get_members()
@@ -236,7 +252,7 @@ impl Group {
             .find(|m| m.account_id == account_id)
     }
 
-    pub fn get_members_by_role(&self, role: TagId) -> Vec<AccountId> {
+    pub fn get_members_accounts_by_role(&self, role: TagId) -> Vec<AccountId> {
         self.members
             .get_members()
             .into_iter()
