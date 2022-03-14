@@ -3,7 +3,7 @@ pub const ERR_NO_ACCESS: &str = "You have no rights for this action";
 pub const ERR_GROUP_NOT_FOUND: &str = "Group does not exist";
 pub const ERR_UNKNOWN_FNCALL: &str = "Undefined fn call";
 
-pub const ERR_LOCK_AMOUNT_ABOVE: &str = "Total FT locked amount exceeded total FT supply";
+pub const ERR_LOCK_AMOUNT_OVERFLOW: &str = "Total FT locked amount exceeded total FT supply";
 pub const ERR_DISTRIBUTION_AMOUNT_ABOVE: &str = "Total FT distribution exceeded total FT supply";
 pub const ERR_DISTRIBUTION_ACC_EMPTY: &str = "No accounts to distribute to";
 pub const ERR_DISTRIBUTION_MIN_VALUE: &str = "Cannot distribute less than 1.0 FT per member";

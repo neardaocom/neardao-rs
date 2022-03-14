@@ -1,6 +1,7 @@
-use library::types::FnCallMetadata;
-use library::workflow::Template;
-use library::FnCallId;
+use library::workflow::help::TemplateHelp;
+use library::workflow::template::Template;
+use library::workflow::types::FnCallMetadata;
+use library::{FnCallId, Version};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap};
 use near_sdk::serde::Serialize;
@@ -9,6 +10,7 @@ use near_sdk::{env, near_bindgen, BorshStorageKey};
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
     WorkflowTemplate,
+    WorkflowHelp,
     FnCallMetadata,
     WorkflowFnCalls,
 }
@@ -18,6 +20,7 @@ pub enum StorageKeys {
 pub struct Contract {
     last_wf_id: u16,
     workflows: UnorderedMap<u16, Template>,
+    workflow_help: UnorderedMap<u16, TemplateHelp>,
     workflow_fncalls: LookupMap<u16, Vec<FnCallId>>,
     fncall_metadata: UnorderedMap<FnCallId, Vec<FnCallMetadata>>,
 }
@@ -30,6 +33,7 @@ impl Contract {
         workflow: Template,
         fncalls: Vec<FnCallId>,
         mut fncall_metadata: Vec<Vec<FnCallMetadata>>,
+        help: Option<TemplateHelp>,
     ) {
         assert_eq!(fncalls.len(), fncall_metadata.len());
         self.last_wf_id += 1;
@@ -40,7 +44,16 @@ impl Contract {
                 .insert(&fncall, &fncall_metadata.pop().unwrap());
         }
 
+        if let Some(help) = help {
+            self.workflow_help.insert(&self.last_wf_id, &help);
+        }
+
         self.workflow_fncalls.insert(&self.last_wf_id, &fncalls);
+    }
+
+    #[private]
+    pub fn workflow_add_help(&mut self, id: u16, wf_help: TemplateHelp) -> Option<TemplateHelp> {
+        self.workflow_help.insert(&id, &wf_help)
     }
 
     #[private]
@@ -50,7 +63,10 @@ impl Contract {
     }
 
     /// Returns Workflow with corresponding FnCalls and their metadata
-    pub fn wf_template(self, id: u16) -> Option<(Template, Vec<FnCallId>, Vec<Vec<FnCallMetadata>>)> {
+    pub fn wf_template(
+        self,
+        id: u16,
+    ) -> Option<(Template, Vec<FnCallId>, Vec<Vec<FnCallMetadata>>)> {
         match self.workflows.get(&id) {
             Some(t) => match self.workflow_fncalls.get(&id) {
                 Some(fncalls) => {
@@ -72,22 +88,30 @@ impl Contract {
             .into_iter()
             .map(|(id, t)| {
                 let fncalls = self.workflow_fncalls.get(&id).unwrap();
+                let help = self.workflow_help.get(&id).is_some();
                 Metadata {
                     id,
-                    name: t.name,
+                    code: t.code,
                     version: t.version,
                     fncalls,
+                    help,
                 }
             })
             .collect()
     }
 
-    pub fn wf_template_fncalls(self, id: u16) -> Vec<FnCallId> {
-        self.workflow_fncalls.get(&id).unwrap_or(vec![])
+    pub fn wf_conditions_help(self, id: u16) -> Option<TemplateHelp> {
+        self.workflow_help.get(&id)
     }
 
+    // TODO deprecated
+    pub fn wf_template_fncalls(self, id: u16) -> Vec<FnCallId> {
+        self.workflow_fncalls.get(&id).unwrap_or_else(|| vec![])
+    }
+
+    // TODO deprecated
     pub fn fncall_metadata(self, id: FnCallId) -> Vec<FnCallMetadata> {
-        self.fncall_metadata.get(&id).unwrap_or(vec![])
+        self.fncall_metadata.get(&id).unwrap_or_else(|| vec![])
     }
 }
 
@@ -96,6 +120,7 @@ impl Default for Contract {
         Self {
             last_wf_id: 0,
             workflows: UnorderedMap::new(StorageKeys::WorkflowTemplate),
+            workflow_help: UnorderedMap::new(StorageKeys::WorkflowHelp),
             fncall_metadata: UnorderedMap::new(StorageKeys::FnCallMetadata),
             workflow_fncalls: LookupMap::new(StorageKeys::WorkflowFnCalls),
         }
@@ -106,7 +131,8 @@ impl Default for Contract {
 #[serde(crate = "near_sdk::serde")]
 pub struct Metadata {
     pub id: u16,
-    pub name: String,
-    pub version: u8,
+    pub code: String,
+    pub version: Version,
     pub fncalls: Vec<FnCallId>,
+    pub help: bool,
 }

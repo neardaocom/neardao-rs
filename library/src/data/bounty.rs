@@ -2,13 +2,13 @@ use std::vec;
 
 use crate::{
     expression::{EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
-    types::{
-        ActionData, ActionIdent, DataType, DataTypeDef, EventData, ValidatorType, VoteScenario,
+    workflow::{
+        ActionData, ActionType, DataType, DataTypeDef, EventData, ValidatorType, VoteScenario,
     },
     unit_tests::ONE_NEAR,
     workflow::{
-        ActivityRight, ArgType, ExprArg, Expression, Postprocessing, PostprocessingType,
-        ProposeSettings, Template, TemplateActivity, TemplateSettings, TransitionConstraint,
+        ActivityRight, ArgSrc, ExprArg, Expression, Postprocessing, PostprocessingType,
+        ProposeSettings, Template, TemplateActivity, TemplateSettings, Transition,
     },
 };
 
@@ -17,21 +17,21 @@ use super::{TemplateData, TemplateUserSettings};
 // This wf does not return bounty + deposit
 pub fn workflow_bounty_template_data_1() -> TemplateData {
     let wf = Template {
-        name: "wf_bounty".into(),
+        code: "wf_bounty".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "event_checkin".into(),
                 exec_condition: None,
-                action: ActionIdent::Event,
+                action: ActionType::Event,
                 action_data: Some(ActionData::Event(EventData {
                     code: "checkin".into(),
                     values: vec![DataTypeDef::String(false)],
                     deposit_from_bind: Some(1),
                 })),
                 arg_types: vec![],
-                activity_inputs: vec![vec![ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free]],
                 postprocessing: Some(Postprocessing {
                     storage_key: "pp_1".into(),
                     op_type: PostprocessingType::SaveUserValue((0, 0)),
@@ -42,14 +42,14 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
             Some(TemplateActivity {
                 code: "event_unrealized".into(),
                 exec_condition: None,
-                action: ActionIdent::Event,
+                action: ActionType::Event,
                 action_data: Some(ActionData::Event(EventData {
                     code: "unrealized".into(),
                     values: vec![DataTypeDef::String(false)],
                     deposit_from_bind: None,
                 })),
                 arg_types: vec![],
-                activity_inputs: vec![vec![ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free]],
                 postprocessing: Some(Postprocessing {
                     storage_key: "pp_2".into(),
                     op_type: PostprocessingType::RemoveActionStorage("pp_1".into()),
@@ -60,14 +60,14 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
             Some(TemplateActivity {
                 code: "event_approve".into(),
                 exec_condition: None,
-                action: ActionIdent::Event,
+                action: ActionType::Event,
                 action_data: Some(ActionData::Event(EventData {
                     code: "approve".into(),
                     values: vec![DataTypeDef::String(false), DataTypeDef::Bool(false)],
                     deposit_from_bind: None,
                 })),
                 arg_types: vec![],
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free]],
                 postprocessing: Some(Postprocessing {
                     storage_key: "pp_3".into(),
                     op_type: PostprocessingType::SaveUserValue((0, 1)),
@@ -78,14 +78,14 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
             Some(TemplateActivity {
                 code: "event_done".into(),
                 exec_condition: None,
-                action: ActionIdent::Event,
+                action: ActionType::Event,
                 action_data: Some(ActionData::Event(EventData {
                     code: "done".into(),
                     values: vec![DataTypeDef::String(false), DataTypeDef::String(false)],
                     deposit_from_bind: None,
                 })),
                 arg_types: vec![],
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free]],
                 postprocessing: Some(Postprocessing {
                     storage_key: "pp_4".into(),
                     op_type: PostprocessingType::SaveUserValue((0, 1)),
@@ -96,14 +96,14 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
             Some(TemplateActivity {
                 code: "event_done_approve".into(),
                 exec_condition: None,
-                action: ActionIdent::Event,
+                action: ActionType::Event,
                 action_data: Some(ActionData::Event(EventData {
                     code: "done_approve".into(),
                     values: vec![DataTypeDef::String(false), DataTypeDef::String(false)],
                     deposit_from_bind: None,
                 })),
                 arg_types: vec![],
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free]],
                 postprocessing: Some(Postprocessing {
                     storage_key: "pp_5".into(),
                     op_type: PostprocessingType::SaveUserValue((0, 1)),
@@ -114,10 +114,10 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
             Some(TemplateActivity {
                 code: "send_near".into(),
                 exec_condition: None,
-                action: ActionIdent::TreasurySendNear,
+                action: ActionType::TreasurySendNear,
                 action_data: None,
                 arg_types: vec![],
-                activity_inputs: vec![vec![ArgType::Storage("pp_1".into()), ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Storage("pp_1".into()), ArgSrc::Free]],
                 postprocessing: None,
                 must_succeed: true,
             }),
@@ -128,7 +128,7 @@ pub fn workflow_bounty_template_data_1() -> TemplateData {
             vec![],
             vec![],
             vec![],
-            vec![ValidatorType::Primitive(0), ValidatorType::Primitive(0)],
+            vec![ValidatorType::Simple(0), ValidatorType::Simple(0)],
         ],
         validator_exprs: vec![
             Expression {
@@ -193,26 +193,26 @@ pub fn workflow_bounty_template_settings_data_1() -> TemplateUserSettings {
         deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
         transition_constraints: vec![
-            vec![TransitionConstraint {
+            vec![Transition {
                 transition_limit: 1,
                 cond: None,
             }],
             vec![
-                TransitionConstraint {
+                Transition {
                     transition_limit: 5,
                     cond: None,
                 },
-                TransitionConstraint {
+                Transition {
                     transition_limit: 5,
                     cond: None,
                 },
             ],
-            vec![TransitionConstraint {
+            vec![Transition {
                 transition_limit: 4,
                 cond: None,
             }],
             vec![
-                TransitionConstraint {
+                Transition {
                     transition_limit: 4,
                     cond: Some(Expression {
                         args: vec![ExprArg::Storage("pp_3".into())],
@@ -225,7 +225,7 @@ pub fn workflow_bounty_template_settings_data_1() -> TemplateUserSettings {
                         }),
                     }),
                 },
-                TransitionConstraint {
+                Transition {
                     transition_limit: 4,
                     cond: Some(Expression {
                         args: vec![ExprArg::Storage("pp_1".into()), ExprArg::User(0)],
@@ -238,7 +238,7 @@ pub fn workflow_bounty_template_settings_data_1() -> TemplateUserSettings {
                         }),
                     }),
                 },
-                TransitionConstraint {
+                Transition {
                     transition_limit: 1,
                     cond: Some(Expression {
                         args: vec![ExprArg::Storage("pp_3".into())],
@@ -252,11 +252,11 @@ pub fn workflow_bounty_template_settings_data_1() -> TemplateUserSettings {
                     }),
                 },
             ],
-            vec![TransitionConstraint {
+            vec![Transition {
                 transition_limit: 1,
                 cond: None,
             }],
-            vec![TransitionConstraint {
+            vec![Transition {
                 transition_limit: 1,
                 cond: None,
             }],

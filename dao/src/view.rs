@@ -1,10 +1,11 @@
 use library::types::DataType;
-use library::workflow::{Instance, ProposeSettings, Template, TemplateSettings};
+use library::workflow::instance::Instance;
+use library::workflow::settings::{ProposeSettings, TemplateSettings};
+use library::workflow::template::Template;
 use near_sdk::near_bindgen;
 use near_sdk::serde::Serialize;
 
 use crate::group::{GroupMember, GroupOutput};
-use crate::media::Media;
 use crate::proposal::VProposal;
 use crate::settings::DaoSettings;
 use crate::tags::Tags;
@@ -92,18 +93,6 @@ impl Contract {
         self.groups
             .get(&id)
             .map(|group| group.members.get_members())
-    }
-
-    pub fn media(self, id: u32) -> Option<Media> {
-        self.media.get(&id)
-    }
-
-    pub fn media_list(self) -> Vec<Option<Media>> {
-        let mut media = Vec::with_capacity(self.media_last_id as usize);
-        for i in 1..=self.media_last_id {
-            media.push(self.media.get(&i))
-        }
-        media
     }
 
     pub fn tags(self, category: TagCategory) -> Option<Tags> {

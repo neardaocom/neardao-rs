@@ -6,13 +6,13 @@ use crate::data::bounty::{
     workflow_bounty_template_data_1, workflow_bounty_template_settings_data_1,
 };
 
-use crate::types::{ActionData, ActionIdent};
+use crate::workflow::{ActionData, ActionType};
 use crate::unit_tests::{get_dao_consts, ONE_NEAR};
 use crate::utils::validate_args;
 use crate::workflow::ActionResult;
 use crate::{
     storage::StorageBucket,
-    types::DataType,
+    workflow::DataType,
     workflow::{Instance, InstanceState},
 };
 
@@ -322,7 +322,7 @@ fn workflow_bounty_happy_scenario() {
     ]];
 
     let (transition_id, activity_id) = wfi
-        .get_target_trans_with_for_dao_action(&wft, ActionIdent::TreasurySendNear)
+        .get_target_trans_with_for_dao_action(&wft, ActionType::TreasurySendNear)
         .unwrap();
 
     assert_eq!(activity_id, 6);
@@ -349,7 +349,7 @@ fn workflow_bounty_happy_scenario() {
 
     assert_eq!(result.0, ActionResult::Ok);
     assert_eq!(wfi.current_activity_id, 6);
-    assert_eq!(*actual_action_ident, ActionIdent::TreasurySendNear);
+    assert_eq!(*actual_action_ident, ActionType::TreasurySendNear);
 
     assert!(validate_args(
         &dao_consts,

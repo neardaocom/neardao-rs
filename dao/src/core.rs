@@ -4,12 +4,12 @@ use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
 use crate::tags::{TagInput, Tags};
 use library::storage::StorageBucket;
-use library::types::{DataType, FnCallMetadata};
-use library::workflow::InstanceState;
-use library::{
-    workflow::{Instance, ProposeSettings, Template, TemplateSettings},
-    FnCallId,
-};
+use library::types::DataType;
+use library::workflow::instance::{Instance, InstanceState};
+use library::workflow::settings::{ProposeSettings, TemplateSettings};
+use library::workflow::template::Template;
+use library::workflow::types::{DaoActionIdent, FnCallMetadata};
+use library::FnCallId;
 
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
 use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
@@ -28,7 +28,6 @@ use near_sdk::{
 
 use crate::group::{Group, GroupInput};
 
-use crate::media::Media;
 use crate::{calc_percent_u128_unchecked, proposal::*, StorageKey, TagCategory};
 use crate::{GroupId, ProposalId};
 
@@ -53,7 +52,6 @@ pub enum StorageKeys {
     ProposalConfig,
     Council,
     Tags,
-    Media,
     FunctionCalls,
     FunctionCallMetadata,
     Storage,
@@ -76,9 +74,10 @@ pub enum StorageKeys {
     FunctionCallWhitelist,
     WfTemplate,
     WfTemplateSettings,
-    ProposedWfTemplateSettings, //for proposal workflow add template
+    ProposedWfTemplateSettings,
     ActivityLog,
     WfInstance,
+    DaoActionMetadata,
 }
 
 #[near_bindgen]
@@ -98,8 +97,8 @@ pub struct Contract {
     pub proposals: UnorderedMap<u32, VProposal>,
     pub storage: UnorderedMap<StorageKey, StorageBucket>,
     pub tags: UnorderedMap<TagCategory, Tags>,
-    pub media_last_id: u32,
-    pub media: LookupMap<u32, Media>,
+    /// Provides metadata for dao actions.
+    pub dao_action_metadata: LookupMap<DaoActionIdent, Vec<FnCallMetadata>>,
     pub function_call_metadata: UnorderedMap<FnCallId, Vec<FnCallMetadata>>,
     pub workflow_last_id: u16,
     pub workflow_template: UnorderedMap<u16, (Template, Vec<TemplateSettings>)>,
@@ -116,7 +115,6 @@ impl Contract {
         ft_metadata: FungibleTokenMetadata,
         settings: DaoSettings,
         groups: Vec<GroupInput>,
-        media: Vec<Media>,
         tags: Vec<TagInput>,
         function_calls: Vec<FnCallId>,
         function_call_metadata: Vec<Vec<FnCallMetadata>>,
@@ -141,8 +139,7 @@ impl Contract {
             proposals: UnorderedMap::new(StorageKeys::Proposals),
             storage: UnorderedMap::new(StorageKeys::Storage),
             tags: UnorderedMap::new(StorageKeys::Tags),
-            media_last_id: 0,
-            media: LookupMap::new(StorageKeys::Media),
+            dao_action_metadata: LookupMap::new(StorageKeys::DaoActionMetadata),
             function_call_metadata: UnorderedMap::new(StorageKeys::FunctionCallMetadata),
             workflow_last_id: 0,
             workflow_template: UnorderedMap::new(StorageKeys::WfTemplate),
@@ -151,21 +148,19 @@ impl Contract {
             workflow_activity_log: LookupMap::new(StorageKeys::ActivityLog),
         };
 
-        //register self and mint all FT
-
+        // Register self and mint all FT
         let contract_acc = env::current_account_id();
         contract.ft.internal_register_account(&contract_acc);
         contract.ft.internal_deposit(
             &contract_acc,
             contract.ft_total_supply as u128 * contract.decimal_const,
         );
-        //substract self account
+        // Don't count self into token holders.
         contract.ft.token_holders_count -= 1;
 
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
         contract.init_groups(groups);
-        contract.init_media(media);
         contract.init_function_calls(function_calls, function_call_metadata);
         contract.init_workflows(workflow_templates, workflow_template_settings);
 
@@ -186,14 +181,13 @@ impl Contract {
     }
 
     #[payable]
-    pub fn propose(
+    pub fn proposal_create(
         &mut self,
+        desc: String,
         template_id: u16,
         template_settings_id: u8,
         propose_settings: ProposeSettings,
         template_settings: Option<Vec<TemplateSettings>>,
-        desc: String,
-        content: Option<ProposalContent>,
     ) -> u32 {
         let caller = env::predecessor_account_id();
         let (wft, wfs) = self.workflow_template.get(&template_id).unwrap();
@@ -220,22 +214,28 @@ impl Contract {
         }
 
         let proposal = Proposal::new(
+            desc,
             env::block_timestamp() / 10u64.pow(9) / 60 * 60 + 60, // Rounded up to minutes
             caller,
             template_id,
             template_settings_id,
             true,
-            desc,
-            content,
         );
-        assert!(self.storage.get(&propose_settings.storage_key).is_none());
 
+        if let Some(ref key) = propose_settings.storage_key {
+            assert!(
+                self.storage.get(key).is_none(),
+                "Storage key already exists."
+            );
+        }
+
+        let transition_counter = self.create_transition_counter(&wft.transitions);
         self.proposals
             .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
         self.workflow_instance.insert(
             &self.proposal_last_id,
             &(
-                Instance::new(template_id, &wft.transitions),
+                Instance::new(template_id, transition_counter),
                 propose_settings,
             ),
         );
@@ -244,7 +244,7 @@ impl Contract {
     }
 
     #[payable]
-    pub fn vote(&mut self, proposal_id: u32, vote_kind: u8) -> bool {
+    pub fn proposal_vote(&mut self, proposal_id: u32, vote_kind: u8) -> bool {
         if vote_kind > 2 {
             return false;
         }
@@ -318,7 +318,8 @@ impl Contract {
                         // proposal is accepted, create new workflow activity with its storage
                         instance.state = InstanceState::Running;
                         // Storage key must be unique among all proposals
-                        self.storage_bucket_add(settings.storage_key.as_str());
+                        // TODO only when needed by WFT
+                        //self.storage_bucket_add(settings.storage_key.as_ref().as_str());
                         Some(ProposalState::Accepted)
                     }
                 }

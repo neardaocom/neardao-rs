@@ -1,7 +1,7 @@
 #![cfg(test)]
 #![allow(unused)]
 use crate::{
-    types::FnCallMetadata,
+    workflow::FnCallMetadata,
     workflow::{ProposeSettings, Template, TemplateSettings},
     FnCallId,
 };

@@ -37,10 +37,10 @@ impl From<VProposal> for Proposal {
 #[serde(crate = "near_sdk::serde")]
 pub enum ProposalState {
     InProgress,
-    Invalid, // Not enough voters/tokens when time expired or could not apply tx
+    Invalid,
     Spam,
     Rejected,
-    Accepted, // Accepted and winning transaction executed
+    Accepted,
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq)]
@@ -57,6 +57,7 @@ pub enum VoteResult {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Proposal {
+    pub desc: String,
     pub created: u64,
     pub created_by: AccountId,
     pub votes: HashMap<AccountId, u8>,
@@ -64,22 +65,20 @@ pub struct Proposal {
     pub workflow_id: u16,
     pub workflow_settings_id: u8,
     pub workflow_add_settings_id: bool,
-    pub desc: String,
-    pub content: Option<ProposalContent>,
 }
 
 impl Proposal {
     #[inline]
     pub fn new(
+        desc: String,
         created: u64,
         created_by: AccountId,
         workflow_id: u16,
         workflow_settings_id: u8,
         workflow_add_settings_id: bool,
-        desc: String,
-        content: Option<ProposalContent>,
     ) -> Self {
         Proposal {
+            desc,
             created,
             created_by,
             votes: HashMap::new(),
@@ -87,8 +86,6 @@ impl Proposal {
             workflow_id,
             workflow_settings_id,
             workflow_add_settings_id,
-            desc,
-            content,
         }
     }
 }

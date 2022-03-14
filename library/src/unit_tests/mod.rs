@@ -1,6 +1,6 @@
 #![cfg(test)]
 #![allow(unused)]
-use crate::types::DataType;
+use crate::workflow::DataType;
 
 mod bounty;
 mod skyward;

@@ -13,13 +13,13 @@ use crate::data::skyward::{
     WNEAR_ACC,
 };
 
-use crate::types::ActionData;
+use crate::workflow::ActionData;
 use crate::unit_tests::{get_dao_consts, ONE_NEAR};
 use crate::utils::{args_to_json, bind_args, validate_args};
 use crate::workflow::ActionResult;
 use crate::{
     storage::StorageBucket,
-    types::DataType,
+    workflow::DataType,
     workflow::{Instance, InstanceState},
 };
 
@@ -83,7 +83,7 @@ fn workflow_skyward_finance() {
     let mut builder = VMContextBuilder::new();
     testing_env!(builder.build());
 
-    let (wft, fncalls, fn_metadata) = workflow_skyward_template_data_1();
+    let (wft, fncalls, xfn_metadata) = workflow_skyward_template_data_1();
     let (wfs, settings) = workflow_skyward_template_settings_data_1();
 
     let mut wfi = Instance::new(1, &wft.transitions);

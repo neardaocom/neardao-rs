@@ -79,6 +79,7 @@ pub struct GroupSettings {
     pub leader: String,
 }
 
+// TODO refactor
 #[derive(Deserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -90,6 +91,7 @@ pub struct GroupReleaseInput {
     pub model: ReleaseModelInput,
 }
 
+// TODO refactor
 impl From<GroupReleaseInput> for Release {
     fn from(mut input: GroupReleaseInput) -> Self {
         assert!(

@@ -1,12 +1,14 @@
-use library::types::FnCallMetadata;
-use library::workflow::{ActionResult, Template, TemplateSettings};
+use library::types::DataType;
+use library::workflow::activity::Postprocessing;
+use library::workflow::settings::TemplateSettings;
+use library::workflow::template::Template;
+use library::workflow::types::{ActionResult, FnCallMetadata};
 use library::FnCallId;
 use near_sdk::serde_json;
 use near_sdk::{env, ext_contract, near_bindgen, PromiseResult};
 
 use crate::core::*;
 use crate::errors::*;
-use library::{types::DataType, workflow::Postprocessing};
 
 #[ext_contract(ext_self)]
 trait ExtSelf {
@@ -50,9 +52,9 @@ impl Contract {
                     let mut bucket = self.storage.get(&storage_key).unwrap();
 
                     let key = p.storage_key.clone();
-                    if let Some(val) = &p.postprocess(val, inner_value, &mut bucket) {
-                        bucket.add_data(&key, val);
-                    }
+                    //if let Some(val) = &p.postprocess(val, inner_value, &mut bucket) {
+                    //    bucket.add_data(&key, val);
+                    //}
 
                     self.storage.insert(&storage_key, &bucket);
                     true

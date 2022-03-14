@@ -1,20 +1,35 @@
 use near_sdk::AccountId;
 use types::DataType;
 
-mod data;
-mod unit_tests;
+//mod data;
+//mod unit_tests;
 
-pub mod expression;
+pub mod functions;
+pub mod interpreter;
 pub mod storage;
 pub mod types;
-pub mod utils;
 pub mod workflow;
 
 pub type MethodName = String;
 pub type FnCallId = (AccountId, MethodName);
-pub type ArgValidatorId = u8;
-pub type BindId = u8;
+pub type TransitionLimit = u16;
 pub type Consts = dyn Fn(u8) -> DataType;
 pub type EventCode = String;
-pub type TransitionId = u8;
+
 pub type ActivityId = u8;
+pub type ActionId = u8;
+pub type ObjectId = u8;
+pub type BindId = u8;
+pub type ValidatorId = u8;
+pub type ExpressionId = u8;
+pub type TransitionId = u8;
+
+/// Flatten object's values type for activity inputs.
+pub type ObjectValues = Vec<Vec<DataType>>;
+
+/// Flatten object's collections values type for activity inputs.
+pub type ObjectCollectionValues = Vec<Vec<DataType>>;
+
+/// Version string.
+/// Max 16 characters (unchecked atm).
+pub type Version = String;

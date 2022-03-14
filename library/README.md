@@ -27,3 +27,7 @@ Shared crate Library provides necessary data types / functions for other NearDAO
 3. Optimalizations all kinds in general
 4. Crate module structure
 5. Workflow validation tests
+
+## Missing
+- Be able to process JSON objects with collection objects having optionable objects inside them.
+- Validate collection objects data by pos.

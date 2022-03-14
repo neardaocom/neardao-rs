@@ -1,12 +1,13 @@
+use crate::workflow::{ArgSrc, Transition};
 use crate::{
     expression::{EExpr, FnName},
-    types::{
-        ActionData, ActionIdent, DataType, DataTypeDef, FnCallData, FnCallMetadata, VoteScenario,
+    workflow::{
+        ActionData, ActionType, DataType, DataTypeDef, FnCallData, FnCallMetadata, VoteScenario,
     },
     unit_tests::ONE_NEAR,
     workflow::{
-        ActivityRight, ArgType, ExprArg, Expression, Postprocessing, PostprocessingType,
-        ProposeSettings, Template, TemplateActivity, TemplateSettings, TransitionConstraint,
+        ActivityRight, ExprArg, Expression, Postprocessing, PostprocessingType, ProposeSettings,
+        Template, TemplateActivity, TemplateSettings,
     },
     FnCallId,
 };
@@ -29,14 +30,14 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
     });
 
     let wf = Template {
-        name: "wf_skyward".into(),
+        code: "wf_skyward".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "register_tokens".into(),
                 exec_condition: None,
-                action: ActionIdent::FnCall,
+                action: ActionType::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
                     id: (SKYWARD_ACC.into(), "register_tokens".into()),
                     tgas: 30,
@@ -44,7 +45,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_register_tokens,
-                activity_inputs: vec![vec![ArgType::Expression(Expression {
+                activity_inputs: vec![vec![ArgSrc::Expression(Expression {
                     args: vec![ExprArg::Const(0), ExprArg::Bind(0)],
                     expr: EExpr::Fn(FnName::ToArray),
                 })]],
@@ -53,7 +54,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
             Some(TemplateActivity {
                 code: "transfer_tokens".into(),
                 exec_condition: None,
-                action: ActionIdent::FnCall,
+                action: ActionType::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
                     id: ("self".into(), "storage_deposit".into()),
                     tgas: 10,
@@ -61,13 +62,13 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_storage_deposit_1,
-                activity_inputs: vec![vec![ArgType::BindTpl(0)]],
+                activity_inputs: vec![vec![ArgSrc::BindTpl(0)]],
                 must_succeed: false,
             }),
             Some(TemplateActivity {
                 code: "transfer_tokens".into(),
                 exec_condition: None,
-                action: ActionIdent::FnCall,
+                action: ActionType::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
                     id: (WNEAR_ACC.into(), "storage_deposit".into()), //TODO dynamic receiver
                     tgas: 10,
@@ -75,13 +76,13 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 })),
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_storage_deposit_2,
-                activity_inputs: vec![vec![ArgType::BindTpl(0)]],
+                activity_inputs: vec![vec![ArgSrc::BindTpl(0)]],
                 must_succeed: false,
             }),
             Some(TemplateActivity {
                 code: "transfer_tokens".into(),
                 exec_condition: None,
-                action: ActionIdent::FnCall,
+                action: ActionType::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
                     id: ("self".into(), "ft_transfer_call".into()),
                     tgas: 100,
@@ -90,17 +91,17 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_amount_send,
                 activity_inputs: vec![vec![
-                    ArgType::Free,
-                    ArgType::Bind(1),
-                    ArgType::BindTpl(0),
-                    ArgType::BindTpl(1),
+                    ArgSrc::Free,
+                    ArgSrc::Bind(1),
+                    ArgSrc::BindTpl(0),
+                    ArgSrc::BindTpl(1),
                 ]],
                 must_succeed: true,
             }),
             Some(TemplateActivity {
                 code: "sale_create".into(),
                 exec_condition: None,
-                action: ActionIdent::FnCall,
+                action: ActionType::FnCall,
                 action_data: Some(ActionData::FnCall(FnCallData {
                     id: (SKYWARD_ACC.into(), "sale_create".into()),
                     tgas: 50,
@@ -109,17 +110,17 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                 arg_types: vec![DataTypeDef::Object(0)],
                 postprocessing: pp_sale_create,
                 activity_inputs: vec![
-                    vec![ArgType::Object(1)],
+                    vec![ArgSrc::Object(1)],
                     vec![
-                        ArgType::Bind(2),
-                        ArgType::Bind(3),
-                        ArgType::Const(0),
-                        ArgType::VecObject(2),
-                        ArgType::Bind(0),
-                        ArgType::Bind(4),
-                        ArgType::Bind(5),
+                        ArgSrc::Bind(2),
+                        ArgSrc::Bind(3),
+                        ArgSrc::Const(0),
+                        ArgSrc::VecObject(2),
+                        ArgSrc::Bind(0),
+                        ArgSrc::Bind(4),
+                        ArgSrc::Bind(5),
                     ],
-                    vec![ArgType::Const(0), ArgType::Bind(1), ArgType::BindTpl(2)],
+                    vec![ArgSrc::Const(0), ArgSrc::Bind(1), ArgSrc::BindTpl(2)],
                 ],
                 must_succeed: true,
             }),
@@ -239,39 +240,39 @@ pub fn workflow_skyward_template_settings_data_1() -> TemplateUserSettings {
         deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
         transition_constraints: vec![
-            vec![TransitionConstraint {
+            vec![Transition {
                 transition_limit: 1,
                 cond: None,
             }],
             vec![
-                TransitionConstraint {
+                Transition {
                     transition_limit: 1,
                     cond: None,
                 },
-                TransitionConstraint {
+                Transition {
                     transition_limit: 1,
                     cond: None,
                 },
-                TransitionConstraint {
+                Transition {
                     transition_limit: 1,
                     cond: None,
                 },
             ],
             vec![
-                TransitionConstraint {
+                Transition {
                     transition_limit: 1,
                     cond: None,
                 },
-                TransitionConstraint {
+                Transition {
                     transition_limit: 1,
                     cond: None,
                 },
             ],
-            vec![TransitionConstraint {
+            vec![Transition {
                 transition_limit: 1,
                 cond: None,
             }],
-            vec![TransitionConstraint {
+            vec![Transition {
                 transition_limit: 1,
                 cond: None,
             }],

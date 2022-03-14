@@ -1,26 +1,26 @@
 use crate::{
     expression::{EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
-    types::{ActionIdent, DataTypeDef, ValidatorType, VoteScenario},
+    workflow::{ActionType, DataTypeDef, ValidatorType, VoteScenario},
     workflow::{
-        ActivityRight, ArgType, ExprArg, Expression, Template, TemplateActivity, TemplateSettings,
-        TransitionConstraint,
+        ActivityRight, ArgSrc, ExprArg, Expression, Template, TemplateActivity, TemplateSettings,
+        Transition,
     },
 };
 
 pub fn workflow_wf_add() -> Template {
     Template {
-        name: "wf_add".into(),
+        code: "wf_add".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "wf_add".into(),
                 exec_condition: None,
-                action: ActionIdent::WorkflowAdd,
+                action: ActionType::WorkflowAdd,
                 action_data: None,
                 arg_types: vec![DataTypeDef::U16(false)],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Bind(0)]],
+                activity_inputs: vec![vec![ArgSrc::Bind(0)]],
                 must_succeed: true,
             }),
         ],
@@ -28,7 +28,7 @@ pub fn workflow_wf_add() -> Template {
         start: vec![0],
         end: vec![1],
         binds: vec![],
-        obj_validators: vec![vec![ValidatorType::Primitive(0)]],
+        obj_validators: vec![vec![ValidatorType::Simple(0)]],
         validator_exprs: vec![Expression {
             args: vec![ExprArg::User(0), ExprArg::Bind(0)],
             expr: EExpr::Boolean(TExpr {
@@ -56,7 +56,7 @@ pub fn workflow_settings_wf_add() -> TemplateSettings {
         deposit_propose: Some(1.into()),
         deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
-        transition_constraints: vec![vec![TransitionConstraint {
+        transition_constraints: vec![vec![Transition {
             transition_limit: 1,
             cond: None,
         }]],
@@ -65,18 +65,18 @@ pub fn workflow_settings_wf_add() -> TemplateSettings {
 
 pub fn workflow_treasury_send_near_loop() -> Template {
     Template {
-        name: "wf_near_send".into(),
+        code: "wf_near_send".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "near_send".into(),
                 exec_condition: None,
-                action: ActionIdent::TreasurySendNear,
+                action: ActionType::TreasurySendNear,
                 action_data: None,
                 arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],
@@ -84,7 +84,7 @@ pub fn workflow_treasury_send_near_loop() -> Template {
         binds: vec![],
         start: vec![0],
         end: vec![1],
-        obj_validators: vec![vec![ValidatorType::Primitive(0)]],
+        obj_validators: vec![vec![ValidatorType::Simple(0)]],
         validator_exprs: vec![Expression {
             args: vec![ExprArg::User(1), ExprArg::Bind(0)],
             expr: EExpr::Boolean(TExpr {
@@ -113,11 +113,11 @@ pub fn workflow_settings_treasury_send_near_loop() -> TemplateSettings {
         deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
         transition_constraints: vec![
-            vec![TransitionConstraint {
+            vec![Transition {
                 transition_limit: 1,
                 cond: None,
             }],
-            vec![TransitionConstraint {
+            vec![Transition {
                 transition_limit: 4,
                 cond: None,
             }],
@@ -127,18 +127,18 @@ pub fn workflow_settings_treasury_send_near_loop() -> TemplateSettings {
 
 pub fn workflow_treasury_send_near() -> Template {
     Template {
-        name: "wf_near_send".into(),
+        code: "wf_near_send".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "near_send".into(),
                 exec_condition: None,
-                action: ActionIdent::TreasurySendNear,
+                action: ActionType::TreasurySendNear,
                 action_data: None,
                 arg_types: vec![DataTypeDef::String(false), DataTypeDef::U128(false)],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],
@@ -146,10 +146,7 @@ pub fn workflow_treasury_send_near() -> Template {
         binds: vec![],
         start: vec![0],
         end: vec![1],
-        obj_validators: vec![vec![
-            ValidatorType::Primitive(0),
-            ValidatorType::Primitive(0),
-        ]],
+        obj_validators: vec![vec![ValidatorType::Simple(0), ValidatorType::Simple(0)]],
         validator_exprs: vec![
             Expression {
                 args: vec![ExprArg::User(0), ExprArg::Bind(0)],
@@ -189,7 +186,7 @@ pub fn workflow_settings_basic() -> TemplateSettings {
         deposit_propose: Some(1.into()),
         deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
-        transition_constraints: vec![vec![TransitionConstraint {
+        transition_constraints: vec![vec![Transition {
             transition_limit: 1,
             cond: None,
         }]],
@@ -198,14 +195,14 @@ pub fn workflow_settings_basic() -> TemplateSettings {
 
 pub fn workflow_treasury_send_ft() -> Template {
     Template {
-        name: "wf_treasury_send_ft".into(),
+        code: "wf_treasury_send_ft".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "treasury_send_ft".into(),
                 exec_condition: None,
-                action: ActionIdent::TreasurySendFt,
+                action: ActionType::TreasurySendFt,
                 action_data: None,
                 arg_types: vec![
                     DataTypeDef::String(false),
@@ -215,10 +212,10 @@ pub fn workflow_treasury_send_ft() -> Template {
                 ],
                 postprocessing: None,
                 activity_inputs: vec![vec![
-                    ArgType::Free,
-                    ArgType::Free,
-                    ArgType::Free,
-                    ArgType::Free,
+                    ArgSrc::Free,
+                    ArgSrc::Free,
+                    ArgSrc::Free,
+                    ArgSrc::Free,
                 ]],
                 must_succeed: true,
             }),
@@ -228,9 +225,9 @@ pub fn workflow_treasury_send_ft() -> Template {
         start: vec![0],
         end: vec![1],
         obj_validators: vec![vec![
-            ValidatorType::Primitive(0),
-            ValidatorType::Primitive(0),
-            ValidatorType::Primitive(0),
+            ValidatorType::Simple(0),
+            ValidatorType::Simple(0),
+            ValidatorType::Simple(0),
         ]],
         validator_exprs: vec![
             Expression {
@@ -281,7 +278,7 @@ pub fn workflow_settings_treasury_send_ft() -> TemplateSettings {
         deposit_propose: Some(1.into()),
         deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
-        transition_constraints: vec![vec![TransitionConstraint {
+        transition_constraints: vec![vec![Transition {
             transition_limit: 1,
             cond: None,
         }]],
@@ -290,14 +287,14 @@ pub fn workflow_settings_treasury_send_ft() -> TemplateSettings {
 
 pub fn workflow_treasury_send_ft_contract() -> Template {
     Template {
-        name: "wf_treasury_send_ft_contract".into(),
+        code: "wf_treasury_send_ft_contract".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "treasury_send_ft_contract".into(),
                 exec_condition: None,
-                action: ActionIdent::TreasurySendFtContract,
+                action: ActionType::TreasurySendFtContract,
                 action_data: None,
                 arg_types: vec![
                     DataTypeDef::String(false),
@@ -308,11 +305,11 @@ pub fn workflow_treasury_send_ft_contract() -> Template {
                 ],
                 postprocessing: None,
                 activity_inputs: vec![vec![
-                    ArgType::Free,
-                    ArgType::Free,
-                    ArgType::Free,
-                    ArgType::Free,
-                    ArgType::Free,
+                    ArgSrc::Free,
+                    ArgSrc::Free,
+                    ArgSrc::Free,
+                    ArgSrc::Free,
+                    ArgSrc::Free,
                 ]],
                 must_succeed: true,
             }),
@@ -340,7 +337,7 @@ pub fn workflow_settings_treasury_send_ft_contract() -> TemplateSettings {
         deposit_propose: Some(1.into()),
         deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
-        transition_constraints: vec![vec![TransitionConstraint {
+        transition_constraints: vec![vec![Transition {
             transition_limit: 1,
             cond: None,
         }]],
@@ -349,14 +346,14 @@ pub fn workflow_settings_treasury_send_ft_contract() -> TemplateSettings {
 
 pub fn workflow_group_add() -> Template {
     Template {
-        name: "wf_group_add".into(),
+        code: "wf_group_add".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "group_add".into(),
                 exec_condition: None,
-                action: ActionIdent::GroupAdd,
+                action: ActionType::GroupAdd,
                 action_data: None,
                 arg_types: vec![
                     DataTypeDef::Object(1),
@@ -364,7 +361,7 @@ pub fn workflow_group_add() -> Template {
                     DataTypeDef::Object(3),
                 ],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free, ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],
@@ -378,18 +375,18 @@ pub fn workflow_group_add() -> Template {
 }
 pub fn workflow_group_members_add() -> Template {
     Template {
-        name: "wf_group_members_add".into(),
+        code: "wf_group_members_add".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "group_members_add".into(),
                 exec_condition: None,
-                action: ActionIdent::GroupAddMembers,
+                action: ActionType::GroupAddMembers,
                 action_data: None,
                 arg_types: vec![DataTypeDef::U16(false), DataTypeDef::VecObject(1)],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],
@@ -397,7 +394,7 @@ pub fn workflow_group_members_add() -> Template {
         binds: vec![],
         start: vec![0],
         end: vec![1],
-        obj_validators: vec![vec![ValidatorType::Primitive(0)]],
+        obj_validators: vec![vec![ValidatorType::Simple(0)]],
         validator_exprs: vec![Expression {
             args: vec![ExprArg::User(0), ExprArg::Bind(0)],
             expr: EExpr::Boolean(TExpr {
@@ -425,7 +422,7 @@ pub fn workflow_settings_group_member_add() -> TemplateSettings {
         deposit_propose: Some(1.into()),
         deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
-        transition_constraints: vec![vec![TransitionConstraint {
+        transition_constraints: vec![vec![Transition {
             transition_limit: 1,
             cond: None,
         }]],
@@ -434,18 +431,18 @@ pub fn workflow_settings_group_member_add() -> TemplateSettings {
 
 pub fn workflow_group_remove() -> Template {
     Template {
-        name: "wf_group_remove".into(),
+        code: "wf_group_remove".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "group_remove".into(),
                 exec_condition: None,
-                action: ActionIdent::GroupRemove,
+                action: ActionType::GroupRemove,
                 action_data: None,
                 arg_types: vec![DataTypeDef::U16(false)],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],
@@ -459,18 +456,18 @@ pub fn workflow_group_remove() -> Template {
 }
 pub fn workflow_group_member_remove() -> Template {
     Template {
-        name: "wf_group_member_remove".into(),
+        code: "wf_group_member_remove".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "group_member_remove".into(),
                 exec_condition: None,
-                action: ActionIdent::GroupRemoveMember,
+                action: ActionType::GroupRemoveMember,
                 action_data: None,
                 arg_types: vec![DataTypeDef::U16(false), DataTypeDef::String(false)],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],
@@ -484,18 +481,18 @@ pub fn workflow_group_member_remove() -> Template {
 }
 pub fn workflow_tag_add() -> Template {
     Template {
-        name: "wf_tag_add".into(),
+        code: "wf_tag_add".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "tag_add".into(),
                 exec_condition: None,
-                action: ActionIdent::TagAdd,
+                action: ActionType::TagAdd,
                 action_data: None,
                 arg_types: vec![DataTypeDef::String(false), DataTypeDef::VecString],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],
@@ -509,14 +506,14 @@ pub fn workflow_tag_add() -> Template {
 }
 pub fn workflow_tag_edit() -> Template {
     Template {
-        name: "wf_tag_edit".into(),
+        code: "wf_tag_edit".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "wf_tag_edit".into(),
                 exec_condition: None,
-                action: ActionIdent::TagRemove,
+                action: ActionType::TagRemove,
                 action_data: None,
                 arg_types: vec![
                     DataTypeDef::String(false),
@@ -524,7 +521,7 @@ pub fn workflow_tag_edit() -> Template {
                     DataTypeDef::String(false),
                 ],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free, ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],
@@ -538,14 +535,14 @@ pub fn workflow_tag_edit() -> Template {
 }
 pub fn workflow_ft_distribute() -> Template {
     Template {
-        name: "wf_ft_distribute".into(),
+        code: "wf_ft_distribute".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "ft_distribute".into(),
                 exec_condition: None,
-                action: ActionIdent::FtDistribute,
+                action: ActionType::FtDistribute,
                 action_data: None,
                 arg_types: vec![
                     DataTypeDef::U16(false),
@@ -553,7 +550,7 @@ pub fn workflow_ft_distribute() -> Template {
                     DataTypeDef::VecString,
                 ],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free, ArgType::Free, ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free, ArgSrc::Free, ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],
@@ -568,18 +565,18 @@ pub fn workflow_ft_distribute() -> Template {
 
 pub fn workflow_media_add() -> Template {
     Template {
-        name: "wf_media_add".into(),
+        code: "wf_media_add".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "media_add".into(),
                 exec_condition: None,
-                action: ActionIdent::MediaAdd,
+                action: ActionType::MediaAdd,
                 action_data: None,
                 arg_types: vec![DataTypeDef::Object(1)],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],
@@ -594,18 +591,18 @@ pub fn workflow_media_add() -> Template {
 
 pub fn workflow_media_invalidate() -> Template {
     Template {
-        name: "wf_media_invalidate".into(),
+        code: "wf_media_invalidate".into(),
         version: 1,
         activities: vec![
             None,
             Some(TemplateActivity {
                 code: "media_invalidate".into(),
                 exec_condition: None,
-                action: ActionIdent::MediaInvalidate,
+                action: ActionType::MediaInvalidate,
                 action_data: None,
                 arg_types: vec![DataTypeDef::U16(false)],
                 postprocessing: None,
-                activity_inputs: vec![vec![ArgType::Free]],
+                activity_inputs: vec![vec![ArgSrc::Free]],
                 must_succeed: true,
             }),
         ],

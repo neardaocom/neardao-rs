@@ -1,3 +1,5 @@
+//TODO move to separate smartcontract
+
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 

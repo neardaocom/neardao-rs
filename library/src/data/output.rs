@@ -3,7 +3,7 @@
 use crate::data::bounty::{
     workflow_bounty_template_data_1, workflow_bounty_template_settings_data_1,
 };
-use crate::{data::basic_workflows::*, types::DataType, workflow::ProposeSettings};
+use crate::{data::basic_workflows::*, workflow::DataType, workflow::ProposeSettings};
 
 use crate::data::skyward::{
     workflow_skyward_template_data_1, workflow_skyward_template_settings_data_1,

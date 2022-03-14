@@ -1,8 +1,8 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use near_sdk::{
     env::{self},
-    AccountId, Promise, Balance
+    AccountId, Balance, Promise,
 };
 
 use crate::{
@@ -11,24 +11,26 @@ use crate::{
     core::{ActivityLog, Contract},
     errors::{
         ERR_DISTRIBUTION_ACC_EMPTY, ERR_DISTRIBUTION_MIN_VALUE, ERR_DISTRIBUTION_NOT_ENOUGH_FT,
-        ERR_GROUP_NOT_FOUND, ERR_LOCK_AMOUNT_ABOVE, ERR_STORAGE_BUCKET_EXISTS,
+        ERR_GROUP_NOT_FOUND, ERR_LOCK_AMOUNT_OVERFLOW, ERR_STORAGE_BUCKET_EXISTS,
     },
     group::{Group, GroupInput},
-    media::Media,
     proposal::{Proposal, ProposalState},
     release::Release,
     settings::DaoSettings,
     tags::{TagInput, Tags},
-    ProposalId, CalculatedVoteResults, Votes, VoteTotalPossible,
+    CalculatedVoteResults, ProposalId, VoteTotalPossible, Votes,
 };
 use library::{
     storage::StorageBucket,
-    types::{VoteScenario, ActionIdent, DataType, FnCallData, FnCallMetadata, ActionData},
-    utils::{args_to_json, bind_args, validate_args},
+    types::DataType,
     workflow::{
-        ActionResult, ActivityRight, InstanceState, Template, TemplateSettings,
+        activity::Transition,
+        instance::InstanceState,
+        settings::TemplateSettings,
+        template::Template,
+        types::{ActionResult, ActivityRight, DaoActionIdent, FnCallMetadata, VoteScenario},
     },
-    Consts, EventCode, FnCallId,
+    Consts, EventCode, FnCallId, TransitionId,
 };
 
 impl Contract {
@@ -58,19 +60,13 @@ impl Contract {
         assert!(
             self.ft_total_supply >= self.ft_total_locked,
             "{}",
-            ERR_LOCK_AMOUNT_ABOVE
+            ERR_LOCK_AMOUNT_OVERFLOW
         );
     }
 
-    #[inline]
-    pub fn init_media(&mut self, media: Vec<Media>) {
-        for (i, m) in media.iter().enumerate() {
-            self.media.insert(&(i as u32), m);
-        }
-
-        self.media_last_id = media.len() as u32;
-    }
-
+    /// Registers fncalls and their metadata.
+    /// Existing are overwriten.
+    /// No checks included.
     pub fn init_function_calls(
         &mut self,
         calls: Vec<FnCallId>,
@@ -88,6 +84,18 @@ impl Contract {
         mut workflows: Vec<Template>,
         mut workflow_template_settings: Vec<Vec<TemplateSettings>>,
     ) {
+        assert!(workflows.len() > 0);
+        assert!(
+            workflows[0]
+                .get_activity_as_ref(1)
+                .unwrap()
+                .get_dao_action_type(0)
+                .unwrap()
+                == DaoActionIdent::WorkflowAdd,
+            "{}",
+            "First Workflow must be WorkflowAdd"
+        );
+
         let len = workflows.len();
         for i in 0..len {
             self.workflow_template.insert(
@@ -230,7 +238,8 @@ impl Contract {
                     }
                     ActivityRight::GroupRole(g, r) => match self.groups.get(&g) {
                         Some(group) => {
-                            max_possible_amount = group.get_members_accounts_by_role(*r).len() as u128;
+                            max_possible_amount =
+                                group.get_members_accounts_by_role(*r).len() as u128;
                         }
                         None => panic!("{}", ERR_GROUP_NOT_FOUND),
                     },
@@ -242,11 +251,13 @@ impl Contract {
                 }
             }
             VoteScenario::TokenWeighted => match vote_target {
-                ActivityRight::Anyone | ActivityRight::TokenHolder => { //TODO refactor Member - wont be calculated correctly
+                ActivityRight::Anyone | ActivityRight::TokenHolder => {
+                    //TODO refactor Member - wont be calculated correctly
                     max_possible_amount = self.ft_total_distributed as u128 * self.decimal_const;
 
                     for (voter, vote_value) in votes.iter() {
-                        vote_result[*vote_value as usize] += self.ft.accounts.get(voter).unwrap_or(0);
+                        vote_result[*vote_value as usize] +=
+                            self.ft.accounts.get(voter).unwrap_or(0);
                     }
                 }
                 // This is expensive scenario
@@ -258,7 +269,7 @@ impl Contract {
                             let amount = self.ft.accounts.get(&member).unwrap_or(0);
 
                             // AccountId can be in multiple groups
-                            if map.insert(member,amount).is_none() {
+                            if map.insert(member, amount).is_none() {
                                 max_possible_amount += amount;
                             }
                         }
@@ -276,14 +287,14 @@ impl Contract {
                     let mut map = HashMap::with_capacity(members.len());
                     for member in members.into_iter() {
                         let amount = self.ft.accounts.get(&member).unwrap_or(0);
-                        map.insert(member,amount);
+                        map.insert(member, amount);
                         max_possible_amount += amount;
-                    } 
+                    }
 
                     for (voter, vote_value) in votes.iter() {
                         vote_result[*vote_value as usize] += *map.get(voter).unwrap_or(&0);
                     }
-                },
+                }
                 ActivityRight::GroupRole(gid, rid) => {
                     let group = self.groups.get(&gid).unwrap();
                     let members: Vec<AccountId> = group.get_members_accounts_by_role(*rid);
@@ -291,9 +302,9 @@ impl Contract {
                     let mut map = HashMap::with_capacity(members.len());
                     for member in members.into_iter() {
                         let amount = self.ft.accounts.get(&member).unwrap_or(0);
-                        map.insert(member,amount);
+                        map.insert(member, amount);
                         max_possible_amount += amount;
-                    } 
+                    }
 
                     for (voter, vote_value) in votes.iter() {
                         vote_result[*vote_value as usize] += *map.get(voter).unwrap_or(&0);
@@ -346,6 +357,7 @@ impl Contract {
             );
         }
 
+        // TODO refactor
         let release: Release = group.release.into();
 
         // Create StorageKey for nested structure
@@ -382,7 +394,11 @@ impl Contract {
         }
     }
 
-    pub fn postprocessing_fail_update(&mut self, proposal_id: u32, must_succeed: bool) -> ActionResult {
+    pub fn postprocessing_fail_update(
+        &mut self,
+        proposal_id: u32,
+        must_succeed: bool,
+    ) -> ActionResult {
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
         if must_succeed {
             wfi.current_activity_id = wfi.previous_activity_id;
@@ -393,7 +409,7 @@ impl Contract {
         ActionResult::ErrPostprocessing
     }
 
-    /// Returns dao specific values which needed in WF
+    /// Returns function which might be required in WF.
     pub fn dao_consts(&self) -> Box<Consts> {
         Box::new(|id| match id {
             0 => DataType::String(env::current_account_id()),
@@ -401,8 +417,8 @@ impl Contract {
         })
     }
 
-    /// Action logging method
-    /// Will be moved to indexer when its ready
+    /// Action logging method.
+    /// Will be moved to indexer when its ready.
     pub fn log_action(
         &mut self,
         proposal_id: ProposalId,
@@ -427,13 +443,24 @@ impl Contract {
         self.workflow_activity_log.insert(&proposal_id, &logs);
     }
 
+    /// Creates transition counter for `Instance`
+    pub fn create_transition_counter(&self, transitions: &[Vec<Transition>]) -> Vec<Vec<u16>> {
+        let mut counter = Vec::with_capacity(transitions.len());
+
+        for t in transitions {
+            counter.push(vec![0; t.len()]);
+        }
+
+        counter
+    }
+    /*
     // TODO refactoring
     /// Workflow execution logic
     pub fn execute_action(
         &mut self,
         caller: AccountId,
         proposal_id: ProposalId,
-        action_ident: ActionIdent,
+        action_ident: ActionType,
         event: Option<EventCode>,
         fncall: Option<FnCallId>,
         args: &mut Vec<Vec<DataType>>,
@@ -476,7 +503,7 @@ impl Contract {
         let activity =  wft.activities[activity_id as usize].as_ref().unwrap();
 
         // Deposit check in case of event
-        if  activity.action == ActionIdent::Event {
+        if  activity.action == ActionType::Event {
             match activity.action_data.as_ref().unwrap() {
                 ActionData::Event(data) => {
                     match data.deposit_from_bind {
@@ -489,7 +516,7 @@ impl Contract {
                     }
                 }
                 _ => ()
-            }  
+            }
         }
 
         let dao_consts = self.dao_consts();
@@ -513,7 +540,7 @@ impl Contract {
 
                 //We do not process further following dao actions:
                 match action_ident {
-                    ActionIdent::MediaAdd | ActionIdent::GroupAdd | ActionIdent::GroupAddMembers | ActionIdent::GroupUpdate => {
+                    ActionType::MediaAdd | ActionType::GroupAdd | ActionType::GroupAddMembers | ActionType::GroupUpdate => {
                         self.log_action(
                             proposal_id,
                             caller.as_str(),
@@ -570,7 +597,7 @@ impl Contract {
                     .map(|p| p.try_to_get_inner_value(args.as_slice(), settings.binds.as_slice()))
                     .flatten();
 
-                if activity.action != ActionIdent::Event  {
+                if activity.action != ActionType::Event  {
                     bind_args(
                         &dao_consts,
                         wft.binds.as_slice(),
@@ -587,11 +614,11 @@ impl Contract {
                 }
 
                 let promise = match action_ident {
-                    ActionIdent::TreasurySendNear => Some(
+                    ActionType::TreasurySendNear => Some(
                         Promise::new(args[0].swap_remove(0).try_into_string().unwrap())
                             .transfer(args[0].swap_remove(0).try_into_u128().unwrap()),
                     ),
-                    ActionIdent::TreasurySendFt => {
+                    ActionType::TreasurySendFt => {
 
                         let memo = args[0].pop().unwrap().try_into_string().unwrap();
                         let amount = args[0].pop().unwrap().try_into_u128().unwrap();
@@ -612,7 +639,7 @@ impl Contract {
                             10 * TGAS,
                         ))
                     },
-                    ActionIdent::TreasurySendFtContract => {
+                    ActionType::TreasurySendFtContract => {
 
                         let msg = args[0].pop().unwrap().try_into_string().unwrap();
                         let memo = args[0].pop().unwrap().try_into_string().unwrap();
@@ -635,7 +662,7 @@ impl Contract {
                             20 * TGAS,
                         ))
                     },
-                    ActionIdent::TreasurySendNft => {
+                    ActionType::TreasurySendNft => {
 
                         let approval_id = args[0].pop().unwrap().try_into_u128().unwrap();
                         let memo = args[0].pop().unwrap().try_into_string().unwrap();
@@ -657,7 +684,7 @@ impl Contract {
                         30 * TGAS
                     ))
                     }
-                    ActionIdent::TreasurySendNFtContract => {
+                    ActionType::TreasurySendNFtContract => {
 
                         let msg = args[0].pop().unwrap().try_into_string().unwrap();
                         let approval_id = args[0].pop().unwrap().try_into_u128().unwrap();
@@ -665,8 +692,8 @@ impl Contract {
                         let nft_id = args[0].pop().unwrap().try_into_string().unwrap();
                         let receiver_id = args[0].pop().unwrap().try_into_string().unwrap();
                         let acc = args[0].pop().unwrap().try_into_string().unwrap();
-                    
-                        Some(Promise::new(acc).function_call(b"nft_transfer_call".to_vec(), 
+
+                        Some(Promise::new(acc).function_call(b"nft_transfer_call".to_vec(),
                         format!(
                             "{{\"receiver_id\":\"{}\",\"token_id\":\"{}\",\"approval_id\":{},\"memo\":\"{}\",\"msg\":\"{}\"}}",
                             receiver_id,
@@ -676,12 +703,12 @@ impl Contract {
                             msg,
                             )
                             .as_bytes()
-                            .to_vec(), 
-                            1, 
+                            .to_vec(),
+                            1,
                             30 * TGAS
                         ))
                     },
-                    ActionIdent::WorkflowAdd => {
+                    ActionType::WorkflowAdd => {
                         let dao_settings: DaoSettings = self.settings.get().unwrap().into();
                         let workflow_settings = self.proposed_workflow_settings.get(&proposal_id).unwrap();
                         Some(Promise::new(dao_settings.workflow_provider)
@@ -703,7 +730,7 @@ impl Contract {
                             80 * TGAS,
                         )))
                     },
-                    ActionIdent::FnCall => {
+                    ActionType::FnCall => {
                         let (mut receiver, method) = fncall.unwrap();
                         if receiver == "self" {
                            receiver = env::current_account_id()
@@ -752,7 +779,7 @@ impl Contract {
                         if let Some(val) = &pp.postprocess(vec![], inner_value, &mut bucket) {
                             bucket.add_data(&key, val);
                         }
-    
+
                         self.storage.insert(&settings.storage_key, &bucket);
                         result
                     },
@@ -778,7 +805,7 @@ impl Contract {
             }
             _ => result,
         }
-    }
+    } */
 }
 
 pub mod utils {

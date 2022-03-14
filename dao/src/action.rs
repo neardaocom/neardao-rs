@@ -1,6 +1,7 @@
-use library::types::{ActionIdent, DataType};
-use library::{workflow::ActionResult, MethodName};
+use std::collections::HashMap;
 
+use library::types::DataType;
+use library::workflow::types::ActionResult;
 use near_sdk::json_types::U128;
 use near_sdk::{env, near_bindgen, AccountId};
 
@@ -17,7 +18,7 @@ use crate::{TagCategory, TagId};
 
 #[near_bindgen]
 impl Contract {
-    //TODO destructuring and validations for input objs
+/*     //TODO destructuring and validations for input objs
     pub fn group_add(
         &mut self,
         proposal_id: ProposalId,
@@ -28,7 +29,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::GroupAdd,
+            ActionType::GroupAdd,
             None,
             None,
             &mut vec![vec![]],
@@ -50,7 +51,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::GroupRemove,
+            ActionType::GroupRemove,
             None,
             None,
             &mut vec![vec![DataType::U16(id)]],
@@ -82,7 +83,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::GroupUpdate,
+            ActionType::GroupUpdate,
             None,
             None,
             &mut vec![vec![DataType::U16(id)]],
@@ -113,7 +114,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::GroupAddMembers,
+            ActionType::GroupAddMembers,
             None,
             None,
             &mut vec![vec![DataType::U16(id)]],
@@ -143,7 +144,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::GroupRemoveMember,
+            ActionType::GroupRemoveMember,
             None,
             None,
             &mut vec![vec![DataType::U16(id), DataType::String(member.clone())]],
@@ -178,7 +179,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::MediaAdd,
+            ActionType::MediaAdd,
             None,
             None,
             &mut vec![vec![]],
@@ -204,7 +205,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::MediaInvalidate,
+            ActionType::MediaInvalidate,
             None,
             None,
             &mut vec![vec![DataType::U32(id)]],
@@ -228,7 +229,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::MediaRemove,
+            ActionType::MediaRemove,
             None,
             None,
             &mut vec![vec![DataType::U32(id)]],
@@ -253,7 +254,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::TagAdd,
+            ActionType::TagAdd,
             None,
             None,
             &mut vec![vec![
@@ -284,7 +285,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::TagAdd,
+            ActionType::TagAdd,
             None,
             None,
             &mut vec![vec![
@@ -317,7 +318,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::TagAdd,
+            ActionType::TagAdd,
             None,
             None,
             &mut vec![vec![DataType::String(category.clone()), DataType::U16(id)]],
@@ -353,7 +354,7 @@ impl Contract {
         let result = self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::FtDistribute,
+            ActionType::FtDistribute,
             None,
             None,
             &mut args,
@@ -392,7 +393,7 @@ impl Contract {
         self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::TreasurySendNear,
+            ActionType::TreasurySendNear,
             None,
             None,
             &mut args,
@@ -419,7 +420,7 @@ impl Contract {
         self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::TreasurySendFt,
+            ActionType::TreasurySendFt,
             None,
             None,
             &mut args,
@@ -448,7 +449,7 @@ impl Contract {
         self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::TreasurySendFtContract,
+            ActionType::TreasurySendFtContract,
             None,
             None,
             &mut args,
@@ -478,7 +479,7 @@ impl Contract {
         self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::TreasurySendNft,
+            ActionType::TreasurySendNft,
             None,
             None,
             &mut args,
@@ -510,7 +511,7 @@ impl Contract {
         self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::TreasurySendNFtContract,
+            ActionType::TreasurySendNFtContract,
             None,
             None,
             &mut args,
@@ -532,7 +533,7 @@ impl Contract {
         self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::FnCall,
+            ActionType::FnCall,
             None,
             Some((fncall_receiver, fncall_method)),
             &mut arg_values,
@@ -545,7 +546,7 @@ impl Contract {
         self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::WorkflowAdd,
+            ActionType::WorkflowAdd,
             None,
             None,
             &mut vec![vec![DataType::U16(workflow_id)]],
@@ -569,12 +570,12 @@ impl Contract {
         self.execute_action(
             env::predecessor_account_id(),
             proposal_id,
-            ActionIdent::Event,
+            ActionType::Event,
             Some(code),
             None,
             &mut vec![args],
             &mut vec![],
             Some(env::attached_deposit()),
         )
-    }
+    } */
 }
