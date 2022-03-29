@@ -8,10 +8,8 @@ use near_sdk::{
     AccountId, IntoStorageKey,
 };
 
-use crate::errors::ERR_INVALID_AMOUNT;
-use crate::release::{
-    Release, ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseDb, VReleaseModel,
-};
+use crate::token_lock::{ReleaseType, TokenLock, UnlockPeriodInput};
+use crate::{error::ERR_INVALID_AMOUNT, token_lock::UnlockPeriod};
 use crate::{GroupId, TagId};
 
 #[derive(Serialize, Deserialize)]
@@ -22,10 +20,10 @@ pub struct GroupMember {
     pub tags: Vec<TagId>,
 }
 
-//#[repr(transparent)]
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[repr(transparent)]
 pub struct GroupMembers(HashMap<AccountId, Vec<TagId>>);
 
 impl GroupMembers {
@@ -79,52 +77,16 @@ pub struct GroupSettings {
     pub leader: String,
 }
 
-// TODO refactor
-#[derive(Deserialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[derive(Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Serialize))]
 #[serde(crate = "near_sdk::serde")]
-pub struct GroupReleaseInput {
+pub struct GroupTokenLockInput {
     pub amount: u32,
+    pub start_from: u64,
+    pub duration: u64,
     pub init_distribution: u32,
-    pub start_from: u32,
-    pub duration: u32,
-    pub model: ReleaseModelInput,
-}
-
-// TODO refactor
-impl From<GroupReleaseInput> for Release {
-    fn from(mut input: GroupReleaseInput) -> Self {
-        assert!(
-            input.amount >= input.init_distribution,
-            "{}",
-            ERR_INVALID_AMOUNT
-        );
-        let rel_model = match input.model {
-            ReleaseModelInput::Linear => {
-                //TODO move up to remove env dependency
-                if input.start_from == 0 {
-                    input.start_from = (env::block_timestamp() / 10u64.pow(9)) as u32;
-                }
-
-                ReleaseModel::Linear {
-                    duration: input.duration,
-                    release_end: input.start_from + input.duration,
-                }
-            }
-            ReleaseModelInput::None => ReleaseModel::None,
-        };
-
-        let rel_db = ReleaseDb::new(
-            input.amount,
-            input.init_distribution,
-            input.init_distribution,
-        );
-
-        Release {
-            model: VReleaseModel::Curr(rel_model),
-            data: VReleaseDb::Curr(rel_db),
-        }
-    }
+    pub unlock_interval: u32,
+    pub periods: Vec<UnlockPeriodInput>,
 }
 
 #[derive(Deserialize)]
@@ -133,7 +95,7 @@ impl From<GroupReleaseInput> for Release {
 pub struct GroupInput {
     pub settings: GroupSettings,
     pub members: Vec<GroupMember>,
-    pub release: GroupReleaseInput,
+    pub token_lock: GroupTokenLockInput,
 }
 
 #[derive(Serialize)]
@@ -142,20 +104,18 @@ pub struct GroupOutput {
     pub id: GroupId,
     pub settings: GroupSettings,
     pub members: Vec<GroupMember>,
-    pub release_model: ReleaseModel,
-    pub release_data: ReleaseDb,
+    pub token_lock: TokenLock,
 }
 
 impl GroupOutput {
     pub fn from_group(id: GroupId, group: Group) -> Self {
-        let release = group.release.get().unwrap();
+        let token_lock = group.token_lock.get().unwrap();
 
         GroupOutput {
             id,
             settings: group.settings,
             members: group.members.get_members(),
-            release_model: release.model.into(),
-            release_data: release.data.into(),
+            token_lock,
         }
     }
 }
@@ -164,7 +124,7 @@ impl GroupOutput {
 pub struct Group {
     pub settings: GroupSettings,
     pub members: GroupMembers,
-    pub release: LazyOption<Release>,
+    pub token_lock: LazyOption<TokenLock>,
 }
 
 impl Group {
@@ -172,7 +132,7 @@ impl Group {
         release_key: T,
         settings: GroupSettings,
         members: Vec<GroupMember>,
-        release: Release,
+        token_lock: TokenLock,
     ) -> Self {
         assert!(
             members.iter().any(|m| settings.leader == m.account_id),
@@ -181,7 +141,7 @@ impl Group {
         Group {
             settings,
             members: members.into(),
-            release: LazyOption::new(release_key.into_storage_key(), Some(&release)),
+            token_lock: LazyOption::new(release_key.into_storage_key(), Some(&token_lock)),
         }
     }
 
@@ -202,14 +162,16 @@ impl Group {
     }
 
     //TODO test if storage removed properly
-    pub fn remove_storage_data(&mut self) -> Release {
-        let release = self.release.get().unwrap();
-        self.release.remove();
-        release
+    pub fn remove_storage_data(&mut self) -> TokenLock {
+        let token_lock = self.token_lock.get().unwrap();
+        self.token_lock.remove();
+        token_lock
     }
 
+    // TODO: fix
     pub fn unlock_ft(&mut self, current_time: u64) -> u32 {
-        let mut release = self.release.get().unwrap();
+        todo!()
+        /*         let mut release = self.release.get().unwrap();
         let (model, mut db): (ReleaseModel, ReleaseDb) =
             (release.model.into(), release.data.into());
 
@@ -217,6 +179,7 @@ impl Group {
             return 0;
         }
 
+        //TODO
         let total_released_now = model.release(
             db.total,
             db.init_distribution,
@@ -236,7 +199,7 @@ impl Group {
         release.data = VReleaseDb::Curr(db);
 
         self.release.set(&release);
-        unlocked
+        unlocked */
     }
 
     pub fn get_members_accounts(&self) -> Vec<AccountId> {
@@ -264,17 +227,13 @@ impl Group {
     }
 
     pub fn distribute_ft(&mut self, amount: u32) -> bool {
-        let mut release = self.release.get().unwrap();
-        let mut db: ReleaseDb = release.data.into();
+        let mut token_lock = self.token_lock.get().unwrap();
 
-        match db.distributed + amount <= db.unlocked {
-            true => {
-                db.distributed += amount;
-                release.data = VReleaseDb::Curr(db);
-                self.release.set(&release);
-                true
-            }
-            _ => false,
+        if token_lock.distribute(amount) {
+            self.token_lock.set(&token_lock);
+            true
+        } else {
+            false
         }
     }
 }

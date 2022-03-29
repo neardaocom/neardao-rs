@@ -1,9 +1,17 @@
 #![allow(unreachable_patterns)]
+
+use library::workflow::{
+    instance::Instance,
+    settings::{ProposeSettings, TemplateSettings},
+    template::Template,
+};
+use proposal::Proposal;
 mod standard_impl;
 mod unit_tests;
 
 pub mod constants;
-pub mod errors;
+pub mod error;
+pub(crate) mod helper;
 pub mod tags;
 
 pub mod action;
@@ -12,8 +20,8 @@ pub mod group;
 pub mod internal;
 pub mod media;
 pub mod proposal;
-pub mod release;
 pub mod settings;
+pub mod token_lock;
 
 pub mod core;
 pub mod view;
@@ -27,6 +35,8 @@ pub(crate) type GroupName = String;
 pub(crate) type VoteTotalPossible = u128;
 pub(crate) type Votes = [u128; 3];
 pub(crate) type CalculatedVoteResults = (VoteTotalPossible, Votes);
+pub(crate) type ProposalWf = (Proposal, Template, TemplateSettings);
+pub(crate) type InstanceWf = (Instance, ProposeSettings);
 
 /// Calculates votes as percents
 #[inline]

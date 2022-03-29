@@ -1,7 +1,7 @@
 use library::workflow::help::TemplateHelp;
 use library::workflow::template::Template;
 use library::workflow::types::FnCallMetadata;
-use library::{FnCallId, Version};
+use library::{FnCallId, MethodName, Version};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap};
 use near_sdk::serde::Serialize;
@@ -12,6 +12,7 @@ pub enum StorageKeys {
     WorkflowTemplate,
     WorkflowHelp,
     FnCallMetadata,
+    StandardFnCallMetadata,
     WorkflowFnCalls,
 }
 
@@ -21,8 +22,10 @@ pub struct Contract {
     last_wf_id: u16,
     workflows: UnorderedMap<u16, Template>,
     workflow_help: UnorderedMap<u16, TemplateHelp>,
-    workflow_fncalls: LookupMap<u16, Vec<FnCallId>>,
+    /// FnCalls and Standard FnCalls.
+    workflow_fncalls: LookupMap<u16, (Vec<FnCallId>, Vec<MethodName>)>,
     fncall_metadata: UnorderedMap<FnCallId, Vec<FnCallMetadata>>,
+    standard_fncall_metadata: UnorderedMap<MethodName, Vec<FnCallMetadata>>,
 }
 
 #[near_bindgen]
@@ -41,14 +44,24 @@ impl Contract {
 
         for fncall in fncalls.iter().rev() {
             self.fncall_metadata
-                .insert(&fncall, &fncall_metadata.pop().unwrap());
+                .insert(&fncall, &(fncall_metadata.pop().unwrap()));
         }
 
         if let Some(help) = help {
             self.workflow_help.insert(&self.last_wf_id, &help);
         }
 
-        self.workflow_fncalls.insert(&self.last_wf_id, &fncalls);
+        self.workflow_fncalls
+            .insert(&self.last_wf_id, &(fncalls, vec![]));
+    }
+
+    #[private]
+    pub fn standard_fncalls_add(
+        &mut self,
+        id: u16,
+        fncalls: Vec<FnCallId>,
+        mut fncall_metadata: Vec<Vec<FnCallMetadata>>,
+    ) {
     }
 
     #[private]
@@ -66,17 +79,35 @@ impl Contract {
     pub fn wf_template(
         self,
         id: u16,
-    ) -> Option<(Template, Vec<FnCallId>, Vec<Vec<FnCallMetadata>>)> {
+    ) -> Option<(
+        Template,
+        Vec<FnCallId>,
+        Vec<Vec<FnCallMetadata>>,
+        Vec<MethodName>,
+        Vec<Vec<FnCallMetadata>>,
+    )> {
         match self.workflows.get(&id) {
             Some(t) => match self.workflow_fncalls.get(&id) {
-                Some(fncalls) => {
+                Some((fncalls, std_fncalls)) => {
                     let mut fncalls_metadata = Vec::with_capacity(fncalls.len());
                     for fncall in fncalls.iter() {
                         fncalls_metadata.push(self.fncall_metadata.get(fncall).unwrap());
                     }
-                    Some((t, fncalls, fncalls_metadata))
+
+                    let mut std_fncalls_metadata = Vec::with_capacity(std_fncalls.len());
+                    for std_fncall in std_fncalls.iter() {
+                        std_fncalls_metadata
+                            .push(self.standard_fncall_metadata.get(std_fncall).unwrap());
+                    }
+                    Some((
+                        t,
+                        fncalls,
+                        fncalls_metadata,
+                        std_fncalls,
+                        std_fncalls_metadata,
+                    ))
                 }
-                None => Some((t, vec![], vec![])),
+                None => panic!("Missing FnCalls for the required template."),
             },
             _ => None,
         }
@@ -87,13 +118,14 @@ impl Contract {
             .to_vec()
             .into_iter()
             .map(|(id, t)| {
-                let fncalls = self.workflow_fncalls.get(&id).unwrap();
+                let (fncalls, standard_fncalls) = self.workflow_fncalls.get(&id).unwrap();
                 let help = self.workflow_help.get(&id).is_some();
                 Metadata {
                     id,
                     code: t.code,
                     version: t.version,
                     fncalls,
+                    standard_fncalls,
                     help,
                 }
             })
@@ -104,12 +136,26 @@ impl Contract {
         self.workflow_help.get(&id)
     }
 
-    // TODO deprecated
     pub fn wf_template_fncalls(self, id: u16) -> Vec<FnCallId> {
-        self.workflow_fncalls.get(&id).unwrap_or_else(|| vec![])
+        self.workflow_fncalls
+            .get(&id)
+            .map(|(fns, _)| fns)
+            .unwrap_or_else(|| vec![])
     }
 
-    // TODO deprecated
+    pub fn wf_template_standard_fncalls(self, id: u16) -> Vec<MethodName> {
+        self.workflow_fncalls
+            .get(&id)
+            .map(|(_, fns)| fns)
+            .unwrap_or_else(|| vec![])
+    }
+
+    pub fn standard_fn_call_metadata(self, method: String) -> Vec<FnCallMetadata> {
+        self.standard_fncall_metadata
+            .get(&method)
+            .unwrap_or_else(|| vec![])
+    }
+
     pub fn fncall_metadata(self, id: FnCallId) -> Vec<FnCallMetadata> {
         self.fncall_metadata.get(&id).unwrap_or_else(|| vec![])
     }
@@ -122,6 +168,7 @@ impl Default for Contract {
             workflows: UnorderedMap::new(StorageKeys::WorkflowTemplate),
             workflow_help: UnorderedMap::new(StorageKeys::WorkflowHelp),
             fncall_metadata: UnorderedMap::new(StorageKeys::FnCallMetadata),
+            standard_fncall_metadata: UnorderedMap::new(StorageKeys::StandardFnCallMetadata),
             workflow_fncalls: LookupMap::new(StorageKeys::WorkflowFnCalls),
         }
     }
@@ -134,5 +181,6 @@ pub struct Metadata {
     pub code: String,
     pub version: Version,
     pub fncalls: Vec<FnCallId>,
+    pub standard_fncalls: Vec<MethodName>,
     pub help: bool,
 }

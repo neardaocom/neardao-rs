@@ -3,15 +3,21 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use super::template::Template;
+use crate::TransitionLimit;
+
+use super::{activity::Transition, template::Template};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone))]
 #[serde(crate = "near_sdk::serde")]
 pub enum InstanceState {
+    /// Waiting for proposal to be accepted.
     Waiting,
+    /// Workflow is running.
     Running,
+    /// Unrecoverable error happened. Eg. by executing badly defined workflow.
     FatalError,
+    /// Workflow was finished and closed.
     Finished,
 }
 
@@ -24,19 +30,57 @@ pub struct Instance {
     pub current_activity_id: u8,
     pub previous_activity_id: u8,
     pub transition_counter: Vec<Vec<u16>>,
+    /// Last activity's count of done actions. < actions.len() during execution.
+    pub actions_done_count: u8,
+    pub actions_total: u8,
     pub template_id: u16,
 }
 
 impl Instance {
-    pub fn new(template_id: u16, transitions: Vec<Vec<u16>>) -> Self {
+    pub fn new(template_id: u16) -> Self {
         Instance {
             state: InstanceState::Waiting,
             last_transition_done_at: 0,
             current_activity_id: 0,
             previous_activity_id: 0,
-            transition_counter: transitions,
+            actions_done_count: 0,
+            actions_total: 0,
+            transition_counter: Vec::default(),
             template_id,
         }
+    }
+
+    pub fn init_transition_counter(&mut self, counter: Vec<Vec<u16>>) {
+        self.transition_counter = counter;
+    }
+
+    pub fn check_transition_counter(
+        &self,
+        activity_id: usize,
+        transition_limits: &[Vec<TransitionLimit>],
+    ) -> bool {
+        *self.transition_counter[self.current_activity_id as usize]
+            .get(activity_id)
+            .expect("Transition does not exists.")
+            < transition_limits[self.current_activity_id as usize][activity_id as usize]
+    }
+
+    pub fn find_transition<'a>(
+        &self,
+        template: &'a Template,
+        activity_id: usize,
+    ) -> Option<&'a Transition> {
+        // Current activity is not finished yet.
+        if self.actions_done_count != self.actions_total {
+            return None;
+        }
+
+        template
+            .transitions
+            .get(self.current_activity_id as usize)
+            .expect("Activity does not exists.")
+            .iter()
+            .find(|t| t.activity_id == activity_id as u8)
     }
 
     /*
@@ -202,13 +246,4 @@ impl Instance {
 
         (ActionResult::Ok, wanted_activity.postprocessing.clone())
     } */
-
-    pub fn finish(&mut self, wft: &Template) -> bool {
-        if wft.end.contains(&self.current_activity_id) {
-            self.state = InstanceState::Finished;
-            true
-        } else {
-            false
-        }
-    }
 }

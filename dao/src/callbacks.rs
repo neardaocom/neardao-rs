@@ -2,27 +2,32 @@ use library::types::DataType;
 use library::workflow::activity::Postprocessing;
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
-use library::workflow::types::{ActionResult, FnCallMetadata};
+use library::workflow::types::{ActivityResult, FnCallMetadata};
 use library::FnCallId;
 use near_sdk::serde_json;
 use near_sdk::{env, ext_contract, near_bindgen, PromiseResult};
 
 use crate::core::*;
-use crate::errors::*;
+use crate::error::*;
 
 #[ext_contract(ext_self)]
 trait ExtSelf {
     fn postprocess(
         &mut self,
         instance_id: u32,
-        storage_key: String,
+        activity_id: u8,
+        action_id: u8,
+        storage_key: Option<String>,
         postprocessing: Option<Postprocessing>,
-        inner_value: Option<DataType>,
         must_succeed: bool,
-    ) -> ActionResult;
+        wf_finish: bool,
+    ) -> ActivityResult;
 
-    fn store_workflow(&mut self, instance_id: u32, settings: Vec<TemplateSettings>)
-        -> ActionResult;
+    /*     fn store_workflow(
+        &mut self,
+        instance_id: u32,
+        settings: Vec<TemplateSettings>,
+    ) -> ActivityResult; */
 }
 
 #[near_bindgen]
@@ -30,52 +35,48 @@ impl Contract {
     // TODO finish error handling
     #[private]
     /// Private callback to check Promise result.
-    /// If there is postprocessing, then also processes result or just save provided value to the storage.
+    /// If there's postprocessing, then it's executed.
+    /// Postprocessing always requires storage.
+    /// Unwrapping is OK as it's been checked before dispatching this promise.
     pub fn postprocess(
         &mut self,
         instance_id: u32,
-        storage_key: String,
+        activity_id: u8,
+        action_id: u8,
+        storage_key: Option<String>,
         postprocessing: Option<Postprocessing>,
-        inner_value: Option<DataType>,
         must_succeed: bool,
-    ) -> ActionResult {
+        wf_finish: bool,
+    ) -> Result<(), ActionError> {
         assert_eq!(
             env::promise_results_count(),
             1,
             "{}",
             ERR_PROMISE_INVALID_RESULTS_COUNT
         );
-        let result: bool = match env::promise_result(0) {
+        match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),
-            PromiseResult::Successful(val) => match postprocessing {
-                Some(p) => {
-                    let mut bucket = self.storage.get(&storage_key).unwrap();
-
-                    let key = p.storage_key.clone();
-                    //if let Some(val) = &p.postprocess(val, inner_value, &mut bucket) {
-                    //    bucket.add_data(&key, val);
-                    //}
-
-                    self.storage.insert(&storage_key, &bucket);
-                    true
-                }
-                None => true,
-            },
-            PromiseResult::Failed => false,
-        };
-
-        match result {
-            true => ActionResult::Ok,
-            false => self.postprocessing_fail_update(instance_id, must_succeed),
+            PromiseResult::Successful(val) => self.postprocessing_success(
+                instance_id,
+                activity_id,
+                action_id,
+                storage_key,
+                postprocessing,
+                wf_finish,
+                val,
+            ),
+            PromiseResult::Failed => {
+                self.postprocessing_failed(instance_id, activity_id, action_id, must_succeed)
+            }
         }
     }
-
+    /*
     #[private]
     pub fn store_workflow(
         &mut self,
         instance_id: u32,
         settings: Vec<TemplateSettings>,
-    ) -> ActionResult {
+    ) -> ActivityResult {
         assert_eq!(
             env::promise_results_count(),
             1,
@@ -95,9 +96,9 @@ impl Contract {
                 self.workflow_template
                     .insert(&self.workflow_last_id, &(workflow, settings));
                 self.init_function_calls(fncalls, fncall_metadata);
-                ActionResult::Ok
+                ActivityResult::Ok
             }
-            PromiseResult::Failed => self.postprocessing_fail_update(instance_id, true),
+            PromiseResult::Failed => self.postprocessing_failed(instance_id, true),
         }
-    }
+    } */
 }

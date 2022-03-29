@@ -4,7 +4,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::{types::DataType, ObjectCollectionValues, ObjectValues, TransitionLimit};
+use crate::{types::DataType, ObjectValues, TransitionLimit};
 
 use super::types::{ActivityRight, VoteScenario};
 
@@ -15,7 +15,7 @@ pub struct TemplateSettings {
     pub allowed_proposers: Vec<ActivityRight>,
     pub allowed_voters: ActivityRight,
     pub activity_rights: Vec<Vec<ActivityRight>>,
-    pub transition_constraints: Vec<Vec<TransitionLimit>>,
+    pub transition_limits: Vec<Vec<TransitionLimit>>,
     pub scenario: VoteScenario,
     pub duration: u32,
     pub quorum: u8,
@@ -41,6 +41,5 @@ pub struct ProposeSettings {
 #[serde(crate = "near_sdk::serde")]
 pub struct ActivityBind {
     pub shared: Vec<DataType>,
-    pub values: Vec<ObjectValues>,
-    pub values_collections: Vec<ObjectCollectionValues>,
+    pub values: Vec<Vec<DataType>>,
 }

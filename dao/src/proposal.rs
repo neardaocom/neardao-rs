@@ -37,8 +37,11 @@ impl From<VProposal> for Proposal {
 #[serde(crate = "near_sdk::serde")]
 pub enum ProposalState {
     InProgress,
+    /// Below quorum limit.
     Invalid,
+    /// Above spam threshold.
     Spam,
+    /// Below approve threshold.
     Rejected,
     Accepted,
 }
@@ -49,6 +52,7 @@ pub enum ProposalState {
 pub enum VoteResult {
     Ok,
     AlreadyVoted,
+    NoRights,
     InvalidVote,
     VoteEnded,
 }
@@ -64,7 +68,6 @@ pub struct Proposal {
     pub state: ProposalState,
     pub workflow_id: u16,
     pub workflow_settings_id: u8,
-    pub workflow_add_settings_id: bool,
 }
 
 impl Proposal {
@@ -75,7 +78,6 @@ impl Proposal {
         created_by: AccountId,
         workflow_id: u16,
         workflow_settings_id: u8,
-        workflow_add_settings_id: bool,
     ) -> Self {
         Proposal {
             desc,
@@ -85,7 +87,6 @@ impl Proposal {
             state: ProposalState::InProgress,
             workflow_id,
             workflow_settings_id,
-            workflow_add_settings_id,
         }
     }
 }

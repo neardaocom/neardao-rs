@@ -1,4 +1,4 @@
-use crate::constants::MAX_FT_TOTAL_SUPPLY;
+use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::standard_impl::ft::FungibleToken;
 use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
@@ -9,7 +9,7 @@ use library::workflow::instance::{Instance, InstanceState};
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
 use library::workflow::types::{DaoActionIdent, FnCallMetadata};
-use library::FnCallId;
+use library::{FnCallId, MethodName};
 
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
 use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
@@ -49,28 +49,14 @@ pub enum StorageKeys {
     FT,
     FTMetadata,
     Proposals,
-    ProposalConfig,
-    Council,
     Tags,
     FunctionCalls,
     FunctionCallMetadata,
+    StandardFunctionCallMetadata,
     Storage,
     DaoSettings,
-    VoteSettings,
-    VConfig,
-    ReleaseConfig,
-    ReleaseDb,
-    DocMetadata,
-    Mappers,
     NewVersionCode,
-    FactoryAcc,
-    TokenGroupRights,
-    UserRights,
-    StorageDeposit,
-    RefPools,
-    SkywardAuctions,
     Groups,
-    Rights,
     FunctionCallWhitelist,
     WfTemplate,
     WfTemplateSettings,
@@ -100,9 +86,11 @@ pub struct Contract {
     /// Provides metadata for dao actions.
     pub dao_action_metadata: LookupMap<DaoActionIdent, Vec<FnCallMetadata>>,
     pub function_call_metadata: UnorderedMap<FnCallId, Vec<FnCallMetadata>>,
+    pub standard_function_call_metadata: UnorderedMap<MethodName, Vec<FnCallMetadata>>,
     pub workflow_last_id: u16,
     pub workflow_template: UnorderedMap<u16, (Template, Vec<TemplateSettings>)>,
-    pub workflow_instance: UnorderedMap<u32, (Instance, ProposeSettings)>,
+    pub workflow_instance: UnorderedMap<ProposalId, (Instance, ProposeSettings)>,
+    /// Proposed workflow template settings for WorkflowAdd.
     pub proposed_workflow_settings: LookupMap<ProposalId, Vec<TemplateSettings>>,
     pub workflow_activity_log: LookupMap<ProposalId, Vec<ActivityLog>>, // Logs will be moved to indexer when its ready
 }
@@ -116,6 +104,8 @@ impl Contract {
         settings: DaoSettings,
         groups: Vec<GroupInput>,
         tags: Vec<TagInput>,
+        standard_function_calls: Vec<MethodName>,
+        standard_function_call_metadata: Vec<Vec<FnCallMetadata>>,
         function_calls: Vec<FnCallId>,
         function_call_metadata: Vec<Vec<FnCallMetadata>>,
         workflow_templates: Vec<Template>,
@@ -141,6 +131,9 @@ impl Contract {
             tags: UnorderedMap::new(StorageKeys::Tags),
             dao_action_metadata: LookupMap::new(StorageKeys::DaoActionMetadata),
             function_call_metadata: UnorderedMap::new(StorageKeys::FunctionCallMetadata),
+            standard_function_call_metadata: UnorderedMap::new(
+                StorageKeys::StandardFunctionCallMetadata,
+            ),
             workflow_last_id: 0,
             workflow_template: UnorderedMap::new(StorageKeys::WfTemplate),
             workflow_instance: UnorderedMap::new(StorageKeys::WfInstance),
@@ -161,8 +154,12 @@ impl Contract {
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
         contract.init_groups(groups);
+        // TOOD: Add standard function calls metadata.
         contract.init_function_calls(function_calls, function_call_metadata);
+        contract
+            .init_standard_function_calls(standard_function_calls, standard_function_call_metadata);
         contract.init_workflows(workflow_templates, workflow_template_settings);
+        contract.storage_bucket_add(GLOBAL_BUCKET_IDENT);
 
         contract
     }
@@ -219,54 +216,71 @@ impl Contract {
             caller,
             template_id,
             template_settings_id,
-            true,
         );
 
-        if let Some(ref key) = propose_settings.storage_key {
-            assert!(
-                self.storage.get(key).is_none(),
-                "Storage key already exists."
-            );
+        if wft.need_storage {
+            if let Some(ref key) = propose_settings.storage_key {
+                assert!(
+                    self.storage.get(key).is_none(),
+                    "Storage key already exists."
+                );
+            } else {
+                panic!("Template requires storage, but no key was provided.");
+            }
         }
 
-        let transition_counter = self.create_transition_counter(&wft.transitions);
+        // Check that proposal binds have valid structure.
+        self.assert_valid_proposal_binds_structure(
+            propose_settings.binds.as_slice(),
+            wft.activities.as_slice(),
+        );
+
         self.proposals
             .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
         self.workflow_instance.insert(
             &self.proposal_last_id,
-            &(
-                Instance::new(template_id, transition_counter),
-                propose_settings,
-            ),
+            &(Instance::new(template_id), propose_settings),
         );
+
+        // TODO: Croncat registration to finish proposal
 
         self.proposal_last_id
     }
 
     #[payable]
-    pub fn proposal_vote(&mut self, proposal_id: u32, vote_kind: u8) -> bool {
+    pub fn proposal_vote(&mut self, proposal_id: u32, vote_kind: u8) -> VoteResult {
         if vote_kind > 2 {
-            return false;
+            return VoteResult::InvalidVote;
         }
 
         let caller = env::predecessor_account_id();
         let (mut proposal, _, wfs) = self.get_wf_and_proposal(proposal_id);
 
-        assert!(env::attached_deposit() >= wfs.deposit_vote.unwrap_or(0.into()).0);
+        assert!(
+            env::attached_deposit() >= wfs.deposit_vote.unwrap_or(0.into()).0,
+            "{}",
+            "Not enough deposit."
+        );
 
-        if !self.check_rights(&[wfs.allowed_voters.clone()], &caller) {
-            return false;
+        let TemplateSettings {
+            allowed_voters,
+            duration,
+            vote_only_once,
+            ..
+        } = wfs;
+
+        if !self.check_rights(&[allowed_voters], &caller) {
+            return VoteResult::NoRights;
         }
 
         if proposal.state != ProposalState::InProgress
-            || proposal.created + (wfs.duration as u64) < env::block_timestamp() / 10u64.pow(9)
+            || proposal.created + (duration as u64) < env::block_timestamp() / 10u64.pow(9)
         {
-            //TODO update expired proposal state
-            return false;
+            return VoteResult::VoteEnded;
         }
 
-        if wfs.vote_only_once && proposal.votes.contains_key(&caller) {
-            return false;
+        if vote_only_once && proposal.votes.contains_key(&caller) {
+            return VoteResult::AlreadyVoted;
         }
 
         proposal.votes.insert(caller, vote_kind);
@@ -274,11 +288,11 @@ impl Contract {
         self.proposals
             .insert(&proposal_id, &VProposal::Curr(proposal));
 
-        true
+        VoteResult::Ok
     }
 
     pub fn finish_proposal(&mut self, proposal_id: u32) -> ProposalState {
-        let (mut proposal, _, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (mut proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
         let (mut instance, settings) = self.workflow_instance.get(&proposal_id).unwrap();
 
         let new_state = match proposal.state {
@@ -304,7 +318,6 @@ impl Contract {
                         self.decimal_const,
                     ) < wfs.quorum
                     {
-                        // not enough quorum
                         Some(ProposalState::Invalid)
                     } else if calc_percent_u128_unchecked(
                         vote_results[1],
@@ -312,14 +325,16 @@ impl Contract {
                         self.decimal_const,
                     ) < wfs.approve_threshold
                     {
-                        // not enough voters to accept
                         Some(ProposalState::Rejected)
                     } else {
-                        // proposal is accepted, create new workflow activity with its storage
                         instance.state = InstanceState::Running;
-                        // Storage key must be unique among all proposals
-                        // TODO only when needed by WFT
-                        //self.storage_bucket_add(settings.storage_key.as_ref().as_str());
+                        instance.init_transition_counter(
+                            self.create_transition_counter(&wft.transitions),
+                        );
+
+                        if let Some(ref storage_key) = settings.storage_key {
+                            self.storage_bucket_add(storage_key);
+                        }
                         Some(ProposalState::Accepted)
                     }
                 }
@@ -334,13 +349,17 @@ impl Contract {
                 proposal.state = state.clone();
                 self.proposals
                     .insert(&proposal_id, &VProposal::Curr(proposal));
+
+                if wft.is_simple {
+                    //TODO: Dispatch wf execution with Croncat.
+                }
+
                 state
             }
             None => proposal.state,
         }
     }
 
-    //TODO resolve other state combinations eg. FatalError on instance.
     /// Changes workflow instance state to finish.
     /// Rights to close are same as the "end" activity rights.
     pub fn wf_finish(&mut self, proposal_id: u32) -> bool {
@@ -355,18 +374,19 @@ impl Contract {
             || self.check_rights(
                 &wfs.activity_rights[wfi.current_activity_id as usize - 1].as_slice(),
                 &caller,
-            )
+            ) && wft.end.contains(&wfi.current_activity_id)
         {
-            let result = wfi.finish(&wft);
+            wfi.state = InstanceState::Finished;
             self.workflow_instance
                 .insert(&proposal_id, &(wfi, settings));
-
-            result
+            true
         } else {
             false
         }
     }
 
+    /// Trigger function.
+    /// Unlocks FT for provided `GroupId`s by internal logic.
     pub fn ft_unlock(&mut self, group_ids: Vec<GroupId>) -> Vec<u32> {
         let mut released = Vec::with_capacity(group_ids.len());
         for id in group_ids.into_iter() {
@@ -380,22 +400,28 @@ impl Contract {
 
     /// For dev/testing purposes only
     #[cfg(feature = "testnet")]
+    #[private]
     pub fn clean_self(&mut self) {
         self.workflow_template.clear();
         self.workflow_instance.clear();
         self.function_call_metadata.clear();
 
-        let settings: DaoSettings = self.settings.get().unwrap().into();
-        assert_eq!(settings.dao_admin_account_id, env::predecessor_account_id());
-        env::storage_remove(&StorageKeys::NewVersionCode.into_storage_key());
+        self.proposals.clear();
+        self.groups.clear();
+        self.storage.clear();
+        self.tags.clear();
+        self.function_call_metadata.clear();
+        self.workflow_template.clear();
+        self.workflow_instance.clear();
+        self.ft_metadata.remove();
+        self.settings.remove();
     }
 
     /// For dev/testing purposes only
     #[cfg(feature = "testnet")]
+    #[private]
     pub fn delete_self(&mut self) -> Promise {
-        let settings: DaoSettings = self.settings.get().unwrap().into();
-        assert_eq!(settings.dao_admin_account_id, env::predecessor_account_id());
-        Promise::new(env::current_account_id()).delete_account(settings.dao_admin_account_id)
+        Promise::new(env::current_account_id()).delete_account("neardao.testnet".into())
     }
 }
 
@@ -510,7 +536,7 @@ impl StorageManagement for Contract {
     }
 }
 
-/// Triggers new version download from factory
+/// Triggers new version download from factory.
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn download_new_version() {
@@ -524,7 +550,7 @@ pub extern "C" fn download_new_version() {
     let contract: Contract = env::state_read().unwrap();
     let dao_settings: DaoSettings = contract.settings.get().unwrap().into();
 
-    //TODO who can trigger the download
+    //TODO download rights
     assert_eq!(
         dao_settings.dao_admin_account_id,
         env::predecessor_account_id()
@@ -549,8 +575,8 @@ pub extern "C" fn download_new_version() {
     }
 }
 
-/// Method called by dao factory as response to download_new_version method
-/// Saves provided dao binary in storage under "NewVersionCode"
+/// Method called by dao factory as response to download_new_version method.
+/// Saves provided dao binary in storage under "NewVersionCode".
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn store_new_version() {

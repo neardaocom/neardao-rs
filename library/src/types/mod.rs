@@ -17,18 +17,22 @@ pub mod error;
 #[serde(rename_all = "snake_case")]
 pub enum DataType {
     Bool(bool),
-    #[serde(rename = "int")]
     U64(u64),
     #[serde(rename = "str_int")]
     U128(U128),
     Null,
     String(String),
     VecBool(Vec<bool>),
-    #[serde(rename = "vec_int")]
     VecU64(Vec<u64>),
     #[serde(rename = "vec_str_int")]
     VecU128(Vec<U128>),
     VecString(Vec<String>),
+}
+
+impl Default for DataType {
+    fn default() -> Self {
+        DataType::Null
+    }
 }
 
 // TODO better error type
@@ -63,9 +67,23 @@ impl DataType {
         }
     }
 
-    pub fn try_into_vec_str(self) -> Result<Vec<String>, TypeError> {
+    pub fn try_into_vec_string(self) -> Result<Vec<String>, TypeError> {
         match self {
             DataType::VecString(v) => Ok(v),
+            _ => Err(TypeError::Conversion),
+        }
+    }
+
+    pub fn try_into_vec_u64(self) -> Result<Vec<u64>, TypeError> {
+        match self {
+            DataType::VecU64(v) => Ok(v),
+            _ => Err(TypeError::Conversion),
+        }
+    }
+
+    pub fn try_into_str(&self) -> Result<&str, TypeError> {
+        match self {
+            DataType::String(v) => Ok(v.as_str()),
             _ => Err(TypeError::Conversion),
         }
     }

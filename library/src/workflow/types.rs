@@ -14,11 +14,13 @@ pub struct ValueContainer<'a, T: AsRef<[DataType]>> {
     pub dao_consts: &'a Consts,
     pub tpl_consts: &'a T,
     pub settings_consts: &'a T,
-    pub proposal_consts: &'a T,
-    pub storage: &'a StorageBucket,
+    pub activity_shared_consts: Option<&'a T>,
+    pub action_proposal_consts: Option<&'a T>,
+    pub storage: Option<&'a mut StorageBucket>,
+    pub global_storage: &'a mut StorageBucket,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Copy, Clone, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
 pub enum DaoActionIdent {
@@ -28,9 +30,6 @@ pub enum DaoActionIdent {
     GroupAddMembers,
     GroupRemoveMember,
     SettingsUpdate,
-    MediaAdd,
-    MediaInvalidate,
-    MediaRemove,
     TagAdd,
     TagEdit,
     TagRemove,
@@ -92,7 +91,7 @@ impl ValidatorRef {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug))]
 #[serde(crate = "near_sdk::serde")]
-pub enum ActionResult {
+pub enum ActivityResult {
     Ok,
     Finished,
     NoRights,
@@ -119,8 +118,10 @@ pub enum ArgSrc {
     ConstsTpl(BindId),
     ConstsSettings(BindId),
     /// Bind from proposal settings.
-    ConstProps(BindId),
+    ConstActivityShared(BindId),
+    ConstAction(BindId),
     Storage(String),
+    GlobalStorage(String),
     Expression(ExpressionId),
     Object(ObjectId),
     VecObject(ObjectId),

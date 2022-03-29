@@ -2,7 +2,7 @@
 #![cfg(test)]
 
 //mod dao; // Require refactoring to match new structure
-mod release;
+mod unlocking;
 
 pub const DURATION_1Y_S: u32 = 31_536_000;
 pub const DURATION_2Y_S: u32 = 63_072_000;
