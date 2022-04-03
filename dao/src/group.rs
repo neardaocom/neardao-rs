@@ -8,12 +8,15 @@ use near_sdk::{
     AccountId, IntoStorageKey,
 };
 
-use crate::token_lock::{ReleaseType, TokenLock, UnlockPeriodInput};
+use crate::token_lock::{TokenLock, UnlockMethod, UnlockPeriodInput};
 use crate::{error::ERR_INVALID_AMOUNT, token_lock::UnlockPeriod};
 use crate::{GroupId, TagId};
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)
+)]
 #[serde(crate = "near_sdk::serde")]
 pub struct GroupMember {
     pub account_id: String,

@@ -25,18 +25,6 @@ use crate::proposal::{Proposal, ProposalState, VoteResult};
 use crate::release::{Release, ReleaseDb, ReleaseModel, ReleaseModelInput, VReleaseModel};
 use crate::unit_tests::{DURATION_2Y_S, DURATION_3Y_S, DURATION_ONE_WEEK};
 
-const ISSUER_ACC: &str = "dao_factory";
-const OWNER_ACC: &str = "dao_instance";
-const OWNER_ACC_FULLNAME: &str = "dao_instance.dao_factory";
-
-const DAO_NAME: &str = "dao";
-const DAO_DESC: &str = "dao description";
-
-const TOKEN_TOTAL_SUPPLY: u32 = 1_000_000_000;
-const INIT_DISTRIBUTION: u32 = 200_000_000;
-const METADATA_DECIMALS: u8 = 24;
-
-const DURATION_WAITING: u64 = 10_000_000_000;
 
 //distribution percent of free tokens
 const COUNCIL_SHARE: u8 = 25;
@@ -115,13 +103,6 @@ fn get_default_groups() -> Vec<GroupInput> {
 
     groups
 }
-//TODO HERE
-fn get_default_media() -> Vec<Media> {}
-fn get_default_tags() -> Vec<TagInput> {}
-fn get_default_fncalls() -> Vec<FnCallDefinition> {}
-fn get_default_fncall_metadata() -> Vec<Vec<FnCallMetadata>> {}
-fn get_default_templates() -> Vec<Template> {}
-fn get_efault_template_settings() -> Vec<Vec<TemplateSettings>> {}
 
 /// Contract constructor
 fn get_contract(

@@ -4,7 +4,7 @@ use crate::{
     constants::MAX_FT_TOTAL_SUPPLY,
     create_val_to_percent_closure,
     group::GroupTokenLockInput,
-    token_lock::{ReleaseType, TokenLock, UnlockPeriod, UnlockPeriodInput},
+    token_lock::{UnlockMethod, TokenLock, UnlockPeriod, UnlockPeriodInput},
     unit_tests::DURATION_1Y_S,
 };
 
@@ -18,32 +18,32 @@ fn get_default_release() -> TokenLock {
         1000,
         vec![
             UnlockPeriodInput {
-                kind: ReleaseType::Linear,
+                kind: UnlockMethod::Linear,
                 duration: 100,
                 amount: TOTAL_AMOUNT / 8,
             },
             UnlockPeriodInput {
-                kind: ReleaseType::Linear,
+                kind: UnlockMethod::Linear,
                 duration: 300,
                 amount: 0,
             },
             UnlockPeriodInput {
-                kind: ReleaseType::None,
+                kind: UnlockMethod::None,
                 duration: 300,
                 amount: TOTAL_AMOUNT / 2,
             },
             UnlockPeriodInput {
-                kind: ReleaseType::Linear,
+                kind: UnlockMethod::Linear,
                 duration: 100,
                 amount: TOTAL_AMOUNT / 16,
             },
             UnlockPeriodInput {
-                kind: ReleaseType::Linear,
+                kind: UnlockMethod::Linear,
                 duration: 100,
                 amount: TOTAL_AMOUNT / 16,
             },
             UnlockPeriodInput {
-                kind: ReleaseType::Linear,
+                kind: UnlockMethod::Linear,
                 duration: 100,
                 amount: TOTAL_AMOUNT / 8,
             },

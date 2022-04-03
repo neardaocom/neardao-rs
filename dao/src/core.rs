@@ -72,6 +72,7 @@ pub struct Contract {
     pub ft_total_supply: u32,
     pub ft_total_locked: u32,
     pub ft_total_distributed: u32,
+    /// Count of all members in groups - that does not mean unique members.
     pub total_members_count: u32,
     pub decimal_const: u128,
     pub ft: FungibleToken,
@@ -154,7 +155,7 @@ impl Contract {
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
         contract.init_groups(groups);
-        // TOOD: Add standard function calls metadata.
+
         contract.init_function_calls(function_calls, function_call_metadata);
         contract
             .init_standard_function_calls(standard_function_calls, standard_function_call_metadata);

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use library::functions::{bind_from_sources, get_value_from_source, serialize_to_json, validate};
 use library::storage::StorageBucket;
 use library::types::error::ProcessingError;
@@ -34,6 +32,7 @@ impl Contract {
     }
 
     #[payable]
+    // TODO: Auto-finish WF then there is no other possible transition regardless terminality.
     pub fn wf_run_activity(
         &mut self,
         proposal_id: u32,
@@ -44,6 +43,7 @@ impl Contract {
         let attached_deposit = env::attached_deposit();
         let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
         let (mut wfi, prop_settings) = self.workflow_instance.get(&proposal_id).unwrap();
+        let mut is_new_transition = false;
 
         let dao_consts = self.dao_consts();
         let storage_key = prop_settings.storage_key.to_owned();
@@ -108,6 +108,8 @@ impl Contract {
                     .unwrap_or(true),
                 "Transition condition failed."
             );
+
+            is_new_transition = true;
         }
 
         let is_dao_activity = wft.activities[activity_id].is_dao_activity();
@@ -118,9 +120,10 @@ impl Contract {
             .get(activity_id)
             .expect("Activity does not exists.")
             .activity_as_ref()
-            .unwrap();
+            .expect("Activity is invalid.");
 
         // Skip right checks for automatic activity.
+        // TODO: This might be solved by settings run rights "Anyone" to the automatic activity.
         if !activity.automatic {
             // Check rights
             assert!(
@@ -129,7 +132,7 @@ impl Contract {
             );
         }
 
-        // Check action input structure
+        // Check action input structure including optional actions.
         assert!(
             self.check_activity_input(
                 activity.actions.as_slice(),
@@ -139,7 +142,10 @@ impl Contract {
             "Activity input structure is invalid."
         );
 
+        // TODO: This will be refactored, its just tmp solution because of Rust move semantics.
         let actions_done_before = wfi.actions_done_count;
+        let mut actions_done_new = wfi.actions_done_count;
+        let activity_actions_count = activity.actions.len() as u8;
         let activity_terminality = activity.terminal;
         let _activity_postprocessing = activity.postprocessing.clone(); // TODO: Solve.
         let result;
@@ -152,64 +158,89 @@ impl Contract {
                 wft,
                 wfs,
                 activity_id,
-                &mut wfi,
+                &mut actions_done_new,
                 actions_inputs,
                 &prop_settings,
                 dao_consts,
                 storage.as_mut(),
                 &mut global_storage,
             );
+
+            // TODO: Discuss Activity postprocessing when all actions are DONE.
+
+            // In case not a single DaoAction was executed, then consider this call as failed and panic!
+            if result.is_err() && actions_done_before == actions_done_new {
+                panic!("Not a single action was executed.");
+            } else {
+                //At least one action was executed.
+                wfi.last_transition_done_at = env::block_timestamp() / 10u64.pow(9);
+
+                if is_new_transition {
+                    wfi.transition_next(
+                        activity_id as u8,
+                        activity_actions_count,
+                        actions_done_new,
+                    );
+                } else {
+                    wfi.actions_done_count = actions_done_new;
+                }
+
+                // This can happen only if no error occured.
+                if wfi.actions_done_count == wfi.actions_total
+                    && activity_terminality == Terminality::Automatic
+                {
+                    wfi.state = InstanceState::Finished;
+                }
+
+                // Save mutated storage.
+                if let Some(storage) = storage {
+                    self.storage.insert(&storage_key.unwrap(), &storage);
+                }
+                self.storage
+                    .insert(&GLOBAL_BUCKET_IDENT.into(), &global_storage);
+            }
         } else {
+            // Optional actions will be immediatelly added to instance.
+            let mut optional_actions = 0;
+            // In case of fn calls activity storages are mutated in postprocessing as promises resolve.
             result = self.run_fncall_activity(
                 proposal_id,
                 wft,
                 wfs,
                 activity_id,
-                &mut wfi,
+                &mut actions_done_new,
+                &mut optional_actions,
                 actions_inputs,
                 &prop_settings,
                 dao_consts,
                 storage.as_mut(),
                 &mut global_storage,
             );
+
+            if result.is_err() && actions_done_before == actions_done_new {
+                panic!("Not a single action was executed.");
+            } else {
+                wfi.actions_done_count += optional_actions;
+                wfi.set_new_awaiting_state(
+                    activity_id as u8,
+                    is_new_transition,
+                    activity_actions_count,
+                    activity_terminality == Terminality::Automatic,
+                );
+            }
         }
 
-        let actions_done_after = wfi.actions_done_count;
+        // Decide if is fatal error.
+        let result: Result<(), ActivityError> = if let Err(e) = result {
+            let e = ActivityError::from(e);
 
-        // TODO: Discuss Activity postprocessing when all actions are DONE.
-
-        let result = match result {
-            Err(e) => {
-                // We want to make the underlying transaction succeed if at least one of the action was successfuly executed.
-                if actions_done_before == actions_done_after {
-                    panic!("Not a single action was executed.");
-                } else {
-                    let e = ActivityError::from(e);
-
-                    if e.is_fatal() {
-                        wfi.state = InstanceState::FatalError;
-                    }
-
-                    Err(e)
-                }
+            if e.is_fatal() {
+                wfi.state = InstanceState::FatalError;
             }
-            _ => {
-                if activity_terminality == Terminality::Automatic
-                    && wfi.actions_done_count == wfi.actions_total
-                {
-                    wfi.state = InstanceState::Finished;
-                }
-
-                Ok(())
-            }
+            Err(e)
+        } else {
+            Ok(())
         };
-
-        // Save mutated storage.
-        if let Some(storage) = storage {
-            self.storage.insert(&storage_key.unwrap(), &storage);
-        }
-        self.storage
-            .insert(&GLOBAL_BUCKET_IDENT.into(), &global_storage);
 
         // Save mutated instance state.
         self.workflow_instance
@@ -231,7 +262,7 @@ impl Contract {
         mut template: Template,
         template_settings: TemplateSettings,
         activity_id: usize,
-        instance: &mut Instance,
+        actions_done_count: &mut u8,
         mut actions_inputs: Vec<Option<ActionInput>>,
         prop_settings: &ProposeSettings,
         dao_consts: Box<Consts>,
@@ -256,10 +287,14 @@ impl Contract {
 
         // Loop which tries to execute all actions, starting from the last done. Returns when something goes wrong.
         // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
-        for idx in instance.actions_done_count as usize..activity.actions.len() {
+        let last_action_done = *actions_done_count as usize;
+        for idx in last_action_done..activity.actions.len() {
             let action = match actions_inputs.get_mut(idx).unwrap() {
                 Some(a) => a,
-                None => continue, // skip optional actions
+                None => {
+                    *actions_done_count += 1;
+                    continue;
+                }
             };
 
             let tpl_action = activity.actions.get_mut(idx).unwrap();
@@ -339,7 +374,7 @@ impl Contract {
 
             // TODO: Handle error so we do only part of the batch.
             if let Some(mut pp) = tpl_action.postprocessing.take() {
-                pp.bind_and_convert(&sources, &mut action.values)
+                pp.bind_instructions(&sources, &mut action.values)
                     .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
                 // TODO: Different execute version for DaoActions?
                 if pp
@@ -355,7 +390,7 @@ impl Contract {
                 }
             }
 
-            instance.actions_done_count += 1;
+            *actions_done_count += 1;
         }
 
         Ok(())
@@ -367,7 +402,8 @@ impl Contract {
         mut template: Template,
         template_settings: TemplateSettings,
         activity_id: usize,
-        instance: &mut Instance,
+        actions_done_count: &mut u8,
+        optional_actions: &mut u8,
         mut actions_inputs: Vec<Option<ActionInput>>,
         prop_settings: &ProposeSettings,
         dao_consts: Box<Consts>,
@@ -392,10 +428,28 @@ impl Contract {
 
         // Loop which tries to execute all actions, starting from the last done. Returns when something goes wrong.
         // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
-        for idx in instance.actions_done_count as usize..activity.actions.len() {
+        let last_action_done = *actions_done_count as usize;
+
+        // This strange variable is here because "optional-required-optional" actions case might happen. Therefore we must not considered 3th action as sucessfull but instead of that break the cycle.
+        // This might be redundant and "YAGNI" stuff I let it stay here for now.
+        let mut optional_state = 0;
+        for idx in last_action_done..activity.actions.len() {
             let action = match actions_inputs.get_mut(idx).unwrap() {
-                Some(a) => a,
-                None => continue, // skip optional actions
+                Some(a) => {
+                    if optional_state == 1 {
+                        optional_state = 2;
+                    }
+                    a
+                }
+                None => {
+                    if optional_state == 2 {
+                        break;
+                    }
+                    optional_state = 1;
+                    *optional_actions += 1;
+                    *actions_done_count += 1;
+                    continue;
+                }
             };
 
             let tpl_action = activity.actions.get_mut(idx).unwrap();
@@ -526,7 +580,7 @@ impl Contract {
             let args = serialize_to_json(action.values.as_slice(), metadata.as_slice(), 0);
 
             let pp = if let Some(mut pp) = tpl_action.postprocessing.take() {
-                pp.bind_and_convert(&sources, &mut action.values)
+                pp.bind_instructions(&sources, &mut action.values)
                     .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
                 Some(pp)
             } else {
@@ -543,18 +597,17 @@ impl Contract {
                 )
                 .then(ext_self::postprocess(
                     proposal_id,
-                    activity_id as u8,
                     idx as u8,
+                    tpl_action.must_succeed,
                     prop_settings.storage_key.clone(),
                     pp,
-                    tpl_action.must_succeed,
-                    activity.terminal == Terminality::Automatic,
                     &env::current_account_id(),
                     0,
                     50 * 10u64.pow(12),
                 ));
 
-            instance.actions_done_count += 1;
+            // We need number of successfully dispatched promises.
+            *actions_done_count += 1;
         }
 
         Ok(())

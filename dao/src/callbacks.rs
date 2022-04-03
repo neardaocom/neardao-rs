@@ -15,19 +15,11 @@ trait ExtSelf {
     fn postprocess(
         &mut self,
         instance_id: u32,
-        activity_id: u8,
         action_id: u8,
+        must_succeed: bool,
         storage_key: Option<String>,
         postprocessing: Option<Postprocessing>,
-        must_succeed: bool,
-        wf_finish: bool,
     ) -> ActivityResult;
-
-    /*     fn store_workflow(
-        &mut self,
-        instance_id: u32,
-        settings: Vec<TemplateSettings>,
-    ) -> ActivityResult; */
 }
 
 #[near_bindgen]
@@ -41,12 +33,10 @@ impl Contract {
     pub fn postprocess(
         &mut self,
         instance_id: u32,
-        activity_id: u8,
         action_id: u8,
+        must_succeed: bool,
         storage_key: Option<String>,
         postprocessing: Option<Postprocessing>,
-        must_succeed: bool,
-        wf_finish: bool,
     ) -> Result<(), ActionError> {
         assert_eq!(
             env::promise_results_count(),
@@ -58,47 +48,14 @@ impl Contract {
             PromiseResult::NotReady => unreachable!(),
             PromiseResult::Successful(val) => self.postprocessing_success(
                 instance_id,
-                activity_id,
                 action_id,
                 storage_key,
                 postprocessing,
-                wf_finish,
                 val,
             ),
             PromiseResult::Failed => {
-                self.postprocessing_failed(instance_id, activity_id, action_id, must_succeed)
+                self.postprocessing_failed(instance_id, action_id, must_succeed)
             }
         }
     }
-    /*
-    #[private]
-    pub fn store_workflow(
-        &mut self,
-        instance_id: u32,
-        settings: Vec<TemplateSettings>,
-    ) -> ActivityResult {
-        assert_eq!(
-            env::promise_results_count(),
-            1,
-            "{}",
-            ERR_PROMISE_INVALID_RESULTS_COUNT
-        );
-
-        match env::promise_result(0) {
-            PromiseResult::NotReady => unreachable!(),
-            PromiseResult::Successful(val) => {
-                let (workflow, fncalls, fncall_metadata): (
-                    Template,
-                    Vec<FnCallId>,
-                    Vec<Vec<FnCallMetadata>>,
-                ) = serde_json::from_slice(&val).unwrap();
-                self.workflow_last_id += 1;
-                self.workflow_template
-                    .insert(&self.workflow_last_id, &(workflow, settings));
-                self.init_function_calls(fncalls, fncall_metadata);
-                ActivityResult::Ok
-            }
-            PromiseResult::Failed => self.postprocessing_failed(instance_id, true),
-        }
-    } */
 }

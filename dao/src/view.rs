@@ -80,7 +80,7 @@ impl Contract {
             .collect()
     }
 
-    pub fn group_names(self) -> Vec<GroupName> {
+    pub fn group_names(&self) -> Vec<GroupName> {
         self.groups
             .values_as_vector()
             .to_vec()
@@ -89,7 +89,7 @@ impl Contract {
             .collect()
     }
 
-    pub fn group_members(self, id: GroupId) -> Option<Vec<GroupMember>> {
+    pub fn group_members(&self, id: GroupId) -> Option<Vec<GroupMember>> {
         self.groups
             .get(&id)
             .map(|group| group.members.get_members())

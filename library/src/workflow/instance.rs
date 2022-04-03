@@ -15,6 +15,8 @@ pub enum InstanceState {
     Waiting,
     /// Workflow is running.
     Running,
+    /// Temporary state during execution when 1..N promises were dispached.
+    AwaitingPromise,
     /// Unrecoverable error happened. Eg. by executing badly defined workflow.
     FatalError,
     /// Workflow was finished and closed.
@@ -34,6 +36,7 @@ pub struct Instance {
     pub actions_done_count: u8,
     pub actions_total: u8,
     pub template_id: u16,
+    pub awaiting_state: Option<AwaitingState>,
 }
 
 impl Instance {
@@ -47,7 +50,27 @@ impl Instance {
             actions_total: 0,
             transition_counter: Vec::default(),
             template_id,
+            awaiting_state: None,
         }
+    }
+
+    /// Updates necessary attributes.
+    /// Does not check if transition is possible - might panic.
+    pub fn transition_next(
+        &mut self,
+        activity_id: u8,
+        activity_actions_count: u8,
+        actions_already_done: u8,
+    ) {
+        self.transition_counter[self.current_activity_id as usize][activity_id as usize] += 1;
+        self.actions_done_count = actions_already_done;
+        self.actions_total = activity_actions_count;
+        self.previous_activity_id = self.current_activity_id;
+        self.current_activity_id = activity_id as u8;
+    }
+
+    pub fn set_current_activity_done(&mut self) {
+        self.actions_done_count = self.actions_total;
     }
 
     pub fn init_transition_counter(&mut self, counter: Vec<Vec<u16>>) {
@@ -83,167 +106,50 @@ impl Instance {
             .find(|t| t.activity_id == activity_id as u8)
     }
 
-    /*
-    // TODO optimalize so we dont have to subtract index by one each time
-    /// Finds transition for dao action
-    pub fn get_target_trans_with_for_dao_action(
-        &self,
-        wft: &Template,
-        action_ident: ActionType,
-    ) -> Option<(TransitionId, ActivityId)> {
-        wft.transitions
-            .get(self.current_activity_id as usize)
-            .map(|t| {
-                t.iter()
-                    .enumerate()
-                    .find(|(_, act_id)| {
-                        wft.activities[**act_id as usize].as_ref().unwrap().action == action_ident
-                    })
-                    .map(|(t_id, act_id)| (t_id as u8, *act_id))
-            })
-            .flatten()
-    }
-    /// Finds transition for fncall
-    pub fn get_target_trans_with_for_fncall(
-        &self,
-        wft: &Template,
-        fn_call_ident: FnCallId,
-    ) -> Option<(TransitionId, ActivityId)> {
-        wft.transitions
-            .get(self.current_activity_id as usize)
-            .map(|t| {
-                t.iter()
-                    .enumerate()
-                    .find(|(_, act_id)| {
-                        if wft.activities[**act_id as usize].as_ref().unwrap().action
-                            != ActionType::FnCall
-                        {
-                            return false;
-                        }
-
-                        match wft.activities[**act_id as usize]
-                            .as_ref()
-                            .unwrap()
-                            .action_data
-                            .as_ref()
-                        {
-                            Some(data) => match data {
-                                ActionData::FnCall(fncall) => fncall.id == fn_call_ident,
-                                ActionData::Event(_) => false,
-                            },
-                            None => false,
-                        }
-                    })
-                    .map(|(t_id, act_id)| (t_id as u8, *act_id))
-            })
-            .flatten()
-    }
-
-    /// Finds transition for event
-    pub fn get_target_trans_with_for_event(
-        &self,
-        wft: &Template,
-        event_code: &EventCode,
-    ) -> Option<(TransitionId, ActivityId)> {
-        wft.transitions
-            .get(self.current_activity_id as usize)
-            .map(|t| {
-                t.iter()
-                    .enumerate()
-                    .find(|(_, act_id)| {
-                        if wft.activities[**act_id as usize].as_ref().unwrap().action
-                            != ActionType::Event
-                        {
-                            return false;
-                        }
-
-                        match wft.activities[**act_id as usize]
-                            .as_ref()
-                            .unwrap()
-                            .action_data
-                            .as_ref()
-                        {
-                            Some(data) => match data {
-                                ActionData::FnCall(_) => false,
-                                ActionData::Event(e) => e.code == *event_code,
-                            },
-                            None => false,
-                        }
-                    })
-                    .map(|(t_id, act_id)| (t_id as u8, *act_id))
-            })
-            .flatten()
-    }
-
-    // TODO figure out cond eval and pos_level
-    /// Tries to advance to next activity in workflow and updates counter.
-    /// Conditions might panics underneath.
-    pub fn transition_to_next(
+    pub fn set_new_awaiting_state(
         &mut self,
         activity_id: u8,
-        transition_id: u8,
-        wft: &Template,
-        consts: &Consts,
-        wfs: &TemplateSettings,
-        settings: &ProposeSettings,
-        action_args: &[Vec<DataType>],
-        storage_bucket: &StorageBucket,
-        pos_level: usize,
-    ) -> (ActionResult, Option<Postprocessing>) {
-        //TODO switching to finish state
-        if self.state == InstanceState::Finished {
-            return (ActionResult::Finished, None);
+        is_new_transition: bool,
+        new_activity_actions_count: u8,
+        wf_finish: bool,
+    ) {
+        self.state = InstanceState::AwaitingPromise;
+        self.awaiting_state = Some(AwaitingState::new(
+            activity_id,
+            is_new_transition,
+            new_activity_actions_count,
+            wf_finish,
+        ));
+    }
+
+    pub fn unset_awaiting_state(&mut self, new_state: InstanceState) {
+        self.state = new_state;
+        self.awaiting_state = None;
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct AwaitingState {
+    pub is_new_transition: bool,
+    pub activity_id: u8,
+    pub new_activity_actions_count: u8,
+    pub wf_finish: bool,
+}
+
+impl AwaitingState {
+    pub fn new(
+        activity_id: u8,
+        is_new_transition: bool,
+        new_activity_actions_count: u8,
+        wf_finish: bool,
+    ) -> Self {
+        AwaitingState {
+            is_new_transition,
+            activity_id,
+            new_activity_actions_count,
+            wf_finish,
         }
-
-        let transition_settings =
-            &wfs.transition_constraints[self.current_activity_id as usize][transition_id as usize];
-
-        // TODO trans and activity cond should be required only validation against storage
-        //check transition cond
-        let transition_cond_result = match &transition_settings.cond {
-            Some(c) => c
-                .bind_and_eval(
-                    consts,
-                    storage_bucket,
-                    settings.binds.as_slice(),
-                    &action_args[pos_level],
-                )
-                .try_into_bool()
-                .unwrap_or(true),
-            None => true,
-        };
-
-        if !transition_cond_result {
-            return (ActionResult::TransitionCondFailed, None);
-        }
-
-        // check transition counter
-        if self.transition_counter[self.current_activity_id as usize][transition_id as usize] + 1
-            > transition_settings.transition_limit
-        {
-            return (ActionResult::MaxTransitionLimitReached, None);
-        }
-
-        self.transition_counter[self.current_activity_id as usize][transition_id as usize] += 1;
-        self.previous_activity_id = self.current_activity_id;
-        self.current_activity_id = activity_id;
-
-        // check if we can run this
-        let wanted_activity = wft.activities[activity_id as usize].as_ref().unwrap();
-        let can_be_exec = match wanted_activity.exec_condition {
-            Some(ref e) => e.bind_and_eval(
-                consts,
-                storage_bucket,
-                settings.binds.as_slice(),
-                &action_args[pos_level],
-            ),
-            None => DataType::Bool(true),
-        };
-
-        if !can_be_exec.try_into_bool().unwrap() {
-            return (ActionResult::ActivityCondFailed, None);
-        }
-
-        (ActionResult::Ok, wanted_activity.postprocessing.clone())
-    } */
+    }
 }

@@ -36,6 +36,7 @@ pub(crate) type VoteTotalPossible = u128;
 pub(crate) type Votes = [u128; 3];
 pub(crate) type CalculatedVoteResults = (VoteTotalPossible, Votes);
 pub(crate) type ProposalWf = (Proposal, Template, TemplateSettings);
+#[allow(dead_code)]
 pub(crate) type InstanceWf = (Instance, ProposeSettings);
 
 /// Calculates votes as percents

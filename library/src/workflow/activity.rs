@@ -7,7 +7,7 @@ use near_sdk::{
 
 use crate::{
     functions::get_value_from_source,
-    interpreter::condition::Condition,
+    interpreter::{condition::Condition, expression::EExpr},
     storage::StorageBucket,
     types::{DataType, DataTypeDef},
     ActivityId, FnCallId, MethodName, ObjectValues,
@@ -222,9 +222,20 @@ pub enum Instruction {
     StoreFnCallResult(String, DataTypeDef),
     StoreFnCallResultGlobal(String, DataTypeDef),
     StoreWorkflow,
-    /// TODO: Not implemented yet.
-    StoreExpression(String, Expression),
-    Cond(Condition),
+    /// Stores expression
+    /// 2th param defines if FnCallResult is required and what to deserialize it to.
+    /// FnCall result will always be as last arg in values.
+    StoreExpression(String, Vec<ArgSrc>, EExpr, Option<DataTypeDef>),
+    StoreExpressionGlobal(String, Vec<ArgSrc>, EExpr, Option<DataTypeDef>),
+    StoreExpressionBinded(String, Vec<DataType>, EExpr, Option<DataTypeDef>),
+    StoreExpressionGlobalBinded(String, Vec<DataType>, EExpr, Option<DataTypeDef>),
+    /// Conditional Jump.
+    /// 2th param defines if FnCallResult is required and what to deserialize it to.
+    /// FnCall result will always be as last arg in values.
+    Cond(Vec<ArgSrc>, Condition, Option<DataTypeDef>),
+    CondBinded(Vec<DataType>, Condition, Option<DataTypeDef>),
+    Jump(u8),
+    None,
 }
 /// Simple post-fncall instructions which say what to do based on FnCall result.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
@@ -237,34 +248,70 @@ pub struct Postprocessing {
 
 impl Postprocessing {
     /// Replaces all StoryDynValue variants with StoreValue variants.
+    /// Same is valid for variants with opposite *Binded
+    /// Supposed to be called before dispatching FnCall action.
     /// Returns `Err(())` in case users's input structure is not correct.
-    pub fn bind_and_convert<T: AsRef<[DataType]>>(
+    pub fn bind_instructions<T: AsRef<[DataType]>>(
         &mut self,
         value_source: &ValueContainer<T>,
         user_input: &Vec<Vec<DataType>>,
     ) -> Result<(), ()> {
         // TODO: Improve.
         for ins in self.instructions.iter_mut() {
-            if let Instruction::StoreDynValue(string, arg_src) = ins {
-                let value = match arg_src {
-                    ArgSrc::User(id) => user_input
-                        .get(0)
-                        .ok_or(())?
-                        .get(*id as usize)
-                        .ok_or(())?
-                        .clone(),
-                    _ => get_value_from_source(arg_src, value_source).map_err(|_| ())?,
-                };
-                *ins = Instruction::StoreValue(string.clone(), value);
+            match ins {
+                Instruction::StoreDynValue(string, arg_src) => {
+                    let value = bind_value(arg_src, user_input, value_source)?;
+                    *ins = Instruction::StoreValue(string.clone(), value);
+                }
+                Instruction::Cond(arg_src, cond, required_fncall_result) => {
+                    let mut values = Vec::with_capacity(arg_src.len());
+                    for src in arg_src.iter() {
+                        let value = bind_value(src, user_input, value_source)?;
+                        values.push(value);
+                    }
+                    *ins = Instruction::CondBinded(
+                        values,
+                        cond.clone(),
+                        required_fncall_result.take(),
+                    );
+                }
+                Instruction::StoreExpression(key, arg_src, expr, required_fncall_result) => {
+                    let mut values = Vec::with_capacity(arg_src.len());
+                    for src in arg_src.iter() {
+                        let value = bind_value(src, user_input, value_source)?;
+                        values.push(value);
+                    }
+
+                    *ins = Instruction::StoreExpressionBinded(
+                        key.clone(),
+                        values,
+                        expr.clone(),
+                        required_fncall_result.take(),
+                    );
+                }
+                Instruction::StoreExpressionGlobal(key, arg_src, expr, required_fncall_result) => {
+                    let mut values = Vec::with_capacity(arg_src.len());
+                    for src in arg_src.iter() {
+                        let value = bind_value(src, user_input, value_source)?;
+                        values.push(value);
+                    }
+
+                    *ins = Instruction::StoreExpressionGlobalBinded(
+                        key.clone(),
+                        values,
+                        expr.clone(),
+                        required_fncall_result.take(),
+                    );
+                }
+                _ => continue,
             }
         }
 
         Ok(())
     }
-
-    // TODO: Finish all variants.
+    /// Executes postprocessing script.
     pub fn execute(
-        self,
+        mut self,
         fn_result_val: Vec<u8>,
         storage: &mut Option<&mut StorageBucket>,
         global_storage: &mut StorageBucket,
@@ -278,7 +325,9 @@ impl Postprocessing {
     ) -> Result<(), ()> {
         let mut i = 0;
         while i < self.instructions.len() {
-            match &self.instructions[i] {
+            // Replace/Swap to avoid cloning.
+            let mut ins = std::mem::replace(&mut self.instructions[i], Instruction::None);
+            match &mut ins {
                 Instruction::DeleteKey(key) => {
                     storage.as_mut().unwrap().remove_data(&key);
                 }
@@ -314,14 +363,63 @@ impl Postprocessing {
                         std_fncall_metadata,
                     ))
                 }
-                Instruction::StoreDynValue(_, _) => Err(())?,
-                Instruction::StoreExpression(_, _) => unimplemented!(),
-                // TODO: finish.
-                Instruction::Cond(cond) => {
-                    i = cond.eval(&[]).map_err(|_| ())? as usize;
+                Instruction::StoreExpression(_, _, _, _) => Err(())?,
+                Instruction::StoreExpressionGlobal(_, _, _, _) => Err(())?,
+                Instruction::CondBinded(values, cond, required_fncall_result) => {
+                    // Bind FnCall result to values in condition.
+                    if let Some(type_def) = required_fncall_result {
+                        let result = self.deser_datatype_from_slice(&type_def, &fn_result_val)?;
+                        values.push(result);
+                    }
+
+                    let next_ins = cond.eval(values.as_slice()).map_err(|_| ())? as usize;
+                    // In case this condition is evaluated again we want to restore it back.
+                    values.pop();
+                    std::mem::swap(&mut self.instructions[i], &mut ins);
+                    i = next_ins;
                     continue;
                 }
+                Instruction::Jump(idx) => {
+                    let next_ins = *idx as usize;
+                    std::mem::swap(&mut self.instructions[i], &mut ins);
+                    i = next_ins;
+                    continue;
+                }
+                Instruction::StoreDynValue(_, _) => Err(())?,
+                Instruction::Cond(_, _, _) => Err(())?,
+                Instruction::None => continue,
+                Instruction::StoreExpressionBinded(key, values, expr, required_fncall_result) => {
+                    // Bind FnCall result to values in condition.
+                    if let Some(type_def) = required_fncall_result {
+                        let result = self.deser_datatype_from_slice(&type_def, &fn_result_val)?;
+                        values.push(result);
+                    }
+
+                    let result = expr.eval(values.as_slice()).map_err(|_| ())?;
+                    storage.as_mut().unwrap().add_data(&key, &result);
+
+                    values.pop();
+                }
+                Instruction::StoreExpressionGlobalBinded(
+                    key,
+                    values,
+                    expr,
+                    required_fncall_result,
+                ) => {
+                    // Bind FnCall result to values in condition.
+                    if let Some(type_def) = required_fncall_result {
+                        let result = self.deser_datatype_from_slice(&type_def, &fn_result_val)?;
+                        values.push(result);
+                    }
+
+                    let result = expr.eval(values.as_slice()).map_err(|_| ())?;
+                    global_storage.add_data(&key, &result);
+
+                    values.pop();
+                }
             }
+            // Swap instruction back.
+            std::mem::swap(&mut self.instructions[i], &mut ins);
 
             i += 1;
         }
@@ -368,6 +466,23 @@ impl Postprocessing {
     }
 }
 
+fn bind_value<T: AsRef<[DataType]>>(
+    arg_src: &ArgSrc,
+    user_input: &Vec<Vec<DataType>>,
+    value_source: &ValueContainer<T>,
+) -> Result<DataType, ()> {
+    let value = match arg_src {
+        ArgSrc::UserObj(obj_id, arg_id) => user_input
+            .get(*obj_id as usize)
+            .ok_or(())?
+            .get(*arg_id as usize)
+            .ok_or(())?
+            .clone(),
+        _ => get_value_from_source(arg_src, value_source).map_err(|_| ())?,
+    };
+    Ok(value)
+}
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -380,27 +495,74 @@ pub struct Transition {
 
 #[cfg(test)]
 mod test {
+    use near_sdk::{serde_json, test_utils::VMContextBuilder, testing_env, MockedBlockchain};
+
     use crate::{
+        interpreter::{
+            condition::Condition,
+            expression::{AriOp, EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
+        },
         storage::StorageBucket,
-        types::DataType,
+        types::{DataType, DataTypeDef},
         workflow::types::{ArgSrc, ValueContainer},
     };
 
     use super::{Instruction, Postprocessing};
 
-    // TODO: Extend.
+    // TODO: Come up with better test case than this one.
+    /// Test case 1:
+    /// User input values: "value_1", 420
+    /// Assume FnCall result => string: registered/unregistered
+    /// If registered, then global storage save 2 * 420,
+    /// Else wf storage save "requires registration",
     #[test]
-    fn simple_postprocessing() {
+    fn postprocessing_simple_cond_1() {
+        testing_env!(VMContextBuilder::new().build());
         let user_input = vec![vec![DataType::String("value_1".into()), DataType::U64(420)]];
+
         let mut pp = Postprocessing {
             storage_key: "key".into(),
             instructions: vec![
-                Instruction::StoreDynValue("skey_1".into(), ArgSrc::User(0)),
-                Instruction::StoreDynValue("skey_2".into(), ArgSrc::User(1)),
+                Instruction::Cond(
+                    vec![],
+                    Condition {
+                        expr: EExpr::String(TExpr {
+                            operators: vec![Op {
+                                operands_ids: [0, 1],
+                                op_type: EOp::Rel(RelOp::Eqs),
+                            }],
+                            terms: vec![
+                                ExprTerm::Arg(0),
+                                ExprTerm::Value(DataType::String("registered".into())),
+                            ],
+                        }),
+                        true_path: 1,
+                        false_path: 3,
+                    },
+                    Some(DataTypeDef::String(false)),
+                ),
+                Instruction::StoreExpressionGlobal(
+                    "skey_1".into(),
+                    vec![ArgSrc::UserObj(0, 1)],
+                    EExpr::Aritmetic(TExpr {
+                        operators: vec![Op {
+                            operands_ids: [0, 1],
+                            op_type: EOp::Ari(AriOp::Multiply),
+                        }],
+                        terms: vec![ExprTerm::Arg(0), ExprTerm::Value(DataType::U64(2))],
+                    }),
+                    None,
+                ),
+                Instruction::Jump(u8::MAX),
+                Instruction::StoreValue(
+                    "skey_2".into(),
+                    DataType::String("requires_registration".into()),
+                ),
             ],
         };
 
         let mut global_storage = StorageBucket::new(b"global".to_vec());
+        let mut storage = StorageBucket::new(b"key".to_vec());
 
         let dao_consts = Box::new(|id: u8| match id {
             0 => Some(DataType::String("neardao.near".into())),
@@ -413,21 +575,107 @@ mod test {
             settings_consts: &[],
             activity_shared_consts: None,
             action_proposal_consts: None,
-            storage: None,
+            storage: Some(&mut storage),
             global_storage: &mut global_storage,
         };
 
-        pp.bind_and_convert(&source, &user_input)
+        pp.bind_instructions(&source, &user_input)
             .expect("PP - bind_and_convert failed.");
 
         let expected_pp_binded = Postprocessing {
             storage_key: "key".into(),
             instructions: vec![
-                Instruction::StoreValue("skey_1".into(), DataType::String("value_1".into())),
-                Instruction::StoreValue("skey_2".into(), DataType::U64(420)),
+                Instruction::CondBinded(
+                    vec![],
+                    Condition {
+                        expr: EExpr::String(TExpr {
+                            operators: vec![Op {
+                                operands_ids: [0, 1],
+                                op_type: EOp::Rel(RelOp::Eqs),
+                            }],
+                            terms: vec![
+                                ExprTerm::Arg(0),
+                                ExprTerm::Value(DataType::String("registered".into())),
+                            ],
+                        }),
+                        true_path: 1,
+                        false_path: 3,
+                    },
+                    Some(DataTypeDef::String(false)),
+                ),
+                Instruction::StoreExpressionGlobalBinded(
+                    "skey_1".into(),
+                    vec![DataType::U64(420)],
+                    EExpr::Aritmetic(TExpr {
+                        operators: vec![Op {
+                            operands_ids: [0, 1],
+                            op_type: EOp::Ari(AriOp::Multiply),
+                        }],
+                        terms: vec![ExprTerm::Arg(0), ExprTerm::Value(DataType::U64(2))],
+                    }),
+                    None,
+                ),
+                Instruction::Jump(u8::MAX),
+                Instruction::StoreValue(
+                    "skey_2".into(),
+                    DataType::String("requires_registration".into()),
+                ),
             ],
         };
 
         assert_eq!(pp, expected_pp_binded);
+
+        assert_eq!(global_storage.get_all_data().len(), 0);
+        assert_eq!(storage.get_all_data().len(), 0);
+
+        // Registered case
+
+        let result = "registered".to_string();
+        let result_raw = serde_json::to_string(&result).unwrap().into_bytes();
+
+        assert!(pp
+            .clone()
+            .execute(
+                result_raw,
+                &mut Some(&mut storage),
+                &mut global_storage,
+                &mut None,
+            )
+            .is_ok());
+
+        assert_eq!(
+            global_storage.get_all_data(),
+            vec![("skey_1".into(), DataType::U64(2 * 420))]
+        );
+
+        assert_eq!(storage.get_all_data(), vec![]);
+
+        // Unregistered case
+
+        let result = "unregistered".to_string();
+        let result_raw = serde_json::to_string(&result).unwrap().into_bytes();
+
+        global_storage.remove_data(&"skey_1".into());
+
+        assert_eq!(global_storage.get_all_data().len(), 0);
+        assert_eq!(storage.get_all_data().len(), 0);
+
+        assert!(pp
+            .execute(
+                result_raw,
+                &mut Some(&mut storage),
+                &mut global_storage,
+                &mut None,
+            )
+            .is_ok());
+
+        assert_eq!(global_storage.get_all_data(), vec![]);
+        assert_eq!(
+            storage.get_all_data(),
+            vec![(
+                "skey_2".into(),
+                DataType::String("requires_registration".into())
+            )]
+        );
     }
 }

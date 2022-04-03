@@ -13,14 +13,14 @@ use crate::{derive_from_versioned, derive_into_versioned, group::GroupTokenLockI
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 #[repr(u8)]
-pub enum ReleaseType {
+pub enum UnlockMethod {
     /// All FT immediately unlocked.
     None = 0,
     /// Linear unlocker over specified time period.
     Linear,
 }
 
-impl TryFrom<u64> for ReleaseType {
+impl TryFrom<u64> for UnlockMethod {
     type Error = &'static str;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
@@ -28,6 +28,18 @@ impl TryFrom<u64> for ReleaseType {
             0 => Ok(Self::None),
             1 => Ok(Self::Linear),
             _ => Err("Invalid ReleaseModelType repr."),
+        }
+    }
+}
+
+impl TryFrom<String> for UnlockMethod {
+    type Error = &'static str;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "none" => Ok(Self::None),
+            "linear" => Ok(Self::Linear),
+            _ => Err("Invalid ReleaseModelType value."),
         }
     }
 }
@@ -84,8 +96,8 @@ impl TokenLock {
         if current_period.end_at >= current_time {
             if current_period.amount > self.current_period_unlocked {
                 let total_released = match current_period.kind {
-                    ReleaseType::None => current_period.amount,
-                    ReleaseType::Linear => {
+                    UnlockMethod::None => current_period.amount,
+                    UnlockMethod::Linear => {
                         let start_time = if pos > 0 {
                             self.periods[pos - 1].end_at
                         } else {
@@ -125,8 +137,8 @@ impl TokenLock {
 
             if current_period.amount > self.current_period_unlocked {
                 let total_released = match current_period.kind {
-                    ReleaseType::None => current_period.amount,
-                    ReleaseType::Linear => {
+                    UnlockMethod::None => current_period.amount,
+                    UnlockMethod::Linear => {
                         let start_time = if pos != 0 {
                             self.periods[pos - 1].end_at
                         } else {
@@ -211,7 +223,7 @@ impl TryFrom<GroupTokenLockInput> for TokenLock {
 /// Defines `amount` FT to be release at `end_at` timestamp.
 /// Kind defines type of releasing. "None" releases `amount` immediately. "Linear" lineary over the time period.
 pub struct UnlockPeriod {
-    pub kind: ReleaseType,
+    pub kind: UnlockMethod,
     pub end_at: u64,
     pub amount: u32,
 }
@@ -224,7 +236,7 @@ pub struct UnlockPeriod {
 #[serde(crate = "near_sdk::serde")]
 /// Input version of `UnlockPeriod`.
 pub struct UnlockPeriodInput {
-    pub kind: ReleaseType,
+    pub kind: UnlockMethod,
     pub duration: u64,
     pub amount: u32,
 }

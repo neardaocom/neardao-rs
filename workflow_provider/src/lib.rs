@@ -56,12 +56,18 @@ impl Contract {
     }
 
     #[private]
+    /// Adds fncalls for standard interfaces. Eg. FT Standard NEP-148.
     pub fn standard_fncalls_add(
         &mut self,
-        id: u16,
-        fncalls: Vec<FnCallId>,
+        fncalls: Vec<MethodName>,
         mut fncall_metadata: Vec<Vec<FnCallMetadata>>,
     ) {
+        assert_eq!(fncalls.len(), fncall_metadata.len());
+
+        for fncall in fncalls.iter().rev() {
+            self.standard_fncall_metadata
+                .insert(&fncall, &(fncall_metadata.pop().unwrap()));
+        }
     }
 
     #[private]

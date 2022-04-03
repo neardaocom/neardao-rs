@@ -39,7 +39,7 @@ pub mod deserialize {
         error::ActionError,
         group::{GroupInput, GroupMember, GroupSettings, GroupTokenLockInput},
         settings::DaoSettings,
-        token_lock::{ReleaseType, UnlockPeriodInput},
+        token_lock::{UnlockMethod, UnlockPeriodInput},
     };
 
     pub fn deserialize_group_settings(
@@ -79,7 +79,7 @@ pub mod deserialize {
 
         Ok(members)
     }
-    /// Serializes `GroupInput` from user action inputs for GroupAdd action.
+    /// Deserializes `GroupInput` from user action inputs for GroupAdd action.
     pub fn deserialize_group_input(
         user_inputs: &mut Vec<Vec<DataType>>,
     ) -> Result<GroupInput, ActionError> {
@@ -96,9 +96,10 @@ pub mod deserialize {
         }
 
         let mut unlock_models = Vec::with_capacity(unlock_period_col.len() / 3);
-        for idx in (0..unlock_period_col.len()).step_by(4) {
-            let kind = ReleaseType::try_from(get_datatype(unlock_period_col, idx)?.try_into_u64()?)
-                .unwrap();
+        for idx in (0..unlock_period_col.len()).step_by(3) {
+            let kind =
+                UnlockMethod::try_from(get_datatype(unlock_period_col, idx)?.try_into_string()?)
+                    .expect("Failed to create ReleaseType from input.");
 
             unlock_models.push(UnlockPeriodInput {
                 kind,
@@ -110,10 +111,10 @@ pub mod deserialize {
 
         let token_lock = GroupTokenLockInput {
             amount: get_datatype(token_lock_obj, 0)?.try_into_u64()? as u32,
-            start_from: get_datatype(token_lock_obj, 2)?.try_into_u64()?,
-            duration: get_datatype(token_lock_obj, 3)?.try_into_u64()?,
-            init_distribution: get_datatype(token_lock_obj, 4)?.try_into_u64()? as u32,
-            unlock_interval: get_datatype(token_lock_obj, 5)?.try_into_u64()? as u32,
+            start_from: get_datatype(token_lock_obj, 1)?.try_into_u64()?,
+            duration: get_datatype(token_lock_obj, 2)?.try_into_u64()?,
+            init_distribution: get_datatype(token_lock_obj, 3)?.try_into_u64()? as u32,
+            unlock_interval: get_datatype(token_lock_obj, 4)?.try_into_u64()? as u32,
             periods: unlock_models,
         };
 

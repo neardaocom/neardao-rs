@@ -112,8 +112,10 @@ pub enum ActivityResult {
 #[serde(crate = "near_sdk::serde")]
 /// Defines source of value.
 pub enum ArgSrc {
-    /// User's input
+    /// User's input - defines arg pos.
     User(u8),
+    /// User's input - defines obj and arg pos.
+    UserObj(u8,u8),
     /// Bind from template.
     ConstsTpl(BindId),
     ConstsSettings(BindId),

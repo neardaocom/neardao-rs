@@ -28,7 +28,7 @@ use crate::{
     proposal::{Proposal, ProposalState},
     settings::DaoSettings,
     tags::{TagInput, Tags},
-    token_lock::{ReleaseType, TokenLock, UnlockPeriod},
+    token_lock::{TokenLock, UnlockMethod, UnlockPeriod},
     CalculatedVoteResults, InstanceWf, ProposalId, ProposalWf, VoteTotalPossible, Votes,
 };
 use library::{
@@ -232,7 +232,7 @@ impl Contract {
         false
     }
 
-    // TODO test
+    // TODO: Test coverage.
     /// Evaluates vote results by scenario and type of voters.
     /// Returns tuple (max_possible_amount,vote_results)
     pub fn calculate_votes(
@@ -263,6 +263,7 @@ impl Contract {
                     ActivityRight::TokenHolder => {
                         max_possible_amount = self.ft.token_holders_count as u128;
                     }
+                    // If member exists in 2 groups, then he is accounted twice.
                     ActivityRight::Member => {
                         max_possible_amount = self.total_members_count as u128;
                     }
@@ -275,7 +276,6 @@ impl Contract {
                     },
                 }
 
-                //calculate votes
                 for vote_value in votes.values() {
                     vote_result[*vote_value as usize] += 1;
                 }
@@ -369,6 +369,7 @@ impl Contract {
     /// Updates DAO's `ft_total_locked` amount and `total_members_count` values.
     pub fn add_group(&mut self, group: GroupInput) {
         self.ft_total_locked += group.token_lock.amount;
+        // Already counted members still counts as new.
         self.total_members_count += group.members.len() as u32;
 
         // Check if dao has enough free tokens to distribute ft
@@ -428,55 +429,100 @@ impl Contract {
         }
     }
 
+    /// Error callback.
+    /// If promise did not have to succeed, then instance is still updated.
     pub fn postprocessing_failed(
         &mut self,
         proposal_id: u32,
-        activity_id: u8,
         action_id: u8,
         must_succeed: bool,
     ) -> Result<(), ActionError> {
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
-        if must_succeed {
-            Err(ActionError::PromiseFailed(activity_id, action_id))
+
+        let awaiting_state = wfi.awaiting_state.take().unwrap();
+
+        let result = if must_succeed {
+            // Switch state back to running.
+            wfi.unset_awaiting_state(InstanceState::Running);
+
+            Err(ActionError::PromiseFailed(
+                awaiting_state.activity_id,
+                action_id,
+            ))
+            // TODO: Question is if to do postprocessing as well or just update instance.
         } else {
-            wfi.actions_done_count += 1;
-            self.workflow_instance
-                .insert(&proposal_id, &(wfi, settings));
+            if awaiting_state.is_new_transition {
+                wfi.transition_next(
+                    awaiting_state.activity_id,
+                    awaiting_state.new_activity_actions_count,
+                    1,
+                );
+            } else {
+                wfi.actions_done_count += 1;
+            }
+
+            // This might be unnecessary as activity with one optional action does not make much sense.
+            if wfi.actions_done_count == wfi.actions_total && awaiting_state.wf_finish {
+                wfi.unset_awaiting_state(InstanceState::Finished);
+            } else {
+                wfi.awaiting_state = Some(awaiting_state);
+            }
+
             Ok(())
-        }
+        };
+
+        self.workflow_instance
+            .insert(&proposal_id, &(wfi, settings));
+
+        result
     }
 
+    /// Success callback.
+    /// Modifies workflow's instance.
+    /// If `postprocessing` is included, then also postprocessing script is executed.
+    /// Only successful postprocessing updates action as sucessfully executed.
     pub fn postprocessing_success(
         &mut self,
         proposal_id: u32,
-        activity_id: u8,
         action_id: u8,
         storage_key: Option<String>,
         postprocessing: Option<Postprocessing>,
-        wf_finish: bool,
         promise_call_result: Vec<u8>,
     ) -> Result<(), ActionError> {
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
 
-        // Transaction check.
+        let awaiting_state = wfi.awaiting_state.take().unwrap();
+
+        // Action transaction check if previous action succesfully finished.
         if wfi.actions_done_count < action_id {
-            return Err(ActionError::PromiseFailed(activity_id, action_id));
+            wfi.unset_awaiting_state(InstanceState::Running);
+            self.workflow_instance
+                .insert(&proposal_id, &(wfi, settings));
+            return Err(ActionError::PromiseFailed(
+                awaiting_state.activity_id,
+                action_id,
+            ));
         }
         wfi.last_transition_done_at = env::block_timestamp();
         wfi.actions_done_count += 1;
 
-        // Check if its last action.
-        if action_id == wfi.actions_total - 1 {
-            wfi.previous_activity_id = wfi.current_activity_id;
-            wfi.current_activity_id = activity_id;
-            wfi.actions_done_count = 0;
-
-            if wf_finish {
-                wfi.state = InstanceState::Finished;
+        // Check if its last action done.
+        if wfi.actions_done_count == wfi.actions_total {
+            if awaiting_state.wf_finish {
+                wfi.unset_awaiting_state(InstanceState::Finished);
+            } else {
+                wfi.unset_awaiting_state(InstanceState::Running);
             }
+        // Check if its first action done
+        } else if wfi.actions_done_count == 1 {
+            wfi.transition_next(
+                awaiting_state.activity_id,
+                awaiting_state.new_activity_actions_count,
+                1,
+            );
         }
 
-        // Execute postprocessing script.
+        // Execute postprocessing script which must always succeed.
         let result = match postprocessing {
             Some(pp) => {
                 let mut global_storage = self.storage.get(&GLOBAL_BUCKET_IDENT.into()).unwrap();
@@ -497,7 +543,7 @@ impl Contract {
                     )
                     .is_err()
                 {
-                    wfi.state = InstanceState::FatalError;
+                    wfi.unset_awaiting_state(InstanceState::FatalError);
                     Err(ActionError::ActionPostprocessing(action_id))
                 } else {
                     // Only in case its workflow Add.
@@ -534,6 +580,7 @@ impl Contract {
             _ => Ok(()),
         };
 
+        wfi.awaiting_state = Some(awaiting_state);
         self.workflow_instance
             .insert(&proposal_id, &(wfi, settings));
         result
