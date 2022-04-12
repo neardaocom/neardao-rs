@@ -83,6 +83,7 @@ impl TokenLock {
     }
 
     /// Calculates amount of tokens to be unlocked depending on current time.
+    /// Updates owns stats about unlocking if necessary.
     pub fn unlock(&mut self, current_time: u64) -> u32 {
         if self.amount == self.unlocked {
             return 0;

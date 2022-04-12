@@ -1,3 +1,8 @@
+//! Tags for DAO
+//! Simple storage for strings which are then referenced by integer key.
+//! Last inserted key is kept to avoid assigning same key to two different tags during the tags lifetime in DAO.
+//! Contains no logic exepct basic CRUD methods.
+
 use std::collections::{hash_map::Iter, HashMap};
 
 use near_sdk::{
@@ -71,7 +76,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn tags_scenario() {
+    fn tags_crud_scenario() {
         let new_input: Vec<String> = vec!["tag1".into(), "tag2".into(), "tag3".into()];
         let mut tags = Tags::new();
         let result = tags.insert(new_input);

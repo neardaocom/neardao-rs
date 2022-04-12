@@ -2,27 +2,23 @@ use library::functions::{bind_from_sources, get_value_from_source, serialize_to_
 use library::storage::StorageBucket;
 use library::types::error::ProcessingError;
 use library::types::DataType;
-use library::workflow::activity::{
-    ActionData, ActionInput, Activity, FnCallIdType, TemplateActivity, Terminality,
-};
-use library::workflow::instance::{Instance, InstanceState};
+use library::workflow::activity::{ActionData, ActionInput, Activity, FnCallIdType, Terminality};
+use library::workflow::instance::InstanceState;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
-use library::workflow::types::{
-    self, ActivityResult, DaoActionIdent, ValidatorType, ValueContainer,
-};
-use library::{Consts, FnCallId, ObjectValues};
-use near_sdk::serde::Serialize;
+use library::workflow::types::{DaoActionIdent, ValueContainer};
+use library::{Consts, ObjectValues};
 use near_sdk::{env, near_bindgen, AccountId, Promise};
 
 use crate::callbacks::ext_self;
 use crate::constants::{GLOBAL_BUCKET_IDENT, TGAS};
 use crate::error::{ActionError, ActivityError};
-use crate::group::{GroupInput, GroupMember, GroupSettings, GroupTokenLockInput};
-use crate::proposal::{Proposal, ProposalContent, ProposalState};
-use crate::settings::DaoSettings;
+use crate::group::{GroupInput, GroupMember, GroupSettings};
+use crate::proposal::ProposalState;
+use crate::settings::{assert_valid_dao_settings, DaoSettings};
+use crate::tags::Tags;
 use crate::token_lock::TokenLock;
-use crate::{core::*, group, GroupId, ProposalId, TagCategory, TagId};
+use crate::{core::*, group, GroupId, TagId};
 
 #[near_bindgen]
 impl Contract {
@@ -668,57 +664,38 @@ impl Contract {
     }
 
     pub fn settings_update(&mut self, settings: DaoSettings) {
-        //assert_valid_dao_settings(&settings);
+        assert_valid_dao_settings(&settings);
         self.settings.replace(&settings.into());
     }
 
     /// Returns tuple of start, end index for the new tags
-    pub fn tag_add(
-        &mut self,
-        proposal_id: ProposalId,
-        category: TagCategory,
-        tags: Vec<String>,
-    ) -> Option<(TagId, TagId)> {
-        unimplemented!();
-        //let mut t = self.tags.get(&category).unwrap_or(Tags::new());
-        //let ids = t.insert(tags);
-        //self.tags.insert(&category, &t);
+    pub fn tag_add(&mut self, category: String, tags: Vec<String>) -> Option<(TagId, TagId)> {
+        let mut t = self.tags.get(&category).unwrap_or(Tags::new());
+        let ids = t.insert(tags);
+        self.tags.insert(&category, &t);
+        ids
     }
 
-    pub fn tag_edit(
-        &mut self,
-        proposal_id: ProposalId,
-        category: TagCategory,
-        id: TagId,
-        value: String,
-    ) -> bool {
-        unimplemented!();
-
-        //match self.tags.get(&category) {
-        //    Some(mut t) => {
-        //        t.rename(id, value);
-        //        self.tags.insert(&category, &t);
-        //    }
-        //}
-        //true
+    pub fn tag_edit(&mut self, category: String, id: u16, value: String) -> bool {
+        match self.tags.get(&category) {
+            Some(mut t) => {
+                t.rename(id, value);
+                self.tags.insert(&category, &t);
+                true
+            }
+            None => false,
+        }
     }
 
-    pub fn tag_remove(
-        &mut self,
-        proposal_id: ProposalId,
-        category: TagCategory,
-        id: TagId,
-    ) -> bool {
-        unimplemented!();
-
-        //match self.tags.get(&category) {
-        //    Some(mut t) => {
-        //        t.remove(id);
-        //        self.tags.insert(&category, &t);
-        //    }
-        //    None => (),
-        //}
-        //true
+    pub fn tag_remove(&mut self, category: String, id: u16) -> bool {
+        match self.tags.get(&category) {
+            Some(mut t) => {
+                t.remove(id);
+                self.tags.insert(&category, &t);
+                true
+            }
+            None => false,
+        }
     }
 
     /// Internally sends `group_id`'s FT `amount` to the `account_ids`.

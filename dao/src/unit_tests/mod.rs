@@ -164,10 +164,10 @@ pub(crate) fn get_default_groups() -> Vec<GroupInput> {
     groups.push(GroupInput {
         settings: GroupSettings {
             name: "council".into(),
-            leader: FOUNDER_1.into(),
+            leader: Some(FOUNDER_1.into()),
         },
         members: members,
-        token_lock: GroupTokenLockInput {
+        token_lock: Some(GroupTokenLockInput {
             amount: 100_000_000,
             start_from: 0,
             duration: 3600,
@@ -178,7 +178,7 @@ pub(crate) fn get_default_groups() -> Vec<GroupInput> {
                 duration: 3600,
                 amount: 90_000_000,
             }],
-        },
+        }),
     });
 
     groups

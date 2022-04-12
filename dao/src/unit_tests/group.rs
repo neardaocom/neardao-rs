@@ -57,17 +57,17 @@ fn add_group() {
     contract.add_group(GroupInput {
         settings: GroupSettings {
             name: "council_rest".into(),
-            leader: FOUNDER_4.into(),
+            leader: Some(FOUNDER_4.into()),
         },
         members: new_group_members.clone(),
-        token_lock: GroupTokenLockInput {
+        token_lock: Some(GroupTokenLockInput {
             amount: 0,
             start_from: 0,
             duration: 0,
             init_distribution: 0,
             unlock_interval: 0,
             periods: vec![],
-        },
+        }),
     });
 
     assert_eq!(contract.total_members_count, 5);

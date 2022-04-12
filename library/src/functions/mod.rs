@@ -573,6 +573,8 @@ mod test {
 
     /****** TEST CASES ******/
 
+    // TODO: Test with nullable object.
+
     #[test]
     fn full_scenario_validation_binding_serialization_complex_1() {
         let metadata = vec![

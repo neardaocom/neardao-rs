@@ -386,13 +386,12 @@ impl Contract {
         }
     }
 
-    /// Trigger function.
     /// Unlocks FT for provided `GroupId`s by internal logic.
     pub fn ft_unlock(&mut self, group_ids: Vec<GroupId>) -> Vec<u32> {
         let mut released = Vec::with_capacity(group_ids.len());
         for id in group_ids.into_iter() {
             if let Some(mut group) = self.groups.get(&id) {
-                released.push(group.unlock_ft(env::block_timestamp()));
+                released.push(group.unlock_ft(env::block_timestamp() / 10u64.pow(9)));
                 self.groups.insert(&id, &group);
             }
         }

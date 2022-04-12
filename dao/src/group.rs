@@ -77,7 +77,7 @@ impl From<Vec<GroupMember>> for GroupMembers {
 #[serde(crate = "near_sdk::serde")]
 pub struct GroupSettings {
     pub name: String,
-    pub leader: String,
+    pub leader: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -98,7 +98,7 @@ pub struct GroupTokenLockInput {
 pub struct GroupInput {
     pub settings: GroupSettings,
     pub members: Vec<GroupMember>,
-    pub token_lock: GroupTokenLockInput,
+    pub token_lock: Option<GroupTokenLockInput>,
 }
 
 #[derive(Serialize)]
@@ -135,21 +135,25 @@ impl Group {
         release_key: T,
         settings: GroupSettings,
         members: Vec<GroupMember>,
-        token_lock: TokenLock,
+        token_lock: Option<TokenLock>,
     ) -> Self {
-        assert!(
-            members.iter().any(|m| settings.leader == m.account_id),
-            "Leader must be contained in group members"
-        );
+        if let Some(ref leader) = settings.leader {
+            assert!(leader.len() > 0, "Leader cannot be empty string.");
+            assert!(
+                members.iter().any(|m| *leader == m.account_id),
+                "Leader must be contained in group members"
+            );
+        }
         Group {
             settings,
             members: members.into(),
-            token_lock: LazyOption::new(release_key.into_storage_key(), Some(&token_lock)),
+            token_lock: LazyOption::new(release_key.into_storage_key(), token_lock.as_ref()),
         }
     }
 
     /// Adds members to the group.
     /// Returns count of new members added.
+    /// New added + overwriten = `members.len()`
     pub fn add_members(&mut self, members: Vec<GroupMember>) -> u32 {
         let mut new_added = 0;
         for m in members.into_iter() {
@@ -160,49 +164,41 @@ impl Group {
         new_added
     }
 
+    /// Removes member from group.
+    /// If the member is leader, then group leader is removed from it's settings.
     pub fn remove_member(&mut self, account_id: AccountId) -> Option<GroupMember> {
+        if let Some(ref leader) = self.settings.leader {
+            if account_id == *leader {
+                self.settings.leader = None;
+            }
+        }
+
         self.members.remove_member(account_id)
     }
 
-    //TODO test if storage removed properly
+    /// Removes storage used by the group.
+    /// ATM it's only TokenLock that is taking the storage.
     pub fn remove_storage_data(&mut self) -> TokenLock {
         let token_lock = self.token_lock.get().unwrap();
         self.token_lock.remove();
         token_lock
     }
 
-    // TODO: fix
-    pub fn unlock_ft(&mut self, current_time: u64) -> u32 {
-        todo!()
-        /*         let mut release = self.release.get().unwrap();
-        let (model, mut db): (ReleaseModel, ReleaseDb) =
-            (release.model.into(), release.data.into());
+    /// Unlocks locked FT for self.
+    /// `current_timestamp` must be in seconds.
+    pub fn unlock_ft(&mut self, current_timestamp: u64) -> u32 {
+        let mut tl = self.token_lock.get().unwrap();
 
-        if db.total == db.unlocked {
+        if tl.amount == tl.unlocked {
             return 0;
         }
 
-        //TODO
-        let total_released_now = model.release(
-            db.total,
-            db.init_distribution,
-            db.unlocked,
-            (current_time / 10u64.pow(9)) as u32,
-        );
+        let unlocked = tl.unlock(current_timestamp);
 
-        let unlocked = if total_released_now > 0 {
-            let delta = total_released_now - (db.unlocked - db.init_distribution);
-            db.unlocked += delta;
-            delta
-        } else {
-            total_released_now
-        };
+        assert!(tl.amount >= tl.unlocked, "Unlocking overflow error.");
 
-        release.model = VReleaseModel::Curr(model);
-        release.data = VReleaseDb::Curr(db);
-
-        self.release.set(&release);
-        unlocked */
+        self.token_lock.set(&tl);
+        unlocked
     }
 
     pub fn get_members_accounts(&self) -> Vec<AccountId> {

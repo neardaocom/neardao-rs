@@ -14,8 +14,8 @@ use crate::{
     core::{ActivityLog, Contract},
     error::{
         ActionError, ActivityError, ERR_DISTRIBUTION_ACC_EMPTY, ERR_DISTRIBUTION_MIN_VALUE,
-        ERR_DISTRIBUTION_NOT_ENOUGH_FT, ERR_GROUP_NOT_FOUND, ERR_LOCK_AMOUNT_OVERFLOW,
-        ERR_STORAGE_BUCKET_EXISTS,
+        ERR_DISTRIBUTION_NOT_ENOUGH_FT, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
+        ERR_LOCK_AMOUNT_OVERFLOW, ERR_STORAGE_BUCKET_EXISTS,
     },
     group::{Group, GroupInput, GroupMember, GroupMembers, GroupSettings, GroupTokenLockInput},
     helper::{
@@ -196,10 +196,16 @@ impl Contract {
                     _ => panic!("{}", ERR_GROUP_NOT_FOUND),
                 },
                 ActivityRight::GroupLeader(g) => match self.groups.get(g) {
-                    Some(group) => match group.settings.leader == *account_id {
-                        true => return true,
-                        false => continue,
-                    },
+                    Some(group) => {
+                        if let Some(leader) = group.settings.leader {
+                            match leader == *account_id {
+                                true => return true,
+                                false => continue,
+                            }
+                        } else {
+                            panic!("{}", ERR_GROUP_HAS_NO_LEADER);
+                        }
+                    }
                     _ => panic!("{}", ERR_GROUP_NOT_FOUND),
                 },
                 //TODO only group members
@@ -368,32 +374,36 @@ impl Contract {
     /// Adds new Group with TokenLock.
     /// Updates DAO's `ft_total_locked` amount and `total_members_count` values.
     pub fn add_group(&mut self, group: GroupInput) {
-        self.ft_total_locked += group.token_lock.amount;
         // Already counted members still counts as new.
         self.total_members_count += group.members.len() as u32;
 
-        // Check if dao has enough free tokens to distribute ft
-        if group.token_lock.init_distribution > 0 {
-            assert!(
-                group.token_lock.init_distribution
-                    <= self.ft_total_supply - self.ft_total_locked - self.ft_total_distributed,
-                "{}",
-                ERR_DISTRIBUTION_NOT_ENOUGH_FT
-            );
-            self.distribute_ft(
-                group.token_lock.init_distribution,
-                &group
-                    .members
-                    .iter()
-                    .map(|member| member.account_id.clone())
-                    .collect::<Vec<AccountId>>(), //TODO optimalize
-            );
-        }
+        let token_lock = if let Some(tl) = group.token_lock {
+            self.ft_total_locked += tl.amount;
 
-        let token_lock: TokenLock = group
-            .token_lock
-            .try_into()
-            .expect("Failed to create TokenLock.");
+            // Check if dao has enough free tokens to distribute ft
+            if tl.init_distribution > 0 {
+                assert!(
+                    tl.init_distribution
+                        <= self.ft_total_supply - self.ft_total_locked - self.ft_total_distributed,
+                    "{}",
+                    ERR_DISTRIBUTION_NOT_ENOUGH_FT
+                );
+                self.distribute_ft(
+                    tl.init_distribution,
+                    &group
+                        .members
+                        .iter()
+                        .map(|member| member.account_id.clone())
+                        .collect::<Vec<AccountId>>(), //TODO optimalize
+                );
+            }
+
+            // TODO: Should return Err<T>
+            let tl: TokenLock = tl.try_into().expect("Failed to create TokenLock.");
+            Some(tl)
+        } else {
+            None
+        };
 
         // Create StorageKey for nested structure
         self.group_last_id += 1;
@@ -668,7 +678,6 @@ impl Contract {
         action_ident: DaoActionIdent,
         inputs: &mut Vec<Vec<DataType>>,
     ) -> Result<(), ActionError> {
-        // Select action
         match action_ident {
             DaoActionIdent::GroupAdd => {
                 let group_input = deserialize_group_input(inputs)?;
@@ -786,10 +795,6 @@ impl Contract {
                 );
                 self.treasury_send_near(receiver, amount);
             }
-            //DaoActionIdent::WorkflowAdd => {
-            //    let wf_id = get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16;
-            //    self.workflow_add(proposal_id, wf_id);
-            //}
             _ => unreachable!(),
         }
 

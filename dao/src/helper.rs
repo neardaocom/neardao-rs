@@ -33,7 +33,7 @@ pub mod deserialize {
     use std::convert::TryFrom;
 
     use super::{get_datatype, get_datatype_from_values};
-    use library::types::DataType;
+    use library::types::{error::TypeError, DataType};
 
     use crate::{
         error::ActionError,
@@ -48,10 +48,16 @@ pub mod deserialize {
     ) -> Result<GroupSettings, ActionError> {
         let first_object = user_inputs.get_mut(obj_idx).ok_or(ActionError::Binding)?;
 
+        let leader = match get_datatype(first_object, 1)? {
+            DataType::Null => None,
+            DataType::String(s) => Some(s),
+            _ => return Err(ActionError::Binding),
+        };
+
         // Settings
         Ok(GroupSettings {
             name: get_datatype(first_object, 0)?.try_into_string()?,
-            leader: get_datatype(first_object, 1)?.try_into_string()?,
+            leader,
         })
     }
 
@@ -109,13 +115,17 @@ pub mod deserialize {
         }
         let token_lock_obj = user_inputs.get_mut(2).ok_or(ActionError::Binding)?;
 
-        let token_lock = GroupTokenLockInput {
-            amount: get_datatype(token_lock_obj, 0)?.try_into_u64()? as u32,
-            start_from: get_datatype(token_lock_obj, 1)?.try_into_u64()?,
-            duration: get_datatype(token_lock_obj, 2)?.try_into_u64()?,
-            init_distribution: get_datatype(token_lock_obj, 3)?.try_into_u64()? as u32,
-            unlock_interval: get_datatype(token_lock_obj, 4)?.try_into_u64()? as u32,
-            periods: unlock_models,
+        let token_lock = if get_datatype(token_lock_obj, 0)? == DataType::Null {
+            None
+        } else {
+            Some(GroupTokenLockInput {
+                amount: get_datatype(token_lock_obj, 0)?.try_into_u64()? as u32,
+                start_from: get_datatype(token_lock_obj, 1)?.try_into_u64()?,
+                duration: get_datatype(token_lock_obj, 2)?.try_into_u64()?,
+                init_distribution: get_datatype(token_lock_obj, 3)?.try_into_u64()? as u32,
+                unlock_interval: get_datatype(token_lock_obj, 4)?.try_into_u64()? as u32,
+                periods: unlock_models,
+            })
         };
 
         Ok(GroupInput {
