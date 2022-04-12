@@ -8,7 +8,6 @@ use library::{
     FnCallId, MethodName,
 };
 use near_sdk::{json_types::ValidAccountId, test_utils::VMContextBuilder};
-use near_sdk_sim::to_yocto;
 
 use crate::{
     core::Contract,
@@ -70,7 +69,7 @@ pub(crate) fn get_context_builder() -> VMContextBuilder {
         .signer_account_id(ValidAccountId::try_from(ISSUER_ACC).unwrap()) // Who started the transaction - DaoFactory in our case
         .predecessor_account_id(ValidAccountId::try_from(ISSUER_ACC).unwrap()) // Previous cross-contract caller, its called directly from DaoFactory so its same as signer
         .current_account_id(ValidAccountId::try_from(OWNER_ACC).unwrap()) // Account owning this smart contract
-        .account_balance(to_yocto("10")); //10 nears
+        .account_balance(10u128.pow(24)); //10 nears
     builder
 }
 

@@ -10,7 +10,7 @@ use near_sdk::{
 near_sdk::setup_alloc!();
 
 ///include binary code of dao contract
-const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../res/dao.wasm");
+const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../../res/dao.wasm");
 
 /// Gas spent on the call & account creation.
 const CREATE_CALL_GAS: u64 = 75_000_000_000_000;

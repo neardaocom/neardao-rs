@@ -1,6 +1,6 @@
 [package]
-name = "dao"
-version = "0.5.0"
+name = "workflow_provider"
+version = "0.1.0"
 edition = "2018"
 
 [lib]
@@ -8,8 +8,7 @@ crate-type = ["cdylib"] # enable rlib for simulations tests, remove in prod
 
 [dependencies]
 near-sdk = "3.1.0"
-near-contract-standards = "3.2.0"
-library = { path = "./../library", version = "0.1.0" }
+library = { path = "./../../library", version = "0.1.0" }
 
 [dev-dependencies]
 near-sdk-sim = "3.2.0"
