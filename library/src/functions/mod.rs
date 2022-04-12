@@ -1,7 +1,4 @@
-use near_sdk::serde_json;
-
 use crate::{
-    storage::StorageBucket,
     types::{
         error::{ProcessingError, SourceError},
         DataType, DataTypeDef,
@@ -10,7 +7,6 @@ use crate::{
         expression::Expression,
         types::{ArgSrc, FnCallMetadata, ValidatorRef, ValidatorType, ValueContainer},
     },
-    Consts,
 };
 
 /// Validates inputs by validator_exprs.
@@ -352,7 +348,7 @@ pub(crate) fn colection_to_json(
 ) {
     let obj_size = metadata[metadata_id].arg_types.len();
     buf.push('[');
-    if user_input[metadata_id].len() > 0 {
+    if !user_input[metadata_id].is_empty() {
         for (i, _) in user_input[metadata_id].iter().enumerate().step_by(obj_size) {
             buf.push_str("{");
             for j in 0..obj_size {

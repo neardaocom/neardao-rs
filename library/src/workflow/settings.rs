@@ -4,7 +4,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::{types::DataType, ObjectValues, TransitionLimit};
+use crate::{types::DataType, TransitionLimit};
 
 use super::types::{ActivityRight, VoteScenario};
 

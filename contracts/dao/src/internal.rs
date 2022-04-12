@@ -1,55 +1,44 @@
-use std::{
-    collections::HashMap,
-    convert::{TryFrom, TryInto},
-};
+use std::{collections::HashMap, convert::TryInto};
 
 use near_sdk::{
     env::{self},
-    serde_json, AccountId, Balance, Promise,
+    AccountId, Promise,
 };
 
 use crate::{
-    callbacks::ext_self,
     constants::{C_DAO_ACC_ID, GLOBAL_BUCKET_IDENT, TGAS},
     core::{ActivityLog, Contract},
     error::{
-        ActionError, ActivityError, ERR_DISTRIBUTION_ACC_EMPTY, ERR_DISTRIBUTION_MIN_VALUE,
+        ActionError, ERR_DISTRIBUTION_ACC_EMPTY, ERR_DISTRIBUTION_MIN_VALUE,
         ERR_DISTRIBUTION_NOT_ENOUGH_FT, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
         ERR_LOCK_AMOUNT_OVERFLOW, ERR_STORAGE_BUCKET_EXISTS,
     },
-    group::{Group, GroupInput, GroupMember, GroupMembers, GroupSettings, GroupTokenLockInput},
+    group::{Group, GroupInput},
     helper::{
         deserialize::{
             deserialize_dao_settings, deserialize_group_input, deserialize_group_members,
             deserialize_group_settings,
         },
-        get_datatype, get_datatype_from_values,
+        get_datatype_from_values,
     },
-    proposal::{Proposal, ProposalState},
+    proposal::Proposal,
     settings::DaoSettings,
     tags::{TagInput, Tags},
-    token_lock::{TokenLock, UnlockMethod, UnlockPeriod},
-    CalculatedVoteResults, InstanceWf, ProposalId, ProposalWf, VoteTotalPossible, Votes,
+    token_lock::TokenLock,
+    CalculatedVoteResults, ProposalId, ProposalWf, VoteTotalPossible, Votes,
 };
 use library::{
     functions::serialize_to_json,
     storage::StorageBucket,
     types::DataType,
     workflow::{
-        activity::{
-            ActionInput, Activity, DaoActionData, Postprocessing, TemplateAction, TemplateActivity,
-            Transition,
-        },
-        expression::Expression,
-        instance::{Instance, InstanceState},
+        activity::{ActionInput, Activity, Postprocessing, TemplateAction, Transition},
+        instance::InstanceState,
         settings::{ActivityBind, TemplateSettings},
         template::Template,
-        types::{
-            ActivityResult, ActivityRight, DaoActionIdent, FnCallMetadata, ValueContainer,
-            VoteScenario,
-        },
+        types::{ActivityRight, DaoActionIdent, FnCallMetadata, VoteScenario},
     },
-    Consts, EventCode, FnCallId, MethodName, ObjectValues, TransitionId,
+    Consts, FnCallId, MethodName,
 };
 
 impl Contract {
@@ -150,7 +139,7 @@ impl Contract {
 
     // TODO unit tests
     pub fn check_rights(&self, rights: &[ActivityRight], account_id: &AccountId) -> bool {
-        if rights.len() == 0 {
+        if rights.is_empty() {
             return true;
         }
 
@@ -247,7 +236,7 @@ impl Contract {
         scenario: &VoteScenario,
         vote_target: &ActivityRight,
     ) -> CalculatedVoteResults {
-        let mut vote_result: Votes = [0 as u128; 3];
+        let mut vote_result: Votes = [0_u128; 3];
         let mut max_possible_amount: VoteTotalPossible = 0;
         match scenario {
             VoteScenario::Democratic => {
@@ -255,7 +244,7 @@ impl Contract {
                     ActivityRight::Anyone => {
                         max_possible_amount = votes.len() as u128;
                     }
-                    ActivityRight::Group(g) => match self.groups.get(&g) {
+                    ActivityRight::Group(g) => match self.groups.get(g) {
                         Some(group) => {
                             max_possible_amount = group.members.members_count() as u128;
                         }
@@ -273,7 +262,7 @@ impl Contract {
                     ActivityRight::Member => {
                         max_possible_amount = self.total_members_count as u128;
                     }
-                    ActivityRight::GroupRole(g, r) => match self.groups.get(&g) {
+                    ActivityRight::GroupRole(g, r) => match self.groups.get(g) {
                         Some(group) => {
                             max_possible_amount =
                                 group.get_members_accounts_by_role(*r).len() as u128;
@@ -316,7 +305,7 @@ impl Contract {
                     }
                 }
                 ActivityRight::Group(gid) => {
-                    let group = self.groups.get(&gid).unwrap();
+                    let group = self.groups.get(gid).unwrap();
                     let members: Vec<AccountId> = group.get_members_accounts();
 
                     // Store it in temp hashmap so we dont have to IO ft_amount for each member again
@@ -332,7 +321,7 @@ impl Contract {
                     }
                 }
                 ActivityRight::GroupRole(gid, rid) => {
-                    let group = self.groups.get(&gid).unwrap();
+                    let group = self.groups.get(gid).unwrap();
                     let members: Vec<AccountId> = group.get_members_accounts_by_role(*rid);
 
                     let mut map = HashMap::with_capacity(members.len());
@@ -419,7 +408,7 @@ impl Contract {
     /// Sets contract's ft_total_distributed property.
     /// Panics if account_ids is empty vector or distribution value is zero.
     pub fn distribute_ft(&mut self, amount: u32, account_ids: &[AccountId]) {
-        assert!(account_ids.len() > 0, "{}", ERR_DISTRIBUTION_ACC_EMPTY);
+        assert!(!account_ids.is_empty(), "{}", ERR_DISTRIBUTION_ACC_EMPTY);
         assert!(
             amount / account_ids.len() as u32 > 0,
             "{}",
@@ -430,8 +419,8 @@ impl Contract {
         let contract_account_id = env::current_account_id();
         for acc in account_ids {
             // If not registered when distributing ft, we register them, assuming storage deposit payment is solved by other mechanisms
-            if !self.ft.accounts.contains_key(&acc) {
-                self.ft.accounts.insert(&acc, &0);
+            if !self.ft.accounts.contains_key(acc) {
+                self.ft.accounts.insert(acc, &0);
             }
 
             self.ft
@@ -674,7 +663,7 @@ impl Contract {
     /// Inner methods panic when provided malformed inputs - structure/datatype.
     pub fn execute_dao_action(
         &mut self,
-        proposal_id: u32,
+        _proposal_id: u32,
         action_ident: DaoActionIdent,
         inputs: &mut Vec<Vec<DataType>>,
     ) -> Result<(), ActionError> {

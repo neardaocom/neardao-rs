@@ -22,7 +22,7 @@ use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
 use near_sdk::json_types::{ValidAccountId, U128};
 use near_sdk::serde::Serialize;
 use near_sdk::{
-    env, log, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault, Promise,
+    env, log, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault,
     PromiseOrValue,
 };
 
@@ -193,7 +193,7 @@ impl Contract {
             .get(template_settings_id as usize)
             .expect("Undefined settings id");
 
-        assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or(0.into()).0);
+        assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or_else(|| 0.into()).0);
 
         if !self.check_rights(&settings.allowed_proposers, &caller) {
             panic!("You have no rights to propose this");
@@ -258,7 +258,7 @@ impl Contract {
         let (mut proposal, _, wfs) = self.get_wf_and_proposal(proposal_id);
 
         assert!(
-            env::attached_deposit() >= wfs.deposit_vote.unwrap_or(0.into()).0,
+            env::attached_deposit() >= wfs.deposit_vote.unwrap_or_else(|| 0.into()).0,
             "{}",
             "Not enough deposit."
         );
@@ -373,7 +373,7 @@ impl Contract {
 
         if wfi.state == InstanceState::FatalError
             || self.check_rights(
-                &wfs.activity_rights[wfi.current_activity_id as usize - 1].as_slice(),
+                wfs.activity_rights[wfi.current_activity_id as usize - 1].as_slice(),
                 &caller,
             ) && wft.end.contains(&wfi.current_activity_id)
         {

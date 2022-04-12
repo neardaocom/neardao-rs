@@ -1,2 +1,5 @@
 #!/bin/sh
-docker build -t contract-builder .
+
+. env.sh
+
+docker build -t $IMAGE_NAME .

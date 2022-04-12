@@ -4,8 +4,10 @@ use library::workflow::types::FnCallMetadata;
 use library::{FnCallId, MethodName, Version};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap};
+#[allow(unused_imports)]
+use near_sdk::env;
 use near_sdk::serde::Serialize;
-use near_sdk::{env, near_bindgen, BorshStorageKey};
+use near_sdk::{near_bindgen, BorshStorageKey};
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
@@ -31,6 +33,7 @@ pub struct Contract {
 #[near_bindgen]
 impl Contract {
     #[private]
+    #[allow(unused_mut)]
     pub fn workflow_add(
         &mut self,
         workflow: Template,
@@ -55,8 +58,9 @@ impl Contract {
             .insert(&self.last_wf_id, &(fncalls, vec![]));
     }
 
-    #[private]
     /// Adds fncalls for standard interfaces. Eg. FT Standard NEP-148.
+    #[private]
+    #[allow(unused_mut)]
     pub fn standard_fncalls_add(
         &mut self,
         fncalls: Vec<MethodName>,
@@ -146,24 +150,24 @@ impl Contract {
         self.workflow_fncalls
             .get(&id)
             .map(|(fns, _)| fns)
-            .unwrap_or_else(|| vec![])
+            .unwrap_or_else(Vec::new)
     }
 
     pub fn wf_template_standard_fncalls(self, id: u16) -> Vec<MethodName> {
         self.workflow_fncalls
             .get(&id)
             .map(|(_, fns)| fns)
-            .unwrap_or_else(|| vec![])
+            .unwrap_or_else(Vec::new)
     }
 
     pub fn standard_fn_call_metadata(self, method: String) -> Vec<FnCallMetadata> {
         self.standard_fncall_metadata
             .get(&method)
-            .unwrap_or_else(|| vec![])
+            .unwrap_or_else(Vec::new)
     }
 
     pub fn fncall_metadata(self, id: FnCallId) -> Vec<FnCallMetadata> {
-        self.fncall_metadata.get(&id).unwrap_or_else(|| vec![])
+        self.fncall_metadata.get(&id).unwrap_or_else(Vec::new)
     }
 }
 

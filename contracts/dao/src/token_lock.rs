@@ -2,11 +2,10 @@ use std::convert::TryFrom;
 
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    env,
     serde::{Deserialize, Serialize},
 };
 
-use crate::{derive_from_versioned, derive_into_versioned, group::GroupTokenLockInput};
+use crate::group::GroupTokenLockInput;
 
 #[derive(Deserialize, Serialize, BorshDeserialize, BorshSerialize, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, Copy, Clone))]

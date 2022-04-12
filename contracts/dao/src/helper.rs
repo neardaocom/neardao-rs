@@ -1,4 +1,4 @@
-use std::mem::{self, replace};
+use std::mem::replace;
 
 use library::{types::DataType, ObjectValues};
 
@@ -33,7 +33,7 @@ pub mod deserialize {
     use std::convert::TryFrom;
 
     use super::{get_datatype, get_datatype_from_values};
-    use library::types::{error::TypeError, DataType};
+    use library::types::DataType;
 
     use crate::{
         error::ActionError,

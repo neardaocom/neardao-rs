@@ -3,10 +3,10 @@ use near_sdk::json_types::Base64VecU8;
 use near_sdk::serde::{Deserialize, Serialize};
 
 /******************************************************************************
- * 
+ *
  * Fungible Token Metadata (NEP-148)
  * https://nomicon.io/Standards/FungibleToken/Metadata.html
- * 
+ *
  ******************************************************************************/
 
 pub const FT_METADATA_SPEC: &str = "ft-1.0.0";

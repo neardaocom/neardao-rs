@@ -1,5 +1,7 @@
 #!/bin/bash
 
+## TODO: Automation
+
 ### Workflow template data for Workflow provider
 
 GREEN='\033[0;32m'

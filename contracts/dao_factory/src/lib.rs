@@ -144,7 +144,7 @@ impl DaoFactoryContract {
             "Dao already exists"
         );
 
-        let promise = Promise::new(account_id.clone())
+        let promise = Promise::new(account_id)
             .create_account()
             .deploy_contract(NEWEST_DAO_VERSION.to_vec())
             .transfer(env::attached_deposit());

@@ -80,7 +80,7 @@ impl From<EvalError> for ProcessingError {
 }
 
 impl From<TypeError> for ProcessingError {
-    fn from(e: TypeError) -> Self {
+    fn from(_e: TypeError) -> Self {
         Self::Conversion
     }
 }

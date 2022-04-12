@@ -18,17 +18,19 @@ use crate::proposal::ProposalState;
 use crate::settings::{assert_valid_dao_settings, DaoSettings};
 use crate::tags::Tags;
 use crate::token_lock::TokenLock;
-use crate::{core::*, group, GroupId, TagId};
+use crate::{core::*, GroupId, TagId};
 
 #[near_bindgen]
 impl Contract {
     /// Testing method
+    #[allow(unused_mut)]
     pub fn run_action(&mut self, action_type: DaoActionIdent, mut args: ObjectValues) {
         self.execute_dao_action(0, action_type, &mut args).unwrap();
     }
 
-    #[payable]
     // TODO: Auto-finish WF then there is no other possible transition regardless terminality.
+    #[payable]
+    #[allow(unused_mut)]
     pub fn wf_run_activity(
         &mut self,
         proposal_id: u32,
@@ -325,7 +327,7 @@ impl Contract {
             );
 
             // Check input validators
-            if tpl_action.input_validators.len() > 0 {
+            if !tpl_action.input_validators.is_empty() {
                 if !validate(
                     &sources,
                     tpl_action.input_validators.as_slice(),
@@ -545,7 +547,7 @@ impl Contract {
             let input_defs = action_data.inputs_definitions.as_slice();
 
             // Check input validators
-            if tpl_action.input_validators.len() > 0 {
+            if !tpl_action.input_validators.is_empty() {
                 if !validate(
                     &sources,
                     tpl_action.input_validators.as_slice(),
@@ -615,52 +617,45 @@ impl Contract {
         true
     }
     pub fn group_remove(&mut self, id: GroupId) -> bool {
-        match self.groups.remove(&id) {
-            Some(mut group) => {
-                let token_lock: TokenLock = group.remove_storage_data().into();
-                self.ft_total_locked -= token_lock.amount - token_lock.distributed;
-                self.total_members_count -= group.members.members_count() as u32;
-            }
-            _ => (),
+        if let Some(mut group) = self.groups.remove(&id) {
+            let token_lock: TokenLock = group.remove_storage_data().into();
+            self.ft_total_locked -= token_lock.amount - token_lock.distributed;
+            self.total_members_count -= group.members.members_count() as u32;
+            true
+        } else {
+            false
         }
-
-        true
     }
 
     pub fn group_update(&mut self, id: GroupId, settings: GroupSettings) -> bool {
-        match self.groups.get(&id) {
-            Some(mut group) => {
-                group.settings = settings;
-                self.groups.insert(&id, &group);
-            }
-            _ => (),
+        if let Some(mut group) = self.groups.get(&id) {
+            group.settings = settings;
+            self.groups.insert(&id, &group);
+            true
+        } else {
+            false
         }
-
-        true
     }
 
     pub fn group_add_members(&mut self, id: GroupId, members: Vec<GroupMember>) -> bool {
-        match self.groups.get(&id) {
-            Some(mut group) => {
-                self.total_members_count += group.add_members(members);
-                self.groups.insert(&id, &group);
-            }
-            _ => (),
+        if let Some(mut group) = self.groups.get(&id) {
+            self.total_members_count += group.add_members(members);
+            self.groups.insert(&id, &group);
+            true
+        } else {
+            false
         }
-        true
     }
 
     pub fn group_remove_member(&mut self, id: GroupId, member: AccountId) -> bool {
-        match self.groups.get(&id) {
-            Some(mut group) => {
-                group.remove_member(member);
-                self.total_members_count -= 1;
-                self.groups.insert(&id, &group);
-            }
-            _ => (),
+        if let Some(mut group) = self.groups.get(&id) {
+            group.remove_member(member);
+            self.total_members_count -= 1;
+            self.groups.insert(&id, &group);
+            true
+        } else {
+            false
         }
-
-        true
     }
 
     pub fn settings_update(&mut self, settings: DaoSettings) {
@@ -670,7 +665,7 @@ impl Contract {
 
     /// Returns tuple of start, end index for the new tags
     pub fn tag_add(&mut self, category: String, tags: Vec<String>) -> Option<(TagId, TagId)> {
-        let mut t = self.tags.get(&category).unwrap_or(Tags::new());
+        let mut t = self.tags.get(&category).unwrap_or_else(Tags::new);
         let ids = t.insert(tags);
         self.tags.insert(&category, &t);
         ids
@@ -706,7 +701,7 @@ impl Contract {
         account_ids: Vec<AccountId>,
     ) -> bool {
         if let Some(mut group) = self.groups.get(&group_id) {
-            match group.distribute_ft(amount) && account_ids.len() > 0 {
+            match group.distribute_ft(amount) && !account_ids.is_empty() {
                 true => {
                     self.groups.insert(&group_id, &group);
                     self.distribute_ft(amount, &account_ids);
@@ -741,7 +736,7 @@ impl Contract {
                     "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":\"{}\",\"msg\":\"{}\"}}",
                     receiver_id,
                     amount,
-                    memo.unwrap_or("null".into()),
+                    memo.unwrap_or_else(|| "null".into()),
                     msg.unwrap_or_default(),
                 )
                 .as_bytes()
@@ -756,7 +751,7 @@ impl Contract {
                     "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":\"{}\"}}",
                     receiver_id,
                     amount,
-                    memo.unwrap_or("null".into()),
+                    memo.unwrap_or_else(|| "null".into()),
                 )
                 .as_bytes()
                 .to_vec(),
@@ -786,7 +781,7 @@ impl Contract {
                 receiver_id,
                 nft_id,
                 approval_id,
-                memo.unwrap_or("null".into()),
+                memo.unwrap_or_else(|| "null".into()),
                 msg.unwrap_or_default(),
                 )
                 .as_bytes()
@@ -801,7 +796,7 @@ impl Contract {
                     receiver_id,
                     nft_id,
                     approval_id,
-                    memo.unwrap_or("null".into()),
+                    memo.unwrap_or_else(|| "null".into()),
                     )
                     .as_bytes()
                     .to_vec(),

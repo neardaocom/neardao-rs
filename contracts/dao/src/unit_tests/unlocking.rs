@@ -4,7 +4,7 @@ use crate::{
     constants::MAX_FT_TOTAL_SUPPLY,
     create_val_to_percent_closure,
     group::GroupTokenLockInput,
-    token_lock::{UnlockMethod, TokenLock, UnlockPeriod, UnlockPeriodInput},
+    token_lock::{TokenLock, UnlockMethod, UnlockPeriod, UnlockPeriodInput},
     unit_tests::DURATION_1Y_S,
 };
 
@@ -108,7 +108,7 @@ fn release_complex() {
     assert_eq!(tl.amount, TOTAL_AMOUNT);
     assert_eq!(tl.unlocked, TOTAL_AMOUNT);
     assert_eq!(tl.distributed, TOTAL_AMOUNT / 8);
-    
+
     // Try to unlock when all FT has already been unlocked.
     assert_eq!(tl.unlock(2000), 0);
 

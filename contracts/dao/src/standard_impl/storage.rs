@@ -1,14 +1,16 @@
-use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds, StorageManagement};
+use near_contract_standards::storage_management::{
+    StorageBalance, StorageBalanceBounds, StorageManagement,
+};
 use near_sdk::json_types::{ValidAccountId, U128};
 use near_sdk::{assert_one_yocto, env, log, AccountId, Balance, Promise};
 
 use super::ft::FungibleToken;
 
 /******************************************************************************
- * 
+ *
  * Storage Management (NEP-145)
  * https://nomicon.io/Standards/StorageManagement.html
- * 
+ *
  ******************************************************************************/
 
 impl FungibleToken {
@@ -37,7 +39,10 @@ impl FungibleToken {
 
     fn internal_storage_balance_of(&self, account_id: &AccountId) -> Option<StorageBalance> {
         if self.accounts.contains_key(account_id) {
-            Some(StorageBalance { total: self.storage_balance_bounds().min, available: 0.into() })
+            Some(StorageBalance {
+                total: self.storage_balance_bounds().min,
+                available: 0.into(),
+            })
         } else {
             None
         }
@@ -53,8 +58,9 @@ impl StorageManagement for FungibleToken {
         registration_only: Option<bool>,
     ) -> StorageBalance {
         let amount: Balance = env::attached_deposit();
-        let account_id =
-            account_id.map(|a| a.into()).unwrap_or_else(|| env::predecessor_account_id());
+        let account_id = account_id
+            .map(|a| a.into())
+            .unwrap_or_else(|| env::predecessor_account_id());
         if self.accounts.contains_key(&account_id) {
             log!("The account is already registered, refunding the deposit");
             if amount > 0 {

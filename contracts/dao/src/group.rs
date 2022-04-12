@@ -3,13 +3,11 @@ use std::collections::HashMap;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::LazyOption,
-    env,
     serde::{Deserialize, Serialize},
     AccountId, IntoStorageKey,
 };
 
-use crate::token_lock::{TokenLock, UnlockMethod, UnlockPeriodInput};
-use crate::{error::ERR_INVALID_AMOUNT, token_lock::UnlockPeriod};
+use crate::token_lock::{TokenLock, UnlockPeriodInput};
 use crate::{GroupId, TagId};
 
 #[derive(Serialize, Deserialize)]
@@ -34,17 +32,13 @@ impl GroupMembers {
     /// Overrides existing.
     /// Returns false if the member was not in the group before.
     pub fn add_member(&mut self, member: GroupMember) -> bool {
-        match self.0.insert(member.account_id, member.tags) {
-            Some(_) => true,
-            None => false,
-        }
+        self.0.insert(member.account_id, member.tags).is_some()
     }
 
     pub fn remove_member(&mut self, account_id: AccountId) -> Option<GroupMember> {
-        match self.0.remove(&account_id) {
-            Some(tags) => Some(GroupMember { account_id, tags }),
-            _ => None,
-        }
+        self.0
+            .remove(&account_id)
+            .map(|tags| GroupMember { account_id, tags })
     }
 
     pub fn members_count(&self) -> usize {
@@ -138,7 +132,7 @@ impl Group {
         token_lock: Option<TokenLock>,
     ) -> Self {
         if let Some(ref leader) = settings.leader {
-            assert!(leader.len() > 0, "Leader cannot be empty string.");
+            assert!(!leader.is_empty(), "Leader cannot be empty string.");
             assert!(
                 members.iter().any(|m| *leader == m.account_id),
                 "Leader must be contained in group members"

@@ -3,14 +3,8 @@ use std::{
     fmt::{self, Display},
 };
 
-use library::{
-    types::error::{ProcessingError, TypeError},
-    workflow::activity,
-};
-use near_sdk::{
-    serde::{self, Serialize},
-    serde_json::Error as SerdeError,
-};
+use library::types::error::{ProcessingError, TypeError};
+use near_sdk::{serde::Serialize, serde_json::Error as SerdeError};
 
 pub const ERR_INVALID_AMOUNT: &str = "Invalid amount";
 pub const ERR_NO_ACCESS: &str = "You have no rights for this action";
@@ -135,13 +129,13 @@ impl Display for ActionError {
 impl Error for ActionError {}
 
 impl From<TypeError> for ActionError {
-    fn from(error: TypeError) -> Self {
+    fn from(_: TypeError) -> Self {
         Self::InvalidDataType
     }
 }
 
 impl From<SerdeError> for ActionError {
-    fn from(error: SerdeError) -> Self {
+    fn from(_: SerdeError) -> Self {
         Self::SerDe
     }
 }
@@ -150,8 +144,8 @@ impl From<ProcessingError> for ActionError {
     fn from(error: ProcessingError) -> Self {
         match error {
             ProcessingError::Conversion => Self::InvalidDataType,
-            ProcessingError::Source(e) => Self::InvalidWfStructure,
-            ProcessingError::Eval(e) => Self::InvalidWfStructure,
+            ProcessingError::Source(_) => Self::InvalidWfStructure,
+            ProcessingError::Eval(_) => Self::InvalidWfStructure,
             ProcessingError::UserInput(pos) => Self::InputStructure(pos),
             ProcessingError::Unreachable => Self::InvalidWfStructure,
         }
