@@ -10,8 +10,5 @@ crate-type = ["cdylib"] # enable rlib for simulations tests, remove in prod
 near-sdk = "3.1.0"
 library = { path = "./../../library", version = "0.1.0" }
 
-[dev-dependencies]
-near-sdk-sim = "3.2.0"
-
 [features]
 testnet = []

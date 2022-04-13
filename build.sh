@@ -28,7 +28,7 @@ if [ ! -z "$1" -a -d "${ABS_BASEDIR}/contracts/${1}" ]; then
 else
     echo "BUILD SCRIPT: Building all libs into res dir"
 
-    RUSTFLAGS='-C link-arg=-s' cargo build --all --target wasm32-unknown-unknown --release
+    RUSTFLAGS='-C link-arg=-s' cargo build --workspace --target wasm32-unknown-unknown --release
 
     for lib in "${CRATES[@]}"
     do

@@ -14,8 +14,5 @@ near-contract-standards = "3.2.0"
 [dependencies.dao]
 path = "../dao"
 
-[dev-dependencies]
-near-sdk-sim = "3.2.0"
-
 [features]
 testnet = []
