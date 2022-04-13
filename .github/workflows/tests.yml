@@ -52,7 +52,7 @@ jobs:
           toolchain: 1.58.0
           override: true
           components: clippy
-      - uses: actions-rs/clippy@master
+      - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: -- -D warnings
