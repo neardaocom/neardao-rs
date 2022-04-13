@@ -47,7 +47,7 @@ impl Contract {
 
         for fncall in fncalls.iter().rev() {
             self.fncall_metadata
-                .insert(&fncall, &(fncall_metadata.pop().unwrap()));
+                .insert(fncall, &(fncall_metadata.pop().unwrap()));
         }
 
         if let Some(help) = help {
@@ -70,7 +70,7 @@ impl Contract {
 
         for fncall in fncalls.iter().rev() {
             self.standard_fncall_metadata
-                .insert(&fncall, &(fncall_metadata.pop().unwrap()));
+                .insert(fncall, &(fncall_metadata.pop().unwrap()));
         }
     }
 
@@ -86,6 +86,7 @@ impl Contract {
     }
 
     /// Returns Workflow with corresponding FnCalls and their metadata
+    #[allow(clippy::type_complexity)]
     pub fn wf_template(
         self,
         id: u16,

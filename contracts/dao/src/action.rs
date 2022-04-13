@@ -31,6 +31,7 @@ impl Contract {
     // TODO: Auto-finish WF then there is no other possible transition regardless terminality.
     #[payable]
     #[allow(unused_mut)]
+    #[allow(clippy::nonminimal_bool)]
     pub fn wf_run_activity(
         &mut self,
         proposal_id: u32,
@@ -125,7 +126,7 @@ impl Contract {
         if !activity.automatic {
             // Check rights
             assert!(
-                self.check_rights(&wfs.activity_rights[activity_id].as_slice(), &caller),
+                self.check_rights(wfs.activity_rights[activity_id].as_slice(), &caller),
                 "No rights."
             );
         }
@@ -252,6 +253,7 @@ impl Contract {
 impl Contract {
     /// Tries to run all activity's actions.
     /// Some checks must be done before calling this function.
+    #[allow(clippy::too_many_arguments)]
     pub fn run_dao_activity(
         &mut self,
         caller: AccountId,
@@ -298,13 +300,10 @@ impl Contract {
             let tpl_action = activity.actions.get_mut(idx).unwrap();
 
             // Check exec condition
-            match tpl_action.exec_condition.as_ref() {
-                Some(cond) => {
-                    if !cond.bind_and_eval(&sources, &[])?.try_into_bool()? {
-                        return Err(ActionError::Condition(idx as u8));
-                    }
+            if let Some(cond) = tpl_action.exec_condition.as_ref() {
+                if !cond.bind_and_eval(&sources, &[])?.try_into_bool()? {
+                    return Err(ActionError::Condition(idx as u8));
                 }
-                None => (),
             };
 
             // Assign current action proposal binds to source.
@@ -318,7 +317,7 @@ impl Contract {
 
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                 .try_into_action_data()
-                .ok_or_else(|| ActionError::InvalidWfStructure)?;
+                .ok_or(ActionError::InvalidWfStructure)?;
 
             // Need metadata coz validations and bindings. Metadata are always included in DAO.
             let (metadata, input_defs) = (
@@ -327,16 +326,16 @@ impl Contract {
             );
 
             // Check input validators
-            if !tpl_action.input_validators.is_empty() {
-                if !validate(
+            if !tpl_action.input_validators.is_empty()
+                && !validate(
                     &sources,
                     tpl_action.input_validators.as_slice(),
                     template.validator_exprs.as_slice(),
                     metadata.as_slice(),
                     action.values.as_slice(),
-                )? {
-                    return Err(ActionError::Validation(idx as u8));
-                }
+                )?
+            {
+                return Err(ActionError::Validation(idx as u8));
             }
 
             // Bind DaoAction
@@ -372,7 +371,7 @@ impl Contract {
 
             // TODO: Handle error so we do only part of the batch.
             if let Some(mut pp) = tpl_action.postprocessing.take() {
-                pp.bind_instructions(&sources, &mut action.values)
+                pp.bind_instructions(&sources, action.values.as_slice())
                     .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
                 // TODO: Different execute version for DaoActions?
                 if pp
@@ -394,6 +393,7 @@ impl Contract {
         Ok(())
     }
     /// FnCall version of `run_dao_activity` function.
+    #[allow(clippy::too_many_arguments)]
     pub fn run_fncall_activity(
         &mut self,
         proposal_id: u32,
@@ -453,13 +453,10 @@ impl Contract {
             let tpl_action = activity.actions.get_mut(idx).unwrap();
 
             // Check exec condition
-            match tpl_action.exec_condition.as_ref() {
-                Some(cond) => {
-                    if !cond.bind_and_eval(&sources, &[])?.try_into_bool()? {
-                        return Err(ActionError::Condition(idx as u8));
-                    }
+            if let Some(cond) = tpl_action.exec_condition.as_ref() {
+                if !cond.bind_and_eval(&sources, &[])?.try_into_bool()? {
+                    return Err(ActionError::Condition(idx as u8));
                 }
-                None => (),
             };
 
             // Assign current action proposal binds to source.
@@ -473,7 +470,7 @@ impl Contract {
 
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                 .try_into_fncall_data()
-                .ok_or_else(|| ActionError::InvalidWfStructure)?;
+                .ok_or(ActionError::InvalidWfStructure)?;
 
             // TODO: Reduce cloning.
             // Metadata are provided by workflow provider when workflow is added. Missing metadata are fault of the workflow provider and are considered as fatal runtime error.
@@ -486,7 +483,7 @@ impl Contract {
                             method.clone(),
                             self.function_call_metadata
                                 .get(&(name.clone(), method.clone()))
-                                .ok_or_else(|| ActionError::MissingFnCallMetadata(method))?,
+                                .ok_or(ActionError::MissingFnCallMetadata(method))?,
                         )
                     } else {
                         (
@@ -494,20 +491,20 @@ impl Contract {
                             method.clone(),
                             self.function_call_metadata
                                 .get(&(account, method.clone()))
-                                .ok_or_else(|| ActionError::MissingFnCallMetadata(method))?,
+                                .ok_or(ActionError::MissingFnCallMetadata(method))?,
                         )
                     }
                 }
                 FnCallIdType::Dynamic(arg_src, method) => {
                     let name = get_value_from_source(&arg_src, &sources)
-                        .map_err(|e| ProcessingError::Source(e))?
+                        .map_err(ProcessingError::Source)?
                         .try_into_string()?;
                     (
                         name.clone(),
                         method.clone(),
                         self.function_call_metadata
                             .get(&(name.clone(), method.clone()))
-                            .ok_or_else(|| ActionError::MissingFnCallMetadata(method))?,
+                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
                     )
                 }
                 FnCallIdType::StandardStatic((account, method)) => {
@@ -518,7 +515,7 @@ impl Contract {
                             method.clone(),
                             self.standard_function_call_metadata
                                 .get(&method.clone())
-                                .ok_or_else(|| ActionError::MissingFnCallMetadata(method))?,
+                                .ok_or(ActionError::MissingFnCallMetadata(method))?,
                         )
                     } else {
                         (
@@ -526,20 +523,20 @@ impl Contract {
                             method.clone(),
                             self.function_call_metadata
                                 .get(&(account, method.clone()))
-                                .ok_or_else(|| ActionError::MissingFnCallMetadata(method))?,
+                                .ok_or(ActionError::MissingFnCallMetadata(method))?,
                         )
                     }
                 }
                 FnCallIdType::StandardDynamic(arg_src, method) => {
                     let name = get_value_from_source(&arg_src, &sources)
-                        .map_err(|e| ProcessingError::Source(e))?
+                        .map_err(ProcessingError::Source)?
                         .try_into_string()?;
                     (
                         name.clone(),
                         method.clone(),
                         self.standard_function_call_metadata
                             .get(&name)
-                            .ok_or_else(|| ActionError::MissingFnCallMetadata(method))?,
+                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
                     )
                 }
             };
@@ -547,16 +544,16 @@ impl Contract {
             let input_defs = action_data.inputs_definitions.as_slice();
 
             // Check input validators
-            if !tpl_action.input_validators.is_empty() {
-                if !validate(
+            if !tpl_action.input_validators.is_empty()
+                && !validate(
                     &sources,
                     tpl_action.input_validators.as_slice(),
                     template.validator_exprs.as_slice(),
                     metadata.as_slice(),
                     action.values.as_slice(),
-                )? {
-                    return Err(ActionError::Validation(idx as u8));
-                }
+                )?
+            {
+                return Err(ActionError::Validation(idx as u8));
             }
 
             // Bind DaoAction
@@ -578,7 +575,7 @@ impl Contract {
             let args = serialize_to_json(action.values.as_slice(), metadata.as_slice(), 0);
 
             let pp = if let Some(mut pp) = tpl_action.postprocessing.take() {
-                pp.bind_instructions(&sources, &mut action.values)
+                pp.bind_instructions(&sources, action.values.as_slice())
                     .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
                 Some(pp)
             } else {
@@ -618,7 +615,7 @@ impl Contract {
     }
     pub fn group_remove(&mut self, id: GroupId) -> bool {
         if let Some(mut group) = self.groups.remove(&id) {
-            let token_lock: TokenLock = group.remove_storage_data().into();
+            let token_lock: TokenLock = group.remove_storage_data();
             self.ft_total_locked -= token_lock.amount - token_lock.distributed;
             self.total_members_count -= group.members.members_count() as u32;
             true
@@ -701,16 +698,16 @@ impl Contract {
         account_ids: Vec<AccountId>,
     ) -> bool {
         if let Some(mut group) = self.groups.get(&group_id) {
-            match group.distribute_ft(amount) && !account_ids.is_empty() {
-                true => {
-                    self.groups.insert(&group_id, &group);
-                    self.distribute_ft(amount, &account_ids);
-                }
-                _ => (),
+            if group.distribute_ft(amount) && !account_ids.is_empty() {
+                self.groups.insert(&group_id, &group);
+                self.distribute_ft(amount, &account_ids);
+                true
+            } else {
+                false
             }
+        } else {
+            false
         }
-
-        true
     }
 
     // TODO: Move to standard fncalls.
@@ -764,6 +761,7 @@ impl Contract {
     }
 
     // TODO: Move to standard fncalls.
+    #[allow(clippy::too_many_arguments)]
     pub fn treasury_send_nft(
         &mut self,
         nft_account_id: AccountId,

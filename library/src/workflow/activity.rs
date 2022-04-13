@@ -33,10 +33,7 @@ pub enum Activity {
 
 impl Activity {
     pub fn is_dao_activity(&self) -> bool {
-        match self {
-            Self::DaoActivity(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::DaoActivity(_))
     }
 }
 
@@ -51,9 +48,9 @@ impl Activity {
 
     pub fn activity_as_ref(&self) -> Option<&TemplateActivity> {
         match self {
-            &Activity::Init => None,
-            &Activity::DaoActivity(ref a) => Some(a),
-            &Activity::FnCallActivity(ref a) => Some(a),
+            Activity::Init => None,
+            Activity::DaoActivity(ref a) => Some(a),
+            Activity::FnCallActivity(ref a) => Some(a),
         }
     }
 
@@ -96,7 +93,7 @@ impl TemplateActivity {
     pub fn get_dao_action_type(&self, id: u8) -> Option<DaoActionIdent> {
         match self.actions.get(id as usize) {
             Some(action) => match &action.action_data {
-                ActionData::Action(a) => Some(a.name.clone()),
+                ActionData::Action(a) => Some(a.name),
                 _ => None,
             },
             None => None,
@@ -251,10 +248,11 @@ impl Postprocessing {
     /// Same is valid for variants with opposite *Binded
     /// Supposed to be called before dispatching FnCall action.
     /// Returns `Err(())` in case users's input structure is not correct.
+    #[allow(clippy::result_unit_err)]
     pub fn bind_instructions<T: AsRef<[DataType]>>(
         &mut self,
         value_source: &ValueContainer<T>,
-        user_input: &Vec<Vec<DataType>>,
+        user_input: &[Vec<DataType>],
     ) -> Result<(), ()> {
         // TODO: Improve.
         for ins in self.instructions.iter_mut() {
@@ -310,6 +308,8 @@ impl Postprocessing {
         Ok(())
     }
     /// Executes postprocessing script.
+    #[allow(clippy::type_complexity)]
+    #[allow(clippy::result_unit_err)]
     pub fn execute(
         mut self,
         fn_result_val: Vec<u8>,
@@ -329,22 +329,22 @@ impl Postprocessing {
             let mut ins = std::mem::replace(&mut self.instructions[i], Instruction::None);
             match &mut ins {
                 Instruction::DeleteKey(key) => {
-                    storage.as_mut().unwrap().remove_data(&key);
+                    storage.as_mut().unwrap().remove_data(key);
                 }
                 Instruction::DeleteKeyGlobal(key) => {
-                    global_storage.remove_data(&key);
+                    global_storage.remove_data(key);
                 }
                 Instruction::StoreValue(key, value) => {
-                    storage.as_mut().unwrap().add_data(&key, &value)
+                    storage.as_mut().unwrap().add_data(key, value)
                 }
-                Instruction::StoreValueGlobal(key, value) => global_storage.add_data(&key, &value),
+                Instruction::StoreValueGlobal(key, value) => global_storage.add_data(key, value),
                 Instruction::StoreFnCallResult(key, type_def) => {
-                    let result = self.deser_datatype_from_slice(&type_def, &fn_result_val)?;
-                    storage.as_mut().unwrap().add_data(&key, &result);
+                    let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
+                    storage.as_mut().unwrap().add_data(key, &result);
                 }
                 Instruction::StoreFnCallResultGlobal(key, type_def) => {
-                    let result = self.deser_datatype_from_slice(&type_def, &fn_result_val)?;
-                    global_storage.add_data(&key, &result);
+                    let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
+                    global_storage.add_data(key, &result);
                 }
                 Instruction::StoreWorkflow => {
                     let (workflow, fncalls, fncall_metadata, std_fncalls, std_fncall_metadata): (
@@ -363,12 +363,12 @@ impl Postprocessing {
                         std_fncall_metadata,
                     ))
                 }
-                Instruction::StoreExpression(_, _, _, _) => Err(())?,
-                Instruction::StoreExpressionGlobal(_, _, _, _) => Err(())?,
+                Instruction::StoreExpression(_, _, _, _) => return Err(()),
+                Instruction::StoreExpressionGlobal(_, _, _, _) => return Err(()),
                 Instruction::CondBinded(values, cond, required_fncall_result) => {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
-                        let result = self.deser_datatype_from_slice(&type_def, &fn_result_val)?;
+                        let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
                         values.push(result);
                     }
 
@@ -385,18 +385,18 @@ impl Postprocessing {
                     i = next_ins;
                     continue;
                 }
-                Instruction::StoreDynValue(_, _) => Err(())?,
-                Instruction::Cond(_, _, _) => Err(())?,
+                Instruction::StoreDynValue(_, _) => return Err(()),
+                Instruction::Cond(_, _, _) => return Err(()),
                 Instruction::None => continue,
                 Instruction::StoreExpressionBinded(key, values, expr, required_fncall_result) => {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
-                        let result = self.deser_datatype_from_slice(&type_def, &fn_result_val)?;
+                        let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
                         values.push(result);
                     }
 
                     let result = expr.eval(values.as_slice()).map_err(|_| ())?;
-                    storage.as_mut().unwrap().add_data(&key, &result);
+                    storage.as_mut().unwrap().add_data(key, &result);
 
                     values.pop();
                 }
@@ -408,12 +408,12 @@ impl Postprocessing {
                 ) => {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
-                        let result = self.deser_datatype_from_slice(&type_def, &fn_result_val)?;
+                        let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
                         values.push(result);
                     }
 
                     let result = expr.eval(values.as_slice()).map_err(|_| ())?;
-                    global_storage.add_data(&key, &result);
+                    global_storage.add_data(key, &result);
 
                     values.pop();
                 }
@@ -427,10 +427,11 @@ impl Postprocessing {
         Ok(())
     }
 
+    #[allow(clippy::result_unit_err)]
     fn deser_datatype_from_slice(
         &self,
         type_def: &DataTypeDef,
-        promise_result_data: &Vec<u8>,
+        promise_result_data: &[u8],
     ) -> Result<DataType, ()> {
         match type_def {
             DataTypeDef::String(_) => {
@@ -466,9 +467,10 @@ impl Postprocessing {
     }
 }
 
+#[allow(clippy::result_unit_err)]
 fn bind_value<T: AsRef<[DataType]>>(
     arg_src: &ArgSrc,
-    user_input: &Vec<Vec<DataType>>,
+    user_input: &[Vec<DataType>],
     value_source: &ValueContainer<T>,
 ) -> Result<DataType, ()> {
     let value = match arg_src {

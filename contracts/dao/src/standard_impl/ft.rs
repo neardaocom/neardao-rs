@@ -112,7 +112,7 @@ impl FungibleToken {
     }
 
     pub fn internal_unwrap_balance_of(&self, account_id: &AccountId) -> Balance {
-        match self.accounts.get(&account_id) {
+        match self.accounts.get(account_id) {
             Some(balance) => balance,
             None => {
                 if env::predecessor_account_id() == env::current_account_id() {
@@ -130,7 +130,7 @@ impl FungibleToken {
             if balance == 0 && new_balance > 0 {
                 self.token_holders_count += 1;
             }
-            self.accounts.insert(&account_id, &new_balance);
+            self.accounts.insert(account_id, &new_balance);
             self.total_supply = self
                 .total_supply
                 .checked_add(amount)
@@ -146,7 +146,7 @@ impl FungibleToken {
             if new_balance == 0 {
                 self.token_holders_count -= 1;
             }
-            self.accounts.insert(&account_id, &new_balance);
+            self.accounts.insert(account_id, &new_balance);
             self.total_supply = self
                 .total_supply
                 .checked_sub(amount)
@@ -177,7 +177,7 @@ impl FungibleToken {
     }
 
     pub fn internal_register_account(&mut self, account_id: &AccountId) {
-        if self.accounts.insert(&account_id, &0).is_some() {
+        if self.accounts.insert(account_id, &0).is_some() {
             env::panic(b"The account is already registered");
         }
         self.registered_accounts_count += 1;
@@ -265,9 +265,9 @@ impl FungibleToken {
                 self.accounts
                     .insert(&receiver_id, &(receiver_balance - refund_amount));
 
-                if let Some(sender_balance) = self.accounts.get(&sender_id) {
+                if let Some(sender_balance) = self.accounts.get(sender_id) {
                     self.accounts
-                        .insert(&sender_id, &(sender_balance + refund_amount));
+                        .insert(sender_id, &(sender_balance + refund_amount));
                     log!(
                         "Refund {} from {} to {}",
                         refund_amount,

@@ -34,10 +34,7 @@ pub enum ActivityError {
 
 impl ActivityError {
     pub fn is_fatal(&self) -> bool {
-        match self {
-            Self::FatalError(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::FatalError(_))
     }
 }
 

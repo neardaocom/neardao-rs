@@ -53,9 +53,9 @@ impl Display for ProcessingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ProcessingError::Source(e) => {
-                write!(f, "Fetching value from source failed: {}", e.to_string())
+                write!(f, "Fetching value from source failed: {}", e)
             }
-            ProcessingError::Eval(e) => write!(f, "Evaluation failed: {}", e.to_string()),
+            ProcessingError::Eval(e) => write!(f, "Evaluation failed: {}", e),
             ProcessingError::UserInput(id) => write!(f, "Missing value at pos: {}.", id),
             ProcessingError::Conversion => {
                 write!(f, "Converting datatype failed - got invalid datatype.")

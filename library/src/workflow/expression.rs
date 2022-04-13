@@ -38,7 +38,7 @@ impl Expression {
                 _ => binded_args.push(get_value_from_source(arg_src, sources)?),
             }
         }
-        Ok(self.expr.eval(&mut binded_args)?)
+        Ok(self.expr.eval(binded_args.as_slice())?)
     }
 }
 

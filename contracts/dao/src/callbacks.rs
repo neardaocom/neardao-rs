@@ -3,9 +3,9 @@ use near_sdk::{env, ext_contract, near_bindgen, PromiseResult};
 
 use crate::core::*;
 use crate::error::*;
-
 #[ext_contract(ext_self)]
 trait ExtSelf {
+    #[allow(clippy::too_many_arguments)]
     fn postprocess(
         &mut self,
         instance_id: u32,
@@ -24,6 +24,7 @@ impl Contract {
     /// If there's postprocessing, then it's executed.
     /// Postprocessing always requires storage.
     /// Unwrapping is OK as it's been checked before dispatching this promise.
+    #[allow(clippy::too_many_arguments)]
     pub fn postprocess(
         &mut self,
         instance_id: u32,

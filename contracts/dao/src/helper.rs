@@ -1,4 +1,4 @@
-use std::mem::replace;
+use std::mem::take;
 
 use library::{types::DataType, ObjectValues};
 
@@ -7,10 +7,7 @@ use crate::error::ActionError;
 /// Helper method for fetching `DataType` from the object on index idx.
 /// Replaces the value with `DataType`s default value.
 pub fn get_datatype(object: &mut Vec<DataType>, idx: usize) -> Result<DataType, ActionError> {
-    Ok(replace(
-        object.get_mut(idx).ok_or(ActionError::Binding)?,
-        DataType::default(),
-    ))
+    Ok(take(object.get_mut(idx).ok_or(ActionError::Binding)?))
 }
 
 pub fn get_datatype_from_values(
@@ -18,13 +15,12 @@ pub fn get_datatype_from_values(
     obj_idx: usize,
     idx: usize,
 ) -> Result<DataType, ActionError> {
-    Ok(replace(
+    Ok(take(
         object
             .get_mut(obj_idx)
             .ok_or(ActionError::Binding)?
             .get_mut(idx)
             .ok_or(ActionError::Binding)?,
-        DataType::default(),
     ))
 }
 

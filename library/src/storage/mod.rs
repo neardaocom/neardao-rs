@@ -22,14 +22,17 @@ impl StorageBucket {
         self.data.to_vec()
     }
 
+    #[allow(clippy::ptr_arg)]
     pub fn get_data(&self, key: &String) -> Option<DataType> {
         self.data.get(key)
     }
 
+    #[allow(clippy::ptr_arg)]
     pub fn add_data(&mut self, key: &String, data: &DataType) {
         self.data.insert(key, data);
     }
 
+    #[allow(clippy::ptr_arg)]
     pub fn remove_data(&mut self, key: &String) -> Option<DataType> {
         self.data.remove(key)
     }

@@ -98,6 +98,7 @@ pub struct Contract {
 
 #[near_bindgen]
 impl Contract {
+    #[allow(clippy::too_many_arguments)]
     #[init]
     pub fn new(
         total_supply: u32,
@@ -516,6 +517,7 @@ impl StorageManagement for Contract {
         self.ft.storage_withdraw(amount)
     }
 
+    #[allow(clippy::match_like_matches_macro)]
     #[payable]
     fn storage_unregister(&mut self, force: Option<bool>) -> bool {
         #[allow(unused_variables)]

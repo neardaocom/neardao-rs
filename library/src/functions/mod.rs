@@ -21,14 +21,14 @@ pub fn validate<T: std::convert::AsRef<[DataType]>>(
     for v_ref in validator_refs.iter() {
         let validator = validator_exprs
             .get(v_ref.val_id as usize)
-            .ok_or_else(|| SourceError::InvalidArgId)?;
+            .ok_or(SourceError::InvalidArgId)?;
         let inputs: &[DataType] = &user_input[v_ref.obj_id as usize];
 
         match v_ref.v_type {
             ValidatorType::Simple => {
-                let inputs: &[DataType] = &user_input
+                let inputs: &[DataType] = user_input
                     .get(v_ref.obj_id as usize)
-                    .ok_or_else(|| ProcessingError::UserInput(v_ref.obj_id))?;
+                    .ok_or(ProcessingError::UserInput(v_ref.obj_id))?;
                 if !validator.bind_and_eval(sources, inputs)?.try_into_bool()? {
                     return Ok(false);
                 }
@@ -37,7 +37,7 @@ pub fn validate<T: std::convert::AsRef<[DataType]>>(
             ValidatorType::Collection => {
                 let obj_len = metadata
                     .get(v_ref.obj_id as usize)
-                    .ok_or_else(|| SourceError::InvalidArgId)?
+                    .ok_or(SourceError::InvalidArgId)?
                     .arg_names
                     .len();
                 let collection_size_total = inputs.len();
@@ -70,13 +70,13 @@ pub fn bind_from_sources<T: std::convert::AsRef<[DataType]>>(
     source_metadata: &[Vec<ArgSrc>],
     sources: &ValueContainer<T>,
     expressions: &[Expression],
-    mut user_input: &mut Vec<Vec<DataType>>,
+    user_input: &mut Vec<Vec<DataType>>,
     metadata_pos: usize,
 ) -> Result<(), ProcessingError> {
     let mut result_args = Vec::with_capacity(
         source_metadata
             .get(metadata_pos)
-            .ok_or_else(|| SourceError::InvalidArgId)?
+            .ok_or(SourceError::InvalidArgId)?
             .len(),
     );
 
@@ -99,9 +99,9 @@ pub fn bind_from_sources<T: std::convert::AsRef<[DataType]>>(
             ArgSrc::Expression(expr_id) => result_args.push(
                 expressions
                     .get(*expr_id as usize)
-                    .ok_or_else(|| SourceError::InvalidArgId)?
+                    .ok_or(SourceError::InvalidArgId)?
                     .bind_and_eval(
-                        &sources,
+                        sources,
                         user_input
                             .get(metadata_pos)
                             .ok_or_else(|| ProcessingError::UserInput(metadata_pos as u8))?
@@ -115,7 +115,7 @@ pub fn bind_from_sources<T: std::convert::AsRef<[DataType]>>(
                     source_metadata,
                     sources,
                     expressions,
-                    &mut user_input,
+                    user_input,
                     *id as usize,
                 )?;
             }
@@ -126,11 +126,11 @@ pub fn bind_from_sources<T: std::convert::AsRef<[DataType]>>(
                     source_metadata,
                     sources,
                     expressions,
-                    &mut user_input,
+                    user_input,
                     *id as usize,
                 )?;
             }
-            _ => result_args.push(get_value_from_source(arg_type, &sources)?),
+            _ => result_args.push(get_value_from_source(arg_type, sources)?),
         }
     }
 
@@ -143,7 +143,7 @@ pub(crate) fn bind_vec_obj_args<T: std::convert::AsRef<[DataType]>>(
     source_metadata: &[Vec<ArgSrc>],
     sources: &ValueContainer<T>,
     expressions: &[Expression],
-    mut user_input: &mut Vec<Vec<DataType>>,
+    user_input: &mut Vec<Vec<DataType>>,
     metadata_pos: usize,
 ) -> Result<(), ProcessingError> {
     let mut result_args = Vec::with_capacity(source_metadata.len());
@@ -151,7 +151,7 @@ pub(crate) fn bind_vec_obj_args<T: std::convert::AsRef<[DataType]>>(
     let mut cycle_counter = 0;
     let obj_size = source_metadata
         .get(metadata_pos)
-        .ok_or_else(|| SourceError::InvalidArgId)?
+        .ok_or(SourceError::InvalidArgId)?
         .len();
 
     for _ in 0..user_input
@@ -161,9 +161,9 @@ pub(crate) fn bind_vec_obj_args<T: std::convert::AsRef<[DataType]>>(
     {
         let arg_src = source_metadata
             .get(metadata_pos)
-            .ok_or_else(|| SourceError::InvalidArgId)?
+            .ok_or(SourceError::InvalidArgId)?
             .get(obj_arg_pos)
-            .ok_or_else(|| SourceError::InvalidArgId)?;
+            .ok_or(SourceError::InvalidArgId)?;
 
         match arg_src {
             ArgSrc::User(arg_pos) => {
@@ -181,9 +181,9 @@ pub(crate) fn bind_vec_obj_args<T: std::convert::AsRef<[DataType]>>(
             ArgSrc::Expression(expr_id) => result_args.push(
                 expressions
                     .get(*expr_id as usize)
-                    .ok_or_else(|| SourceError::InvalidArgId)?
+                    .ok_or(SourceError::InvalidArgId)?
                     .bind_and_eval(
-                        &sources,
+                        sources,
                         user_input
                             .get(metadata_pos)
                             .ok_or_else(|| ProcessingError::UserInput(metadata_pos as u8))?
@@ -191,7 +191,7 @@ pub(crate) fn bind_vec_obj_args<T: std::convert::AsRef<[DataType]>>(
                     )?,
             ),
             // VecObject can have object only as another VecObject
-            ArgSrc::Object(_) => Err(ProcessingError::Unreachable)?,
+            ArgSrc::Object(_) => return Err(ProcessingError::Unreachable),
             ArgSrc::VecObject(id) => {
                 result_args.push(DataType::Null);
 
@@ -199,16 +199,16 @@ pub(crate) fn bind_vec_obj_args<T: std::convert::AsRef<[DataType]>>(
                     source_metadata,
                     sources,
                     expressions,
-                    &mut user_input,
+                    user_input,
                     *id as usize,
                 )?;
             }
             _ => result_args.push(get_value_from_source(
-                *&source_metadata
+                source_metadata
                     .get(metadata_pos)
-                    .ok_or_else(|| SourceError::InvalidArgId)?
+                    .ok_or(SourceError::InvalidArgId)?
                     .get(obj_arg_pos)
-                    .ok_or_else(|| SourceError::InvalidArgId)?,
+                    .ok_or(SourceError::InvalidArgId)?,
                 sources,
             )?),
         }
@@ -238,7 +238,7 @@ pub fn get_value_from_source<T: std::convert::AsRef<[DataType]>>(
                 .tpl_consts
                 .as_ref()
                 .get(*id as usize)
-                .ok_or_else(|| SourceError::InvalidArgId)?
+                .ok_or(SourceError::InvalidArgId)?
                 .clone();
             Ok(value)
         }
@@ -247,27 +247,27 @@ pub fn get_value_from_source<T: std::convert::AsRef<[DataType]>>(
                 .settings_consts
                 .as_ref()
                 .get(*id as usize)
-                .ok_or_else(|| SourceError::InvalidArgId)?
+                .ok_or(SourceError::InvalidArgId)?
                 .clone();
             Ok(value)
         }
         ArgSrc::ConstAction(id) => {
             let value = container
                 .action_proposal_consts
-                .ok_or_else(|| SourceError::SourceMissing)?
+                .ok_or(SourceError::SourceMissing)?
                 .as_ref()
                 .get(*id as usize)
-                .ok_or_else(|| SourceError::InvalidArgId)?
+                .ok_or(SourceError::InvalidArgId)?
                 .clone();
             Ok(value)
         }
         ArgSrc::ConstActivityShared(id) => {
             let value = container
                 .activity_shared_consts
-                .ok_or_else(|| SourceError::SourceMissing)?
+                .ok_or(SourceError::SourceMissing)?
                 .as_ref()
                 .get(*id as usize)
-                .ok_or_else(|| SourceError::InvalidArgId)?
+                .ok_or(SourceError::InvalidArgId)?
                 .clone();
             Ok(value)
         }
@@ -275,22 +275,20 @@ pub fn get_value_from_source<T: std::convert::AsRef<[DataType]>>(
             let value = container
                 .storage
                 .as_ref()
-                .ok_or_else(|| SourceError::SourceMissing)?
-                .get_data(&key)
-                .ok_or_else(|| SourceError::InvalidArgId)?
-                .clone();
+                .ok_or(SourceError::SourceMissing)?
+                .get_data(key)
+                .ok_or(SourceError::InvalidArgId)?;
             Ok(value)
         }
         ArgSrc::GlobalStorage(key) => {
             let value = container
                 .global_storage
-                .get_data(&key)
-                .ok_or_else(|| SourceError::InvalidArgId)?
-                .clone();
+                .get_data(key)
+                .ok_or(SourceError::InvalidArgId)?;
             Ok(value)
         }
         ArgSrc::Const(const_id) => {
-            Ok((container.dao_consts)(*const_id).ok_or_else(|| SourceError::InvalidArgId)?)
+            Ok((container.dao_consts)(*const_id).ok_or(SourceError::InvalidArgId)?)
         }
         _ => Err(SourceError::InvalidSourceVariant),
     }
@@ -317,14 +315,14 @@ pub fn serialize_to_json(
             DataTypeDef::NullableObject(id) => {
                 // check first elem in the obj array
                 // if theres optional attribute with null on the 0th position, then this wont work
-                if &user_input[*id as usize][0] == &DataType::Null {
+                if user_input[*id as usize][0] == DataType::Null {
                     args.push_str("null");
                 } else {
                     args.push_str(serialize_to_json(user_input, metadata, *id as usize).as_str());
                 }
             }
             DataTypeDef::VecObject(id) => {
-                colection_to_json(&mut args, &user_input, metadata, *id as usize);
+                colection_to_json(&mut args, user_input, metadata, *id as usize);
             }
             _ => primitive_arg_to_json(
                 &mut args,
@@ -350,7 +348,7 @@ pub(crate) fn colection_to_json(
     buf.push('[');
     if !user_input[metadata_id].is_empty() {
         for (i, _) in user_input[metadata_id].iter().enumerate().step_by(obj_size) {
-            buf.push_str("{");
+            buf.push('{');
             for j in 0..obj_size {
                 buf.push('"');
                 buf.push_str(&metadata[metadata_id].arg_names[j]);
@@ -376,7 +374,7 @@ pub(crate) fn colection_to_json(
                 buf.push(',');
             }
             buf.pop();
-            buf.push_str("}");
+            buf.push('}');
             buf.push(',');
         }
         buf.pop();
@@ -386,6 +384,7 @@ pub(crate) fn colection_to_json(
 
 /// Serializes collection of object to JSON.
 /// Because of schema this has to be separate method.
+#[allow(clippy::explicit_counter_loop)]
 pub(crate) fn collection_obj_to_json(
     buf: &mut String,
     user_input: &[Vec<DataType>],
@@ -396,7 +395,7 @@ pub(crate) fn collection_obj_to_json(
     buf.push('{');
     let mut counter = 0;
     let obj_size = metadata[metadata_id].arg_names.len();
-    for i in 0 + pos * obj_size..pos * obj_size + obj_size {
+    for i in pos * obj_size..pos * obj_size + obj_size {
         buf.push('"');
         buf.push_str(metadata[metadata_id].arg_names[counter].as_str());
         buf.push('"');

@@ -1,4 +1,5 @@
 #![allow(unreachable_patterns)]
+#![allow(clippy::too_many_arguments)] // TODO: Solve.
 
 use library::workflow::{
     instance::Instance,

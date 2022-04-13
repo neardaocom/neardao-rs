@@ -71,6 +71,12 @@ impl Tags {
     }
 }
 
+impl Default for Tags {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
