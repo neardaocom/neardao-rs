@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2018"
 
 [lib]
-crate-type = ["cdylib"] # enable rlib for simulations tests, remove in prod
+crate-type = ["cdylib"]
 
 [dependencies]
 near-sdk = "3.1.0"

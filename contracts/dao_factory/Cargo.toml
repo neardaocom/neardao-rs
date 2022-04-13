@@ -4,7 +4,7 @@ version = "0.6.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"] # enable rlib for simulations tests, remove in prod
+crate-type = ["cdylib"]
 
 
 [dependencies]
