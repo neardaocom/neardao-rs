@@ -17,7 +17,7 @@ use crate::{GroupId, TagId};
 )]
 #[serde(crate = "near_sdk::serde")]
 pub struct GroupMember {
-    pub account_id: String,
+    pub account_id: AccountId,
     pub tags: Vec<TagId>,
 }
 
@@ -71,7 +71,7 @@ impl From<Vec<GroupMember>> for GroupMembers {
 #[serde(crate = "near_sdk::serde")]
 pub struct GroupSettings {
     pub name: String,
-    pub leader: Option<String>,
+    pub leader: Option<AccountId>,
 }
 
 #[derive(Deserialize)]
@@ -132,7 +132,10 @@ impl Group {
         token_lock: Option<TokenLock>,
     ) -> Self {
         if let Some(ref leader) = settings.leader {
-            assert!(!leader.is_empty(), "Leader cannot be empty string.");
+            assert!(
+                !leader.as_str().is_empty(),
+                "Leader cannot be empty string."
+            );
             assert!(
                 members.iter().any(|m| *leader == m.account_id),
                 "Leader must be contained in group members"
@@ -203,11 +206,11 @@ impl Group {
             .collect()
     }
 
-    pub fn get_member_by_account(&self, account_id: &str) -> Option<GroupMember> {
+    pub fn get_member_by_account(&self, account_id: &AccountId) -> Option<GroupMember> {
         self.members
             .get_members()
             .into_iter()
-            .find(|m| m.account_id == account_id)
+            .find(|m| m.account_id == *account_id)
     }
 
     pub fn get_members_accounts_by_role(&self, role: TagId) -> Vec<AccountId> {

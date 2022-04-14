@@ -57,7 +57,7 @@ pub enum VoteScenario {
 pub enum ActivityRight {
     Anyone,
     Group(u16),
-    GroupMember(u16, String),
+    GroupMember(u16, AccountId),
     Account(AccountId),
     TokenHolder,
     Member,

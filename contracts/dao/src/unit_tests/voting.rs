@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use library::workflow::types::{ActivityRight, VoteScenario};
+use near_sdk::AccountId;
 use near_sdk::{testing_env, MockedBlockchain};
 
 use crate::unit_tests::{
@@ -20,7 +21,7 @@ macro_rules! test_voting {
 
                 let votes = HashMap::from([
                 $(
-                    ($name.to_string(), $vote),
+                    (AccountId::try_from($name.to_string()).unwrap(), $vote),
                 )*
 
                 ]);
@@ -44,7 +45,7 @@ macro_rules! test_voting {
 
                 let votes = HashMap::from([
                 $(
-                    ($name.to_string(), $vote),
+                    (AccountId::try_from($name.to_string()).unwrap(), $vote),
                 )*
 
                 ]);
@@ -58,8 +59,7 @@ macro_rules! test_voting {
         }
     };
 }
-
-test_voting!(
+/* test_voting!(
     democratic_tokenholder;
     TokenHolder, Democratic;
     FOUNDER_1 => 1 FOUNDER_2 => 1 FOUNDER_3 => 2;
@@ -68,7 +68,6 @@ test_voting!(
     YES: 2,
     NO: 1
 );
-
 test_voting!(
     tokenweighted_tokenholder;
     TokenHolder, TokenWeighted;
@@ -77,4 +76,4 @@ test_voting!(
     SPAM: 0,
     YES: 6_666_666,
     NO: 3_333_333
-);
+); */

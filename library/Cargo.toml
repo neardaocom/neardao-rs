@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-near-sdk = "3.1.0"
+near-sdk = {version = "4.0.0-pre.7", features = ["unstable"]}

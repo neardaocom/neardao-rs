@@ -7,13 +7,12 @@ use library::{
     workflow::{settings::TemplateSettings, template::Template, types::FnCallMetadata},
     FnCallId, MethodName,
 };
-use near_sdk::{json_types::ValidAccountId, test_utils::VMContextBuilder};
+use near_sdk::{test_utils::VMContextBuilder, AccountId};
 
 use crate::{
     core::Contract,
     group::{GroupInput, GroupMember, GroupSettings, GroupTokenLockInput},
     settings::DaoSettings,
-    standard_impl::ft_metadata::{FungibleTokenMetadata, FT_METADATA_SPEC},
     tags::TagInput,
     token_lock::{UnlockMethod, UnlockPeriodInput},
 };
@@ -66,16 +65,15 @@ pub(crate) fn get_context_builder() -> VMContextBuilder {
     let mut builder = VMContextBuilder::new();
     builder
         .block_timestamp(0)
-        .signer_account_id(ValidAccountId::try_from(ISSUER_ACC).unwrap()) // Who started the transaction - DaoFactory in our case
-        .predecessor_account_id(ValidAccountId::try_from(ISSUER_ACC).unwrap()) // Previous cross-contract caller, its called directly from DaoFactory so its same as signer
-        .current_account_id(ValidAccountId::try_from(OWNER_ACC).unwrap()) // Account owning this smart contract
+        .signer_account_id(AccountId::try_from(ISSUER_ACC.to_string()).unwrap()) // Who started the transaction - DaoFactory in our case
+        .predecessor_account_id(AccountId::try_from(ISSUER_ACC.to_string()).unwrap()) // Previous cross-contract caller, its called directly from DaoFactory so its same as signer
+        .current_account_id(AccountId::try_from(OWNER_ACC.to_string()).unwrap()) // Account owning this smart contract
         .account_balance(10u128.pow(24)); //10 nears
     builder
 }
 
 pub(crate) fn get_contract(
     total_supply: u32,
-    ft_metadata: FungibleTokenMetadata,
     settings: DaoSettings,
     groups: Vec<GroupInput>,
     tags: Vec<TagInput>,
@@ -88,7 +86,6 @@ pub(crate) fn get_contract(
 ) -> Contract {
     Contract::new(
         total_supply,
-        ft_metadata,
         settings,
         groups,
         tags,
@@ -104,7 +101,6 @@ pub(crate) fn get_contract(
 pub(crate) fn get_default_contract() -> Contract {
     get_contract(
         TOKEN_TOTAL_SUPPLY,
-        get_default_metadata(),
         get_default_dao_config(),
         get_default_groups(),
         get_default_tags(),
@@ -121,41 +117,29 @@ pub(crate) fn decimal_const() -> u128 {
     10u128.pow(METADATA_DECIMALS as u32)
 }
 
-pub(crate) fn get_default_metadata() -> FungibleTokenMetadata {
-    FungibleTokenMetadata {
-        spec: FT_METADATA_SPEC.to_string(),
-        name: "Example NEAR fungible token".to_string(),
-        symbol: "EXAMPLE".to_string(),
-        icon: Some("some_icon".to_string()),
-        reference: None,
-        reference_hash: None,
-        decimals: METADATA_DECIMALS,
-    }
-}
-
 pub(crate) fn get_default_dao_config() -> DaoSettings {
     DaoSettings {
         name: DAO_NAME.into(),
         purpose: "test".into(),
         tags: vec![0, 1, 2],
-        dao_admin_account_id: DAO_ADMIN_ACC.into(),
+        dao_admin_account_id: DAO_ADMIN_ACC.to_string().try_into().unwrap(),
         dao_admin_rights: vec!["all".into()],
-        workflow_provider: WF_PROVIDER_ACC.into(),
+        workflow_provider: WF_PROVIDER_ACC.to_string().try_into().unwrap(),
     }
 }
 
 pub(crate) fn get_default_groups() -> Vec<GroupInput> {
     let mut members = vec![
         GroupMember {
-            account_id: FOUNDER_1.into(),
+            account_id: FOUNDER_1.to_string().try_into().unwrap(),
             tags: vec![0],
         },
         GroupMember {
-            account_id: FOUNDER_2.into(),
+            account_id: FOUNDER_2.to_string().try_into().unwrap(),
             tags: vec![1],
         },
         GroupMember {
-            account_id: FOUNDER_3.into(),
+            account_id: FOUNDER_3.to_string().try_into().unwrap(),
             tags: vec![2],
         },
     ];
@@ -163,7 +147,7 @@ pub(crate) fn get_default_groups() -> Vec<GroupInput> {
     groups.push(GroupInput {
         settings: GroupSettings {
             name: "council".into(),
-            leader: Some(FOUNDER_1.into()),
+            leader: Some(FOUNDER_1.to_string().try_into().unwrap()),
         },
         members: members,
         token_lock: Some(GroupTokenLockInput {

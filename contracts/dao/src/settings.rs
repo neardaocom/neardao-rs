@@ -28,6 +28,6 @@ derive_into_versioned!(DaoSettings, VDaoSettings);
 
 pub(crate) fn assert_valid_dao_settings(settings: &DaoSettings) {
     assert!(!settings.name.is_empty());
-    assert!(!settings.dao_admin_account_id.is_empty()); //TODO switch to valid account_id check in SDK 4.0
-    assert!(!settings.workflow_provider.is_empty());
+    assert!(!settings.dao_admin_account_id.as_str().is_empty()); //TODO switch to valid account_id check in SDK 4.0
+    assert!(!settings.workflow_provider.as_str().is_empty());
 }

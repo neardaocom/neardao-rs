@@ -1,7 +1,5 @@
 use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
-use crate::standard_impl::ft::FungibleToken;
-use crate::standard_impl::ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
 use crate::tags::{TagInput, Tags};
 use library::storage::StorageBucket;
 use library::types::DataType;
@@ -11,27 +9,17 @@ use library::workflow::template::Template;
 use library::workflow::types::{DaoActionIdent, FnCallMetadata};
 use library::{FnCallId, MethodName};
 
-use near_contract_standards::fungible_token::core::FungibleTokenCore;
-use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
-use near_contract_standards::storage_management::{
-    StorageBalance, StorageBalanceBounds, StorageManagement,
-};
-
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
-use near_sdk::json_types::{ValidAccountId, U128};
 use near_sdk::serde::Serialize;
 use near_sdk::{
     env, log, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault,
-    PromiseOrValue,
 };
 
 use crate::group::{Group, GroupInput};
 
 use crate::{calc_percent_u128_unchecked, proposal::*, StorageKey, TagCategory};
 use crate::{GroupId, ProposalId};
-
-near_sdk::setup_alloc!();
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
@@ -46,8 +34,6 @@ pub struct ActivityLog {
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
-    FT,
-    FTMetadata,
     Proposals,
     Tags,
     FunctionCalls,
@@ -75,8 +61,6 @@ pub struct Contract {
     /// Count of all members in groups - that does not mean unique members.
     pub total_members_count: u32,
     pub decimal_const: u128,
-    pub ft: FungibleToken,
-    pub ft_metadata: LazyOption<FungibleTokenMetadata>,
     pub group_last_id: GroupId,
     pub groups: UnorderedMap<GroupId, Group>,
     pub settings: LazyOption<VDaoSettings>,
@@ -102,7 +86,6 @@ impl Contract {
     #[init]
     pub fn new(
         total_supply: u32,
-        ft_metadata: FungibleTokenMetadata,
         settings: DaoSettings,
         groups: Vec<GroupInput>,
         tags: Vec<TagInput>,
@@ -121,9 +104,7 @@ impl Contract {
             ft_total_locked: 0,
             ft_total_distributed: 0,
             total_members_count: 0,
-            decimal_const: 10u128.pow(ft_metadata.decimals as u32),
-            ft: FungibleToken::new(StorageKeys::FT),
-            ft_metadata: LazyOption::new(StorageKeys::FTMetadata, Some(&ft_metadata)),
+            decimal_const: 10u128.pow(24), // TODO
             settings: LazyOption::new(StorageKeys::DaoSettings, None),
             group_last_id: 0,
             groups: UnorderedMap::new(StorageKeys::Groups),
@@ -143,15 +124,7 @@ impl Contract {
             workflow_activity_log: LookupMap::new(StorageKeys::ActivityLog),
         };
 
-        // Register self and mint all FT
-        let contract_acc = env::current_account_id();
-        contract.ft.internal_register_account(&contract_acc);
-        contract.ft.internal_deposit(
-            &contract_acc,
-            contract.ft_total_supply as u128 * contract.decimal_const,
-        );
-        // Don't count self into token holders.
-        contract.ft.token_holders_count -= 1;
+        // TODO: Register self and mint all FT
 
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
@@ -426,127 +399,13 @@ impl Contract {
     }
 }
 
-/******************************************************************************
- *
- * Fungible Token (NEP-141)
- * https://nomicon.io/Standards/FungibleToken/Core.html
- *
- ******************************************************************************/
-
-#[near_bindgen]
-impl FungibleTokenCore for Contract {
-    #[payable]
-    fn ft_transfer(&mut self, receiver_id: ValidAccountId, amount: U128, memo: Option<String>) {
-        self.ft.ft_transfer(receiver_id, amount, memo)
-    }
-
-    #[payable]
-    fn ft_transfer_call(
-        &mut self,
-        receiver_id: ValidAccountId,
-        amount: U128,
-        memo: Option<String>,
-        msg: String,
-    ) -> PromiseOrValue<U128> {
-        self.ft.ft_transfer_call(receiver_id, amount, memo, msg)
-    }
-
-    fn ft_total_supply(&self) -> U128 {
-        self.ft.ft_total_supply()
-    }
-
-    fn ft_balance_of(&self, account_id: ValidAccountId) -> U128 {
-        self.ft.ft_balance_of(account_id)
-    }
-}
-
-#[near_bindgen]
-impl FungibleTokenResolver for Contract {
-    #[private]
-    fn ft_resolve_transfer(
-        &mut self,
-        sender_id: ValidAccountId,
-        receiver_id: ValidAccountId,
-        amount: U128,
-    ) -> U128 {
-        let sender_id: AccountId = sender_id.into();
-        let (used_amount, burned_amount) =
-            self.ft
-                .internal_ft_resolve_transfer(&sender_id, receiver_id, amount);
-        if burned_amount > 0 {
-            //self.on_tokens_burned(sender_id, burned_amount);
-        }
-        used_amount.into()
-    }
-}
-
-/******************************************************************************
- *
- * Fungible Token Metadata (NEP-148)
- * https://nomicon.io/Standards/FungibleToken/Metadata.html
- *
- ******************************************************************************/
-
-#[near_bindgen]
-impl FungibleTokenMetadataProvider for Contract {
-    fn ft_metadata(&self) -> FungibleTokenMetadata {
-        self.ft_metadata.get().unwrap()
-    }
-}
-
-/******************************************************************************
- *
- * Storage Management (NEP-145)
- * https://nomicon.io/Standards/StorageManagement.html
- *
- ******************************************************************************/
-
-#[near_bindgen]
-impl StorageManagement for Contract {
-    #[payable]
-    fn storage_deposit(
-        &mut self,
-        account_id: Option<ValidAccountId>,
-        registration_only: Option<bool>,
-    ) -> StorageBalance {
-        self.ft.storage_deposit(account_id, registration_only)
-    }
-
-    #[payable]
-    fn storage_withdraw(&mut self, amount: Option<U128>) -> StorageBalance {
-        self.ft.storage_withdraw(amount)
-    }
-
-    #[allow(clippy::match_like_matches_macro)]
-    #[payable]
-    fn storage_unregister(&mut self, force: Option<bool>) -> bool {
-        #[allow(unused_variables)]
-        if let Some((account_id, balance)) = self.ft.internal_storage_unregister(force) {
-            //self.on_account_closed(account_id, balance);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn storage_balance_bounds(&self) -> StorageBalanceBounds {
-        self.ft.storage_balance_bounds()
-    }
-
-    fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance> {
-        self.ft.storage_balance_of(account_id)
-    }
-}
-
 /// Triggers new version download from factory.
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn download_new_version() {
     use crate::constants::{GAS_DOWNLOAD_NEW_VERSION, VERSION};
-    use env::BLOCKCHAIN_INTERFACE;
 
     env::setup_panic_hook();
-    env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
 
     // We are not able to access council members any other way so we have deserialize SC
     let contract: Contract = env::state_read().unwrap();
@@ -559,22 +418,15 @@ pub extern "C" fn download_new_version() {
     );
 
     let factory_acc = dao_settings.dao_admin_account_id;
-    let method_name = b"download_dao_bin".to_vec();
+    let method_name = "download_dao_bin";
 
-    unsafe {
-        BLOCKCHAIN_INTERFACE.with(|b| {
-            b.borrow().as_ref().unwrap().promise_create(
-                factory_acc.len() as _,
-                factory_acc.as_ptr() as _,
-                method_name.len() as _,
-                method_name.as_ptr() as _,
-                1 as _,
-                [VERSION].to_vec().as_ptr() as _,
-                0,
-                GAS_DOWNLOAD_NEW_VERSION,
-            );
-        });
-    }
+    env::promise_create(
+        factory_acc,
+        method_name,
+        &[VERSION],
+        0,
+        GAS_DOWNLOAD_NEW_VERSION,
+    );
 }
 
 /// Method called by dao factory as response to download_new_version method.
@@ -583,7 +435,6 @@ pub extern "C" fn download_new_version() {
 #[no_mangle]
 pub extern "C" fn store_new_version() {
     env::setup_panic_hook();
-    env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
 
     let contract: Contract = env::state_read().unwrap();
     let dao_settings: DaoSettings = contract.settings.get().unwrap().into();
@@ -598,14 +449,13 @@ pub extern "C" fn store_new_version() {
     );
 }
 
+// TODO: Use near-sys to access low-level interface.
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn upgrade_self() {
     use crate::constants::GAS_UPGRADE;
-    use near_sdk::env::BLOCKCHAIN_INTERFACE;
 
     env::setup_panic_hook();
-    env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
 
     // We are not able to access council members any other way so we have deserialize SC
     let contract: Contract = env::state_read().unwrap();
@@ -616,43 +466,14 @@ pub extern "C" fn upgrade_self() {
         env::predecessor_account_id()
     );
 
-    let current_acc = env::current_account_id().into_bytes();
-    let method_name = "upgrade".as_bytes().to_vec();
+    let current_acc = env::current_account_id();
+    let method_name = "upgrade";
     let key = StorageKeys::NewVersionCode.into_storage_key();
 
-    unsafe {
-        BLOCKCHAIN_INTERFACE.with(|b| {
-            // Load stored wasm code into register 0.
-            b.borrow()
-                .as_ref()
-                .unwrap()
-                .storage_read(key.len() as _, key.as_ptr() as _, 0);
-            // schedule a Promise tx to this same contract
-            let promise_id = b
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .promise_batch_create(current_acc.len() as _, current_acc.as_ptr() as _);
-            // 1st item in the Tx: "deploy contract" (code is taken from register 0)
-            b.borrow()
-                .as_ref()
-                .unwrap()
-                .promise_batch_action_deploy_contract(promise_id, u64::MAX as _, 0);
-            // 2nd item in the Tx: call this account's migrate() method
-            b.borrow()
-                .as_ref()
-                .unwrap()
-                .promise_batch_action_function_call(
-                    promise_id,
-                    method_name.len() as _,
-                    method_name.as_ptr() as _,
-                    0 as _,
-                    0 as _,
-                    0 as _,
-                    GAS_UPGRADE,
-                );
-        });
-    }
+    let code = env::storage_read(key.as_slice()).expect("Failed to read code from storage.");
+    let promise = env::promise_batch_create(&current_acc);
+    env::promise_batch_action_deploy_contract(promise, code.as_slice());
+    env::promise_batch_action_function_call(promise, method_name, &[], 0, GAS_UPGRADE);
 }
 
 pub struct StorageKeyWrapper(pub Vec<u8>);

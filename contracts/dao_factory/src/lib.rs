@@ -2,21 +2,19 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::UnorderedMap;
 use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::IntoStorageKey;
 use near_sdk::{
     env, ext_contract, log, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise,
 };
-
-near_sdk::setup_alloc!();
+use near_sdk::{Gas, IntoStorageKey};
 
 ///include binary code of dao contract
 const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../../res/dao.wasm");
 
 /// Gas spent on the call & account creation.
-const CREATE_CALL_GAS: u64 = 75_000_000_000_000;
+const CREATE_CALL_GAS: Gas = Gas(75_000_000_000_000);
 
 /// Gas allocated on the callback.
-const ON_CREATE_CALL_GAS: u64 = 10_000_000_000_000;
+const ON_CREATE_CALL_GAS: Gas = Gas(10_000_000_000_000);
 
 const DEPOSIT_CREATE: u128 = 5_000_000_000_000_000_000_000_000;
 const MAX_DAO_VERSIONS: u8 = 5;
@@ -135,7 +133,9 @@ impl DaoFactoryContract {
     #[payable]
     pub fn create(&mut self, acc_name: AccountId, dao_info: DaoInfo, args: Base64VecU8) -> Promise {
         assert!(env::attached_deposit() >= DEPOSIT_CREATE);
-        let account_id = format!("{}.{}", acc_name, env::current_account_id());
+        let account_id = format!("{}.{}", acc_name, env::current_account_id())
+            .try_into()
+            .expect("Account is not valid.");
         log!("Creating DAO account: {}", account_id);
 
         assert!(
@@ -151,7 +151,7 @@ impl DaoFactoryContract {
 
         promise
             .function_call(
-                b"new".to_vec(),
+                "new".to_string(),
                 args.into(),
                 0,
                 env::prepaid_gas() - CREATE_CALL_GAS - ON_CREATE_CALL_GAS,
@@ -161,7 +161,7 @@ impl DaoFactoryContract {
                 U128(env::attached_deposit()),
                 env::predecessor_account_id(),
                 dao_info,
-                &env::current_account_id(),
+                env::current_account_id(),
                 0,
                 ON_CREATE_CALL_GAS,
             ))
@@ -232,16 +232,12 @@ impl DaoFactoryContract {
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn download_dao_bin() {
-    use env::BLOCKCHAIN_INTERFACE;
-
-    const GAS_SEND_BIN_LIMIT: u64 = 100_000_000_000_000;
-
+    const GAS_SEND_BIN_LIMIT: Gas = Gas(100_000_000_000_000);
     env::setup_panic_hook();
-    env::set_blockchain_interface(Box::new(near_blockchain::NearBlockchain {}));
 
     let version: u8 = *env::input().unwrap().get(0).unwrap();
-    let predecessor = env::predecessor_account_id().into_bytes();
-    let method_name = "store_new_version".as_bytes().to_vec();
+    let predecessor = env::predecessor_account_id();
+    let method_name = "store_new_version";
 
     log!("Got version: {:?}", version);
 
@@ -255,25 +251,14 @@ pub extern "C" fn download_dao_bin() {
     }
     .into_storage_key();
 
-    unsafe {
-        BLOCKCHAIN_INTERFACE.with(|b| {
-            b.borrow()
-                .as_ref()
-                .unwrap()
-                .storage_read(key.len() as _, key.as_ptr() as _, 0);
-
-            b.borrow().as_ref().unwrap().promise_create(
-                predecessor.len() as _,
-                predecessor.as_ptr() as _,
-                method_name.len() as _,
-                method_name.as_ptr() as _,
-                u64::MAX as _,
-                0,
-                0 as _,
-                GAS_SEND_BIN_LIMIT,
-            )
-        });
-    }
+    let code = env::storage_read(key.as_slice()).expect("Failed to read code from storage.");
+    env::promise_create(
+        predecessor,
+        method_name,
+        code.as_slice(),
+        0,
+        GAS_SEND_BIN_LIMIT,
+    );
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
@@ -297,7 +282,7 @@ pub struct FactoryStats {
 
 #[cfg(test)]
 mod tests {
-    use near_sdk::{test_utils::VMContextBuilder, testing_env, MockedBlockchain};
+    use near_sdk::{test_utils::VMContextBuilder, testing_env};
 
     use super::*;
     #[test]

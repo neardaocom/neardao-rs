@@ -503,9 +503,9 @@ mod test {
     use std::convert::TryFrom;
 
     use near_sdk::{
-        json_types::{ValidAccountId, WrappedBalance, U128},
+        json_types::U128,
         serde::{Deserialize, Serialize},
-        serde_json,
+        serde_json, AccountId,
     };
 
     use crate::{
@@ -535,9 +535,9 @@ mod test {
     pub struct SaleInput {
         pub title: String,
         pub url: Option<String>,
-        pub permissions_contract_id: Option<ValidAccountId>,
+        pub permissions_contract_id: Option<AccountId>,
         pub out_tokens: Vec<SaleInputOutToken>,
-        pub in_token_account_id: ValidAccountId,
+        pub in_token_account_id: AccountId,
         pub start_time: U128,
         pub duration: U128,
         pub meta: MetaInfo,
@@ -553,8 +553,8 @@ mod test {
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     #[serde(crate = "near_sdk::serde")]
     pub struct SaleInputOutToken {
-        pub token_account_id: ValidAccountId,
-        pub balance: WrappedBalance,
+        pub token_account_id: AccountId,
+        pub balance: U128,
         pub referral_bpt: Option<BasicPoints>,
         pub shares: ShareInfo,
     }
@@ -829,7 +829,7 @@ mod test {
         /* ------------------ Serializing to JSON ------------------ */
 
         let out_tokens_1 = SaleInputOutToken {
-            token_account_id: ValidAccountId::try_from("neardao.near").unwrap(),
+            token_account_id: AccountId::try_from("neardao.near".to_string()).unwrap(),
             balance: 999.into(),
             referral_bpt: None,
             shares: ShareInfo {
@@ -839,7 +839,7 @@ mod test {
         };
 
         let out_tokens_2 = SaleInputOutToken {
-            token_account_id: ValidAccountId::try_from("neardao.near").unwrap(),
+            token_account_id: AccountId::try_from("neardao.near".to_string()).unwrap(),
             balance: 991.into(),
             referral_bpt: None,
             shares: ShareInfo {
@@ -849,7 +849,7 @@ mod test {
         };
 
         let out_tokens_3 = SaleInputOutToken {
-            token_account_id: ValidAccountId::try_from("neardao.near").unwrap(),
+            token_account_id: AccountId::try_from("neardao.near".to_string()).unwrap(),
             balance: 991.into(),
             referral_bpt: None,
             shares: ShareInfo {
@@ -861,9 +861,11 @@ mod test {
         let sale_input = SaleInput {
             title: "Neardao token auction".into(),
             url: Some("www.neardao.com".into()),
-            permissions_contract_id: Some(ValidAccountId::try_from("neardao.testnet").unwrap()),
+            permissions_contract_id: Some(
+                AccountId::try_from("neardao.testnet".to_string()).unwrap(),
+            ),
             out_tokens: vec![out_tokens_1, out_tokens_2, out_tokens_3],
-            in_token_account_id: ValidAccountId::try_from("wrap.near").unwrap(),
+            in_token_account_id: AccountId::try_from("wrap.near".to_string()).unwrap(),
             start_time: 0.into(),
             duration: 3600.into(),
             meta: MetaInfo {

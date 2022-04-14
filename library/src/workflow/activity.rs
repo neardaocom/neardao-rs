@@ -196,9 +196,9 @@ impl PartialEq<ActionData> for DaoActionOrFnCall {
             (Self::DaoAction(_), ActionData::FnCall(_)) => false,
             (Self::FnCall(l0), ActionData::FnCall(f)) => match &f.id {
                 FnCallIdType::Static(s) => *l0 == *s,
-                FnCallIdType::Dynamic(_, m) => *l0.0 == *m,
+                FnCallIdType::Dynamic(_, m) => *l0.0.as_str() == *m,
                 FnCallIdType::StandardStatic(s) => *l0 == *s,
-                FnCallIdType::StandardDynamic(_, m) => *l0.0 == *m,
+                FnCallIdType::StandardDynamic(_, m) => *l0.0.as_str() == *m,
             },
             (Self::FnCall(_), ActionData::Action(_)) => false,
             _ => false,
@@ -497,7 +497,7 @@ pub struct Transition {
 
 #[cfg(test)]
 mod test {
-    use near_sdk::{serde_json, test_utils::VMContextBuilder, testing_env, MockedBlockchain};
+    use near_sdk::{serde_json, test_utils::VMContextBuilder, testing_env};
 
     use crate::{
         interpreter::{

@@ -19,7 +19,6 @@ impl Contract {
             ft_total_supply: self.ft_total_supply,
             ft_total_locked: self.ft_total_locked,
             ft_total_distributed: self.ft_total_distributed,
-            ft_token_holders_count: self.ft.token_holders_count,
             total_members_count: self.total_members_count,
         }
     }
@@ -132,6 +131,5 @@ pub struct Stats {
     pub ft_total_supply: u32,
     pub ft_total_locked: u32,
     pub ft_total_distributed: u32,
-    pub ft_token_holders_count: u32,
     pub total_members_count: u32,
 }

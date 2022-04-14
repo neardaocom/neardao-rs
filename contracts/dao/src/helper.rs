@@ -30,6 +30,7 @@ pub mod deserialize {
 
     use super::{get_datatype, get_datatype_from_values};
     use library::types::DataType;
+    use near_sdk::AccountId;
 
     use crate::{
         error::ActionError,
@@ -46,7 +47,10 @@ pub mod deserialize {
 
         let leader = match get_datatype(first_object, 1)? {
             DataType::Null => None,
-            DataType::String(s) => Some(s),
+            DataType::String(s) => {
+                let acc = AccountId::try_from(s).map_err(|_| ActionError::InvalidDataType)?;
+                Some(acc)
+            }
             _ => return Err(ActionError::Binding),
         };
 
@@ -72,9 +76,13 @@ pub mod deserialize {
             let tags = get_datatype(obj, idx + 1)?.try_into_vec_u64()?;
 
             let tags = tags.into_iter().map(|t| t as u16).collect();
+            let member = get_datatype(obj, idx)?
+                .try_into_string()?
+                .try_into()
+                .map_err(|_| ActionError::Binding)?;
 
             members.push(GroupMember {
-                account_id: get_datatype(obj, idx)?.try_into_string()?,
+                account_id: member,
                 tags,
             })
         }
@@ -141,9 +149,15 @@ pub mod deserialize {
             name: get_datatype_from_values(user_inputs, 0, 0)?.try_into_string()?,
             purpose: get_datatype_from_values(user_inputs, 0, 1)?.try_into_string()?,
             tags,
-            dao_admin_account_id: get_datatype_from_values(user_inputs, 0, 3)?.try_into_string()?,
+            dao_admin_account_id: get_datatype_from_values(user_inputs, 0, 3)?
+                .try_into_string()?
+                .try_into()
+                .map_err(|_| ActionError::Binding)?,
             dao_admin_rights: get_datatype_from_values(user_inputs, 0, 4)?.try_into_vec_string()?,
-            workflow_provider: get_datatype_from_values(user_inputs, 0, 5)?.try_into_string()?,
+            workflow_provider: get_datatype_from_values(user_inputs, 0, 5)?
+                .try_into_string()?
+                .try_into()
+                .map_err(|_| ActionError::Binding)?,
         };
 
         Ok(settings)

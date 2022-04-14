@@ -7,7 +7,6 @@ use library::workflow::{
     template::Template,
 };
 use proposal::Proposal;
-mod standard_impl;
 mod unit_tests;
 
 pub mod constants;

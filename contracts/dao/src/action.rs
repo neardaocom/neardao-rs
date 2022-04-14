@@ -8,10 +8,10 @@ use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
 use library::workflow::types::{DaoActionIdent, ValueContainer};
 use library::{Consts, ObjectValues};
-use near_sdk::{env, near_bindgen, AccountId, Promise};
+use near_sdk::{env, near_bindgen, AccountId, Gas, Promise};
 
 use crate::callbacks::ext_self;
-use crate::constants::{GLOBAL_BUCKET_IDENT, TGAS};
+use crate::constants::GLOBAL_BUCKET_IDENT;
 use crate::error::{ActionError, ActivityError};
 use crate::group::{GroupInput, GroupMember, GroupSettings};
 use crate::proposal::ProposalState;
@@ -364,7 +364,7 @@ impl Contract {
                     .values
                     .get_mut(0)
                     .ok_or(ActionError::InputStructure(0))?
-                    .insert(0, DataType::String(caller.clone()));
+                    .insert(0, DataType::String(caller.to_string()));
             } else {
                 self.execute_dao_action(proposal_id, action_data.name, &mut action.values)?;
             }
@@ -476,10 +476,11 @@ impl Contract {
             // Metadata are provided by workflow provider when workflow is added. Missing metadata are fault of the workflow provider and are considered as fatal runtime error.
             let (name, method, metadata) = match action_data.id {
                 FnCallIdType::Static((account, method)) => {
-                    if account == "self" {
+                    if account.as_str() == "self" {
                         let name = env::current_account_id();
                         (
-                            name.clone(),
+                            AccountId::try_from(name.to_string())
+                                .map_err(|_| ActionError::InvalidDataType)?,
                             method.clone(),
                             self.function_call_metadata
                                 .get(&(name.clone(), method.clone()))
@@ -500,15 +501,20 @@ impl Contract {
                         .map_err(ProcessingError::Source)?
                         .try_into_string()?;
                     (
-                        name.clone(),
+                        AccountId::try_from(name.to_string())
+                            .map_err(|_| ActionError::InvalidDataType)?,
                         method.clone(),
                         self.function_call_metadata
-                            .get(&(name.clone(), method.clone()))
+                            .get(&(
+                                AccountId::try_from(name.to_string())
+                                    .map_err(|_| ActionError::InvalidDataType)?,
+                                method.clone(),
+                            ))
                             .ok_or(ActionError::MissingFnCallMetadata(method))?,
                     )
                 }
                 FnCallIdType::StandardStatic((account, method)) => {
-                    if account == "self" {
+                    if account.as_str() == "self" {
                         let name = env::current_account_id();
                         (
                             name.clone(),
@@ -532,7 +538,8 @@ impl Contract {
                         .map_err(ProcessingError::Source)?
                         .try_into_string()?;
                     (
-                        name.clone(),
+                        AccountId::try_from(name.to_string())
+                            .map_err(|_| ActionError::InvalidDataType)?,
                         method.clone(),
                         self.standard_function_call_metadata
                             .get(&name)
@@ -585,10 +592,10 @@ impl Contract {
             // Dispatch fncall and its postprocessing.
             Promise::new(name)
                 .function_call(
-                    method.clone().into_bytes(),
+                    method,
                     args.into_bytes(),
                     deposit,
-                    action_data.tgas as u64 * 10u64.pow(12),
+                    Gas(action_data.tgas as u64 * 10u64.pow(12)),
                 )
                 .then(ext_self::postprocess(
                     proposal_id,
@@ -596,9 +603,9 @@ impl Contract {
                     tpl_action.must_succeed,
                     prop_settings.storage_key.clone(),
                     pp,
-                    &env::current_account_id(),
+                    env::current_account_id(),
                     0,
-                    50 * 10u64.pow(12),
+                    Gas(50 * 10u64.pow(12)),
                 ));
 
             // We need number of successfully dispatched promises.
@@ -710,13 +717,12 @@ impl Contract {
         }
     }
 
-    // TODO: Move to standard fncalls.
-    pub fn treasury_send_near(&mut self, receiver_id: AccountId, amount: u128) -> bool {
+    // TODO: Refactoring
+    /*     pub fn treasury_send_near(&mut self, receiver_id: AccountId, amount: u128) -> bool {
         Promise::new(receiver_id).transfer(amount);
         true
     }
 
-    // TODO: Move to standard fncalls.
     pub fn treasury_send_ft(
         &mut self,
         ft_account_id: AccountId,
@@ -739,7 +745,7 @@ impl Contract {
                 .as_bytes()
                 .to_vec(),
                 1,
-                30 * TGAS,
+                Gas(30 * TGAS),
             );
         } else {
             Promise::new(ft_account_id).function_call(
@@ -753,14 +759,13 @@ impl Contract {
                 .as_bytes()
                 .to_vec(),
                 1,
-                15 * TGAS,
+                Gas(15 * TGAS),
             );
         }
 
         true
     }
 
-    // TODO: Move to standard fncalls.
     #[allow(clippy::too_many_arguments)]
     pub fn treasury_send_nft(
         &mut self,
@@ -785,7 +790,7 @@ impl Contract {
                 .as_bytes()
                 .to_vec(),
                 1,
-                40 * TGAS
+                Gas(40 * TGAS)
             );
         } else {
             Promise::new(nft_account_id).function_call(b"nft_transfer_call".to_vec(),
@@ -799,10 +804,10 @@ impl Contract {
                     .as_bytes()
                     .to_vec(),
                     1,
-                    20 * TGAS
+                    Gas(20 * TGAS)
                 );
         }
 
         true
-    }
+    } */
 }

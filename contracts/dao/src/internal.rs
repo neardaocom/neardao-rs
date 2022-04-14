@@ -9,8 +9,7 @@ use crate::{
     constants::{C_DAO_ACC_ID, GLOBAL_BUCKET_IDENT, TGAS},
     core::{ActivityLog, Contract},
     error::{
-        ActionError, ERR_DISTRIBUTION_ACC_EMPTY, ERR_DISTRIBUTION_MIN_VALUE,
-        ERR_DISTRIBUTION_NOT_ENOUGH_FT, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
+        ActionError, ERR_DISTRIBUTION_NOT_ENOUGH_FT, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
         ERR_LOCK_AMOUNT_OVERFLOW, ERR_STORAGE_BUCKET_EXISTS,
     },
     group::{Group, GroupInput},
@@ -156,7 +155,7 @@ impl Contract {
                     _ => panic!("{}", ERR_GROUP_NOT_FOUND),
                 },
                 ActivityRight::GroupMember(g, name) => {
-                    if name != account_id {
+                    if *name != *account_id {
                         continue;
                     }
 
@@ -168,12 +167,7 @@ impl Contract {
                         _ => panic!("{}", ERR_GROUP_NOT_FOUND),
                     }
                 }
-                ActivityRight::TokenHolder => match self.ft.accounts.get(account_id) {
-                    Some(ft) if ft > 0 => {
-                        return true;
-                    }
-                    _ => continue,
-                },
+                ActivityRight::TokenHolder => unimplemented!(),
                 ActivityRight::GroupRole(g, r) => match self.groups.get(g) {
                     Some(group) => match group.get_member_by_account(account_id) {
                         Some(m) => match m.tags.into_iter().any(|t| t == *r) {
@@ -198,26 +192,7 @@ impl Contract {
                     _ => panic!("{}", ERR_GROUP_NOT_FOUND),
                 },
                 //TODO only group members
-                ActivityRight::Member => {
-                    match self.ft.accounts.get(account_id) {
-                        Some(ft) if ft > 0 => {
-                            return true;
-                        }
-                        _ => {
-                            // Yep this is expensive...
-                            // Iterate all groups and all members
-                            let groups = self.groups.to_vec();
-
-                            match groups
-                                .into_iter()
-                                .any(|(_, g)| g.get_member_by_account(account_id).is_some())
-                            {
-                                true => return true,
-                                false => continue,
-                            }
-                        }
-                    }
-                }
+                ActivityRight::Member => unimplemented!(),
                 ActivityRight::Account(a) => match a == account_id {
                     true => return true,
                     false => continue,
@@ -230,9 +205,10 @@ impl Contract {
     // TODO: Test coverage.
     /// Evaluates vote results by scenario and type of voters.
     /// Returns tuple (max_possible_amount,vote_results)
+    #[allow(unused)]
     pub fn calculate_votes(
         &self,
-        votes: &HashMap<String, u8>,
+        votes: &HashMap<AccountId, u8>,
         scenario: &VoteScenario,
         vote_target: &ActivityRight,
     ) -> CalculatedVoteResults {
@@ -256,7 +232,7 @@ impl Contract {
                         max_possible_amount = 1;
                     }
                     ActivityRight::TokenHolder => {
-                        max_possible_amount = self.ft.token_holders_count as u128;
+                        unimplemented!()
                     }
                     // If member exists in 2 groups, then he is accounted twice.
                     ActivityRight::Member => {
@@ -276,65 +252,11 @@ impl Contract {
                 }
             }
             VoteScenario::TokenWeighted => match vote_target {
-                ActivityRight::Anyone | ActivityRight::TokenHolder => {
-                    //TODO refactor Member - wont be calculated correctly
-                    max_possible_amount = self.ft_total_distributed as u128 * self.decimal_const;
-
-                    for (voter, vote_value) in votes.iter() {
-                        vote_result[*vote_value as usize] +=
-                            self.ft.accounts.get(voter).unwrap_or(0);
-                    }
-                }
+                ActivityRight::Anyone | ActivityRight::TokenHolder => unimplemented!(),
                 // This is expensive scenario
-                ActivityRight::Member => {
-                    let mut map = HashMap::with_capacity(64);
-                    for group in self.groups.values_as_vector().iter() {
-                        let members = group.get_members_accounts();
-                        for member in members.into_iter() {
-                            let amount = self.ft.accounts.get(&member).unwrap_or(0);
-
-                            // AccountId can be in multiple groups
-                            if map.insert(member, amount).is_none() {
-                                max_possible_amount += amount;
-                            }
-                        }
-                    }
-
-                    for (voter, vote_value) in votes.iter() {
-                        vote_result[*vote_value as usize] += *map.get(voter).unwrap_or(&0);
-                    }
-                }
-                ActivityRight::Group(gid) => {
-                    let group = self.groups.get(gid).unwrap();
-                    let members: Vec<AccountId> = group.get_members_accounts();
-
-                    // Store it in temp hashmap so we dont have to IO ft_amount for each member again
-                    let mut map = HashMap::with_capacity(members.len());
-                    for member in members.into_iter() {
-                        let amount = self.ft.accounts.get(&member).unwrap_or(0);
-                        map.insert(member, amount);
-                        max_possible_amount += amount;
-                    }
-
-                    for (voter, vote_value) in votes.iter() {
-                        vote_result[*vote_value as usize] += *map.get(voter).unwrap_or(&0);
-                    }
-                }
-                ActivityRight::GroupRole(gid, rid) => {
-                    let group = self.groups.get(gid).unwrap();
-                    let members: Vec<AccountId> = group.get_members_accounts_by_role(*rid);
-
-                    let mut map = HashMap::with_capacity(members.len());
-                    for member in members.into_iter() {
-                        let amount = self.ft.accounts.get(&member).unwrap_or(0);
-                        map.insert(member, amount);
-                        max_possible_amount += amount;
-                    }
-
-                    for (voter, vote_value) in votes.iter() {
-                        vote_result[*vote_value as usize] += *map.get(voter).unwrap_or(&0);
-                    }
-                }
+                ActivityRight::Member => unimplemented!(),
+                ActivityRight::Group(gid) => unimplemented!(),
+                ActivityRight::GroupRole(gid, rid) => unimplemented!(),
                 ActivityRight::GroupMember(_, _)
                 | ActivityRight::Account(_)
                 | ActivityRight::GroupLeader(_) => {
@@ -407,8 +329,10 @@ impl Contract {
     /// Internally transfers FT from contract account all accounts equally.
     /// Sets contract's ft_total_distributed property.
     /// Panics if account_ids is empty vector or distribution value is zero.
+    #[allow(unused)]
     pub fn distribute_ft(&mut self, amount: u32, account_ids: &[AccountId]) {
-        assert!(!account_ids.is_empty(), "{}", ERR_DISTRIBUTION_ACC_EMPTY);
+        unimplemented!("Requires new FT SC implemented.");
+        /*         assert!(!account_ids.is_empty(), "{}", ERR_DISTRIBUTION_ACC_EMPTY);
         assert!(
             amount / account_ids.len() as u32 > 0,
             "{}",
@@ -425,7 +349,7 @@ impl Contract {
 
             self.ft
                 .internal_transfer(&contract_account_id, acc, amount_per_acc, None);
-        }
+        } */
     }
 
     /// Error callback.
@@ -589,7 +513,7 @@ impl Contract {
     /// Returns DAO's specific values which cannot be known ahead of time.
     pub fn dao_consts(&self) -> Box<Consts> {
         Box::new(|id| match id {
-            C_DAO_ACC_ID => Some(DataType::String(env::current_account_id())),
+            C_DAO_ACC_ID => Some(DataType::String(env::current_account_id().to_string())),
             _ => None,
         })
     }
@@ -599,7 +523,7 @@ impl Contract {
     pub fn log_action(
         &mut self,
         proposal_id: ProposalId,
-        caller: &str,
+        caller: &AccountId,
         action_id: u8,
         args: &[Vec<DataType>],
         args_collections: Option<&[Vec<DataType>]>,
@@ -610,7 +534,7 @@ impl Contract {
             .unwrap_or_else(|| Vec::with_capacity(1));
 
         logs.push(ActivityLog {
-            caller: caller.to_string(),
+            caller: caller.to_owned(),
             action_id,
             timestamp: env::block_timestamp() / 10u64.pow(9),
             args: args.to_vec(),
@@ -686,9 +610,14 @@ impl Contract {
                 self.group_add_members(group_id, group_members);
             }
             DaoActionIdent::GroupRemoveMember => {
+                let member = get_datatype_from_values(inputs, 0, 1)?
+                    .try_into_string()?
+                    .try_into()
+                    .map_err(|_| ActionError::Binding)?;
+
                 self.group_remove_member(
                     get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16,
-                    get_datatype_from_values(inputs, 0, 1)?.try_into_string()?,
+                    member,
                 );
             }
             DaoActionIdent::SettingsUpdate => {
@@ -704,85 +633,13 @@ impl Contract {
                     get_datatype_from_values(inputs, 0, 1)?.try_into_u64()? as u32,
                     get_datatype_from_values(inputs, 0, 2)?.try_into_vec_string()?,
                 );
-                self.ft_distribute(group_id, amount, account_ids);
-            }
-            DaoActionIdent::TreasurySendFt => {
-                let (ft_account_id, receiver_id, amount, memo, msg) = (
-                    get_datatype_from_values(inputs, 0, 0)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 1)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 2)?.try_into_u128()?,
-                    get_datatype_from_values(inputs, 0, 3)?
-                        .try_into_string()
-                        .ok(),
-                    None,
-                );
-                self.treasury_send_ft(ft_account_id, receiver_id, amount, memo, msg, false);
-            }
-            DaoActionIdent::TreasurySendFtContract => {
-                let (ft_account_id, receiver_id, amount, memo, msg) = (
-                    get_datatype_from_values(inputs, 0, 0)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 1)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 2)?.try_into_u128()?,
-                    get_datatype_from_values(inputs, 0, 3)?
-                        .try_into_string()
-                        .ok(),
-                    get_datatype_from_values(inputs, 0, 4)?
-                        .try_into_string()
-                        .ok(),
-                );
-                self.treasury_send_ft(ft_account_id, receiver_id, amount, memo, msg, true);
-            }
-            DaoActionIdent::TreasurySendNft => {
-                let (nft_account_id, receiver_id, nft_id, memo, approval_id, msg) = (
-                    get_datatype_from_values(inputs, 0, 0)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 1)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 2)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 3)?
-                        .try_into_string()
-                        .ok(),
-                    get_datatype_from_values(inputs, 0, 4)?.try_into_u64()? as u32,
-                    None,
-                );
 
-                self.treasury_send_nft(
-                    nft_account_id,
-                    receiver_id,
-                    nft_id,
-                    memo,
-                    approval_id,
-                    msg,
-                    false,
-                );
-            }
-            DaoActionIdent::TreasurySendNFtContract => {
-                let (nft_account_id, receiver_id, nft_id, memo, approval_id, msg) = (
-                    get_datatype_from_values(inputs, 0, 0)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 1)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 2)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 3)?
-                        .try_into_string()
-                        .ok(),
-                    get_datatype_from_values(inputs, 0, 4)?.try_into_u64()? as u32,
-                    get_datatype_from_values(inputs, 0, 5)?
-                        .try_into_string()
-                        .ok(),
-                );
-                self.treasury_send_nft(
-                    nft_account_id,
-                    receiver_id,
-                    nft_id,
-                    memo,
-                    approval_id,
-                    msg,
-                    true,
-                );
-            }
-            DaoActionIdent::TreasurySendNear => {
-                let (receiver, amount) = (
-                    get_datatype_from_values(inputs, 0, 0)?.try_into_string()?,
-                    get_datatype_from_values(inputs, 0, 1)?.try_into_u128()?,
-                );
-                self.treasury_send_near(receiver, amount);
+                let mut accounts = Vec::with_capacity(account_ids.len());
+                for acc in account_ids.into_iter() {
+                    accounts.push(acc.try_into().map_err(|_| ActionError::Binding)?);
+                }
+
+                self.ft_distribute(group_id, amount, accounts);
             }
             _ => unreachable!(),
         }
@@ -792,25 +649,20 @@ impl Contract {
 
     pub fn execute_fn_call_action(
         &mut self,
-        mut receiver: String,
+        mut receiver: AccountId,
         method: String,
         inputs: &[Vec<DataType>],
         deposit: u128,
         tgas: u16,
         metadata: &[FnCallMetadata],
     ) -> Promise {
-        if receiver == "self" {
+        if receiver.as_str() == "self" {
             receiver = env::current_account_id();
         }
 
         let args = serialize_to_json(inputs, metadata, 0);
 
-        Promise::new(receiver).function_call(
-            method.into_bytes(),
-            args.into_bytes(),
-            deposit,
-            tgas as u64 * TGAS,
-        )
+        Promise::new(receiver).function_call(method, args.into_bytes(), deposit, TGAS * tgas as u64)
     }
 
     /// Proposal binds structure check.
