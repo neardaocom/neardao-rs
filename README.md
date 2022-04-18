@@ -2,13 +2,12 @@
 
 <img src="https://neardao.com/img/logo_neardao.png" alt="drawing" width="150"/>
 
-<h1><code>neardao-rs</code></h1>
-</div>
+<h1>neardao-rs</h1>
 
 [![Build](https://github.com/neardaocom/app-rs/actions/workflows/build.yml/badge.svg?branch=devel%2Fnext)](https://github.com/neardaocom/app-rs/actions/workflows/build.yml)
-[![Tests and code checks](https://github.com/neardaocom/app-rs/actions/workflows/tests.yml/badge.svg?branch=devel%2Fnext)](https://github.com/neardaocom/app-rs/actions/workflows/tests.yml)
-
----
+[![Tests](https://github.com/neardaocom/app-rs/actions/workflows/tests.yml/badge.svg?branch=devel%2Fnext)](https://github.com/neardaocom/app-rs/actions/workflows/tests.yml)
+    
+</div>
 
 ## Smart contracts
 - Dao
