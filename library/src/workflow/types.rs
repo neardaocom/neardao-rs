@@ -6,11 +6,11 @@ use near_sdk::{
 
 use crate::{
     storage::StorageBucket,
-    types::{DataType, DataTypeDef},
+    types::datatype::{Datatype, Value},
     BindId, Consts, ExpressionId, ObjectId, ValidatorId,
 };
 
-pub struct ValueContainer<'a, T: AsRef<[DataType]>> {
+pub struct ValueContainer<'a, T: AsRef<[Value]>> {
     pub dao_consts: &'a Consts,
     pub tpl_consts: &'a T,
     pub settings_consts: &'a T,
@@ -137,7 +137,7 @@ pub enum ArgSrc {
 #[serde(crate = "near_sdk::serde")]
 pub struct FnCallMetadata {
     pub arg_names: Vec<String>,
-    pub arg_types: Vec<DataTypeDef>,
+    pub arg_types: Vec<Datatype>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]

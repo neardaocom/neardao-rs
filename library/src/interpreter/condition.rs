@@ -1,4 +1,4 @@
-use crate::types::DataType;
+use crate::types::datatype::Value;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
@@ -16,8 +16,8 @@ pub struct Condition {
 }
 
 impl Condition {
-    pub fn eval(&self, args: &[DataType]) -> Result<u8, EvalError> {
-        if let DataType::Bool(v) = self.expr.eval(args)? {
+    pub fn eval(&self, args: &[Value]) -> Result<u8, EvalError> {
+        if let Value::Bool(v) = self.expr.eval(args)? {
             match v {
                 true => Ok(self.true_path),
                 false => Ok(self.false_path),

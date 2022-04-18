@@ -1,12 +1,12 @@
 use std::mem::take;
 
-use library::{types::DataType, ObjectValues};
+use library::{types::datatype::Value, ObjectValues};
 
 use crate::error::ActionError;
 
 /// Helper method for fetching `DataType` from the object on index idx.
 /// Replaces the value with `DataType`s default value.
-pub fn get_datatype(object: &mut Vec<DataType>, idx: usize) -> Result<DataType, ActionError> {
+pub fn get_datatype(object: &mut Vec<Value>, idx: usize) -> Result<Value, ActionError> {
     Ok(take(object.get_mut(idx).ok_or(ActionError::Binding)?))
 }
 
@@ -14,7 +14,7 @@ pub fn get_datatype_from_values(
     object: &mut ObjectValues,
     obj_idx: usize,
     idx: usize,
-) -> Result<DataType, ActionError> {
+) -> Result<Value, ActionError> {
     Ok(take(
         object
             .get_mut(obj_idx)
@@ -29,7 +29,7 @@ pub mod deserialize {
     use std::convert::TryFrom;
 
     use super::{get_datatype, get_datatype_from_values};
-    use library::types::DataType;
+    use library::types::datatype::Value;
     use near_sdk::AccountId;
 
     use crate::{
@@ -40,14 +40,14 @@ pub mod deserialize {
     };
 
     pub fn deserialize_group_settings(
-        user_inputs: &mut Vec<Vec<DataType>>,
+        user_inputs: &mut Vec<Vec<Value>>,
         obj_idx: usize,
     ) -> Result<GroupSettings, ActionError> {
         let first_object = user_inputs.get_mut(obj_idx).ok_or(ActionError::Binding)?;
 
         let leader = match get_datatype(first_object, 1)? {
-            DataType::Null => None,
-            DataType::String(s) => {
+            Value::Null => None,
+            Value::String(s) => {
                 let acc = AccountId::try_from(s).map_err(|_| ActionError::InvalidDataType)?;
                 Some(acc)
             }
@@ -62,7 +62,7 @@ pub mod deserialize {
     }
 
     pub fn deserialize_group_members(
-        user_inputs: &mut Vec<Vec<DataType>>,
+        user_inputs: &mut Vec<Vec<Value>>,
         obj_idx: usize,
     ) -> Result<Vec<GroupMember>, ActionError> {
         let obj = user_inputs.get_mut(obj_idx).ok_or(ActionError::Binding)?;
@@ -91,7 +91,7 @@ pub mod deserialize {
     }
     /// Deserializes `GroupInput` from user action inputs for GroupAdd action.
     pub fn deserialize_group_input(
-        user_inputs: &mut Vec<Vec<DataType>>,
+        user_inputs: &mut Vec<Vec<Value>>,
     ) -> Result<GroupInput, ActionError> {
         let settings = deserialize_group_settings(user_inputs, 1)?;
 
@@ -119,7 +119,7 @@ pub mod deserialize {
         }
         let token_lock_obj = user_inputs.get_mut(2).ok_or(ActionError::Binding)?;
 
-        let token_lock = if get_datatype(token_lock_obj, 0)? == DataType::Null {
+        let token_lock = if get_datatype(token_lock_obj, 0)? == Value::Null {
             None
         } else {
             Some(GroupTokenLockInput {
@@ -140,7 +140,7 @@ pub mod deserialize {
     }
 
     pub fn deserialize_dao_settings(
-        user_inputs: &mut Vec<Vec<DataType>>,
+        user_inputs: &mut Vec<Vec<Value>>,
     ) -> Result<DaoSettings, ActionError> {
         let tags = get_datatype_from_values(user_inputs, 0, 2)?.try_into_vec_u64()?;
         let tags = tags.into_iter().map(|t| t as u16).collect();

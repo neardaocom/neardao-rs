@@ -3,7 +3,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::types::DataType;
+use crate::types::datatype::Value;
 
 use super::{error::EvalError, ArgId};
 
@@ -11,7 +11,7 @@ use super::{error::EvalError, ArgId};
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum ExprTerm {
-    Value(DataType),
+    Value(Value),
     Arg(ArgId),
     FnCall(FnName, (u8, u8)),
 }
@@ -57,11 +57,11 @@ pub enum EExpr {
     Boolean(TExpr),
     String(TExpr),
     Fn(FnName),
-    Value(DataType),
+    Value(Value),
 }
 
 impl EExpr {
-    pub fn eval(&self, args: &[DataType]) -> Result<DataType, EvalError> {
+    pub fn eval(&self, args: &[Value]) -> Result<Value, EvalError> {
         match self {
             EExpr::Aritmetic(e) | EExpr::Boolean(e) | EExpr::String(e) => self.eval_expr(e, args),
             EExpr::Fn(fn_name) => self.eval_fn(fn_name, args),
@@ -69,7 +69,7 @@ impl EExpr {
         }
     }
 
-    pub fn eval_expr(&self, expr: &TExpr, args: &[DataType]) -> Result<DataType, EvalError> {
+    pub fn eval_expr(&self, expr: &TExpr, args: &[Value]) -> Result<Value, EvalError> {
         let mut results = Vec::with_capacity(expr.terms.len());
         for op in expr.operators.iter() {
             let temp_res = match &op.op_type {
@@ -111,7 +111,7 @@ impl EExpr {
         Ok(results.pop().unwrap())
     }
 
-    fn eval_fn(&self, fn_name: &FnName, args: &[DataType]) -> Result<DataType, EvalError> {
+    fn eval_fn(&self, fn_name: &FnName, args: &[Value]) -> Result<Value, EvalError> {
         match fn_name {
             FnName::Concat => {
                 let mut result = String::with_capacity(64);
@@ -119,14 +119,14 @@ impl EExpr {
                 for val in args.iter() {
                     // cannot be None coz we iterate by the array
                     match val {
-                        DataType::String(ref v) => result.push_str(v),
+                        Value::String(ref v) => result.push_str(v),
                         _ => return Err(EvalError::InvalidType),
                     };
                 }
-                Ok(DataType::String(result))
+                Ok(Value::String(result))
             }
             FnName::ToArray => match &args[0] {
-                DataType::String(_) => {
+                Value::String(_) => {
                     let mut result = Vec::with_capacity(args.len());
                     for arg in args.iter() {
                         result.push(
@@ -135,13 +135,13 @@ impl EExpr {
                                 .map_err(|_| EvalError::InvalidType)?,
                         );
                     }
-                    Ok(DataType::VecString(result))
+                    Ok(Value::VecString(result))
                 }
                 _ => Err(EvalError::Unimplemented),
             },
             FnName::ValueExists => match &args.get(0) {
-                Some(_) => Ok(DataType::Bool(true)),
-                None => Ok(DataType::Bool(false)),
+                Some(_) => Ok(Value::Bool(true)),
+                None => Ok(Value::Bool(false)),
             },
             _ => Err(EvalError::Unimplemented),
         }
@@ -189,10 +189,10 @@ pub enum EOp {
 }
 
 impl EOp {
-    pub fn eval(&self, arg1: &DataType, arg2: &DataType) -> Result<DataType, EvalError> {
+    pub fn eval(&self, arg1: &Value, arg2: &Value) -> Result<Value, EvalError> {
         match self {
             EOp::Ari(o) => match (arg1, arg2) {
-                (DataType::U64(lhs), DataType::U64(rhs)) => {
+                (Value::U64(lhs), Value::U64(rhs)) => {
                     let result = match o {
                         AriOp::Add => lhs + rhs,
                         AriOp::Subtract => lhs - rhs,
@@ -201,9 +201,9 @@ impl EOp {
                         AriOp::Modulo => lhs % rhs,
                     };
 
-                    Ok(DataType::U64(result))
+                    Ok(Value::U64(result))
                 }
-                (DataType::U128(lhs), DataType::U128(rhs)) => {
+                (Value::U128(lhs), Value::U128(rhs)) => {
                     let result = match o {
                         AriOp::Add => lhs.0 + rhs.0,
                         AriOp::Subtract => lhs.0 - rhs.0,
@@ -212,46 +212,46 @@ impl EOp {
                         AriOp::Modulo => lhs.0 % rhs.0,
                     };
 
-                    Ok(DataType::U128(result.into()))
+                    Ok(Value::U128(result.into()))
                 }
                 _ => panic!("Invalid operands for aritmetic operation"),
             },
             EOp::Rel(o) => match (arg1, arg2) {
-                (DataType::Bool(lhs), DataType::Bool(rhs)) => match o {
-                    RelOp::Eqs => Ok(DataType::Bool(*lhs == *rhs)),
-                    RelOp::NEqs => Ok(DataType::Bool(*lhs != *rhs)),
+                (Value::Bool(lhs), Value::Bool(rhs)) => match o {
+                    RelOp::Eqs => Ok(Value::Bool(*lhs == *rhs)),
+                    RelOp::NEqs => Ok(Value::Bool(*lhs != *rhs)),
                     _ => Err(EvalError::Unimplemented),
                 },
-                (DataType::U64(lhs), DataType::U64(rhs)) => match o {
-                    RelOp::Eqs => Ok(DataType::Bool(lhs == rhs)),
-                    RelOp::NEqs => Ok(DataType::Bool(lhs != rhs)),
-                    RelOp::Gt => Ok(DataType::Bool(lhs > rhs)),
-                    RelOp::Lt => Ok(DataType::Bool(lhs < rhs)),
-                    RelOp::GtE => Ok(DataType::Bool(lhs >= rhs)),
-                    RelOp::LtE => Ok(DataType::Bool(lhs <= rhs)),
+                (Value::U64(lhs), Value::U64(rhs)) => match o {
+                    RelOp::Eqs => Ok(Value::Bool(lhs == rhs)),
+                    RelOp::NEqs => Ok(Value::Bool(lhs != rhs)),
+                    RelOp::Gt => Ok(Value::Bool(lhs > rhs)),
+                    RelOp::Lt => Ok(Value::Bool(lhs < rhs)),
+                    RelOp::GtE => Ok(Value::Bool(lhs >= rhs)),
+                    RelOp::LtE => Ok(Value::Bool(lhs <= rhs)),
                 },
-                (DataType::U128(lhs), DataType::U128(rhs)) => match o {
-                    RelOp::Eqs => Ok(DataType::Bool(lhs == rhs)),
-                    RelOp::NEqs => Ok(DataType::Bool(lhs != rhs)),
-                    RelOp::Gt => Ok(DataType::Bool(lhs.0 > rhs.0)),
-                    RelOp::Lt => Ok(DataType::Bool(lhs.0 < rhs.0)),
-                    RelOp::GtE => Ok(DataType::Bool(lhs.0 >= rhs.0)),
-                    RelOp::LtE => Ok(DataType::Bool(lhs.0 <= rhs.0)),
+                (Value::U128(lhs), Value::U128(rhs)) => match o {
+                    RelOp::Eqs => Ok(Value::Bool(lhs == rhs)),
+                    RelOp::NEqs => Ok(Value::Bool(lhs != rhs)),
+                    RelOp::Gt => Ok(Value::Bool(lhs.0 > rhs.0)),
+                    RelOp::Lt => Ok(Value::Bool(lhs.0 < rhs.0)),
+                    RelOp::GtE => Ok(Value::Bool(lhs.0 >= rhs.0)),
+                    RelOp::LtE => Ok(Value::Bool(lhs.0 <= rhs.0)),
                 },
-                (DataType::String(lhs), DataType::String(rhs)) => match o {
-                    RelOp::Eqs => Ok(DataType::Bool(*lhs == *rhs)),
-                    RelOp::NEqs => Ok(DataType::Bool(*lhs != *rhs)),
-                    RelOp::Gt => Ok(DataType::Bool(*lhs > *rhs)),
-                    RelOp::Lt => Ok(DataType::Bool(*lhs < *rhs)),
-                    RelOp::GtE => Ok(DataType::Bool(*lhs >= *rhs)),
-                    RelOp::LtE => Ok(DataType::Bool(*lhs <= *rhs)),
+                (Value::String(lhs), Value::String(rhs)) => match o {
+                    RelOp::Eqs => Ok(Value::Bool(*lhs == *rhs)),
+                    RelOp::NEqs => Ok(Value::Bool(*lhs != *rhs)),
+                    RelOp::Gt => Ok(Value::Bool(*lhs > *rhs)),
+                    RelOp::Lt => Ok(Value::Bool(*lhs < *rhs)),
+                    RelOp::GtE => Ok(Value::Bool(*lhs >= *rhs)),
+                    RelOp::LtE => Ok(Value::Bool(*lhs <= *rhs)),
                 },
                 _ => Err(EvalError::InvalidType),
             },
             EOp::Log(o) => match (arg1, arg2) {
-                (DataType::Bool(lhs), DataType::Bool(rhs)) => match o {
-                    LogOp::And => Ok(DataType::Bool(*lhs && *rhs)),
-                    LogOp::Or => Ok(DataType::Bool(*lhs || *rhs)),
+                (Value::Bool(lhs), Value::Bool(rhs)) => match o {
+                    LogOp::And => Ok(Value::Bool(*lhs && *rhs)),
+                    LogOp::Or => Ok(Value::Bool(*lhs || *rhs)),
                 },
                 _ => Err(EvalError::Unimplemented),
             },
@@ -261,10 +261,8 @@ impl EOp {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        interpreter::expression::{LogOp, Op},
-        types::DataType,
-    };
+    use crate::interpreter::expression::{LogOp, Op};
+    use crate::types::datatype::Value;
 
     use super::{EExpr, EOp, ExprTerm, FnName, RelOp, TExpr};
 
@@ -273,7 +271,7 @@ mod test {
         //TEST CASE
         //"1 > 2"
 
-        let mut args = vec![DataType::U64(1), DataType::U64(2)];
+        let mut args = vec![Value::U64(1), Value::U64(2)];
 
         let expr = EExpr::Boolean(TExpr {
             operators: vec![Op {
@@ -284,7 +282,7 @@ mod test {
         });
 
         let result = expr.eval(&mut args).unwrap();
-        let expected_result = DataType::Bool(false);
+        let expected_result = Value::Bool(false);
 
         assert_eq!(result, expected_result);
     }
@@ -295,16 +293,16 @@ mod test {
         //string = concat(["a", "b", "c"]) + "_group" //last one is binded
 
         let mut args = vec![
-            DataType::String("a".into()),
-            DataType::String("b".into()),
-            DataType::String("c".into()),
-            DataType::String("_group".into()),
+            Value::String("a".into()),
+            Value::String("b".into()),
+            Value::String("c".into()),
+            Value::String("_group".into()),
         ];
 
         let expr = EExpr::Fn(FnName::Concat);
 
         let result = expr.eval(&mut args).unwrap();
-        let expected_result = DataType::String("abc_group".into());
+        let expected_result = Value::String("abc_group".into());
 
         assert_eq!(result, expected_result);
     }
@@ -314,11 +312,11 @@ mod test {
         //"abc_group" == concat(["a", "b", "c"]) + "_group" //last one is binded
 
         let mut args = vec![
-            DataType::String("a".into()),
-            DataType::String("b".into()),
-            DataType::String("c".into()),
-            DataType::String("_group".into()),
-            DataType::String("abc_group".into()),
+            Value::String("a".into()),
+            Value::String("b".into()),
+            Value::String("c".into()),
+            Value::String("_group".into()),
+            Value::String("abc_group".into()),
         ];
 
         let expr = EExpr::Boolean(TExpr {
@@ -330,7 +328,7 @@ mod test {
         });
 
         let result = expr.eval(&mut args).unwrap();
-        let expected_result = DataType::Bool(true);
+        let expected_result = Value::Bool(true);
 
         assert_eq!(result, expected_result);
     }
@@ -341,13 +339,13 @@ mod test {
         //"abc_group" == concat(["a", "b", "c"]) + "_group" || 1 > 2
 
         let mut args = vec![
-            DataType::String("a".into()),
-            DataType::String("b".into()),
-            DataType::String("c".into()),
-            DataType::String("_group".into()),
-            DataType::String("abc_group".into()),
-            DataType::U64(1),
-            DataType::U64(2),
+            Value::String("a".into()),
+            Value::String("b".into()),
+            Value::String("c".into()),
+            Value::String("_group".into()),
+            Value::String("abc_group".into()),
+            Value::U64(1),
+            Value::U64(2),
         ];
 
         let expr = EExpr::Boolean(TExpr {
@@ -374,7 +372,7 @@ mod test {
         });
 
         let result = expr.eval(&mut args).unwrap();
-        let expected_result = DataType::Bool(true);
+        let expected_result = Value::Bool(true);
 
         assert_eq!(result, expected_result);
     }

@@ -4,9 +4,9 @@ use near_sdk::{
 };
 
 use crate::{
-    functions::get_value_from_source,
+    functions::binding::get_value_from_source,
     interpreter::{condition::Condition, expression::EExpr},
-    types::{error::ProcessingError, DataType},
+    types::{datatype::Value, error::ProcessingError},
 };
 
 use super::types::{ArgSrc, ValueContainer};
@@ -21,12 +21,12 @@ pub struct Expression {
 }
 
 impl Expression {
-    pub fn bind_and_eval<T: std::convert::AsRef<[DataType]>>(
+    pub fn bind_and_eval<T: std::convert::AsRef<[Value]>>(
         &self,
         sources: &ValueContainer<T>,
-        args: &[DataType],
-    ) -> Result<DataType, ProcessingError> {
-        let mut binded_args: Vec<DataType> = Vec::with_capacity(args.len());
+        args: &[Value],
+    ) -> Result<Value, ProcessingError> {
+        let mut binded_args: Vec<Value> = Vec::with_capacity(args.len());
 
         for arg_src in self.args.iter() {
             match arg_src {

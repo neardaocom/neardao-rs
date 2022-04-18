@@ -1,4 +1,4 @@
-use library::types::DataType;
+use library::types::datatype::Value;
 use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
@@ -64,7 +64,7 @@ impl Contract {
     pub fn check_transition(
         self,
         proposal_id: u32,
-        args: Vec<DataType>,
+        args: Vec<Value>,
         activity_id: u8,
         transition_id: Option<u8>,
     ) -> bool {
@@ -98,7 +98,7 @@ impl Contract {
         self.tags.get(&category)
     }
 
-    pub fn storage_bucket_data_all(self, bucket_id: StorageKey) -> Option<Vec<DataType>> {
+    pub fn storage_bucket_data_all(self, bucket_id: StorageKey) -> Option<Vec<Value>> {
         self.storage.get(&bucket_id).map(|bucket| {
             bucket
                 .get_all_data()
@@ -112,7 +112,7 @@ impl Contract {
         self.storage.keys_as_vector().to_vec()
     }
 
-    pub fn storage_bucket_data(self, bucket_id: StorageKey, data_id: String) -> Option<DataType> {
+    pub fn storage_bucket_data(self, bucket_id: StorageKey, data_id: String) -> Option<Value> {
         self.storage
             .get(&bucket_id)
             .map(|bucket| bucket.get_data(&data_id))

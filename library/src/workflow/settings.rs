@@ -4,7 +4,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::{types::DataType, TransitionLimit};
+use crate::{types::datatype::Value, TransitionLimit};
 
 use super::types::{ActivityRight, VoteScenario};
 
@@ -25,7 +25,7 @@ pub struct TemplateSettings {
     pub deposit_propose: Option<U128>,
     pub deposit_vote: Option<U128>,
     pub deposit_propose_return: u8, // how many percent of propose deposit to return, TODO implement
-    pub constants: Vec<DataType>,
+    pub constants: Vec<Value>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
@@ -40,6 +40,6 @@ pub struct ProposeSettings {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ActivityBind {
-    pub shared: Vec<DataType>,
-    pub values: Vec<Vec<DataType>>,
+    pub shared: Vec<Value>,
+    pub values: Vec<Vec<Value>>,
 }

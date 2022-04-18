@@ -6,10 +6,10 @@ use near_sdk::{
 };
 
 use crate::{
-    functions::get_value_from_source,
+    functions::binding::get_value_from_source,
     interpreter::{condition::Condition, expression::EExpr},
     storage::StorageBucket,
-    types::{DataType, DataTypeDef},
+    types::datatype::{Datatype, Value},
     ActivityId, FnCallId, MethodName, ObjectValues,
 };
 
@@ -214,23 +214,23 @@ pub enum Instruction {
     DeleteKeyGlobal(String),
     /// User/Source provided value.
     StoreDynValue(String, ArgSrc),
-    StoreValue(String, DataType),
-    StoreValueGlobal(String, DataType),
-    StoreFnCallResult(String, DataTypeDef),
-    StoreFnCallResultGlobal(String, DataTypeDef),
+    StoreValue(String, Value),
+    StoreValueGlobal(String, Value),
+    StoreFnCallResult(String, Datatype),
+    StoreFnCallResultGlobal(String, Datatype),
     StoreWorkflow,
     /// Stores expression
     /// 2th param defines if FnCallResult is required and what to deserialize it to.
     /// FnCall result will always be as last arg in values.
-    StoreExpression(String, Vec<ArgSrc>, EExpr, Option<DataTypeDef>),
-    StoreExpressionGlobal(String, Vec<ArgSrc>, EExpr, Option<DataTypeDef>),
-    StoreExpressionBinded(String, Vec<DataType>, EExpr, Option<DataTypeDef>),
-    StoreExpressionGlobalBinded(String, Vec<DataType>, EExpr, Option<DataTypeDef>),
+    StoreExpression(String, Vec<ArgSrc>, EExpr, Option<Datatype>),
+    StoreExpressionGlobal(String, Vec<ArgSrc>, EExpr, Option<Datatype>),
+    StoreExpressionBinded(String, Vec<Value>, EExpr, Option<Datatype>),
+    StoreExpressionGlobalBinded(String, Vec<Value>, EExpr, Option<Datatype>),
     /// Conditional Jump.
     /// 2th param defines if FnCallResult is required and what to deserialize it to.
     /// FnCall result will always be as last arg in values.
-    Cond(Vec<ArgSrc>, Condition, Option<DataTypeDef>),
-    CondBinded(Vec<DataType>, Condition, Option<DataTypeDef>),
+    Cond(Vec<ArgSrc>, Condition, Option<Datatype>),
+    CondBinded(Vec<Value>, Condition, Option<Datatype>),
     Jump(u8),
     None,
 }
@@ -249,10 +249,10 @@ impl Postprocessing {
     /// Supposed to be called before dispatching FnCall action.
     /// Returns `Err(())` in case users's input structure is not correct.
     #[allow(clippy::result_unit_err)]
-    pub fn bind_instructions<T: AsRef<[DataType]>>(
+    pub fn bind_instructions<T: AsRef<[Value]>>(
         &mut self,
         value_source: &ValueContainer<T>,
-        user_input: &[Vec<DataType>],
+        user_input: &[Vec<Value>],
     ) -> Result<(), ()> {
         // TODO: Improve.
         for ins in self.instructions.iter_mut() {
@@ -430,37 +430,37 @@ impl Postprocessing {
     #[allow(clippy::result_unit_err)]
     fn deser_datatype_from_slice(
         &self,
-        type_def: &DataTypeDef,
+        type_def: &Datatype,
         promise_result_data: &[u8],
-    ) -> Result<DataType, ()> {
+    ) -> Result<Value, ()> {
         match type_def {
-            DataTypeDef::String(_) => {
+            Datatype::String(_) => {
                 let value = serde_json::from_slice::<String>(promise_result_data);
-                Ok(DataType::String(value.map_err(|_| ())?))
+                Ok(Value::String(value.map_err(|_| ())?))
             }
-            DataTypeDef::Bool(_) => {
+            Datatype::Bool(_) => {
                 let value = serde_json::from_slice::<bool>(promise_result_data);
-                Ok(DataType::Bool(value.map_err(|_| ())?))
+                Ok(Value::Bool(value.map_err(|_| ())?))
             }
-            DataTypeDef::U64(_) => {
+            Datatype::U64(_) => {
                 let value = serde_json::from_slice::<u64>(promise_result_data);
-                Ok(DataType::U64(value.map_err(|_| ())?))
+                Ok(Value::U64(value.map_err(|_| ())?))
             }
-            DataTypeDef::U128(_) => {
+            Datatype::U128(_) => {
                 let value = serde_json::from_slice::<U128>(promise_result_data);
-                Ok(DataType::U128(value.map_err(|_| ())?))
+                Ok(Value::U128(value.map_err(|_| ())?))
             }
-            DataTypeDef::VecString => {
+            Datatype::VecString => {
                 let value = serde_json::from_slice::<Vec<String>>(promise_result_data);
-                Ok(DataType::VecString(value.map_err(|_| ())?))
+                Ok(Value::VecString(value.map_err(|_| ())?))
             }
-            DataTypeDef::VecU64 => {
+            Datatype::VecU64 => {
                 let value = serde_json::from_slice::<Vec<u64>>(promise_result_data);
-                Ok(DataType::VecU64(value.map_err(|_| ())?))
+                Ok(Value::VecU64(value.map_err(|_| ())?))
             }
-            DataTypeDef::VecU128 => {
+            Datatype::VecU128 => {
                 let value = serde_json::from_slice::<Vec<U128>>(promise_result_data);
-                Ok(DataType::VecU128(value.map_err(|_| ())?))
+                Ok(Value::VecU128(value.map_err(|_| ())?))
             }
             _ => Err(()),
         }
@@ -468,11 +468,11 @@ impl Postprocessing {
 }
 
 #[allow(clippy::result_unit_err)]
-fn bind_value<T: AsRef<[DataType]>>(
+fn bind_value<T: AsRef<[Value]>>(
     arg_src: &ArgSrc,
-    user_input: &[Vec<DataType>],
+    user_input: &[Vec<Value>],
     value_source: &ValueContainer<T>,
-) -> Result<DataType, ()> {
+) -> Result<Value, ()> {
     let value = match arg_src {
         ArgSrc::UserObj(obj_id, arg_id) => user_input
             .get(*obj_id as usize)
@@ -505,7 +505,7 @@ mod test {
             expression::{AriOp, EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
         },
         storage::StorageBucket,
-        types::{DataType, DataTypeDef},
+        types::datatype::{Datatype, Value},
         workflow::types::{ArgSrc, ValueContainer},
     };
 
@@ -520,7 +520,7 @@ mod test {
     #[test]
     fn postprocessing_simple_cond_1() {
         testing_env!(VMContextBuilder::new().build());
-        let user_input = vec![vec![DataType::String("value_1".into()), DataType::U64(420)]];
+        let user_input = vec![vec![Value::String("value_1".into()), Value::U64(420)]];
 
         let mut pp = Postprocessing {
             storage_key: "key".into(),
@@ -535,13 +535,13 @@ mod test {
                             }],
                             terms: vec![
                                 ExprTerm::Arg(0),
-                                ExprTerm::Value(DataType::String("registered".into())),
+                                ExprTerm::Value(Value::String("registered".into())),
                             ],
                         }),
                         true_path: 1,
                         false_path: 3,
                     },
-                    Some(DataTypeDef::String(false)),
+                    Some(Datatype::String(false)),
                 ),
                 Instruction::StoreExpressionGlobal(
                     "skey_1".into(),
@@ -551,14 +551,14 @@ mod test {
                             operands_ids: [0, 1],
                             op_type: EOp::Ari(AriOp::Multiply),
                         }],
-                        terms: vec![ExprTerm::Arg(0), ExprTerm::Value(DataType::U64(2))],
+                        terms: vec![ExprTerm::Arg(0), ExprTerm::Value(Value::U64(2))],
                     }),
                     None,
                 ),
                 Instruction::Jump(u8::MAX),
                 Instruction::StoreValue(
                     "skey_2".into(),
-                    DataType::String("requires_registration".into()),
+                    Value::String("requires_registration".into()),
                 ),
             ],
         };
@@ -567,7 +567,7 @@ mod test {
         let mut storage = StorageBucket::new(b"key".to_vec());
 
         let dao_consts = Box::new(|id: u8| match id {
-            0 => Some(DataType::String("neardao.near".into())),
+            0 => Some(Value::String("neardao.near".into())),
             _ => None,
         });
 
@@ -597,30 +597,30 @@ mod test {
                             }],
                             terms: vec![
                                 ExprTerm::Arg(0),
-                                ExprTerm::Value(DataType::String("registered".into())),
+                                ExprTerm::Value(Value::String("registered".into())),
                             ],
                         }),
                         true_path: 1,
                         false_path: 3,
                     },
-                    Some(DataTypeDef::String(false)),
+                    Some(Datatype::String(false)),
                 ),
                 Instruction::StoreExpressionGlobalBinded(
                     "skey_1".into(),
-                    vec![DataType::U64(420)],
+                    vec![Value::U64(420)],
                     EExpr::Aritmetic(TExpr {
                         operators: vec![Op {
                             operands_ids: [0, 1],
                             op_type: EOp::Ari(AriOp::Multiply),
                         }],
-                        terms: vec![ExprTerm::Arg(0), ExprTerm::Value(DataType::U64(2))],
+                        terms: vec![ExprTerm::Arg(0), ExprTerm::Value(Value::U64(2))],
                     }),
                     None,
                 ),
                 Instruction::Jump(u8::MAX),
                 Instruction::StoreValue(
                     "skey_2".into(),
-                    DataType::String("requires_registration".into()),
+                    Value::String("requires_registration".into()),
                 ),
             ],
         };
@@ -647,7 +647,7 @@ mod test {
 
         assert_eq!(
             global_storage.get_all_data(),
-            vec![("skey_1".into(), DataType::U64(2 * 420))]
+            vec![("skey_1".into(), Value::U64(2 * 420))]
         );
 
         assert_eq!(storage.get_all_data(), vec![]);
@@ -676,7 +676,7 @@ mod test {
             storage.get_all_data(),
             vec![(
                 "skey_2".into(),
-                DataType::String("requires_registration".into())
+                Value::String("requires_registration".into())
             )]
         );
     }

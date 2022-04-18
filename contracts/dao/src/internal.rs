@@ -27,9 +27,9 @@ use crate::{
     CalculatedVoteResults, ProposalId, ProposalWf, VoteTotalPossible, Votes,
 };
 use library::{
-    functions::serialize_to_json,
+    functions::serialization::serialize_to_json,
     storage::StorageBucket,
-    types::DataType,
+    types::datatype::Value,
     workflow::{
         activity::{ActionInput, Activity, Postprocessing, TemplateAction, Transition},
         instance::InstanceState,
@@ -513,7 +513,7 @@ impl Contract {
     /// Returns DAO's specific values which cannot be known ahead of time.
     pub fn dao_consts(&self) -> Box<Consts> {
         Box::new(|id| match id {
-            C_DAO_ACC_ID => Some(DataType::String(env::current_account_id().to_string())),
+            C_DAO_ACC_ID => Some(Value::String(env::current_account_id().to_string())),
             _ => None,
         })
     }
@@ -525,8 +525,8 @@ impl Contract {
         proposal_id: ProposalId,
         caller: &AccountId,
         action_id: u8,
-        args: &[Vec<DataType>],
-        args_collections: Option<&[Vec<DataType>]>,
+        args: &[Vec<Value>],
+        args_collections: Option<&[Vec<Value>]>,
     ) {
         let mut logs = self
             .workflow_activity_log
@@ -589,7 +589,7 @@ impl Contract {
         &mut self,
         _proposal_id: u32,
         action_ident: DaoActionIdent,
-        inputs: &mut Vec<Vec<DataType>>,
+        inputs: &mut Vec<Vec<Value>>,
     ) -> Result<(), ActionError> {
         match action_ident {
             DaoActionIdent::GroupAdd => {
@@ -651,7 +651,7 @@ impl Contract {
         &mut self,
         mut receiver: AccountId,
         method: String,
-        inputs: &[Vec<DataType>],
+        inputs: &[Vec<Value>],
         deposit: u128,
         tgas: u16,
         metadata: &[FnCallMetadata],

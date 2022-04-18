@@ -1,7 +1,9 @@
-use library::functions::{bind_from_sources, get_value_from_source, serialize_to_json, validate};
+use library::functions::binding::{bind_from_sources, get_value_from_source};
+use library::functions::serialization::serialize_to_json;
+use library::functions::validation::validate;
 use library::storage::StorageBucket;
+use library::types::datatype::Value;
 use library::types::error::ProcessingError;
-use library::types::DataType;
 use library::workflow::activity::{ActionData, ActionInput, Activity, FnCallIdType, Terminality};
 use library::workflow::instance::InstanceState;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
@@ -364,7 +366,7 @@ impl Contract {
                     .values
                     .get_mut(0)
                     .ok_or(ActionError::InputStructure(0))?
-                    .insert(0, DataType::String(caller.to_string()));
+                    .insert(0, Value::String(caller.to_string()));
             } else {
                 self.execute_dao_action(proposal_id, action_data.name, &mut action.values)?;
             }

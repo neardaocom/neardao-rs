@@ -3,7 +3,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::{types::DataType, Version};
+use crate::{types::datatype::Value, Version};
 
 use super::{
     activity::{Activity, TemplateActivity, Transition},
@@ -25,7 +25,7 @@ pub struct Template {
     pub validator_exprs: Vec<Expression>, //TODO move to matrix, this wont work in all scenarios or use ValidatorId in obj_validators
     pub transitions: Vec<Vec<Transition>>,
     pub expressions: Vec<Expression>, //TODO move to action?
-    pub constants: Vec<DataType>,
+    pub constants: Vec<Value>,
     pub end: Vec<u8>,
 }
 

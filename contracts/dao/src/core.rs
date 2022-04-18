@@ -2,7 +2,7 @@ use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::tags::{TagInput, Tags};
 use library::storage::StorageBucket;
-use library::types::DataType;
+use library::types::datatype::Value;
 use library::workflow::instance::{Instance, InstanceState};
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
@@ -24,12 +24,13 @@ use crate::{GroupId, ProposalId};
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+// TODO: remove
 pub struct ActivityLog {
     pub caller: AccountId,
     pub action_id: u8,
     pub timestamp: u64,
-    pub args: Vec<Vec<DataType>>,
-    pub args_collections: Option<Vec<Vec<DataType>>>,
+    pub args: Vec<Vec<Value>>,
+    pub args_collections: Option<Vec<Vec<Value>>>,
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]

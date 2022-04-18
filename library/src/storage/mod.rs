@@ -4,11 +4,11 @@ use near_sdk::{
     IntoStorageKey,
 };
 
-use crate::types::DataType;
+use crate::types::datatype::Value;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct StorageBucket {
-    data: UnorderedMap<String, DataType>,
+    data: UnorderedMap<String, Value>,
 }
 
 impl StorageBucket {
@@ -18,22 +18,22 @@ impl StorageBucket {
         }
     }
 
-    pub fn get_all_data(&self) -> Vec<(String, DataType)> {
+    pub fn get_all_data(&self) -> Vec<(String, Value)> {
         self.data.to_vec()
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn get_data(&self, key: &String) -> Option<DataType> {
+    pub fn get_data(&self, key: &String) -> Option<Value> {
         self.data.get(key)
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn add_data(&mut self, key: &String, data: &DataType) {
+    pub fn add_data(&mut self, key: &String, data: &Value) {
         self.data.insert(key, data);
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn remove_data(&mut self, key: &String) -> Option<DataType> {
+    pub fn remove_data(&mut self, key: &String) -> Option<Value> {
         self.data.remove(key)
     }
 
