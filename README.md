@@ -4,6 +4,7 @@
 
 <h1><code>neardao-rs</code></h1>
 </div>
+
 [![Build](https://github.com/neardaocom/app-rs/actions/workflows/build.yml/badge.svg?branch=devel%2Fnext)](https://github.com/neardaocom/app-rs/actions/workflows/build.yml)
 [![Tests and code checks](https://github.com/neardaocom/app-rs/actions/workflows/tests.yml/badge.svg?branch=devel%2Fnext)](https://github.com/neardaocom/app-rs/actions/workflows/tests.yml)
 
