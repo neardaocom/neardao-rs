@@ -1,5 +1,10 @@
 [workspace]
-members = ["contracts/dao", "contracts/dao_factory","contracts/workflow_provider", "library"]
+members = [
+    "contracts/*", 
+    "library", 
+    "tests/integration_tests",
+    "tests/mocks/simple_dao"
+]
 
 [profile.release]
 codegen-units = 1       

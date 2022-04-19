@@ -1,0 +1,12 @@
+[package]
+name = "simple_dao"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+near-sdk = {version = "4.0.0-pre.7", features = ["unstable"]}
+near-contract-standards = "4.0.0-pre.7"
+library = { path = "./../../../library", version = "0.1.0" }

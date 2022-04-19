@@ -26,13 +26,12 @@ if [ ! -z "$1" -a -d "${ABS_BASEDIR}/contracts/${1}" ]; then
     fi
     cp "${ABS_BASEDIR}/target/wasm32-unknown-unknown/release/${1}.wasm" "${ABS_BASEDIR}/res/"
 else
-    echo "BUILD SCRIPT: Building all libs into res dir"
-
-    RUSTFLAGS='-C link-arg=-s' cargo build --workspace --target wasm32-unknown-unknown --release
+    echo "BUILD SCRIPT: Building all contracts into res dir"
 
     for lib in "${CRATES[@]}"
     do
     :         
+        RUSTFLAGS='-C link-arg=-s' cargo build -p $lib --target wasm32-unknown-unknown --release
         cp "${ABS_BASEDIR}/target/wasm32-unknown-unknown/release/${lib}.wasm" "${ABS_BASEDIR}/res/"
     done
 fi

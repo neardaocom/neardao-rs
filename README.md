@@ -29,7 +29,7 @@ Contains shared definitions/types/functions used by NearDAO contracts. For more 
 
 2. Via [NEAR CLI](https://docs.near.org/docs/tools/near-cli)
     - set of bash scripts located in near_cli_tests that utilises NEAR CLI tool
-    - run by `. near_cli_test/<script-name>`
+    - run by `. tests/near_cli_test/<script-name>`
     - free the testnets's resources used by running `. clean.sh`
 
 3. [Near workpaces](https://github.com/near/workspaces-rs)
