@@ -19,12 +19,13 @@ trait ExtSelf {
 #[near_bindgen]
 impl Contract {
     // TODO finish error handling
-    #[private]
     /// Private callback to check Promise result.
     /// If there's postprocessing, then it's executed.
     /// Postprocessing always requires storage.
     /// Unwrapping is OK as it's been checked before dispatching this promise.
     #[allow(clippy::too_many_arguments)]
+    #[private]
+
     pub fn postprocess(
         &mut self,
         instance_id: u32,
@@ -32,7 +33,7 @@ impl Contract {
         must_succeed: bool,
         storage_key: Option<String>,
         postprocessing: Option<Postprocessing>,
-    ) -> Result<(), ActionError> {
+    ) {
         assert_eq!(
             env::promise_results_count(),
             1,
@@ -48,9 +49,7 @@ impl Contract {
                 postprocessing,
                 val,
             ),
-            PromiseResult::Failed => {
-                self.postprocessing_failed(instance_id, action_id, must_succeed)
-            }
+            PromiseResult::Failed => self.postprocessing_failed(instance_id, must_succeed),
         }
     }
 }

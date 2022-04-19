@@ -31,9 +31,10 @@ impl Contract {
     }
 
     // TODO: Auto-finish WF then there is no other possible transition regardless terminality.
-    #[payable]
     #[allow(unused_mut)]
     #[allow(clippy::nonminimal_bool)]
+    #[payable]
+    #[handle_result]
     pub fn wf_run_activity(
         &mut self,
         proposal_id: u32,

@@ -7,6 +7,6 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-near-sdk = {version = "4.0.0-pre.7", features = ["unstable"]}
-near-contract-standards = "4.0.0-pre.7"
+near-sdk = {version = "4.0.0-pre.8", features = ["unstable"]}
+near-contract-standards = "4.0.0-pre.8"
 library = { path = "./../../../library", version = "0.1.0" }

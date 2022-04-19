@@ -52,6 +52,15 @@ impl Display for ActivityError {
     }
 }
 
+impl AsRef<str> for ActivityError {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Error(s) => s.as_str(),
+            Self::FatalError(s) => s.as_str(),
+        }
+    }
+}
+
 impl Error for ActivityError {}
 
 impl From<ActionError> for ActivityError {
@@ -120,6 +129,12 @@ impl Display for ActionError {
                 write!(f, "Source was missing or value pos does not match.")
             }
         }
+    }
+}
+
+impl AsRef<str> for ActionError {
+    fn as_ref(&self) -> &str {
+        "Action error occured"
     }
 }
 

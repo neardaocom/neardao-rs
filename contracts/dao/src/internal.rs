@@ -354,24 +354,15 @@ impl Contract {
 
     /// Error callback.
     /// If promise did not have to succeed, then instance is still updated.
-    pub fn postprocessing_failed(
-        &mut self,
-        proposal_id: u32,
-        action_id: u8,
-        must_succeed: bool,
-    ) -> Result<(), ActionError> {
+    pub fn postprocessing_failed(&mut self, proposal_id: u32, must_succeed: bool) {
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
 
         let awaiting_state = wfi.awaiting_state.take().unwrap();
 
-        let result = if must_succeed {
+        if must_succeed {
             // Switch state back to running.
             wfi.unset_awaiting_state(InstanceState::Running);
 
-            Err(ActionError::PromiseFailed(
-                awaiting_state.activity_id,
-                action_id,
-            ))
             // TODO: Question is if to do postprocessing as well or just update instance.
         } else {
             if awaiting_state.is_new_transition {
@@ -390,14 +381,10 @@ impl Contract {
             } else {
                 wfi.awaiting_state = Some(awaiting_state);
             }
-
-            Ok(())
-        };
+        }
 
         self.workflow_instance
             .insert(&proposal_id, &(wfi, settings));
-
-        result
     }
 
     /// Success callback.
@@ -411,7 +398,7 @@ impl Contract {
         storage_key: Option<String>,
         postprocessing: Option<Postprocessing>,
         promise_call_result: Vec<u8>,
-    ) -> Result<(), ActionError> {
+    ) {
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
 
         let awaiting_state = wfi.awaiting_state.take().unwrap();
@@ -421,10 +408,7 @@ impl Contract {
             wfi.unset_awaiting_state(InstanceState::Running);
             self.workflow_instance
                 .insert(&proposal_id, &(wfi, settings));
-            return Err(ActionError::PromiseFailed(
-                awaiting_state.activity_id,
-                action_id,
-            ));
+            return;
         }
         wfi.last_transition_done_at = env::block_timestamp();
         wfi.actions_done_count += 1;
@@ -446,67 +430,61 @@ impl Contract {
         }
 
         // Execute postprocessing script which must always succeed.
-        let result = match postprocessing {
-            Some(pp) => {
-                let mut global_storage = self.storage.get(&GLOBAL_BUCKET_IDENT.into()).unwrap();
-                let mut storage = if let Some(ref storage_key) = storage_key {
-                    self.storage.get(storage_key)
-                } else {
-                    None
-                };
+        if let Some(pp) = postprocessing {
+            let mut global_storage = self.storage.get(&GLOBAL_BUCKET_IDENT.into()).unwrap();
+            let mut storage = if let Some(ref storage_key) = storage_key {
+                self.storage.get(storage_key)
+            } else {
+                None
+            };
 
-                let mut new_template = None;
+            let mut new_template = None;
 
-                if pp
-                    .execute(
-                        promise_call_result,
-                        &mut storage.as_mut(),
-                        &mut global_storage,
-                        &mut new_template,
-                    )
-                    .is_err()
+            if pp
+                .execute(
+                    promise_call_result,
+                    &mut storage.as_mut(),
+                    &mut global_storage,
+                    &mut new_template,
+                )
+                .is_err()
+            {
+                wfi.unset_awaiting_state(InstanceState::FatalError);
+            } else {
+                // Only in case its workflow Add.
+                if let Some((
+                    workflow,
+                    fncalls,
+                    fncall_metadata,
+                    std_fncalls,
+                    std_fncall_metadata,
+                )) = new_template
                 {
-                    wfi.unset_awaiting_state(InstanceState::FatalError);
-                    Err(ActionError::ActionPostprocessing(action_id))
-                } else {
-                    // Only in case its workflow Add.
-                    if let Some((
-                        workflow,
-                        fncalls,
-                        fncall_metadata,
-                        std_fncalls,
-                        std_fncall_metadata,
-                    )) = new_template
-                    {
-                        // Unwraping is ok as settings are inserted when this proposal is accepted.
-                        let settings = self
-                            .proposed_workflow_settings
-                            .remove(&proposal_id)
-                            .unwrap();
+                    // Unwraping is ok as settings are inserted when this proposal is accepted.
+                    let settings = self
+                        .proposed_workflow_settings
+                        .remove(&proposal_id)
+                        .unwrap();
 
-                        self.workflow_last_id += 1;
-                        self.workflow_template
-                            .insert(&self.workflow_last_id, &(workflow, settings));
-                        self.init_function_calls(fncalls, fncall_metadata);
-                        self.init_standard_function_calls(std_fncalls, std_fncall_metadata);
-                    }
-
-                    // Save updated storages.
-                    if let Some(storage) = storage {
-                        self.storage.insert(&storage_key.unwrap(), &storage);
-                    }
-                    self.storage
-                        .insert(&GLOBAL_BUCKET_IDENT.into(), &global_storage);
-                    Ok(())
+                    self.workflow_last_id += 1;
+                    self.workflow_template
+                        .insert(&self.workflow_last_id, &(workflow, settings));
+                    self.init_function_calls(fncalls, fncall_metadata);
+                    self.init_standard_function_calls(std_fncalls, std_fncall_metadata);
                 }
+
+                // Save updated storages.
+                if let Some(storage) = storage {
+                    self.storage.insert(&storage_key.unwrap(), &storage);
+                }
+                self.storage
+                    .insert(&GLOBAL_BUCKET_IDENT.into(), &global_storage);
             }
-            _ => Ok(()),
         };
 
         wfi.awaiting_state = Some(awaiting_state);
         self.workflow_instance
             .insert(&proposal_id, &(wfi, settings));
-        result
     }
 
     /// Closure which might be required in workflow.
