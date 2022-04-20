@@ -1,11 +1,13 @@
 use crate::{
     types::{
+        activity_input::ActivityInput,
         datatype::Value,
         error::{ProcessingError, SourceError},
+        source::Source,
     },
     workflow::{
-        expression::Expression,
-        types::{ArgSrc, ValueContainer},
+        expression::{Expression, ExpressionNew},
+        types::{ArgSrc, ArgSrcNew, ValueContainer},
     },
 };
 
@@ -238,4 +240,32 @@ pub fn get_value_from_source<T: std::convert::AsRef<[Value]>>(
         }
         _ => Err(SourceError::InvalidSourceVariant),
     }
+}
+
+pub fn bind_from_sources_new<S, A>(
+    sources: &S,
+    source_defs: &[(String, ArgSrcNew)],
+    _expressions: &[ExpressionNew],
+    inputs: &mut A,
+) -> Result<(), ProcessingError>
+where
+    S: Source + ?Sized,
+    A: ActivityInput + ?Sized,
+{
+    for (arg_key, arg_src) in source_defs {
+        match arg_src {
+            ArgSrcNew::User(_) => {
+                continue;
+            }
+            ArgSrcNew::ConstsTpl(key) => {
+                let val = sources
+                    .get_tpl_const(key)
+                    .expect("Failed to get value from tpl source");
+                inputs.set(arg_key, val.to_owned());
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    Ok(())
 }

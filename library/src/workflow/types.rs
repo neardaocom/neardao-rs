@@ -131,6 +131,26 @@ pub enum ArgSrc {
     Const(u8),
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+/// Defines source of value.
+pub enum ArgSrcNew {
+    /// User's input - defines arg pos.
+    User(String),
+    /// Bind from template.
+    ConstsTpl(String),
+    ConstsSettings(String),
+    /// Bind from proposal settings.
+    ConstActivityShared(String),
+    ConstAction(String),
+    Storage(String),
+    GlobalStorage(String),
+    Expression(ExpressionId),
+    /// Dao specific value known at runtime, eg. 0 means dao's account name.
+    Const(u8),
+}
+
 // Represents object schema
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Clone))]
@@ -138,6 +158,15 @@ pub enum ArgSrc {
 pub struct FnCallMetadata {
     pub arg_names: Vec<String>,
     pub arg_types: Vec<Datatype>,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Clone))]
+#[serde(crate = "near_sdk::serde")]
+pub struct FnCallMetadataNew {
+    pub objects_count: u8,
+    pub arg_names: Vec<String>,
+    pub arg_type: Vec<Datatype>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]

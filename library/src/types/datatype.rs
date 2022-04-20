@@ -35,9 +35,9 @@ impl Default for Value {
 
 // TODO better error type
 impl Value {
-    pub fn try_into_bool(self) -> Result<bool, TypeError> {
+    pub fn try_into_bool(&self) -> Result<bool, TypeError> {
         match self {
-            Value::Bool(b) => Ok(b),
+            Value::Bool(b) => Ok(*b),
             _ => Err(TypeError::Conversion),
         }
     }
@@ -49,17 +49,17 @@ impl Value {
         }
     }
 
-    pub fn try_into_u128(self) -> Result<u128, TypeError> {
+    pub fn try_into_u128(&self) -> Result<u128, TypeError> {
         match self {
-            Value::U64(n) => Ok(n as u128),
+            Value::U64(n) => Ok(*n as u128),
             Value::U128(n) => Ok(n.0),
             _ => Err(TypeError::Conversion),
         }
     }
 
-    pub fn try_into_u64(self) -> Result<u64, TypeError> {
+    pub fn try_into_u64(&self) -> Result<u64, TypeError> {
         match self {
-            Value::U64(n) => Ok(n),
+            Value::U64(n) => Ok(*n),
             Value::U128(n) => Ok(n.0 as u64),
             _ => Err(TypeError::Conversion),
         }

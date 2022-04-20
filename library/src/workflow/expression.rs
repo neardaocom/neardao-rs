@@ -6,10 +6,12 @@ use near_sdk::{
 use crate::{
     functions::binding::get_value_from_source,
     interpreter::{condition::Condition, expression::EExpr},
-    types::{datatype::Value, error::ProcessingError},
+    types::{
+        activity_input::ActivityInput, datatype::Value, error::ProcessingError, source::Source,
+    },
 };
 
-use super::types::{ArgSrc, ValueContainer};
+use super::types::{ArgSrc, ArgSrcNew, ValueContainer};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
@@ -36,6 +38,43 @@ impl Expression {
                         .clone(),
                 ),
                 _ => binded_args.push(get_value_from_source(arg_src, sources)?),
+            }
+        }
+        Ok(self.expr.eval(binded_args.as_slice())?)
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+/// Interpreter wrapper for workflows.
+pub struct ExpressionNew {
+    pub args: Vec<ArgSrcNew>,
+    pub expr: EExpr,
+}
+
+impl ExpressionNew {
+    pub fn bind_and_eval<S, A>(&self, sources: &S, args: &A) -> Result<Value, ProcessingError>
+    where
+        S: Source + ?Sized,
+        A: ActivityInput + ?Sized,
+    {
+        let mut binded_args: Vec<Value> = Vec::with_capacity(self.args.len());
+
+        for arg_src in self.args.iter() {
+            match arg_src {
+                ArgSrcNew::User(key) => {
+                    binded_args.push(args.get(key.as_str()).expect("Failed to get value").clone())
+                }
+                ArgSrcNew::ConstsTpl(key) => binded_args.push(
+                    sources
+                        .get_tpl_const(key.as_str())
+                        .expect("Failed to get value")
+                        .clone(),
+                ),
+                _ => {
+                    unimplemented!("Bind and eval is implemented only for User and ConstTpl inputs")
+                }
             }
         }
         Ok(self.expr.eval(binded_args.as_slice())?)

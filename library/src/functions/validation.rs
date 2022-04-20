@@ -1,10 +1,12 @@
 use crate::{
     types::{
+        activity_input::ActivityInput,
         datatype::Value,
         error::{ProcessingError, SourceError},
+        source::Source,
     },
     workflow::{
-        expression::Expression,
+        expression::{Expression, ExpressionNew},
         types::{FnCallMetadata, ValidatorRef, ValidatorType, ValueContainer},
     },
 };
@@ -57,6 +59,38 @@ pub fn validate<T: std::convert::AsRef<[Value]>>(
                     }
                 }
             }
+        }
+    }
+
+    Ok(true)
+}
+
+pub fn validate_new<S, A>(
+    source: &S,
+    validator_refs: &[ValidatorRef],
+    validator_exprs: &[ExpressionNew],
+    //metadata: &[FnCallMetadata],
+    user_input: &A,
+) -> Result<bool, ProcessingError>
+where
+    S: Source + ?Sized,
+    A: ActivityInput + ?Sized,
+{
+    for v_ref in validator_refs.iter() {
+        let validator = validator_exprs
+            .get(v_ref.val_id as usize)
+            .ok_or(SourceError::InvalidArgId)?;
+
+        match v_ref.v_type {
+            ValidatorType::Simple => {
+                if !validator
+                    .bind_and_eval(source, user_input)?
+                    .try_into_bool()?
+                {
+                    return Ok(false);
+                }
+            }
+            ValidatorType::Collection => todo!(),
         }
     }
 
