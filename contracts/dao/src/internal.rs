@@ -27,12 +27,13 @@ use crate::{
     CalculatedVoteResults, ProposalId, ProposalWf, VoteTotalPossible, Votes,
 };
 use library::{
-    functions::serialization::serialize_to_json,
     storage::StorageBucket,
     types::datatype::Value,
     workflow::{
-        activity::{ActionInput, Activity, Postprocessing, TemplateAction, Transition},
+        action::TemplateAction,
+        activity::{ActionInput, Activity, Transition},
         instance::InstanceState,
+        postprocessing::Postprocessing,
         settings::{ActivityBind, TemplateSettings},
         template::Template,
         types::{ActivityRight, DaoActionIdent, FnCallMetadata, VoteScenario},
@@ -638,7 +639,8 @@ impl Contract {
             receiver = env::current_account_id();
         }
 
-        let args = serialize_to_json(inputs, metadata, 0);
+        //let args = serialize_to_json(inputs, metadata, 0);
+        let args = "".to_string();
 
         Promise::new(receiver).function_call(method, args.into_bytes(), deposit, TGAS * tgas as u64)
     }

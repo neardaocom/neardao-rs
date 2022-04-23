@@ -5,11 +5,15 @@ use near_sdk::{
 };
 
 use crate::{
+    interpreter::{condition::Condition, expression::EExpr},
     storage::StorageBucket,
     types::datatype::{Datatype, Value},
-    BindId, Consts, ExpressionId, ObjectId, ValidatorId,
+    Consts, ObjectId, ValidatorId,
 };
 
+use super::expression::Expression;
+
+// TODO: replace with Source trait
 pub struct ValueContainer<'a, T: AsRef<[Value]>> {
     pub dao_consts: &'a Consts,
     pub tpl_consts: &'a T,
@@ -108,34 +112,10 @@ pub enum ActivityResult {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Debug))]
 #[serde(crate = "near_sdk::serde")]
 /// Defines source of value.
 pub enum ArgSrc {
-    /// User's input - defines arg pos.
-    User(u8),
-    /// User's input - defines obj and arg pos.
-    UserObj(u8, u8),
-    /// Bind from template.
-    ConstsTpl(BindId),
-    ConstsSettings(BindId),
-    /// Bind from proposal settings.
-    ConstActivityShared(BindId),
-    ConstAction(BindId),
-    Storage(String),
-    GlobalStorage(String),
-    Expression(ExpressionId),
-    Object(ObjectId),
-    VecObject(ObjectId),
-    /// Dao specific value known at runtime, eg. 0 means dao's account name.
-    Const(u8),
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-/// Defines source of value.
-pub enum ArgSrcNew {
     /// User's input - defines arg pos.
     User(String),
     /// Bind from template.
@@ -146,9 +126,35 @@ pub enum ArgSrcNew {
     ConstAction(String),
     Storage(String),
     GlobalStorage(String),
-    Expression(ExpressionId),
+    // Special case where expression result is used as source value.
+    //Expression(ExpressionId),
     /// Dao specific value known at runtime, eg. 0 means dao's account name.
     Const(u8),
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Debug))]
+#[serde(crate = "near_sdk::serde")]
+pub enum SrcOrExpr {
+    /// Source for value.
+    Src(ArgSrc),
+    /// Expression sources which evaluates to the value.
+    Expr(Expression),
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct BindDefinition {
+    /// Key being binded.
+    pub key: String,
+    /// Value source for `key`.
+    pub key_src: SrcOrExpr,
+    /// Prefixes for nested collection objects.
+    /// Defined as Vec<String> for forward-compatible changes.
+    pub prefixes: Vec<String>,
+    pub is_collection: bool,
+    //pub expression: Option<Expression>,
 }
 
 // Represents object schema
@@ -160,19 +166,39 @@ pub struct FnCallMetadata {
     pub arg_types: Vec<Datatype>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Clone))]
-#[serde(crate = "near_sdk::serde")]
-pub struct FnCallMetadataNew {
-    pub objects_count: u8,
-    pub arg_names: Vec<String>,
-    pub arg_type: Vec<Datatype>,
-}
-
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
 pub enum ActionType {
     DaoAction,
     FnCall,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum Instruction {
+    DeleteKey(String),
+    DeleteKeyGlobal(String),
+    /// User/Source provided value.
+    StoreDynValue(String, ArgSrc),
+    StoreValue(String, Value),
+    StoreValueGlobal(String, Value),
+    StoreFnCallResult(String, Datatype),
+    StoreFnCallResultGlobal(String, Datatype),
+    StoreWorkflow,
+    /// Stores expression
+    /// 3th param defines if FnCallResult is required and what to deserialize it to.
+    /// FnCall result will always be as last arg in values.
+    StoreExpression(String, Vec<ArgSrc>, EExpr, Option<Datatype>),
+    StoreExpressionGlobal(String, Vec<ArgSrc>, EExpr, Option<Datatype>),
+    StoreExpressionBinded(String, Vec<Value>, EExpr, Option<Datatype>),
+    StoreExpressionGlobalBinded(String, Vec<Value>, EExpr, Option<Datatype>),
+    /// Conditional Jump.
+    /// 3th param defines if FnCallResult is required and what to deserialize it to.
+    /// FnCall result will always be as last arg in values.
+    Cond(Vec<ArgSrc>, Condition, Option<Datatype>),
+    CondBinded(Vec<Value>, Condition, Option<Datatype>),
+    Jump(u8),
+    None,
 }

@@ -1,10 +1,10 @@
 use crate::workflow::{ArgSrc, Transition};
 use crate::{
     expression::{EExpr, FnName},
+    unit_tests::ONE_NEAR,
     workflow::{
         ActionData, ActionType, DataType, DataTypeDef, FnCallData, FnCallMetadata, VoteScenario,
     },
-    unit_tests::ONE_NEAR,
     workflow::{
         ActivityRight, ExprArg, Expression, Postprocessing, PostprocessingType, ProposeSettings,
         Template, TemplateActivity, TemplateSettings,
@@ -25,7 +25,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
 
     let pp_sale_create = Some(Postprocessing {
         storage_key: "pp_5".into(),
-        op_type: PostprocessingType::FnCallResult(DataTypeDef::U32(false)), //might overflow in future coz skyward returns u64 but we have U64 only
+        op_type: PostprocessingType::FnCallResult(DataTypeDef::U32(false)),
         instructions: vec![],
     });
 
@@ -137,7 +137,6 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
         validator_exprs: vec![],
     };
 
-    //TODO be able to say we use receiver as from storage
     let fncalls: Vec<FnCallId> = vec![
         (SKYWARD_ACC.into(), "register_tokens".into()),
         ("self".into(), "storage_deposit".into()),

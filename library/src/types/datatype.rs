@@ -85,6 +85,10 @@ impl Value {
             _ => Err(TypeError::Conversion),
         }
     }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, Value::Null)
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
@@ -105,6 +109,15 @@ pub enum Datatype {
     Object(ObjectId),
     NullableObject(ObjectId),
     VecObject(ObjectId),
+}
+
+impl Datatype {
+    pub fn is_optional(&self) -> bool {
+        match self {
+            Self::Bool(v) | Self::U64(v) | Self::U128(v) | Self::String(v) => *v,
+            _ => false,
+        }
+    }
 }
 
 #[allow(unused)]

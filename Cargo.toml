@@ -3,7 +3,7 @@ members = [
     "contracts/*", 
     "library", 
     "tests/integration_tests",
-    "tests/mocks/simple_dao"
+    "tests/mocks/*"
 ]
 
 [profile.release]

@@ -1,5 +1,6 @@
 use near_sdk::AccountId;
 use types::datatype::Value;
+use workflow::{template::Template, types::FnCallMetadata};
 
 //mod data;
 //mod unit_tests;
@@ -23,6 +24,13 @@ pub type BindId = u8;
 pub type ValidatorId = u8;
 pub type ExpressionId = u8;
 pub type TransitionId = u8;
+pub type ProviderTemplateData = (
+    Template,
+    Vec<FnCallId>,
+    Vec<Vec<FnCallMetadata>>,
+    Vec<MethodName>,
+    Vec<Vec<FnCallMetadata>>,
+);
 
 /// Flatten object's values type for action input.
 pub type ObjectValues = Vec<Vec<Value>>;

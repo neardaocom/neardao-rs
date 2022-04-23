@@ -1,5 +1,4 @@
-use library::functions::binding::{bind_from_sources, get_value_from_source};
-use library::functions::serialization::serialize_to_json;
+use library::functions::binding::bind_from_sources;
 use library::functions::validation::validate;
 use library::storage::StorageBucket;
 use library::types::datatype::Value;
@@ -330,25 +329,25 @@ impl Contract {
 
             // Check input validators
             if !tpl_action.input_validators.is_empty()
-                && !validate(
-                    &sources,
-                    tpl_action.input_validators.as_slice(),
-                    template.validator_exprs.as_slice(),
-                    metadata.as_slice(),
-                    action.values.as_slice(),
-                )?
+            /* && !validate(
+                &sources,
+                tpl_action.input_validators.as_slice(),
+                template.validator_exprs.as_slice(),
+                metadata.as_slice(),
+                action.values.as_slice(),
+            )? */
             {
                 return Err(ActionError::Validation(idx as u8));
             }
 
             // Bind DaoAction
-            bind_from_sources(
+            /* bind_from_sources(
                 input_defs,
                 &sources,
                 template.expressions.as_slice(),
                 &mut action.values,
                 0,
-            )?;
+            )?; */
 
             if action_data.name == DaoActionIdent::Event {
                 let deposit = match &action_data.required_deposit {
@@ -555,25 +554,25 @@ impl Contract {
 
             // Check input validators
             if !tpl_action.input_validators.is_empty()
-                && !validate(
-                    &sources,
-                    tpl_action.input_validators.as_slice(),
-                    template.validator_exprs.as_slice(),
-                    metadata.as_slice(),
-                    action.values.as_slice(),
-                )?
+            /* && !validate(
+                &sources,
+                tpl_action.input_validators.as_slice(),
+                template.validator_exprs.as_slice(),
+                metadata.as_slice(),
+                action.values.as_slice(),
+            )? */
             {
                 return Err(ActionError::Validation(idx as u8));
             }
 
             // Bind DaoAction
-            bind_from_sources(
+            /* bind_from_sources(
                 input_defs,
                 &sources,
                 template.expressions.as_slice(),
                 &mut action.values,
                 0,
-            )?;
+            )?; */
 
             let deposit = match action_data.deposit {
                 Some(arg_src) => get_value_from_source(&arg_src, &sources)
@@ -582,7 +581,8 @@ impl Contract {
                 None => 0,
             };
 
-            let args = serialize_to_json(action.values.as_slice(), metadata.as_slice(), 0);
+            //let args = serialize_to_json(action.values.as_slice(), metadata.as_slice(), 0);
+            let args = "".to_string();
 
             let pp = if let Some(mut pp) = tpl_action.postprocessing.take() {
                 pp.bind_instructions(&sources, action.values.as_slice())

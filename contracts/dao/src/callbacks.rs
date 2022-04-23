@@ -1,4 +1,4 @@
-use library::workflow::activity::Postprocessing;
+use library::workflow::postprocessing::Postprocessing;
 use near_sdk::{env, ext_contract, near_bindgen, PromiseResult};
 
 use crate::core::*;

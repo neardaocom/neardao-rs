@@ -22,7 +22,9 @@ wasm_bin_getters!(
 );
 
 pub(crate) fn outcome_pretty(name: &str, outcome: CallExecutionDetails) {
-    let result_data: String = outcome.json().unwrap_or("Failed to parse data".into());
+    let result_data: String = outcome
+        .json()
+        .unwrap_or("Failed to parse transaction result data".into());
 
     println!(
         r#"
@@ -30,10 +32,12 @@ pub(crate) fn outcome_pretty(name: &str, outcome: CallExecutionDetails) {
     sucess: {:?},
     total TGAS burnt: {},
     returned_data: {},
+    logs: {:?},
     "#,
         name,
         outcome.is_success(),
         outcome.total_gas_burnt / 10u64.pow(12),
         result_data,
+        outcome.logs(),
     )
 }

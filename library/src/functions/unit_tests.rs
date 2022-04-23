@@ -1,4 +1,5 @@
 #![cfg(test)]
+#![allow(unused)]
 
 use std::{collections::HashMap, convert::TryFrom};
 
@@ -12,19 +13,19 @@ use crate::{
     functions::{
         binding::bind_from_sources, serialization::serialize_to_json, validation::validate,
     },
-    interpreter::expression::{EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
+    interpreter::expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
     storage::StorageBucket,
     types::{
         activity_input::{ActivityInput, InputHashMap},
         datatype::{Datatype, Value},
+        source::{Source, SourceMock},
     },
     workflow::{
         expression::Expression,
-        types::{ArgSrc, FnCallMetadata, ValidatorRef, ValidatorType, ValueContainer},
+        types::{ArgSrc, BindDefinition, FnCallMetadata, SrcOrExpr},
+        validator::{CollectionValidator, ObjectValidator, Validator},
     },
 };
-
-use super::serialization::serialize_to_json_new;
 
 /******  Skyward sale_create structures  ******/
 
@@ -72,13 +73,10 @@ pub struct ShareInfo {
     user: String,
     amount: u32,
 }
-
 /****** TEST CASES ******/
 
-// TODO: Test with nullable object.
-
 #[test]
-fn full_scenario_validation_binding_serialization_complex_1() {
+fn full_scenario_skyward_validation_binding_serialization_complex() {
     let metadata = vec![
         FnCallMetadata {
             arg_names: vec!["sale".into(), "sale_info".into()],
@@ -121,7 +119,7 @@ fn full_scenario_validation_binding_serialization_complex_1() {
                 Datatype::String(false),
                 Datatype::U128(false),
                 Datatype::U64(true),
-                Datatype::VecObject(4),
+                Datatype::Object(4),
             ],
         },
         FnCallMetadata {
@@ -131,105 +129,128 @@ fn full_scenario_validation_binding_serialization_complex_1() {
     ];
 
     let tpl_consts = vec![
-        Value::String("neardao.testnet".into()),
-        Value::String("neardao.near".into()),
+        (
+            "sale.permissions_contract_id".into(),
+            Value::String("neardao.testnet".into()),
+        ),
+        (
+            "sale.out_tokens.token_account_id".into(),
+            Value::String("neardao.near".into()),
+        ),
+        ("sale.out_tokens.balance".into(), Value::U128(1000.into())),
+        ("sale.out_tokens.shares.amount".into(), Value::U64(500)),
+        ("sale_info".into(), Value::String("sale info binded".into())),
+        (
+            "sale.meta.reason".into(),
+            Value::String("meta reason binded".into()),
+        ),
     ];
-    let settings_consts = vec![Value::U128(U128::from(1000))];
-    let proposal_consts = vec![
-        Value::U64(500),
-        Value::String("info binded".into()),
-        Value::String("testing binded".into()),
-    ];
-    let expressions = vec![];
-    let validator_refs = vec![
-        ValidatorRef {
-            v_type: ValidatorType::Simple,
-            obj_id: 1,
-            val_id: 0,
-        },
-        ValidatorRef {
-            v_type: ValidatorType::Collection,
-            obj_id: 3,
-            val_id: 1,
-        },
-        ValidatorRef {
-            v_type: ValidatorType::Collection,
-            obj_id: 4,
-            val_id: 2,
-        },
+    let source = SourceMock { tpls: tpl_consts };
+    let expressions = vec![
+        EExpr::Boolean(TExpr {
+            operators: vec![Op {
+                op_type: EOp::Rel(RelOp::Eqs),
+                operands_ids: [0, 1],
+            }],
+            terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
+        }),
+        EExpr::Boolean(TExpr {
+            operators: vec![Op {
+                op_type: EOp::Rel(RelOp::Gt),
+                operands_ids: [0, 1],
+            }],
+            terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
+        }),
+        EExpr::Fn(FnName::Concat),
     ];
     let validators = vec![
-        // validates first obj
-        Expression {
-            args: vec![ArgSrc::ConstsTpl(0), ArgSrc::User(2)],
-            expr: EExpr::Boolean(TExpr {
-                operators: vec![Op {
-                    op_type: EOp::Rel(RelOp::Eqs),
-                    operands_ids: [0, 1],
-                }],
-                terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
-            }),
-        },
-        // validates first collection obj
-        Expression {
-            args: vec![ArgSrc::ConstsSettings(0), ArgSrc::User(1)],
-            expr: EExpr::Boolean(TExpr {
-                operators: vec![Op {
-                    op_type: EOp::Rel(RelOp::Gt),
-                    operands_ids: [0, 1],
-                }],
-                terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
-            }),
-        },
-        // validates second collection obj
-        Expression {
-            args: vec![ArgSrc::ConstAction(0), ArgSrc::User(1)],
-            expr: EExpr::Boolean(TExpr {
-                operators: vec![Op {
-                    op_type: EOp::Rel(RelOp::Gt),
-                    operands_ids: [0, 1],
-                }],
-                terms: vec![ExprTerm::Arg(0), ExprTerm::Arg(1)],
-            }),
-        },
+        Validator::Object(ObjectValidator {
+            expression_id: 0,
+            key_src: vec![
+                ArgSrc::ConstsTpl("sale.permissions_contract_id".into()),
+                ArgSrc::User("sale.permissions_contract_id".into()),
+            ],
+        }),
+        Validator::Collection(CollectionValidator {
+            prefixes: vec!["sale.out_tokens".into()],
+            expression_id: 1,
+            key_src: vec![
+                ArgSrc::ConstsTpl("sale.out_tokens.balance".into()),
+                ArgSrc::User("balance".into()),
+            ],
+        }),
+        Validator::Collection(CollectionValidator {
+            prefixes: vec!["sale.out_tokens".into()],
+            expression_id: 1,
+            key_src: vec![
+                ArgSrc::ConstsTpl("sale.out_tokens.shares.amount".into()),
+                ArgSrc::User("shares.amount".into()),
+            ],
+        }),
     ];
 
-    let mut user_input = vec![
-        vec![Value::Null, Value::String("test".into())],
-        vec![
-            Value::String("Neardao token auction".into()),
-            Value::String("www.neardao.com".into()),
-            Value::String("neardao.testnet".into()),
-            Value::Null,
-            Value::String("wrap.near".into()),
-            Value::U128(0.into()),
-            Value::U128(3600.into()),
-            Value::Null,
-        ],
-        vec![Value::String("testing".into()), Value::U64(420)],
-        vec![
-            Value::String("neardao.testnet".into()),
-            Value::U128(U128::from(999)), // 1000 is limit
-            Value::Null,
-            Value::Null,
-            Value::String("neardao.testnet".into()),
-            Value::U128(U128::from(991)), // 1000 is limit
-            Value::Null,
-            Value::Null,
-            Value::String("neardao.testnet".into()),
-            Value::U128(U128::from(991)), // 1000 is limit
-            Value::Null,
-            Value::Null,
-        ],
-        vec![
-            Value::String("petr.near".into()),
-            Value::U64(123), // 500 is limit
-            Value::String("david.near".into()),
-            Value::U64(456), // 500 is limit
-            Value::String("tomas.near".into()),
-            Value::U64(456), // 500 is limit
-        ],
-    ];
+    let mut hm = InputHashMap::new();
+
+    // Object 0
+    hm.set("sale_info", Value::String("Sale info from user".into()));
+
+    // Object 1
+    hm.set("sale.url", Value::String("www.neardao.com".into()));
+    hm.set("sale.title", Value::String("Neardao token auction".into()));
+    hm.set(
+        "sale.permissions_contract_id",
+        Value::String("neardao.testnet".into()),
+    );
+    hm.set(
+        "sale.in_token_account_id",
+        Value::String("wrap.near".into()),
+    );
+    hm.set("sale.start_time", Value::U128(0.into()));
+    hm.set("sale.duration", Value::U128(3600.into()));
+
+    // Object 2
+    hm.set(
+        "sale.meta.reason",
+        Value::String("Meta reason from user".into()),
+    );
+    hm.set("sale.meta.timestamp", Value::U64(420));
+
+    // Object 3 + 4
+    hm.set(
+        "sale.out_tokens.0.token_account_id",
+        Value::String("neardao.testnet".into()),
+    );
+    hm.set("sale.out_tokens.0.balance", Value::U128(999.into()));
+    hm.set("sale.out_tokens.0.referral_bpt", Value::U64(420));
+    hm.set(
+        "sale.out_tokens.0.shares.user",
+        Value::String("petr.near".into()),
+    );
+    hm.set("sale.out_tokens.0.shares.amount", Value::U64(123));
+
+    hm.set(
+        "sale.out_tokens.1.token_account_id",
+        Value::String("neardao.testnet".into()),
+    );
+    hm.set("sale.out_tokens.1.balance", Value::U128(991.into()));
+    hm.set("sale.out_tokens.1.referral_bpt", Value::Null);
+    hm.set(
+        "sale.out_tokens.1.shares.user",
+        Value::String("david.near".into()),
+    );
+    hm.set("sale.out_tokens.1.shares.amount", Value::U64(456));
+    hm.set(
+        "sale.out_tokens.2.token_account_id",
+        Value::String("neardao.testnet".into()),
+    );
+    hm.set("sale.out_tokens.2.balance", Value::U128(991.into()));
+    hm.set("sale.out_tokens.2.referral_bpt", Value::U64(420));
+    hm.set(
+        "sale.out_tokens.2.shares.user",
+        Value::String("tomas.near".into()),
+    );
+    hm.set("sale.out_tokens.2.shares.amount", Value::U64(456));
+    let mut user_input: Box<dyn ActivityInput> = Box::new(hm);
 
     let mut global_storage = StorageBucket::new(b"global".to_vec());
     let activity_shared_consts: Vec<Value> = vec![];
@@ -239,103 +260,118 @@ fn full_scenario_validation_binding_serialization_complex_1() {
         _ => None,
     });
 
-    let value_source = ValueContainer {
-        dao_consts: &dao_consts,
-        tpl_consts: &tpl_consts,
-        settings_consts: &settings_consts,
-        activity_shared_consts: Some(&activity_shared_consts),
-        action_proposal_consts: Some(&proposal_consts),
-        storage: None,
-        global_storage: &mut global_storage,
-    };
-
     assert!(validate(
-        &value_source,
-        validator_refs.as_slice(),
+        &source,
         validators.as_slice(),
-        metadata.as_slice(),
-        user_input.as_slice(),
+        expressions.as_slice(),
+        user_input.as_ref(),
     )
     .expect("Validation failed."));
 
     /* ------------------ Binding ------------------ */
 
-    let source_metadata = vec![
-        vec![ArgSrc::Object(1), ArgSrc::ConstAction(1)],
-        vec![
-            ArgSrc::User(0),
-            ArgSrc::User(1),
-            ArgSrc::User(2),
-            ArgSrc::VecObject(3),
-            ArgSrc::User(4),
-            ArgSrc::User(5),
-            ArgSrc::User(6),
-            ArgSrc::Object(2),
-        ],
-        vec![ArgSrc::ConstAction(2), ArgSrc::User(1)],
-        vec![
-            ArgSrc::ConstsTpl(1),
-            ArgSrc::User(1),
-            ArgSrc::User(2),
-            ArgSrc::VecObject(4),
-        ],
-        vec![ArgSrc::User(0), ArgSrc::User(1)],
+    let source_defs: Vec<BindDefinition> = vec![
+        BindDefinition {
+            key: "sale.meta.reason".into(),
+            key_src: SrcOrExpr::Src(ArgSrc::ConstsTpl("sale.meta.reason".into())),
+            is_collection: false,
+            prefixes: vec![],
+        },
+        BindDefinition {
+            key: "sale_info".into(),
+            key_src: SrcOrExpr::Src(ArgSrc::ConstsTpl("sale_info".into())),
+            is_collection: false,
+            prefixes: vec![],
+        },
+        BindDefinition {
+            key: "token_account_id".into(),
+            key_src: SrcOrExpr::Expr(Expression {
+                args: vec![ArgSrc::ConstsTpl("sale.out_tokens.token_account_id".into())],
+                expr_id: 2,
+            }),
+            is_collection: true,
+            prefixes: vec!["sale.out_tokens".into()],
+        },
     ];
 
-    bind_from_sources(
-        &source_metadata,
-        &value_source,
-        &expressions,
-        &mut user_input,
-        0,
-    )
-    .expect("Binding failed");
+    let mut hm = InputHashMap::new();
 
-    let expected_binded_inputs = vec![
-        vec![Value::Null, Value::String("info binded".into())],
-        vec![
-            Value::String("Neardao token auction".into()),
-            Value::String("www.neardao.com".into()),
-            Value::String("neardao.testnet".into()),
-            Value::Null,
-            Value::String("wrap.near".into()),
-            Value::U128(0.into()),
-            Value::U128(3600.into()),
-            Value::Null,
-        ],
-        vec![Value::String("testing binded".into()), Value::U64(420)],
-        vec![
-            Value::String("neardao.near".into()),
-            Value::U128(U128::from(999)), // 1000 is limit
-            Value::Null,
-            Value::Null,
-            Value::String("neardao.near".into()),
-            Value::U128(U128::from(991)), // 1000 is limit
-            Value::Null,
-            Value::Null,
-            Value::String("neardao.near".into()),
-            Value::U128(U128::from(991)), // 1000 is limit
-            Value::Null,
-            Value::Null,
-        ],
-        vec![
-            Value::String("petr.near".into()),
-            Value::U64(123), // 500 is limit
-            Value::String("david.near".into()),
-            Value::U64(456), // 500 is limit
-            Value::String("tomas.near".into()),
-            Value::U64(456), // 500 is limit
-        ],
-    ];
+    // Object 0
+    hm.set("sale_info", Value::String("sale info binded".into()));
 
-    assert_eq!(user_input, expected_binded_inputs);
+    // Object 1
+    hm.set("sale.url", Value::String("www.neardao.com".into()));
+    hm.set("sale.title", Value::String("Neardao token auction".into()));
+    hm.set(
+        "sale.permissions_contract_id",
+        Value::String("neardao.testnet".into()),
+    );
+    hm.set(
+        "sale.in_token_account_id",
+        Value::String("wrap.near".into()),
+    );
+    hm.set("sale.start_time", Value::U128(0.into()));
+    hm.set("sale.duration", Value::U128(3600.into()));
+
+    // Object 2
+    hm.set(
+        "sale.meta.reason",
+        Value::String("meta reason binded".into()),
+    );
+    hm.set("sale.meta.timestamp", Value::U64(420));
+
+    // Object 3 + 4
+    hm.set(
+        "sale.out_tokens.0.token_account_id",
+        Value::String("neardao.near".into()),
+    );
+    hm.set("sale.out_tokens.0.balance", Value::U128(999.into()));
+    hm.set("sale.out_tokens.0.referral_bpt", Value::U64(420));
+    hm.set(
+        "sale.out_tokens.0.shares.user",
+        Value::String("petr.near".into()),
+    );
+    hm.set("sale.out_tokens.0.shares.amount", Value::U64(123));
+
+    hm.set(
+        "sale.out_tokens.1.token_account_id",
+        Value::String("neardao.near".into()),
+    );
+    hm.set("sale.out_tokens.1.balance", Value::U128(991.into()));
+    hm.set("sale.out_tokens.1.referral_bpt", Value::Null);
+    hm.set(
+        "sale.out_tokens.1.shares.user",
+        Value::String("david.near".into()),
+    );
+    hm.set("sale.out_tokens.1.shares.amount", Value::U64(456));
+    hm.set(
+        "sale.out_tokens.2.token_account_id",
+        Value::String("neardao.near".into()),
+    );
+    hm.set("sale.out_tokens.2.balance", Value::U128(991.into()));
+    hm.set("sale.out_tokens.2.referral_bpt", Value::U64(420));
+    hm.set(
+        "sale.out_tokens.2.shares.user",
+        Value::String("tomas.near".into()),
+    );
+    hm.set("sale.out_tokens.2.shares.amount", Value::U64(456));
+    let expected: Box<dyn ActivityInput> = Box::new(hm);
+
+    bind_from_sources(&source, &source_defs, &expressions, user_input.as_mut())
+        .expect("Binding failed");
+
+    let mut actual_user_input = user_input.to_vec();
+    let mut expected_user_input = expected.to_vec();
+    actual_user_input.sort_by(|a, b| a.0.cmp(&b.0));
+    expected_user_input.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(actual_user_input, expected_user_input,);
 
     /* ------------------ Serializing to JSON ------------------ */
 
     let out_tokens_1 = SaleInputOutToken {
         token_account_id: AccountId::try_from("neardao.near".to_string()).unwrap(),
         balance: 999.into(),
-        referral_bpt: None,
+        referral_bpt: Some(420),
         shares: ShareInfo {
             user: "petr.near".into(),
             amount: 123,
@@ -355,7 +391,7 @@ fn full_scenario_validation_binding_serialization_complex_1() {
     let out_tokens_3 = SaleInputOutToken {
         token_account_id: AccountId::try_from("neardao.near".to_string()).unwrap(),
         balance: 991.into(),
-        referral_bpt: None,
+        referral_bpt: Some(420),
         shares: ShareInfo {
             user: "tomas.near".into(),
             amount: 456,
@@ -371,17 +407,17 @@ fn full_scenario_validation_binding_serialization_complex_1() {
         start_time: 0.into(),
         duration: 3600.into(),
         meta: MetaInfo {
-            reason: "testing binded".into(),
+            reason: "meta reason binded".into(),
             timestamp: 420,
         },
     };
 
     let sale_create_input = SaleCreateInput {
         sale: sale_input,
-        sale_info: Some("info binded".into()),
+        sale_info: Some("sale info binded".into()),
     };
 
-    let result_json_string = serialize_to_json(user_input.as_slice(), metadata.as_slice(), 0);
+    let result_json_string = serialize_to_json(user_input, metadata.as_slice());
     let expected_json_string = serde_json::to_string(&sale_create_input).unwrap();
     assert_eq!(result_json_string, expected_json_string);
     assert_eq!(
@@ -390,6 +426,30 @@ fn full_scenario_validation_binding_serialization_complex_1() {
     );
 }
 
+/* Test objects -- serialize_complex */
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct Job {
+    name: String,
+    started: u64,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct UserHobby {
+    name: String,
+    years_doing: u8,
+    coach: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct Partner {
+    fullname: String,
+    interested_in_crypto: Option<bool>,
+    hobbies: Vec<UserHobby>,
+}
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
 struct PersonInfo {
@@ -398,6 +458,9 @@ struct PersonInfo {
     age: u8,
     car: Car,
     animals: Vec<Animals>,
+    partner: Option<Partner>,
+    job: Option<Job>,
+    other: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -409,13 +472,23 @@ struct Car {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
+struct Cage {
+    size: u8,
+    material: String,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
 struct Animals {
     name: String,
-    age: u8,
+    age: Option<u8>,
+    cage: Option<Cage>,
 }
-// TODO: Extend
+
+/* Test objects */
+
 #[test]
-fn serialize_new() {
+fn serialize_complex() {
     let metadata = vec![
         FnCallMetadata {
             arg_names: vec![
@@ -424,22 +497,60 @@ fn serialize_new() {
                 "age".into(),
                 "car".into(),
                 "animals".into(),
+                "partner".into(),
+                "job".into(),
+                "other".into(),
             ],
             arg_types: vec![
-                Datatype::String(true),
-                Datatype::String(true),
-                Datatype::U64(true),
+                Datatype::String(false),
+                Datatype::String(false),
+                Datatype::U64(false),
                 Datatype::Object(1),
                 Datatype::VecObject(2),
+                Datatype::NullableObject(3),
+                Datatype::NullableObject(4),
+                Datatype::String(true),
             ],
         },
         FnCallMetadata {
             arg_names: vec!["brand".into(), "model".into()],
-            arg_types: vec![Datatype::String(true), Datatype::String(true)],
+            arg_types: vec![Datatype::String(false), Datatype::String(false)],
         },
         FnCallMetadata {
-            arg_names: vec!["name".into(), "age".into()],
-            arg_types: vec![Datatype::String(true), Datatype::U64(true)],
+            arg_names: vec!["name".into(), "age".into(), "cage".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::U64(true),
+                Datatype::NullableObject(6),
+            ],
+        },
+        FnCallMetadata {
+            arg_names: vec![
+                "fullname".into(),
+                "interested_in_crypto".into(),
+                "hobbies".into(),
+            ],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::Bool(false),
+                Datatype::VecObject(5),
+            ],
+        },
+        FnCallMetadata {
+            arg_names: vec!["name".into(), "started".into()],
+            arg_types: vec![Datatype::String(false), Datatype::U64(false)],
+        },
+        FnCallMetadata {
+            arg_names: vec!["name".into(), "years_doing".into(), "coach".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::U64(false),
+                Datatype::String(true),
+            ],
+        },
+        FnCallMetadata {
+            arg_names: vec!["size".into(), "material".into()],
+            arg_types: vec![Datatype::U64(false), Datatype::String(false)],
         },
     ];
 
@@ -451,12 +562,29 @@ fn serialize_new() {
     input_data.set("car.model", Value::String("mustang".into()));
     input_data.set("animals.0.name", Value::String("Sandy".into()));
     input_data.set("animals.0.age", Value::U64(1));
-    input_data.set("animals.1.name", Value::String("Betty".into()).into());
-    input_data.set("animals.1.age", Value::U64(1));
+    input_data.set("animals.0.cage.size", Value::U64(5));
+    input_data.set("animals.0.cage.material", Value::String("wood".into()));
+    input_data.set("animals.1.name", Value::String("Betty".into()));
+    input_data.set("animals.1.cage", Value::Null);
+    input_data.set("partner.fullname", Value::String("Video games".into()));
+    input_data.set("partner.interested_in_crypto", Value::Bool(true));
+    input_data.set("partner.hobbies.0.name", Value::String("Gambling".into()));
+    input_data.set("partner.hobbies.0.years_doing", Value::U64(1));
+    input_data.set(
+        "partner.hobbies.1.name",
+        Value::String("Video games".into()),
+    );
+    input_data.set("partner.hobbies.1.years_doing", Value::U64(1));
+    input_data.set(
+        "partner.hobbies.1.coach",
+        Value::String("Ronnie Coleman".into()),
+    );
+    input_data.set("job", Value::Null);
+    input_data.set("other", Value::String("Other info".into()));
 
     let input = Box::new(input_data);
 
-    let json = serialize_to_json_new(input, metadata.as_slice());
+    let json = serialize_to_json(input, metadata.as_slice());
 
     dbg!(json.clone());
     let _: PersonInfo =

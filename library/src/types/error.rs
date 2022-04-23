@@ -44,6 +44,8 @@ impl Error for SourceError {}
 pub enum ProcessingError {
     Conversion,
     Source(SourceError),
+    InvalidValidatorDefinition,
+    MissingExpression,
     Eval(EvalError),
     UserInput(u8),
     Unreachable,
@@ -61,6 +63,8 @@ impl Display for ProcessingError {
                 write!(f, "Converting datatype failed - got invalid datatype.")
             }
             ProcessingError::Unreachable => write!(f, "Processing reached unreachable branch."),
+            ProcessingError::InvalidValidatorDefinition => todo!(),
+            ProcessingError::MissingExpression => todo!(),
         }
     }
 }

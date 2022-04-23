@@ -1,271 +1,109 @@
 use crate::{
+    interpreter::expression::EExpr,
     types::{
         activity_input::ActivityInput,
         datatype::Value,
         error::{ProcessingError, SourceError},
         source::Source,
     },
-    workflow::{
-        expression::{Expression, ExpressionNew},
-        types::{ArgSrc, ArgSrcNew, ValueContainer},
+    workflow::types::{
+        ArgSrc, BindDefinition,
+        SrcOrExpr::{Expr, Src},
     },
 };
 
-/// Binds values from template's sources/storage to replace those in `user_input`.
-/// Schema is defined by `source_metadata` values.
-/// Returns `Err(())` in case input/Wf structure is bad.
-pub fn bind_from_sources<T: std::convert::AsRef<[Value]>>(
-    source_metadata: &[Vec<ArgSrc>],
-    sources: &ValueContainer<T>,
-    expressions: &[Expression],
-    user_input: &mut Vec<Vec<Value>>,
-    metadata_pos: usize,
-) -> Result<(), ProcessingError> {
-    let mut result_args = Vec::with_capacity(
-        source_metadata
-            .get(metadata_pos)
-            .ok_or(SourceError::InvalidArgId)?
-            .len(),
-    );
+use super::utils::object_key;
 
-    for arg_type in source_metadata[metadata_pos].iter() {
-        match arg_type {
-            ArgSrc::User(arg_pos) => {
-                // Way to check index exists so it does not panics at next step.
-                let _ = user_input
-                    .get(metadata_pos)
-                    .ok_or_else(|| ProcessingError::UserInput(metadata_pos as u8))?
-                    .get(*arg_pos as usize)
-                    .ok_or_else(|| ProcessingError::UserInput(*arg_pos))?;
-
-                result_args.push(std::mem::replace(
-                    &mut user_input[metadata_pos][*arg_pos as usize],
-                    Value::Null,
-                ))
-            }
-
-            ArgSrc::Expression(expr_id) => result_args.push(
-                expressions
-                    .get(*expr_id as usize)
-                    .ok_or(SourceError::InvalidArgId)?
-                    .bind_and_eval(
-                        sources,
-                        user_input
-                            .get(metadata_pos)
-                            .ok_or_else(|| ProcessingError::UserInput(metadata_pos as u8))?
-                            .as_slice(),
-                    )?,
-            ),
-            ArgSrc::Object(id) => {
-                result_args.push(Value::Null);
-
-                bind_from_sources(
-                    source_metadata,
-                    sources,
-                    expressions,
-                    user_input,
-                    *id as usize,
-                )?;
-            }
-            ArgSrc::VecObject(id) => {
-                result_args.push(Value::Null);
-
-                bind_vec_obj_args(
-                    source_metadata,
-                    sources,
-                    expressions,
-                    user_input,
-                    *id as usize,
-                )?;
-            }
-            _ => result_args.push(get_value_from_source(arg_type, sources)?),
-        }
-    }
-
-    std::mem::swap(&mut result_args, &mut user_input[metadata_pos]);
-
-    Ok(())
-}
-
-pub(crate) fn bind_vec_obj_args<T: std::convert::AsRef<[Value]>>(
-    source_metadata: &[Vec<ArgSrc>],
-    sources: &ValueContainer<T>,
-    expressions: &[Expression],
-    user_input: &mut Vec<Vec<Value>>,
-    metadata_pos: usize,
-) -> Result<(), ProcessingError> {
-    let mut result_args = Vec::with_capacity(source_metadata.len());
-    let mut obj_arg_pos = 0;
-    let mut cycle_counter = 0;
-    let obj_size = source_metadata
-        .get(metadata_pos)
-        .ok_or(SourceError::InvalidArgId)?
-        .len();
-
-    for _ in 0..user_input
-        .get(metadata_pos)
-        .ok_or_else(|| ProcessingError::UserInput(metadata_pos as u8))?
-        .len()
-    {
-        let arg_src = source_metadata
-            .get(metadata_pos)
-            .ok_or(SourceError::InvalidArgId)?
-            .get(obj_arg_pos)
-            .ok_or(SourceError::InvalidArgId)?;
-
-        match arg_src {
-            ArgSrc::User(arg_pos) => {
-                let _ = user_input
-                    .get(metadata_pos)
-                    .ok_or_else(|| ProcessingError::UserInput(metadata_pos as u8))?
-                    .get(*arg_pos as usize + cycle_counter * obj_size)
-                    .ok_or_else(|| ProcessingError::UserInput(metadata_pos as u8))?;
-
-                result_args.push(std::mem::replace(
-                    &mut user_input[metadata_pos][*arg_pos as usize + cycle_counter * obj_size],
-                    Value::Null,
-                ))
-            }
-            ArgSrc::Expression(expr_id) => result_args.push(
-                expressions
-                    .get(*expr_id as usize)
-                    .ok_or(SourceError::InvalidArgId)?
-                    .bind_and_eval(
-                        sources,
-                        user_input
-                            .get(metadata_pos)
-                            .ok_or_else(|| ProcessingError::UserInput(metadata_pos as u8))?
-                            .as_slice(),
-                    )?,
-            ),
-            // VecObject can have object only as another VecObject
-            ArgSrc::Object(_) => return Err(ProcessingError::Unreachable),
-            ArgSrc::VecObject(id) => {
-                result_args.push(Value::Null);
-
-                bind_vec_obj_args(
-                    source_metadata,
-                    sources,
-                    expressions,
-                    user_input,
-                    *id as usize,
-                )?;
-            }
-            _ => result_args.push(get_value_from_source(
-                source_metadata
-                    .get(metadata_pos)
-                    .ok_or(SourceError::InvalidArgId)?
-                    .get(obj_arg_pos)
-                    .ok_or(SourceError::InvalidArgId)?,
-                sources,
-            )?),
-        }
-
-        // reset pos
-        if obj_arg_pos == obj_size - 1 {
-            obj_arg_pos = 0;
-            cycle_counter += 1;
-        } else {
-            obj_arg_pos += 1;
-        }
-    }
-
-    std::mem::swap(&mut result_args, &mut user_input[metadata_pos]);
-
-    Ok(())
-}
-
-/// Fetch owned value from source defined by `arg_src`.
-pub fn get_value_from_source<T: std::convert::AsRef<[Value]>>(
-    arg_src: &ArgSrc,
-    container: &ValueContainer<T>,
-) -> Result<Value, SourceError> {
-    match arg_src {
-        ArgSrc::ConstsTpl(id) => {
-            let value = container
-                .tpl_consts
-                .as_ref()
-                .get(*id as usize)
-                .ok_or(SourceError::InvalidArgId)?
-                .clone();
-            Ok(value)
-        }
-        ArgSrc::ConstsSettings(id) => {
-            let value = container
-                .settings_consts
-                .as_ref()
-                .get(*id as usize)
-                .ok_or(SourceError::InvalidArgId)?
-                .clone();
-            Ok(value)
-        }
-        ArgSrc::ConstAction(id) => {
-            let value = container
-                .action_proposal_consts
-                .ok_or(SourceError::SourceMissing)?
-                .as_ref()
-                .get(*id as usize)
-                .ok_or(SourceError::InvalidArgId)?
-                .clone();
-            Ok(value)
-        }
-        ArgSrc::ConstActivityShared(id) => {
-            let value = container
-                .activity_shared_consts
-                .ok_or(SourceError::SourceMissing)?
-                .as_ref()
-                .get(*id as usize)
-                .ok_or(SourceError::InvalidArgId)?
-                .clone();
-            Ok(value)
-        }
-        ArgSrc::Storage(key) => {
-            let value = container
-                .storage
-                .as_ref()
-                .ok_or(SourceError::SourceMissing)?
-                .get_data(key)
-                .ok_or(SourceError::InvalidArgId)?;
-            Ok(value)
-        }
-        ArgSrc::GlobalStorage(key) => {
-            let value = container
-                .global_storage
-                .get_data(key)
-                .ok_or(SourceError::InvalidArgId)?;
-            Ok(value)
-        }
-        ArgSrc::Const(const_id) => {
-            Ok((container.dao_consts)(*const_id).ok_or(SourceError::InvalidArgId)?)
-        }
-        _ => Err(SourceError::InvalidSourceVariant),
-    }
-}
-
-pub fn bind_from_sources_new<S, A>(
+pub fn bind_from_sources<S, A>(
     sources: &S,
-    source_defs: &[(String, ArgSrcNew)],
-    _expressions: &[ExpressionNew],
+    bind_definitions: &[BindDefinition],
+    expressions: &[EExpr],
     inputs: &mut A,
 ) -> Result<(), ProcessingError>
 where
     S: Source + ?Sized,
     A: ActivityInput + ?Sized,
 {
-    for (arg_key, arg_src) in source_defs {
-        match arg_src {
-            ArgSrcNew::User(_) => {
-                continue;
+    for def in bind_definitions.iter() {
+        match def.is_collection {
+            false => {
+                let value = match &def.key_src {
+                    Src(arg_src) => match arg_src {
+                        ArgSrc::ConstsTpl(ref key) => sources
+                            .tpl(key.as_str())
+                            .expect("Failed to get tpl value for binding")
+                            .clone(),
+                        ArgSrc::User(_) => continue,
+                        _ => todo!(),
+                    },
+                    Expr(expr) => expr.bind_and_eval(sources, inputs, expressions)?,
+                };
+                inputs.set(def.key.as_str(), value);
             }
-            ArgSrcNew::ConstsTpl(key) => {
-                let val = sources
-                    .get_tpl_const(key)
-                    .expect("Failed to get value from tpl source");
-                inputs.set(arg_key, val.to_owned());
+            true => {
+                let prefix = def.prefixes.get(0).expect("Prefix 0 not found").as_str();
+
+                let value = match &def.key_src {
+                    Src(arg_src) => match arg_src {
+                        ArgSrc::ConstsTpl(ref key) => sources
+                            .tpl(key.as_str())
+                            .expect("Failed to get tpl value for binding")
+                            .clone(),
+                        ArgSrc::User(_) => continue,
+                        _ => todo!(),
+                    },
+                    Expr(expr) => expr.bind_and_eval(sources, inputs, expressions)?,
+                };
+                let mut counter: u32 = 0;
+                let mut key = object_key(prefix, counter.to_string().as_str(), def.key.as_str());
+                while inputs.has_key(key.as_str()) {
+                    inputs.set(key.as_str(), value.clone());
+                    counter += 1;
+                    key = object_key(prefix, counter.to_string().as_str(), def.key.as_str());
+                }
             }
-            _ => unimplemented!(),
         }
     }
 
     Ok(())
+}
+
+/// Helper function to fetch value ref from Source.
+pub fn get_value_from_source<'a, S>(sources: &'a S, src: &ArgSrc) -> Result<&'a Value, SourceError>
+where
+    S: Source + ?Sized,
+{
+    match src {
+        ArgSrc::ConstsTpl(key) => {
+            let value = sources.tpl(key).ok_or(SourceError::SourceMissing)?;
+            Ok(value)
+        }
+        ArgSrc::ConstsSettings(key) => {
+            let value = sources
+                .tpl_settings(key)
+                .ok_or(SourceError::SourceMissing)?;
+            Ok(value)
+        }
+        ArgSrc::ConstAction(_key) => {
+            unimplemented!();
+        }
+        ArgSrc::ConstActivityShared(_key) => {
+            unimplemented!();
+        }
+        ArgSrc::Storage(key) => {
+            let value = sources.storage(key).ok_or(SourceError::SourceMissing)?;
+            Ok(value)
+        }
+        ArgSrc::GlobalStorage(key) => {
+            let value = sources
+                .global_storage(key)
+                .ok_or(SourceError::SourceMissing)?;
+            Ok(value)
+        }
+        ArgSrc::Const(key) => {
+            let value = sources.dao_const(*key).ok_or(SourceError::SourceMissing)?;
+            Ok(value)
+        }
+        _ => Err(SourceError::InvalidSourceVariant),
+    }
 }
