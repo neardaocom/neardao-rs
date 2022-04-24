@@ -16,17 +16,19 @@ use super::{
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 /// Wrapper around `TemplateActivity`.
+/// Init variant is always as first activity in WF.
+/// Dao/FnCall activities are basically sync/async activites.
 pub enum Activity {
     Init,
-    /// Contains only DaoActions.
-    DaoActivity(TemplateActivity),
-    /// Contains only FnCall actions.
-    FnCallActivity(TemplateActivity),
+    Activity(TemplateActivity),
 }
 
 impl Activity {
     pub fn is_dao_activity(&self) -> bool {
-        matches!(self, Self::DaoActivity(_))
+        match self {
+            Activity::Init => false,
+            Activity::Activity(a) => a.is_dao_activity,
+        }
     }
 }
 
@@ -34,24 +36,21 @@ impl Activity {
     pub fn into_activity(self) -> Option<TemplateActivity> {
         match self {
             Activity::Init => None,
-            Activity::DaoActivity(a) => Some(a),
-            Activity::FnCallActivity(a) => Some(a),
+            Activity::Activity(a) => Some(a),
         }
     }
 
     pub fn activity_as_ref(&self) -> Option<&TemplateActivity> {
         match self {
             Activity::Init => None,
-            Activity::DaoActivity(ref a) => Some(a),
-            Activity::FnCallActivity(ref a) => Some(a),
+            Activity::Activity(ref a) => Some(a),
         }
     }
 
     pub fn activity_as_mut(&mut self) -> Option<&mut TemplateActivity> {
         match self {
             Activity::Init => None,
-            Activity::DaoActivity(a) => Some(a),
-            Activity::FnCallActivity(a) => Some(a),
+            Activity::Activity(a) => Some(a),
         }
     }
 }
@@ -74,22 +73,24 @@ pub enum Terminality {
 #[serde(crate = "near_sdk::serde")]
 pub struct TemplateActivity {
     pub code: String,
+    /// 1..N actions, only gas is the limit!
     pub actions: Vec<TemplateAction>,
     /// Execution can be done by anyone anytime.
     pub automatic: bool,
-    /// Workflow can be autoclosed when this was successfull.
+    /// Workflow can be autoclosed when this was successful.
     pub terminal: Terminality,
     pub postprocessing: Option<Postprocessing>,
+    pub is_dao_activity: bool,
 }
 
 impl TemplateActivity {
-    pub fn get_dao_action_type(&self, id: u8) -> Option<DaoActionIdent> {
+    pub fn get_dao_action_ident(&self, id: u8) -> Option<DaoActionIdent> {
         match self.actions.get(id as usize) {
             Some(action) => match &action.action_data {
                 ActionData::Action(a) => Some(a.name),
                 _ => None,
             },
-            None => None,
+            _ => None,
         }
     }
 }

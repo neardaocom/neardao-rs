@@ -3,12 +3,9 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::{types::datatype::Value, Version, interpreter::expression::EExpr};
+use crate::{interpreter::expression::EExpr, types::source::SourceDataVariant, Version};
 
-use super::{
-    activity::{Activity, TemplateActivity, Transition},
-    expression::Expression,
-};
+use super::activity::{Activity, TemplateActivity, Transition};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
@@ -16,15 +13,16 @@ use super::{
 pub struct Template {
     pub code: String,
     pub version: Version,
-    /// Whole workflow can be autoexecuted.
+    /// Whole workflow can be auto-executed.
     pub is_simple: bool,
     pub need_storage: bool,
-    //TODO instead of null must be "start" activity
+    /// First activity is init activity as workflow might diverge from init.
     pub activities: Vec<Activity>,
-    //pub obj_validators: Vec<Vec<ValidatorType>>,
-    pub expressions: Vec<EExpr>, //TODO move to matrix, this wont work in all scenarios or use ValidatorId in obj_validators
+    /// Expressions shared for all template entities.
+    pub expressions: Vec<EExpr>,
     pub transitions: Vec<Vec<Transition>>,
-    pub constants: Vec<Value>,
+    // TODO figure out structure.
+    pub constants: SourceDataVariant,
     pub end: Vec<u8>,
 }
 

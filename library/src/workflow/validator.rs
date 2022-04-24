@@ -6,7 +6,7 @@ use near_sdk::{
 use crate::{
     functions::utils::object_key,
     interpreter::expression::EExpr,
-    types::{activity_input::ActivityInput, error::ProcessingError, source::Source},
+    types::{activity_input::ActivityInput, error::ProcessingError, source::SourceProvider},
 };
 
 use super::types::ArgSrc;
@@ -50,7 +50,7 @@ impl Validator {
         expressions: &[EExpr],
     ) -> Result<bool, ProcessingError>
     where
-        S: Source + ?Sized,
+        S: SourceProvider + ?Sized,
         A: ActivityInput + ?Sized,
     {
         let expr = expressions

@@ -5,16 +5,12 @@ use crate::{
 };
 
 /// Validates inputs by validator_exprs.
-pub fn validate<S, A>(
-    sources: &S,
+pub fn validate(
+    sources: &dyn Source,
     validators: &[Validator],
     expressions: &[EExpr],
-    user_input: &A,
-) -> Result<bool, ProcessingError>
-where
-    S: Source + ?Sized,
-    A: ActivityInput + ?Sized,
-{
+    user_input: &dyn ActivityInput,
+) -> Result<bool, ProcessingError> {
     for validator in validators.iter() {
         if !validator.validate(sources, user_input, expressions)? {
             return Ok(false);

@@ -152,6 +152,7 @@ impl From<SerdeError> for ActionError {
     }
 }
 
+// TODO: improve
 impl From<ProcessingError> for ActionError {
     fn from(error: ProcessingError) -> Self {
         match error {
@@ -160,6 +161,9 @@ impl From<ProcessingError> for ActionError {
             ProcessingError::Eval(_) => Self::InvalidWfStructure,
             ProcessingError::UserInput(pos) => Self::InputStructure(pos),
             ProcessingError::Unreachable => Self::InvalidWfStructure,
+            ProcessingError::InvalidValidatorDefinition => todo!(),
+            ProcessingError::MissingExpression => todo!(),
+            ProcessingError::InvalidExpressionStructure => todo!(),
         }
     }
 }

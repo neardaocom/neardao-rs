@@ -2,17 +2,17 @@
 
 use std::{unimplemented, vec::Vec};
 
-use library::functions::binding::bind_from_sources;
+use library::functions::binding::bind_input;
 use library::functions::serialization::serialize_to_json;
 use library::functions::validation::validate;
 use library::interpreter::expression::EExpr;
 use library::storage::StorageBucket;
 use library::types::activity_input::UserInput;
+use library::types::consts::Consts;
 use library::types::datatype::Value;
-use library::types::source::Source;
-use library::workflow::types::{BindDefinition, FnCallMetadata};
+use library::types::source::SourceProvider;
+use library::workflow::types::{BindDefinition, ObjectMetadata};
 use library::workflow::validator::Validator;
-use library::Consts;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap;
 use near_sdk::serde::{Deserialize, Serialize};
@@ -71,7 +71,7 @@ impl Contract {
         )
         .expect("Validation failed"));
 
-        bind_from_sources(
+        bind_input(
             &sources,
             binds.as_slice(),
             expressions.as_slice(),
@@ -82,20 +82,29 @@ impl Contract {
         serialize_to_json(user_input, fncall_metadata.as_slice())
     }
 
-    fn get_dao_consts(&self) -> Box<Consts> {
-        Box::new(|id| match id {
-            0 => Some(Value::String(env::current_account_id().to_string())),
-            _ => unimplemented!(),
-        })
+    fn get_dao_consts(&self) -> impl Consts {
+        DaoConsts::default()
     }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct TestCase {
-    pub fncall_metadata: Vec<FnCallMetadata>,
+    pub fncall_metadata: Vec<ObjectMetadata>,
     pub validators: Vec<Validator>,
     pub expressions: Vec<EExpr>,
     pub binds: Vec<BindDefinition>,
     pub tpl_consts: Vec<(String, Value)>,
+}
+
+#[derive(Default)]
+pub struct DaoConsts;
+
+impl Consts for DaoConsts {
+    fn get(&self, key: u8) -> Option<Value> {
+        match key {
+            0 => Some(Value::String(env::current_account_id().to_string())),
+            _ => None,
+        }
+    }
 }

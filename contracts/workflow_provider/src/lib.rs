@@ -1,6 +1,6 @@
 use library::workflow::help::TemplateHelp;
 use library::workflow::template::Template;
-use library::workflow::types::FnCallMetadata;
+use library::workflow::types::ObjectMetadata;
 use library::{FnCallId, MethodName, Version};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap};
@@ -26,8 +26,8 @@ pub struct Contract {
     workflow_help: UnorderedMap<u16, TemplateHelp>,
     /// FnCalls and Standard FnCalls.
     workflow_fncalls: LookupMap<u16, (Vec<FnCallId>, Vec<MethodName>)>,
-    fncall_metadata: UnorderedMap<FnCallId, Vec<FnCallMetadata>>,
-    standard_fncall_metadata: UnorderedMap<MethodName, Vec<FnCallMetadata>>,
+    fncall_metadata: UnorderedMap<FnCallId, Vec<ObjectMetadata>>,
+    standard_fncall_metadata: UnorderedMap<MethodName, Vec<ObjectMetadata>>,
 }
 
 #[near_bindgen]
@@ -38,7 +38,7 @@ impl Contract {
         &mut self,
         workflow: Template,
         fncalls: Vec<FnCallId>,
-        mut fncall_metadata: Vec<Vec<FnCallMetadata>>,
+        mut fncall_metadata: Vec<Vec<ObjectMetadata>>,
         help: Option<TemplateHelp>,
     ) {
         assert_eq!(fncalls.len(), fncall_metadata.len());
@@ -64,7 +64,7 @@ impl Contract {
     pub fn standard_fncalls_add(
         &mut self,
         fncalls: Vec<MethodName>,
-        mut fncall_metadata: Vec<Vec<FnCallMetadata>>,
+        mut fncall_metadata: Vec<Vec<ObjectMetadata>>,
     ) {
         assert_eq!(fncalls.len(), fncall_metadata.len());
 
@@ -93,9 +93,9 @@ impl Contract {
     ) -> Option<(
         Template,
         Vec<FnCallId>,
-        Vec<Vec<FnCallMetadata>>,
+        Vec<Vec<ObjectMetadata>>,
         Vec<MethodName>,
-        Vec<Vec<FnCallMetadata>>,
+        Vec<Vec<ObjectMetadata>>,
     )> {
         match self.workflows.get(&id) {
             Some(t) => match self.workflow_fncalls.get(&id) {
@@ -161,13 +161,13 @@ impl Contract {
             .unwrap_or_else(Vec::new)
     }
 
-    pub fn standard_fn_call_metadata(self, method: String) -> Vec<FnCallMetadata> {
+    pub fn standard_fn_call_metadata(self, method: String) -> Vec<ObjectMetadata> {
         self.standard_fncall_metadata
             .get(&method)
             .unwrap_or_else(Vec::new)
     }
 
-    pub fn fncall_metadata(self, id: FnCallId) -> Vec<FnCallMetadata> {
+    pub fn fncall_metadata(self, id: FnCallId) -> Vec<ObjectMetadata> {
         self.fncall_metadata.get(&id).unwrap_or_else(Vec::new)
     }
 }

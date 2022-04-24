@@ -4,7 +4,7 @@ use crate::{
         activity_input::ActivityInput,
         datatype::Value,
         error::{ProcessingError, SourceError},
-        source::Source,
+        source::{Source, SourceProvider},
     },
     workflow::types::{
         ArgSrc, BindDefinition,
@@ -14,15 +14,14 @@ use crate::{
 
 use super::utils::object_key;
 
-pub fn bind_from_sources<S, A>(
-    sources: &S,
+// TODO: Replace panic
+pub fn bind_input(
+    sources: &dyn Source,
     bind_definitions: &[BindDefinition],
     expressions: &[EExpr],
-    inputs: &mut A,
+    input: &mut dyn ActivityInput,
 ) -> Result<(), ProcessingError>
 where
-    S: Source + ?Sized,
-    A: ActivityInput + ?Sized,
 {
     for def in bind_definitions.iter() {
         match def.is_collection {
@@ -36,11 +35,13 @@ where
                         ArgSrc::User(_) => continue,
                         _ => todo!(),
                     },
-                    Expr(expr) => expr.bind_and_eval(sources, inputs, expressions)?,
+                    Expr(expr) => expr.bind_and_eval(sources, Some(input), expressions)?,
                 };
-                inputs.set(def.key.as_str(), value);
+                input.set(def.key.as_str(), value);
             }
             true => {
+                // At this version we support only one collection in the whole object.
+                // Nested collection are not supported yet.
                 let prefix = def.prefixes.get(0).expect("Prefix 0 not found").as_str();
 
                 let value = match &def.key_src {
@@ -52,12 +53,12 @@ where
                         ArgSrc::User(_) => continue,
                         _ => todo!(),
                     },
-                    Expr(expr) => expr.bind_and_eval(sources, inputs, expressions)?,
+                    Expr(expr) => expr.bind_and_eval(sources, Some(input), expressions)?,
                 };
                 let mut counter: u32 = 0;
                 let mut key = object_key(prefix, counter.to_string().as_str(), def.key.as_str());
-                while inputs.has_key(key.as_str()) {
-                    inputs.set(key.as_str(), value.clone());
+                while input.has_key(key.as_str()) {
+                    input.set(key.as_str(), value.clone());
                     counter += 1;
                     key = object_key(prefix, counter.to_string().as_str(), def.key.as_str());
                 }
@@ -69,20 +70,24 @@ where
 }
 
 /// Helper function to fetch value ref from Source.
-pub fn get_value_from_source<'a, S>(sources: &'a S, src: &ArgSrc) -> Result<&'a Value, SourceError>
-where
-    S: Source + ?Sized,
-{
+pub fn get_value_from_source(
+    sources: &dyn Source,
+    src: &ArgSrc,
+) -> Result<Value, SourceError> {
     match src {
         ArgSrc::ConstsTpl(key) => {
-            let value = sources.tpl(key).ok_or(SourceError::SourceMissing)?;
+            let value = sources
+                .tpl(key)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
             Ok(value)
         }
         ArgSrc::ConstsSettings(key) => {
             let value = sources
                 .tpl_settings(key)
-                .ok_or(SourceError::SourceMissing)?;
-            Ok(value)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
+            Ok(value.to_owned())
         }
         ArgSrc::ConstAction(_key) => {
             unimplemented!();
@@ -91,17 +96,24 @@ where
             unimplemented!();
         }
         ArgSrc::Storage(key) => {
-            let value = sources.storage(key).ok_or(SourceError::SourceMissing)?;
+            let value = sources
+                .storage(key)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
             Ok(value)
         }
         ArgSrc::GlobalStorage(key) => {
             let value = sources
                 .global_storage(key)
-                .ok_or(SourceError::SourceMissing)?;
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
             Ok(value)
         }
         ArgSrc::Const(key) => {
-            let value = sources.dao_const(*key).ok_or(SourceError::SourceMissing)?;
+            let value = sources
+                .dao_const(*key)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
             Ok(value)
         }
         _ => Err(SourceError::InvalidSourceVariant),

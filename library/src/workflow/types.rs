@@ -8,12 +8,13 @@ use crate::{
     interpreter::{condition::Condition, expression::EExpr},
     storage::StorageBucket,
     types::datatype::{Datatype, Value},
-    Consts, ObjectId, ValidatorId,
+    FnCallResultDatatype, ObjectId, ValidatorId,
 };
 
 use super::expression::Expression;
 
 // TODO: replace with Source trait
+/*
 pub struct ValueContainer<'a, T: AsRef<[Value]>> {
     pub dao_consts: &'a Consts,
     pub tpl_consts: &'a T,
@@ -22,7 +23,7 @@ pub struct ValueContainer<'a, T: AsRef<[Value]>> {
     pub action_proposal_consts: Option<&'a T>,
     pub storage: Option<&'a mut StorageBucket>,
     pub global_storage: &'a mut StorageBucket,
-}
+} */
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Copy, Clone, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
@@ -67,29 +68,6 @@ pub enum ActivityRight {
     Member,
     GroupRole(u16, u16),
     GroupLeader(u16),
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
-#[serde(crate = "near_sdk::serde")]
-pub struct ValidatorRef {
-    pub v_type: ValidatorType,
-    pub obj_id: ObjectId,
-    pub val_id: ValidatorId,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
-#[serde(crate = "near_sdk::serde")]
-pub enum ValidatorType {
-    Simple,
-    Collection,
-}
-
-impl ValidatorRef {
-    pub fn is_simple(&self) -> bool {
-        self.v_type == ValidatorType::Simple
-    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
@@ -138,7 +116,7 @@ pub enum ArgSrc {
 pub enum SrcOrExpr {
     /// Source for value.
     Src(ArgSrc),
-    /// Expression sources which evaluates to the value.
+    /// Expression source which evaluates to the value.
     Expr(Expression),
 }
 
@@ -151,17 +129,18 @@ pub struct BindDefinition {
     /// Value source for `key`.
     pub key_src: SrcOrExpr,
     /// Prefixes for nested collection objects.
-    /// Defined as Vec<String> for forward-compatible changes.
+    /// Defined as `Vec<String>` for forward-compatible changes.
     pub prefixes: Vec<String>,
     pub is_collection: bool,
-    //pub expression: Option<Expression>,
 }
 
-// Represents object schema
+/// Object metadata.
+/// Nested objects are referenced by specific `Datatype` in previous metadata.
+/// These objects must be containerized, eg. in Vec.
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Clone))]
 #[serde(crate = "near_sdk::serde")]
-pub struct FnCallMetadata {
+pub struct ObjectMetadata {
     pub arg_names: Vec<String>,
     pub arg_types: Vec<Datatype>,
 }
@@ -188,17 +167,17 @@ pub enum Instruction {
     StoreFnCallResultGlobal(String, Datatype),
     StoreWorkflow,
     /// Stores expression
-    /// 3th param defines if FnCallResult is required and what to deserialize it to.
+    /// `FnCallResultDatatype` arg defines if FnCallResult is required and what to deserialize it to.
     /// FnCall result will always be as last arg in values.
-    StoreExpression(String, Vec<ArgSrc>, EExpr, Option<Datatype>),
-    StoreExpressionGlobal(String, Vec<ArgSrc>, EExpr, Option<Datatype>),
-    StoreExpressionBinded(String, Vec<Value>, EExpr, Option<Datatype>),
-    StoreExpressionGlobalBinded(String, Vec<Value>, EExpr, Option<Datatype>),
+    StoreExpression(String, Vec<ArgSrc>, EExpr, FnCallResultDatatype),
+    StoreExpressionGlobal(String, Vec<ArgSrc>, EExpr, FnCallResultDatatype),
+    StoreExpressionBinded(String, Vec<Value>, EExpr, FnCallResultDatatype),
+    StoreExpressionGlobalBinded(String, Vec<Value>, EExpr, FnCallResultDatatype),
     /// Conditional Jump.
-    /// 3th param defines if FnCallResult is required and what to deserialize it to.
+    /// `FnCallResultDatatype` arg defines if FnCallResult is required and what to deserialize it to.
     /// FnCall result will always be as last arg in values.
-    Cond(Vec<ArgSrc>, Condition, Option<Datatype>),
-    CondBinded(Vec<Value>, Condition, Option<Datatype>),
+    Cond(Vec<ArgSrc>, Condition, FnCallResultDatatype),
+    CondBinded(Vec<Value>, Condition, FnCallResultDatatype),
     Jump(u8),
     None,
 }

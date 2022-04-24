@@ -7,7 +7,7 @@ use library::{
     },
     workflow::{
         expression::Expression,
-        types::{ArgSrc, BindDefinition, FnCallMetadata, SrcOrExpr},
+        types::{ArgSrc, BindDefinition, ObjectMetadata, SrcOrExpr},
         validator::{CollectionValidator, ObjectValidator, Validator},
     },
 };
@@ -19,7 +19,7 @@ use crate::utils::outcome_pretty;
 
 #[tokio::test]
 async fn skyward() -> Result<()> {
-    let worker = workspaces::sandbox().await?;
+    let worker = workspaces::testnet().await?;
     let wasm_blob = workspaces::compile_project("./../mocks/simple_dao").await?;
     let contract = worker.dev_deploy(&wasm_blob).await?;
 
@@ -61,11 +61,11 @@ async fn skyward() -> Result<()> {
 
 fn testcase_skyward() -> TestCase {
     let fncall_metadata = vec![
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["sale".into(), "sale_info".into()],
             arg_types: vec![Datatype::Object(1), Datatype::String(true)],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec![
                 "title".into(),
                 "url".into(),
@@ -87,11 +87,11 @@ fn testcase_skyward() -> TestCase {
                 Datatype::Object(2),
             ],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["reason".into(), "timestamp".into()],
             arg_types: vec![Datatype::String(false), Datatype::U64(false)],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec![
                 "token_account_id".into(),
                 "balance".into(),
@@ -105,7 +105,7 @@ fn testcase_skyward() -> TestCase {
                 Datatype::Object(4),
             ],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["user".into(), "amount".into()],
             arg_types: vec![Datatype::String(false), Datatype::U64(false)],
         },

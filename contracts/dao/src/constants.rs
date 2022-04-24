@@ -15,5 +15,6 @@ pub const MIN_VOTING_DURATION_SEC: u32 = 300;
 
 pub const GLOBAL_BUCKET_IDENT: &str = "global";
 
+pub const EVENT_CALLER_KEY: &str = "event_caller";
 // DAO CONSTS
 pub const C_DAO_ACC_ID: u8 = 0;

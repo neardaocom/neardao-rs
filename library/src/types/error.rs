@@ -44,6 +44,7 @@ impl Error for SourceError {}
 pub enum ProcessingError {
     Conversion,
     Source(SourceError),
+    InvalidExpressionStructure,
     InvalidValidatorDefinition,
     MissingExpression,
     Eval(EvalError),
@@ -65,6 +66,7 @@ impl Display for ProcessingError {
             ProcessingError::Unreachable => write!(f, "Processing reached unreachable branch."),
             ProcessingError::InvalidValidatorDefinition => todo!(),
             ProcessingError::MissingExpression => todo!(),
+            ProcessingError::InvalidExpressionStructure => todo!(),
         }
     }
 }

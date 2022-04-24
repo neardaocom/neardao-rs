@@ -7,7 +7,10 @@ use crate::{
     functions::binding::get_value_from_source,
     interpreter::{condition::Condition, expression::EExpr},
     types::{
-        activity_input::ActivityInput, datatype::Value, error::ProcessingError, source::Source,
+        activity_input::ActivityInput,
+        datatype::Value,
+        error::ProcessingError,
+        source::{Source, SourceProvider},
     },
 };
 
@@ -23,16 +26,13 @@ pub struct Expression {
 }
 
 impl Expression {
-    pub fn bind_and_eval<S, A>(
+    pub fn bind_and_eval(
         &self,
-        sources: &S,
-        input: &A,
+        sources: &dyn Source,
+        input: Option<&dyn ActivityInput>,
         expressions: &[EExpr],
     ) -> Result<Value, ProcessingError>
-    where
-        S: Source + ?Sized,
-        A: ActivityInput + ?Sized,
-    {
+where {
         let expr = expressions
             .get(self.expr_id as usize)
             .ok_or(ProcessingError::MissingExpression)?;
@@ -40,13 +40,20 @@ impl Expression {
 
         for arg_src in self.args.iter() {
             match arg_src {
-                ArgSrc::User(key) => binded_args.push(
-                    input
-                        .get(key.as_str())
-                        .expect("Failed to get value")
-                        .clone(),
-                ),
-                _ => binded_args.push(get_value_from_source(sources, arg_src)?.to_owned()),
+                ArgSrc::User(key) => {
+                    if let Some(user_input) = input {
+                        binded_args.push(
+                            user_input
+                                .get(key.as_str())
+                                .expect("Failed to get value")
+                                .clone(),
+                        )
+                    } else {
+                        return Err(ProcessingError::InvalidExpressionStructure);
+                    }
+                }
+
+                _ => binded_args.push(get_value_from_source(sources, arg_src)?),
             }
         }
         Ok(expr.eval(binded_args.as_slice())?)

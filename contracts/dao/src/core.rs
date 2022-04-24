@@ -6,7 +6,7 @@ use library::types::datatype::Value;
 use library::workflow::instance::{Instance, InstanceState};
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
-use library::workflow::types::{DaoActionIdent, FnCallMetadata};
+use library::workflow::types::{DaoActionIdent, ObjectMetadata};
 use library::{FnCallId, MethodName};
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
@@ -70,9 +70,9 @@ pub struct Contract {
     pub storage: UnorderedMap<StorageKey, StorageBucket>,
     pub tags: UnorderedMap<TagCategory, Tags>,
     /// Provides metadata for dao actions.
-    pub dao_action_metadata: LookupMap<DaoActionIdent, Vec<FnCallMetadata>>,
-    pub function_call_metadata: UnorderedMap<FnCallId, Vec<FnCallMetadata>>,
-    pub standard_function_call_metadata: UnorderedMap<MethodName, Vec<FnCallMetadata>>,
+    pub dao_action_metadata: LookupMap<DaoActionIdent, Vec<ObjectMetadata>>,
+    pub function_call_metadata: UnorderedMap<FnCallId, Vec<ObjectMetadata>>,
+    pub standard_function_call_metadata: UnorderedMap<MethodName, Vec<ObjectMetadata>>,
     pub workflow_last_id: u16,
     pub workflow_template: UnorderedMap<u16, (Template, Vec<TemplateSettings>)>,
     pub workflow_instance: UnorderedMap<ProposalId, (Instance, ProposeSettings)>,
@@ -91,9 +91,9 @@ impl Contract {
         groups: Vec<GroupInput>,
         tags: Vec<TagInput>,
         standard_function_calls: Vec<MethodName>,
-        standard_function_call_metadata: Vec<Vec<FnCallMetadata>>,
+        standard_function_call_metadata: Vec<Vec<ObjectMetadata>>,
         function_calls: Vec<FnCallId>,
-        function_call_metadata: Vec<Vec<FnCallMetadata>>,
+        function_call_metadata: Vec<Vec<ObjectMetadata>>,
         workflow_templates: Vec<Template>,
         workflow_template_settings: Vec<Vec<TemplateSettings>>,
     ) -> Self {
@@ -230,7 +230,7 @@ impl Contract {
         }
 
         let caller = env::predecessor_account_id();
-        let (mut proposal, _, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (mut proposal, _, wfs) = self.get_workflow_and_proposal(proposal_id);
 
         assert!(
             env::attached_deposit() >= wfs.deposit_vote.unwrap_or_else(|| 0.into()).0,
@@ -268,7 +268,7 @@ impl Contract {
     }
 
     pub fn finish_proposal(&mut self, proposal_id: u32) -> ProposalState {
-        let (mut proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (mut proposal, wft, wfs) = self.get_workflow_and_proposal(proposal_id);
         let (mut instance, settings) = self.workflow_instance.get(&proposal_id).unwrap();
 
         let new_state = match proposal.state {
@@ -340,7 +340,7 @@ impl Contract {
     /// Rights to close are same as the "end" activity rights.
     pub fn wf_finish(&mut self, proposal_id: u32) -> bool {
         let caller = env::predecessor_account_id();
-        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (proposal, wft, wfs) = self.get_workflow_and_proposal(proposal_id);
 
         assert!(proposal.state == ProposalState::Accepted);
 

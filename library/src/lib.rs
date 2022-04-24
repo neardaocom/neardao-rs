@@ -1,6 +1,6 @@
 use near_sdk::AccountId;
-use types::datatype::Value;
-use workflow::{template::Template, types::FnCallMetadata};
+use types::datatype::{Datatype, Value};
+use workflow::{template::Template, types::ObjectMetadata};
 
 //mod data;
 //mod unit_tests;
@@ -14,7 +14,6 @@ pub mod workflow;
 pub type MethodName = String;
 pub type FnCallId = (AccountId, MethodName);
 pub type TransitionLimit = u16;
-pub type Consts = dyn Fn(u8) -> Option<Value>;
 pub type EventCode = String;
 
 pub type ActivityId = u8;
@@ -24,12 +23,13 @@ pub type BindId = u8;
 pub type ValidatorId = u8;
 pub type ExpressionId = u8;
 pub type TransitionId = u8;
+pub type FnCallResultDatatype = Option<Datatype>;
 pub type ProviderTemplateData = (
     Template,
     Vec<FnCallId>,
-    Vec<Vec<FnCallMetadata>>,
+    Vec<Vec<ObjectMetadata>>,
     Vec<MethodName>,
-    Vec<Vec<FnCallMetadata>>,
+    Vec<Vec<ObjectMetadata>>,
 );
 
 /// Flatten object's values type for action input.

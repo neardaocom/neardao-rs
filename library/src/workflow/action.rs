@@ -8,16 +8,16 @@ use crate::{types::activity_input::UserInput, FnCallId, MethodName};
 use super::{
     expression::Expression,
     postprocessing::Postprocessing,
-    types::{ArgSrc, DaoActionIdent, ValidatorRef},
+    types::{ArgSrc, BindDefinition, DaoActionIdent},
+    validator::Validator,
 };
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct TemplateAction {
-    //pub action: Terminality,
     pub exec_condition: Option<Expression>,
-    pub input_validators: Vec<ValidatorRef>,
+    pub validators: Vec<Validator>,
     pub action_data: ActionData,
     pub postprocessing: Option<Postprocessing>,
     pub must_succeed: bool,
@@ -55,8 +55,15 @@ impl ActionData {
 pub struct DaoActionData {
     pub name: DaoActionIdent,
     /// Deposit needed from caller.
+    /// Binded dynamically.
     pub required_deposit: Option<ArgSrc>,
-    pub inputs_definitions: Vec<Vec<ArgSrc>>,
+    pub binds: Vec<BindDefinition>,
+}
+
+impl DaoActionData {
+    pub fn is_event(&self) -> bool {
+        self.name == DaoActionIdent::Event
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
@@ -65,9 +72,9 @@ pub struct DaoActionData {
 pub struct FnCallData {
     pub id: FnCallIdType,
     pub tgas: u16,
-    /// Deposit given by DAO for fncall.
+    /// Deposit for fncall given by executing contract. Not caller.
     pub deposit: Option<ArgSrc>,
-    pub inputs_definitions: Vec<Vec<ArgSrc>>,
+    pub binds: Vec<BindDefinition>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]

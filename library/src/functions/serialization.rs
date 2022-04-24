@@ -2,7 +2,7 @@ use core::panic;
 
 use crate::{
     types::{activity_input::ActivityInput, datatype::Datatype},
-    workflow::types::FnCallMetadata,
+    workflow::types::ObjectMetadata,
 };
 
 use super::utils::object_key;
@@ -10,7 +10,7 @@ use super::utils::object_key;
 const JSON_NULL: &str = "null";
 
 /// Serializes JSON string by metadata schema.
-pub fn serialize_to_json(mut input: Box<dyn ActivityInput>, metadata: &[FnCallMetadata]) -> String {
+pub fn serialize_to_json(mut input: Box<dyn ActivityInput>, metadata: &[ObjectMetadata]) -> String {
     let mut args = String::with_capacity(256);
     args.push('{');
     for i in 0..metadata[0].arg_names.len() {
@@ -67,7 +67,7 @@ pub fn serialize_to_json(mut input: Box<dyn ActivityInput>, metadata: &[FnCallMe
 fn object_to_json(
     buf: &mut String,
     input: &mut dyn ActivityInput,
-    metadata: &[FnCallMetadata],
+    metadata: &[ObjectMetadata],
     meta_pos: usize,
     obj_prefix: &str,
 ) {
@@ -109,7 +109,7 @@ fn object_to_json(
 fn collection_to_json(
     buf: &mut String,
     input: &mut dyn ActivityInput,
-    metadata: &[FnCallMetadata],
+    metadata: &[ObjectMetadata],
     meta_pos: usize,
     obj_prefix: &str,
 ) {

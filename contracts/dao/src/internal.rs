@@ -2,7 +2,7 @@ use std::{collections::HashMap, convert::TryInto};
 
 use near_sdk::{
     env::{self},
-    AccountId, Promise,
+    AccountId, Balance, Promise,
 };
 
 use crate::{
@@ -27,18 +27,22 @@ use crate::{
     CalculatedVoteResults, ProposalId, ProposalWf, VoteTotalPossible, Votes,
 };
 use library::{
+    functions::binding::get_value_from_source,
     storage::StorageBucket,
-    types::datatype::Value,
+    types::{
+        activity_input::ActivityInput, consts::Consts, datatype::Value, error::ProcessingError,
+        source::Source,
+    },
     workflow::{
-        action::TemplateAction,
-        activity::{ActionInput, Activity, Transition},
+        action::{ActionInput, FnCallIdType, TemplateAction},
+        activity::{Activity, Terminality, Transition},
         instance::InstanceState,
         postprocessing::Postprocessing,
-        settings::{ActivityBind, TemplateSettings},
+        settings::{ActivityBind, ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, DaoActionIdent, FnCallMetadata, VoteScenario},
+        types::{ActivityRight, DaoActionIdent, ObjectMetadata, VoteScenario},
     },
-    Consts, FnCallId, MethodName,
+    FnCallId, MethodName,
 };
 
 impl Contract {
@@ -78,7 +82,7 @@ impl Contract {
     pub fn init_function_calls(
         &mut self,
         calls: Vec<FnCallId>,
-        metadata: Vec<Vec<FnCallMetadata>>,
+        metadata: Vec<Vec<ObjectMetadata>>,
     ) {
         for (i, c) in calls.iter().enumerate() {
             self.function_call_metadata.insert(c, &metadata[i]);
@@ -89,7 +93,7 @@ impl Contract {
     pub fn init_standard_function_calls(
         &mut self,
         calls: Vec<MethodName>,
-        metadata: Vec<Vec<FnCallMetadata>>,
+        metadata: Vec<Vec<ObjectMetadata>>,
     ) {
         for (i, c) in calls.iter().enumerate() {
             self.standard_function_call_metadata.insert(c, &metadata[i]);
@@ -129,7 +133,7 @@ impl Contract {
         self.workflow_last_id += len as u16;
     }
 
-    pub fn get_wf_and_proposal(&self, proposal_id: u32) -> ProposalWf {
+    pub fn get_workflow_and_proposal(&self, proposal_id: u32) -> ProposalWf {
         let proposal = Proposal::from(self.proposals.get(&proposal_id).expect("Unknown proposal"));
         let (wft, mut wfs) = self.workflow_template.get(&proposal.workflow_id).unwrap();
         let settings = wfs.swap_remove(proposal.workflow_settings_id as usize);
@@ -137,7 +141,7 @@ impl Contract {
         (proposal, wft, settings)
     }
 
-    // TODO unit tests
+    // TODO: Unit tests
     pub fn check_rights(&self, rights: &[ActivityRight], account_id: &AccountId) -> bool {
         if rights.is_empty() {
             return true;
@@ -444,7 +448,7 @@ impl Contract {
             if pp
                 .execute(
                     promise_call_result,
-                    &mut storage.as_mut(),
+                    storage.as_mut(),
                     &mut global_storage,
                     &mut new_template,
                 )
@@ -490,11 +494,8 @@ impl Contract {
 
     /// Closure which might be required in workflow.
     /// Returns DAO's specific values which cannot be known ahead of time.
-    pub fn dao_consts(&self) -> Box<Consts> {
-        Box::new(|id| match id {
-            C_DAO_ACC_ID => Some(Value::String(env::current_account_id().to_string())),
-            _ => None,
-        })
+    pub fn dao_consts(&self) -> impl Consts {
+        DaoConsts::default()
     }
 
     /// Action logging method.
@@ -534,7 +535,9 @@ impl Contract {
         counter
     }
 
-    /// Checks if inputs structure is same as activity definition. Same order as activity's actions is required.
+    /// Checks if inputs structure is same as activity definition.
+    /// Same order as activity's actions is required.
+    /// Done activities are not required to be in inputs.
     /// Skips done actions.
     pub fn check_activity_input(
         &self,
@@ -547,7 +550,7 @@ impl Contract {
                 action.optional,
                 inputs
                     .get(idx - actions_done)
-                    .expect("Missing action input."),
+                    .expect("Missing action input"),
             ) {
                 (_, Some(a)) => {
                     if !a.action.eq(&action.action_data) {
@@ -555,23 +558,24 @@ impl Contract {
                     }
                 }
                 (false, None) => return false,
-                _ => (),
+                _ => continue,
             }
         }
 
         true
     }
 
+    // TODO: refactor
     /// Executes DAO's native action.
     /// Inner methods panic when provided malformed inputs - structure/datatype.
     pub fn execute_dao_action(
         &mut self,
         _proposal_id: u32,
         action_ident: DaoActionIdent,
-        inputs: &mut Vec<Vec<Value>>,
+        inputs: &mut dyn ActivityInput,
     ) -> Result<(), ActionError> {
         match action_ident {
-            DaoActionIdent::GroupAdd => {
+            /*             DaoActionIdent::GroupAdd => {
                 let group_input = deserialize_group_input(inputs)?;
                 self.group_add(group_input);
             }
@@ -619,7 +623,7 @@ impl Contract {
                 }
 
                 self.ft_distribute(group_id, amount, accounts);
-            }
+            } */
             _ => unreachable!(),
         }
 
@@ -633,7 +637,7 @@ impl Contract {
         inputs: &[Vec<Value>],
         deposit: u128,
         tgas: u16,
-        metadata: &[FnCallMetadata],
+        metadata: &[ObjectMetadata],
     ) -> Promise {
         if receiver.as_str() == "self" {
             receiver = env::current_account_id();
@@ -653,7 +657,9 @@ impl Contract {
         binds: &[Option<ActivityBind>],
         activities: &[Activity],
     ) {
-        assert_eq!(
+        todo!();
+        /*
+         assert_eq!(
             binds.len(),
             activities.len() - 1,
             "Binds must be same length as activities."
@@ -678,6 +684,89 @@ impl Contract {
                 }
             }
         }
+        */
+    }
+
+    /// Binds dao FnCall
+    pub fn get_fncall_id_with_metadata(
+        &self,
+        id: FnCallIdType,
+        sources: &dyn Source,
+    ) -> Result<(AccountId, MethodName, Vec<ObjectMetadata>), ActionError> {
+        let data = match id {
+            FnCallIdType::Static((account, method)) => {
+                if account.as_str() == "self" {
+                    let name = env::current_account_id();
+                    (
+                        AccountId::try_from(name.to_string())
+                            .map_err(|_| ActionError::InvalidDataType)?,
+                        method.clone(),
+                        self.function_call_metadata
+                            .get(&(name.clone(), method.clone()))
+                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                    )
+                } else {
+                    (
+                        account.clone(),
+                        method.clone(),
+                        self.function_call_metadata
+                            .get(&(account, method.clone()))
+                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                    )
+                }
+            }
+            FnCallIdType::Dynamic(arg_src, method) => {
+                let name = get_value_from_source(sources, &arg_src)
+                    .map_err(ProcessingError::Source)?
+                    .try_into_string()?;
+                (
+                    AccountId::try_from(name.to_string())
+                        .map_err(|_| ActionError::InvalidDataType)?,
+                    method.clone(),
+                    self.function_call_metadata
+                        .get(&(
+                            AccountId::try_from(name.to_string())
+                                .map_err(|_| ActionError::InvalidDataType)?,
+                            method.clone(),
+                        ))
+                        .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                )
+            }
+            FnCallIdType::StandardStatic((account, method)) => {
+                if account.as_str() == "self" {
+                    let name = env::current_account_id();
+                    (
+                        name.clone(),
+                        method.clone(),
+                        self.standard_function_call_metadata
+                            .get(&method.clone())
+                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                    )
+                } else {
+                    (
+                        account.clone(),
+                        method.clone(),
+                        self.function_call_metadata
+                            .get(&(account, method.clone()))
+                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                    )
+                }
+            }
+            FnCallIdType::StandardDynamic(arg_src, method) => {
+                let name = get_value_from_source(sources, &arg_src)
+                    .map_err(ProcessingError::Source)?
+                    .try_into_string()?;
+                (
+                    AccountId::try_from(name.to_string())
+                        .map_err(|_| ActionError::InvalidDataType)?,
+                    method.clone(),
+                    self.standard_function_call_metadata
+                        .get(&name)
+                        .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                )
+            }
+        };
+        Ok(data)
     }
 }
 
@@ -695,5 +784,85 @@ pub mod utils {
 
     pub fn get_bucket_id(id: &str) -> StorageKeyWrapper {
         append(STORAGE_BUCKET_PREFIX, id.as_bytes()).into()
+    }
+}
+
+#[derive(Default)]
+pub struct DaoConsts;
+
+impl Consts for DaoConsts {
+    fn get(&self, key: u8) -> Option<Value> {
+        match key {
+            C_DAO_ACC_ID => Some(Value::String(env::current_account_id().to_string())),
+            _ => None,
+        }
+    }
+}
+
+/// Helper data struct during activity execution.
+pub struct ActivityContext {
+    pub caller: AccountId,
+    pub proposal_id: u32,
+    pub activity_id: usize,
+    pub attached_deposit: Balance,
+    pub proposal_settings: ProposeSettings,
+    pub actions_done_before: u8,
+    pub actions_done_now: u8,
+    pub activity_postprocessing: Option<Postprocessing>,
+    pub terminal: Terminality,
+    pub actions: Vec<TemplateAction>,
+    pub optional_actions: u8,
+}
+
+#[allow(clippy::too_many_arguments)]
+impl ActivityContext {
+    pub fn new(
+        proposal_id: u32,
+        activity_id: usize,
+        caller: AccountId,
+        attached_deposit: Balance,
+        proposal_settings: ProposeSettings,
+        actions_done: u8,
+        activity_postprocessing: Option<Postprocessing>,
+        terminal: Terminality,
+        actions: Vec<TemplateAction>,
+    ) -> Self {
+        Self {
+            caller,
+            proposal_id,
+            activity_id,
+            attached_deposit,
+            proposal_settings,
+            actions_done_before: actions_done,
+            actions_done_now: actions_done,
+            activity_postprocessing,
+            terminal,
+            actions,
+            optional_actions: 0,
+        }
+    }
+
+    pub fn actions_done(&self) -> u8 {
+        self.actions_done_now - self.actions_done_before
+    }
+
+    pub fn set_next_action_done(&mut self) {
+        self.actions_done_now += 1;
+    }
+
+    pub fn set_next_optional_action_done(&mut self) {
+        self.optional_actions += 1;
+    }
+
+    pub fn actions_count(&self) -> u8 {
+        self.actions.len() as u8
+    }
+
+    pub fn activity_autofinish(&self) -> bool {
+        self.terminal == Terminality::Automatic
+    }
+
+    pub fn all_actions_done(&self) -> bool {
+        self.actions_done_now == self.actions_count()
     }
 }

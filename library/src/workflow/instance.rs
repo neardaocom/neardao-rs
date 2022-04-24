@@ -90,16 +90,14 @@ impl Instance {
 
     pub fn find_transition<'a>(
         &self,
-        template: &'a Template,
+        transitions: &'a [Vec<Transition>],
         activity_id: usize,
     ) -> Option<&'a Transition> {
         // Current activity is not finished yet.
         if self.actions_done_count != self.actions_total {
             return None;
         }
-
-        template
-            .transitions
+        transitions
             .get(self.current_activity_id as usize)
             .expect("Activity does not exists.")
             .iter()
@@ -125,6 +123,13 @@ impl Instance {
     pub fn unset_awaiting_state(&mut self, new_state: InstanceState) {
         self.state = new_state;
         self.awaiting_state = None;
+    }
+
+    /// Checks if new transition is done to another activity or loop
+    pub fn is_new_transition(&self, target_activity_id: usize) -> bool {
+        self.current_activity_id as usize == target_activity_id
+            && self.actions_done_count == self.actions_total
+            || self.current_activity_id as usize != target_activity_id
     }
 }
 

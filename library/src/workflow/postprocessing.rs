@@ -35,38 +35,34 @@ impl Postprocessing {
     /// Supposed to be called before dispatching FnCall action.
     /// Returns `Err(())` in case users's input structure is not correct.
     #[allow(clippy::result_unit_err)]
-    pub fn bind_instructions<S, A>(
+    pub fn bind_instructions(
         &mut self,
-        sources: &S,
-        user_input: &A,
-    ) -> Result<(), SourceError>
-    where
-        S: Source + ?Sized,
-        A: ActivityInput + ?Sized,
-    {
+        sources: &dyn Source,
+        user_input: &dyn ActivityInput,
+    ) -> Result<(), SourceError> {
         // TODO: Improve.
         for ins in self.instructions.iter_mut() {
             match ins {
                 Instruction::StoreDynValue(string, arg_src) => {
                     let value = match arg_src {
-                        ArgSrc::User(ref key) => {
-                            user_input.get(key).ok_or(SourceError::SourceMissing)?
-                        }
+                        ArgSrc::User(ref key) => user_input
+                            .get(key)
+                            .ok_or(SourceError::SourceMissing)?
+                            .to_owned(),
                         _ => get_value_from_source(sources, arg_src)?,
-                    }
-                    .to_owned();
+                    };
                     *ins = Instruction::StoreValue(string.clone(), value);
                 }
                 Instruction::Cond(arg_src, cond, required_fncall_result) => {
                     let mut values = Vec::with_capacity(arg_src.len());
                     for src in arg_src.iter() {
                         let value = match src {
-                            ArgSrc::User(ref key) => {
-                                user_input.get(key).ok_or(SourceError::SourceMissing)?
-                            }
+                            ArgSrc::User(ref key) => user_input
+                                .get(key)
+                                .ok_or(SourceError::SourceMissing)?
+                                .to_owned(),
                             _ => get_value_from_source(sources, src)?,
-                        }
-                        .to_owned();
+                        };
                         values.push(value);
                     }
                     *ins = Instruction::CondBinded(
@@ -79,12 +75,12 @@ impl Postprocessing {
                     let mut values = Vec::with_capacity(arg_src.len());
                     for src in arg_src.iter() {
                         let value = match src {
-                            ArgSrc::User(ref key) => {
-                                user_input.get(key).ok_or(SourceError::SourceMissing)?
-                            }
+                            ArgSrc::User(ref key) => user_input
+                                .get(key)
+                                .ok_or(SourceError::SourceMissing)?
+                                .to_owned(),
                             _ => get_value_from_source(sources, src)?,
-                        }
-                        .to_owned();
+                        };
                         values.push(value);
                     }
 
@@ -99,12 +95,12 @@ impl Postprocessing {
                     let mut values = Vec::with_capacity(arg_src.len());
                     for src in arg_src.iter() {
                         let value = match src {
-                            ArgSrc::User(ref key) => {
-                                user_input.get(key).ok_or(SourceError::SourceMissing)?
-                            }
+                            ArgSrc::User(ref key) => user_input
+                                .get(key)
+                                .ok_or(SourceError::SourceMissing)?
+                                .to_owned(),
                             _ => get_value_from_source(sources, src)?,
-                        }
-                        .to_owned();
+                        };
                         values.push(value);
                     }
 
@@ -121,12 +117,13 @@ impl Postprocessing {
 
         Ok(())
     }
+    // TODO: Error handling
     /// Executes postprocessing script.
     #[allow(clippy::result_unit_err)]
     pub fn execute(
         mut self,
         fn_result_val: Vec<u8>,
-        storage: &mut Option<&mut StorageBucket>,
+        mut storage: Option<&mut StorageBucket>,
         global_storage: &mut StorageBucket,
         new_template: &mut Option<ProviderTemplateData>,
     ) -> Result<(), ()> {
@@ -415,7 +412,7 @@ mod test {
             .clone()
             .execute(
                 result_raw,
-                &mut Some(&mut storage),
+                Some(&mut storage),
                 &mut global_storage,
                 &mut None,
             )
@@ -441,7 +438,7 @@ mod test {
         assert!(pp
             .execute(
                 result_raw,
-                &mut Some(&mut storage),
+                Some(&mut storage),
                 &mut global_storage,
                 &mut None,
             )

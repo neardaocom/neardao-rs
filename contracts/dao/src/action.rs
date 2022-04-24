@@ -1,20 +1,24 @@
-use library::functions::binding::bind_from_sources;
+use library::functions::binding::{bind_input, get_value_from_source};
+use library::functions::serialization::serialize_to_json;
 use library::functions::validation::validate;
+use library::interpreter::expression::EExpr;
+
 use library::storage::StorageBucket;
 use library::types::datatype::Value;
 use library::types::error::ProcessingError;
-use library::workflow::activity::{ActionData, ActionInput, Activity, FnCallIdType, Terminality};
+use library::types::source::{Source, DefaultSource};
+use library::workflow::action::{ActionData, ActionInput, FnCallIdType};
+use library::workflow::activity::TemplateActivity;
 use library::workflow::instance::InstanceState;
-use library::workflow::settings::{ProposeSettings, TemplateSettings};
+use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
-use library::workflow::types::{DaoActionIdent, ValueContainer};
-use library::{Consts, ObjectValues};
 use near_sdk::{env, near_bindgen, AccountId, Gas, Promise};
 
 use crate::callbacks::ext_self;
-use crate::constants::GLOBAL_BUCKET_IDENT;
+use crate::constants::{EVENT_CALLER_KEY, GLOBAL_BUCKET_IDENT};
 use crate::error::{ActionError, ActivityError};
 use crate::group::{GroupInput, GroupMember, GroupSettings};
+use crate::internal::ActivityContext;
 use crate::proposal::ProposalState;
 use crate::settings::{assert_valid_dao_settings, DaoSettings};
 use crate::tags::Tags;
@@ -23,49 +27,45 @@ use crate::{core::*, GroupId, TagId};
 
 #[near_bindgen]
 impl Contract {
-    /// Testing method
-    #[allow(unused_mut)]
-    pub fn run_action(&mut self, action_type: DaoActionIdent, mut args: ObjectValues) {
-        self.execute_dao_action(0, action_type, &mut args).unwrap();
-    }
-
     // TODO: Auto-finish WF then there is no other possible transition regardless terminality.
-    #[allow(unused_mut)]
-    #[allow(clippy::nonminimal_bool)]
     #[payable]
     #[handle_result]
     pub fn wf_run_activity(
         &mut self,
         proposal_id: u32,
         activity_id: usize,
-        mut actions_inputs: Vec<Option<ActionInput>>,
+        actions_inputs: Vec<Option<ActionInput>>,
     ) -> Result<(), ActivityError> {
-        let caller = env::predecessor_account_id();
-        let attached_deposit = env::attached_deposit();
-        let (proposal, wft, wfs) = self.get_wf_and_proposal(proposal_id);
+        let (proposal, wft, wfs) = self.get_workflow_and_proposal(proposal_id);
         let (mut wfi, prop_settings) = self.workflow_instance.get(&proposal_id).unwrap();
-        let mut is_new_transition = false;
-
         let dao_consts = self.dao_consts();
-        let storage_key = prop_settings.storage_key.to_owned();
 
-        let mut storage: Option<StorageBucket> = match storage_key {
+        let Template {
+            mut activities,
+            constants,
+            transitions,
+            expressions,
+            ..
+        } = wft;
+
+        let TemplateSettings {
+            activity_rights, ..
+        } = wfs;
+
+        let storage_key = prop_settings.storage_key.to_owned();
+        let storage: Option<StorageBucket> = match storage_key {
             Some(ref key) => self.storage.get(key),
             _ => None,
         };
-
-        let mut global_storage = self.storage.get(&GLOBAL_BUCKET_IDENT.into()).unwrap();
-
-        // TODO: Improve - as it cannot be passed down to inner functions.
-        let sources = ValueContainer {
-            dao_consts: &dao_consts,
-            tpl_consts: &wft.constants,
-            settings_consts: &wfs.constants,
-            activity_shared_consts: None,
-            action_proposal_consts: None,
-            storage: storage.as_mut(),
-            global_storage: &mut global_storage,
-        };
+        let mut is_new_transition = false;
+        let global_storage = self.storage.get(&GLOBAL_BUCKET_IDENT.into()).unwrap();
+        let mut sources: Box<dyn Source> = Box::new(DefaultSource::from(
+            constants,
+            wfs.constants,
+            dao_consts,
+            storage,
+            Some(global_storage),
+        ));
 
         // Check states
         assert!(
@@ -78,13 +78,10 @@ impl Contract {
         );
 
         // Loop / other activity case
-        if wfi.current_activity_id as usize == activity_id
-            && wfi.actions_done_count == wfi.actions_total
-            || wfi.current_activity_id as usize != activity_id
-        {
+        if wfi.is_new_transition(activity_id) {
             // Find transition
             let transition = wfi
-                .find_transition(&wft, activity_id)
+                .find_transition(transitions.as_slice(), activity_id)
                 .expect("Transition is not possible.");
 
             // Check transition counter
@@ -102,7 +99,7 @@ impl Contract {
                     .cond
                     .as_ref()
                     .map(|expr| expr
-                        .bind_and_eval(&sources, &[])
+                        .bind_and_eval(sources.as_ref(), None, expressions.as_slice())
                         .expect("Binding and eval transition condition failed.")
                         .try_into_bool()
                         .expect("Invalid transition condition definition."))
@@ -113,22 +110,43 @@ impl Contract {
             is_new_transition = true;
         }
 
-        let is_dao_activity = wft.activities[activity_id].is_dao_activity();
-
         // Finds activity
-        let activity = wft
-            .activities
-            .get(activity_id)
-            .expect("Activity does not exists.")
-            .activity_as_ref()
-            .expect("Activity is invalid.");
+        let TemplateActivity {
+            is_dao_activity,
+            automatic,
+            terminal,
+            actions,
+            postprocessing,
+            ..
+        } = activities
+            .swap_remove(activity_id)
+            .into_activity()
+            .expect("Activity is init");
+
+        let mut ctx = ActivityContext::new(
+            proposal_id,
+            activity_id,
+            env::predecessor_account_id(),
+            env::attached_deposit(),
+            prop_settings,
+            wfi.actions_done_count,
+            postprocessing,
+            terminal,
+            actions,
+        );
 
         // Skip right checks for automatic activity.
         // TODO: This might be solved by settings run rights "Anyone" to the automatic activity.
-        if !activity.automatic {
+        if automatic {
             // Check rights
             assert!(
-                self.check_rights(wfs.activity_rights[activity_id].as_slice(), &caller),
+                self.check_rights(
+                    activity_rights
+                        .get(activity_id)
+                        .expect("Rights not found in settings.")
+                        .as_slice(),
+                    &ctx.caller
+                ),
                 "No rights."
             );
         }
@@ -136,41 +154,23 @@ impl Contract {
         // Check action input structure including optional actions.
         assert!(
             self.check_activity_input(
-                activity.actions.as_slice(),
+                ctx.actions.as_slice(),
                 actions_inputs.as_slice(),
-                wfi.actions_done_count as usize
+                ctx.actions_done_before as usize
             ),
             "Activity input structure is invalid."
         );
-
-        // TODO: This will be refactored, its just tmp solution because of Rust move semantics.
-        let actions_done_before = wfi.actions_done_count;
-        let mut actions_done_new = wfi.actions_done_count;
-        let activity_actions_count = activity.actions.len() as u8;
-        let activity_terminality = activity.terminal;
-        let _activity_postprocessing = activity.postprocessing.clone(); // TODO: Solve.
         let result;
-
         if is_dao_activity {
             result = self.run_dao_activity(
-                caller,
-                attached_deposit,
-                proposal_id,
-                wft,
-                wfs,
-                activity_id,
-                &mut actions_done_new,
+                &mut ctx,
+                expressions.as_slice(),
+                sources.as_mut(),
                 actions_inputs,
-                &prop_settings,
-                dao_consts,
-                storage.as_mut(),
-                &mut global_storage,
             );
 
-            // TODO: Discuss Activity postprocessing when all actions are DONE.
-
             // In case not a single DaoAction was executed, then consider this call as failed and panic!
-            if result.is_err() && actions_done_before == actions_done_new {
+            if result.is_err() && ctx.actions_done() == 0 {
                 panic!("Not a single action was executed.");
             } else {
                 //At least one action was executed.
@@ -179,54 +179,50 @@ impl Contract {
                 if is_new_transition {
                     wfi.transition_next(
                         activity_id as u8,
-                        activity_actions_count,
-                        actions_done_new,
+                        ctx.actions_count(),
+                        ctx.actions_done_now,
                     );
                 } else {
-                    wfi.actions_done_count = actions_done_new;
+                    wfi.actions_done_count = ctx.actions_done_now;
                 }
 
                 // This can happen only if no error occured.
-                if wfi.actions_done_count == wfi.actions_total
-                    && activity_terminality == Terminality::Automatic
-                {
+                if ctx.all_actions_done() && ctx.activity_autofinish() {
                     wfi.state = InstanceState::Finished;
                 }
 
                 // Save mutated storage.
-                if let Some(storage) = storage {
+                if let Some(storage) = sources.take_storage() {
                     self.storage.insert(&storage_key.unwrap(), &storage);
                 }
-                self.storage
-                    .insert(&GLOBAL_BUCKET_IDENT.into(), &global_storage);
+                self.storage.insert(
+                    &GLOBAL_BUCKET_IDENT.into(),
+                    &sources
+                        .take_global_storage()
+                        .expect("Missing global storage"),
+                );
             }
         } else {
             // Optional actions will be immediatelly added to instance.
             let mut optional_actions = 0;
             // In case of fn calls activity storages are mutated in postprocessing as promises resolve.
             result = self.run_fncall_activity(
-                proposal_id,
-                wft,
-                wfs,
-                activity_id,
-                &mut actions_done_new,
-                &mut optional_actions,
+                &mut ctx,
+                expressions.as_slice(),
+                sources.as_mut(),
                 actions_inputs,
-                &prop_settings,
-                dao_consts,
-                storage.as_mut(),
-                &mut global_storage,
+                &mut optional_actions,
             );
 
-            if result.is_err() && actions_done_before == actions_done_new {
+            if result.is_err() && ctx.actions_done() == 0 {
                 panic!("Not a single action was executed.");
             } else {
                 wfi.actions_done_count += optional_actions;
                 wfi.set_new_awaiting_state(
                     activity_id as u8,
                     is_new_transition,
-                    activity_actions_count,
-                    activity_terminality == Terminality::Automatic,
+                    ctx.actions_done_now,
+                    ctx.activity_autofinish(),
                 );
             }
         }
@@ -245,7 +241,7 @@ impl Contract {
 
         // Save mutated instance state.
         self.workflow_instance
-            .insert(&proposal_id, &(wfi, prop_settings));
+            .insert(&proposal_id, &(wfi, ctx.proposal_settings));
 
         result
     }
@@ -255,66 +251,54 @@ impl Contract {
 impl Contract {
     /// Tries to run all activity's actions.
     /// Some checks must be done before calling this function.
-    #[allow(clippy::too_many_arguments)]
     pub fn run_dao_activity(
         &mut self,
-        caller: AccountId,
-        mut attached_deposit: u128,
-        proposal_id: u32,
-        mut template: Template,
-        template_settings: TemplateSettings,
-        activity_id: usize,
-        actions_done_count: &mut u8,
-        mut actions_inputs: Vec<Option<ActionInput>>,
-        prop_settings: &ProposeSettings,
-        dao_consts: Box<Consts>,
-        storage: Option<&mut StorageBucket>,
-        global_storage: &mut StorageBucket,
+        ctx: &mut ActivityContext,
+        expressions: &[EExpr],
+        sources: &mut dyn Source,
+        mut input: Vec<Option<ActionInput>>,
     ) -> Result<(), ActionError> {
-        // Assumption activity_id is valid activity_id index.
-        let mut activity = match template.activities.swap_remove(activity_id) {
-            Activity::DaoActivity(a) => a,
-            _ => return Err(ActionError::InvalidWfStructure),
-        };
-
-        let mut sources = ValueContainer {
-            dao_consts: &dao_consts,
-            tpl_consts: &template.constants,
-            settings_consts: &template_settings.constants,
-            activity_shared_consts: None,
-            action_proposal_consts: None,
-            storage,
-            global_storage,
-        };
-
         // Loop which tries to execute all actions, starting from the last done. Returns when something goes wrong.
-        // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
-        let last_action_done = *actions_done_count as usize;
-        for idx in last_action_done..activity.actions.len() {
-            let action = match actions_inputs.get_mut(idx).unwrap() {
-                Some(a) => a,
+        let last_action_done = ctx.actions_done_before as usize;
+        for idx in last_action_done..ctx.actions.len() {
+            // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
+            let mut action_input = match input.get_mut(idx).unwrap().take() {
+                Some(a) => a.values.into_activity_input(),
                 None => {
-                    *actions_done_count += 1;
+                    ctx.set_next_action_done();
                     continue;
                 }
             };
+            let tpl_action = ctx.actions.get_mut(idx).unwrap();
 
-            let tpl_action = activity.actions.get_mut(idx).unwrap();
-
-            // Check exec condition
+            // Check exec condition.
             if let Some(cond) = tpl_action.exec_condition.as_ref() {
-                if !cond.bind_and_eval(&sources, &[])?.try_into_bool()? {
+                if !cond
+                    .bind_and_eval(sources, Some(action_input.as_ref()), expressions)?
+                    .try_into_bool()?
+                {
                     return Err(ActionError::Condition(idx as u8));
                 }
             };
 
-            // Assign current action proposal binds to source.
-            if let Some(binds) = &prop_settings.binds[activity_id] {
-                sources.activity_shared_consts = Some(&binds.shared);
-                sources.action_proposal_consts = Some(&binds.values[idx]);
+            // Assign current action proposal binds to source if there's defined one.
+            if let Some(mut binds) = ctx
+                .proposal_settings
+                .binds
+                .get_mut(ctx.activity_id)
+                .unwrap()
+                .take()
+            {
+                if let Some(prop_binds) = binds
+                    .values
+                    .get_mut(idx)
+                    .expect("Missing activity bind")
+                    .take()
+                {
+                    sources.set_prop(prop_binds);
+                }
             } else {
-                sources.activity_shared_consts = None;
-                sources.action_proposal_consts = None;
+                sources.unset_prop();
             }
 
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
@@ -322,275 +306,167 @@ impl Contract {
                 .ok_or(ActionError::InvalidWfStructure)?;
 
             // Need metadata coz validations and bindings. Metadata are always included in DAO.
-            let (metadata, input_defs) = (
-                self.dao_action_metadata.get(&action_data.name).unwrap(),
-                action_data.inputs_definitions.as_slice(),
-            );
+            let binds = action_data.binds.as_slice();
 
-            // Check input validators
-            if !tpl_action.input_validators.is_empty()
-            /* && !validate(
-                &sources,
-                tpl_action.input_validators.as_slice(),
-                template.validator_exprs.as_slice(),
-                metadata.as_slice(),
-                action.values.as_slice(),
-            )? */
-            {
+            // Check input validators.
+            if !validate(
+                sources,
+                tpl_action.validators.as_slice(),
+                expressions,
+                action_input.as_ref(),
+            )? {
                 return Err(ActionError::Validation(idx as u8));
             }
 
-            // Bind DaoAction
-            /* bind_from_sources(
-                input_defs,
-                &sources,
-                template.expressions.as_slice(),
-                &mut action.values,
-                0,
-            )?; */
+            // Bind user inputs.
+            bind_input(sources, binds, expressions, action_input.as_mut())?;
 
-            if action_data.name == DaoActionIdent::Event {
+            if action_data.is_event() {
                 let deposit = match &action_data.required_deposit {
-                    Some(arg_src) => get_value_from_source(arg_src, &sources)
+                    Some(arg_src) => get_value_from_source(sources, arg_src)
                         .map_err(|_| ActionError::InvalidSource)?
                         .try_into_u128()?,
                     _ => 0,
                 };
 
-                attached_deposit = attached_deposit
+                ctx.attached_deposit = ctx
+                    .attached_deposit
                     .checked_sub(deposit)
                     .ok_or(ActionError::NotEnoughDeposit)?;
 
                 // Insert caller into 0th position.
-                action
-                    .values
-                    .get_mut(0)
-                    .ok_or(ActionError::InputStructure(0))?
-                    .insert(0, Value::String(caller.to_string()));
+                action_input.set(EVENT_CALLER_KEY, Value::String(ctx.caller.to_string()));
             } else {
-                self.execute_dao_action(proposal_id, action_data.name, &mut action.values)?;
+                self.execute_dao_action(ctx.proposal_id, action_data.name, action_input.as_mut())?;
             }
 
             // TODO: Handle error so we do only part of the batch.
             if let Some(mut pp) = tpl_action.postprocessing.take() {
-                pp.bind_instructions(&sources, action.values.as_slice())
+                pp.bind_instructions(sources, action_input.as_ref())
                     .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
                 // TODO: Different execute version for DaoActions?
+                let mut storage = sources.take_storage();
+                let mut global_storage = sources
+                    .take_global_storage()
+                    .expect("Global storage must be accessible.");
                 if pp
-                    .execute(
-                        vec![],
-                        &mut sources.storage,
-                        sources.global_storage,
-                        &mut None,
-                    )
+                    .execute(vec![], storage.as_mut(), &mut global_storage, &mut None)
                     .is_err()
                 {
                     return Err(ActionError::ActionPostprocessing(idx as u8));
                 }
             }
 
-            *actions_done_count += 1;
+            ctx.set_next_action_done();
         }
 
         Ok(())
     }
     /// FnCall version of `run_dao_activity` function.
-    #[allow(clippy::too_many_arguments)]
     pub fn run_fncall_activity(
         &mut self,
-        proposal_id: u32,
-        mut template: Template,
-        template_settings: TemplateSettings,
-        activity_id: usize,
-        actions_done_count: &mut u8,
+        ctx: &mut ActivityContext,
+        expressions: &[EExpr],
+        sources: &mut dyn Source,
+        mut input: Vec<Option<ActionInput>>,
         optional_actions: &mut u8,
-        mut actions_inputs: Vec<Option<ActionInput>>,
-        prop_settings: &ProposeSettings,
-        dao_consts: Box<Consts>,
-        storage: Option<&mut StorageBucket>,
-        global_storage: &mut StorageBucket,
     ) -> Result<(), ActionError> {
-        // Assumption activity_id is valid activity_id index.
-        let mut activity = match template.activities.swap_remove(activity_id) {
-            Activity::FnCallActivity(a) => a,
-            _ => return Err(ActionError::InvalidWfStructure),
-        };
-
-        let mut sources = ValueContainer {
-            dao_consts: &dao_consts,
-            tpl_consts: &template.constants,
-            settings_consts: &template_settings.constants,
-            activity_shared_consts: None,
-            action_proposal_consts: None,
-            storage,
-            global_storage,
-        };
-
         // Loop which tries to execute all actions, starting from the last done. Returns when something goes wrong.
         // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
-        let last_action_done = *actions_done_count as usize;
+        let last_action_done = ctx.actions_done_before as usize;
 
-        // This strange variable is here because "optional-required-optional" actions case might happen. Therefore we must not considered 3th action as sucessfull but instead of that break the cycle.
+        // This strange variable is here because "optional-required-optional" actions case might happen.
+        // Therefore we must not considered 3th action as sucessfull but instead of that break the cycle.
         // This might be redundant and "YAGNI" stuff I let it stay here for now.
         let mut optional_state = 0;
-        for idx in last_action_done..activity.actions.len() {
-            let action = match actions_inputs.get_mut(idx).unwrap() {
+        for idx in last_action_done..ctx.actions.len() {
+            let mut action_input = match input.get_mut(idx).unwrap().take() {
                 Some(a) => {
                     if optional_state == 1 {
                         optional_state = 2;
                     }
-                    a
+                    a.values.into_activity_input()
                 }
                 None => {
                     if optional_state == 2 {
                         break;
                     }
                     optional_state = 1;
-                    *optional_actions += 1;
-                    *actions_done_count += 1;
+                    ctx.set_next_optional_action_done();
+                    ctx.set_next_action_done();
                     continue;
                 }
             };
 
-            let tpl_action = activity.actions.get_mut(idx).unwrap();
+            let tpl_action = ctx.actions.get_mut(idx).unwrap();
 
             // Check exec condition
             if let Some(cond) = tpl_action.exec_condition.as_ref() {
-                if !cond.bind_and_eval(&sources, &[])?.try_into_bool()? {
+                if !cond
+                    .bind_and_eval(sources, Some(action_input.as_ref()), expressions)?
+                    .try_into_bool()?
+                {
                     return Err(ActionError::Condition(idx as u8));
                 }
             };
 
-            // Assign current action proposal binds to source.
-            if let Some(binds) = &prop_settings.binds[activity_id] {
-                sources.activity_shared_consts = Some(&binds.shared);
-                sources.action_proposal_consts = Some(&binds.values[idx]);
+            // Assign current action proposal binds to source if there's defined one.
+            if let Some(mut binds) = ctx
+                .proposal_settings
+                .binds
+                .get_mut(ctx.activity_id)
+                .unwrap()
+                .take()
+            {
+                if let Some(prop_binds) = binds
+                    .values
+                    .get_mut(idx)
+                    .expect("Missing activity bind")
+                    .take()
+                {
+                    sources.set_prop(prop_binds);
+                }
             } else {
-                sources.activity_shared_consts = None;
-                sources.action_proposal_consts = None;
+                sources.unset_prop();
             }
 
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                 .try_into_fncall_data()
                 .ok_or(ActionError::InvalidWfStructure)?;
 
-            // TODO: Reduce cloning.
-            // Metadata are provided by workflow provider when workflow is added. Missing metadata are fault of the workflow provider and are considered as fatal runtime error.
-            let (name, method, metadata) = match action_data.id {
-                FnCallIdType::Static((account, method)) => {
-                    if account.as_str() == "self" {
-                        let name = env::current_account_id();
-                        (
-                            AccountId::try_from(name.to_string())
-                                .map_err(|_| ActionError::InvalidDataType)?,
-                            method.clone(),
-                            self.function_call_metadata
-                                .get(&(name.clone(), method.clone()))
-                                .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                        )
-                    } else {
-                        (
-                            account.clone(),
-                            method.clone(),
-                            self.function_call_metadata
-                                .get(&(account, method.clone()))
-                                .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                        )
-                    }
-                }
-                FnCallIdType::Dynamic(arg_src, method) => {
-                    let name = get_value_from_source(&arg_src, &sources)
-                        .map_err(ProcessingError::Source)?
-                        .try_into_string()?;
-                    (
-                        AccountId::try_from(name.to_string())
-                            .map_err(|_| ActionError::InvalidDataType)?,
-                        method.clone(),
-                        self.function_call_metadata
-                            .get(&(
-                                AccountId::try_from(name.to_string())
-                                    .map_err(|_| ActionError::InvalidDataType)?,
-                                method.clone(),
-                            ))
-                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                    )
-                }
-                FnCallIdType::StandardStatic((account, method)) => {
-                    if account.as_str() == "self" {
-                        let name = env::current_account_id();
-                        (
-                            name.clone(),
-                            method.clone(),
-                            self.standard_function_call_metadata
-                                .get(&method.clone())
-                                .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                        )
-                    } else {
-                        (
-                            account.clone(),
-                            method.clone(),
-                            self.function_call_metadata
-                                .get(&(account, method.clone()))
-                                .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                        )
-                    }
-                }
-                FnCallIdType::StandardDynamic(arg_src, method) => {
-                    let name = get_value_from_source(&arg_src, &sources)
-                        .map_err(ProcessingError::Source)?
-                        .try_into_string()?;
-                    (
-                        AccountId::try_from(name.to_string())
-                            .map_err(|_| ActionError::InvalidDataType)?,
-                        method.clone(),
-                        self.standard_function_call_metadata
-                            .get(&name)
-                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                    )
-                }
-            };
+            // Metadata are provided by workflow provider when workflow is added.
+            // Missing metadata are fault of the workflow provider and are considered as fatal runtime error.
+            let (name, method, metadata) =
+                self.get_fncall_id_with_metadata(action_data.id, sources)?;
 
-            let input_defs = action_data.inputs_definitions.as_slice();
-
-            // Check input validators
-            if !tpl_action.input_validators.is_empty()
-            /* && !validate(
-                &sources,
-                tpl_action.input_validators.as_slice(),
-                template.validator_exprs.as_slice(),
-                metadata.as_slice(),
-                action.values.as_slice(),
-            )? */
-            {
+            if !validate(
+                sources,
+                tpl_action.validators.as_slice(),
+                expressions,
+                action_input.as_ref(),
+            )? {
                 return Err(ActionError::Validation(idx as u8));
             }
 
-            // Bind DaoAction
-            /* bind_from_sources(
-                input_defs,
-                &sources,
-                template.expressions.as_slice(),
-                &mut action.values,
-                0,
-            )?; */
+            let binds = action_data.binds.as_slice();
+            bind_input(sources, binds, expressions, action_input.as_mut())?;
 
             let deposit = match action_data.deposit {
-                Some(arg_src) => get_value_from_source(&arg_src, &sources)
+                Some(arg_src) => get_value_from_source(sources, &arg_src)
                     .map_err(|_| ActionError::InvalidSource)?
                     .try_into_u128()?,
                 None => 0,
             };
 
-            //let args = serialize_to_json(action.values.as_slice(), metadata.as_slice(), 0);
-            let args = "".to_string();
-
             let pp = if let Some(mut pp) = tpl_action.postprocessing.take() {
-                pp.bind_instructions(&sources, action.values.as_slice())
+                pp.bind_instructions(sources, action_input.as_ref())
                     .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
                 Some(pp)
             } else {
                 None
             };
+
+            let args = serialize_to_json(action_input, metadata.as_slice());
 
             // Dispatch fncall and its postprocessing.
             Promise::new(name)
@@ -601,10 +477,10 @@ impl Contract {
                     Gas(action_data.tgas as u64 * 10u64.pow(12)),
                 )
                 .then(ext_self::postprocess(
-                    proposal_id,
+                    ctx.proposal_id,
                     idx as u8,
                     tpl_action.must_succeed,
-                    prop_settings.storage_key.clone(),
+                    ctx.proposal_settings.storage_key.clone(),
                     pp,
                     env::current_account_id(),
                     0,
@@ -612,7 +488,7 @@ impl Contract {
                 ));
 
             // We need number of successfully dispatched promises.
-            *actions_done_count += 1;
+            ctx.set_next_action_done();
         }
 
         Ok(())

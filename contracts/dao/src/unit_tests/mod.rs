@@ -4,7 +4,7 @@
 use std::convert::TryFrom;
 
 use library::{
-    workflow::{settings::TemplateSettings, template::Template, types::FnCallMetadata},
+    workflow::{settings::TemplateSettings, template::Template, types::ObjectMetadata},
     FnCallId, MethodName,
 };
 use near_sdk::{test_utils::VMContextBuilder, AccountId};
@@ -78,9 +78,9 @@ pub(crate) fn get_contract(
     groups: Vec<GroupInput>,
     tags: Vec<TagInput>,
     standard_function_calls: Vec<String>,
-    standard_function_call_metadata: Vec<Vec<FnCallMetadata>>,
+    standard_function_call_metadata: Vec<Vec<ObjectMetadata>>,
     function_calls: Vec<FnCallId>,
-    function_call_metadata: Vec<Vec<FnCallMetadata>>,
+    function_call_metadata: Vec<Vec<ObjectMetadata>>,
     workflow_templates: Vec<Template>,
     workflow_template_settings: Vec<Vec<TemplateSettings>>,
 ) -> Contract {
@@ -177,11 +177,11 @@ pub(crate) fn get_default_standard_fncalls() -> Vec<MethodName> {
     vec![]
 }
 
-pub(crate) fn get_default_standard_fncall_metadata() -> Vec<Vec<FnCallMetadata>> {
+pub(crate) fn get_default_standard_fncall_metadata() -> Vec<Vec<ObjectMetadata>> {
     vec![]
 }
 
-pub(crate) fn get_default_fncall_metadata() -> Vec<Vec<FnCallMetadata>> {
+pub(crate) fn get_default_fncall_metadata() -> Vec<Vec<ObjectMetadata>> {
     vec![]
 }
 pub(crate) fn get_default_templates() -> Vec<Template> {

@@ -10,19 +10,17 @@ use near_sdk::{
 };
 
 use crate::{
-    functions::{
-        binding::bind_from_sources, serialization::serialize_to_json, validation::validate,
-    },
+    functions::{binding::bind_input, serialization::serialize_to_json, validation::validate},
     interpreter::expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
     storage::StorageBucket,
     types::{
         activity_input::{ActivityInput, InputHashMap},
         datatype::{Datatype, Value},
-        source::{Source, SourceMock},
+        source::{SourceMock, SourceProvider},
     },
     workflow::{
         expression::Expression,
-        types::{ArgSrc, BindDefinition, FnCallMetadata, SrcOrExpr},
+        types::{ArgSrc, BindDefinition, ObjectMetadata, SrcOrExpr},
         validator::{CollectionValidator, ObjectValidator, Validator},
     },
 };
@@ -78,11 +76,11 @@ pub struct ShareInfo {
 #[test]
 fn full_scenario_skyward_validation_binding_serialization_complex() {
     let metadata = vec![
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["sale".into(), "sale_info".into()],
             arg_types: vec![Datatype::Object(1), Datatype::String(true)],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec![
                 "title".into(),
                 "url".into(),
@@ -104,11 +102,11 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
                 Datatype::Object(2),
             ],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["reason".into(), "timestamp".into()],
             arg_types: vec![Datatype::String(false), Datatype::U64(false)],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec![
                 "token_account_id".into(),
                 "balance".into(),
@@ -122,7 +120,7 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
                 Datatype::Object(4),
             ],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["user".into(), "amount".into()],
             arg_types: vec![Datatype::String(false), Datatype::U64(false)],
         },
@@ -357,8 +355,7 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
     hm.set("sale.out_tokens.2.shares.amount", Value::U64(456));
     let expected: Box<dyn ActivityInput> = Box::new(hm);
 
-    bind_from_sources(&source, &source_defs, &expressions, user_input.as_mut())
-        .expect("Binding failed");
+    bind_input(&source, &source_defs, &expressions, user_input.as_mut()).expect("Binding failed");
 
     let mut actual_user_input = user_input.to_vec();
     let mut expected_user_input = expected.to_vec();
@@ -490,7 +487,7 @@ struct Animals {
 #[test]
 fn serialize_complex() {
     let metadata = vec![
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec![
                 "first_name".into(),
                 "surname".into(),
@@ -512,11 +509,11 @@ fn serialize_complex() {
                 Datatype::String(true),
             ],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["brand".into(), "model".into()],
             arg_types: vec![Datatype::String(false), Datatype::String(false)],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["name".into(), "age".into(), "cage".into()],
             arg_types: vec![
                 Datatype::String(false),
@@ -524,7 +521,7 @@ fn serialize_complex() {
                 Datatype::NullableObject(6),
             ],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec![
                 "fullname".into(),
                 "interested_in_crypto".into(),
@@ -536,11 +533,11 @@ fn serialize_complex() {
                 Datatype::VecObject(5),
             ],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["name".into(), "started".into()],
             arg_types: vec![Datatype::String(false), Datatype::U64(false)],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["name".into(), "years_doing".into(), "coach".into()],
             arg_types: vec![
                 Datatype::String(false),
@@ -548,7 +545,7 @@ fn serialize_complex() {
                 Datatype::String(true),
             ],
         },
-        FnCallMetadata {
+        ObjectMetadata {
             arg_names: vec!["size".into(), "material".into()],
             arg_types: vec![Datatype::U64(false), Datatype::String(false)],
         },
