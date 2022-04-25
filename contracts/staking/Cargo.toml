@@ -1,0 +1,16 @@
+[package]
+name = "staking"
+version = "1.0.0"
+authors = ["Devs of NearDAO dev@neardao.com"]
+edition = "2018"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+near-sdk = "4.0.0-pre.8"
+near-contract-standards = "4.0.0-pre.8"
+library = { path = "./../../library", version = "0.1.0" }
+
+[dev-dependencies]

@@ -7,7 +7,7 @@
 
 set -xe 
 
-CRATES=(dao dao_factory workflow_provider)
+CRATES=(dao dao_factory workflow_provider staking)
 FEATURES=""
 ABS_BASEDIR=$(dirname $(readlink -f "$0"))
 

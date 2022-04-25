@@ -70,10 +70,7 @@ where
 }
 
 /// Helper function to fetch value ref from Source.
-pub fn get_value_from_source(
-    sources: &dyn Source,
-    src: &ArgSrc,
-) -> Result<Value, SourceError> {
+pub fn get_value_from_source(sources: &dyn Source, src: &ArgSrc) -> Result<Value, SourceError> {
     match src {
         ArgSrc::ConstsTpl(key) => {
             let value = sources

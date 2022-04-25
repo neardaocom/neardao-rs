@@ -771,19 +771,21 @@ impl Contract {
 }
 
 pub mod utils {
+    use library::functions::utils::{
+        append, into_storage_key_wrapper_str, into_storage_key_wrapper_u16, StorageKeyWrapper,
+    };
+
     use crate::{
-        append,
         constants::{GROUP_RELEASE_PREFIX, STORAGE_BUCKET_PREFIX},
-        core::StorageKeyWrapper,
         GroupId,
     };
 
     pub fn get_group_key(id: GroupId) -> StorageKeyWrapper {
-        append(GROUP_RELEASE_PREFIX, &id.to_le_bytes()).into()
+        into_storage_key_wrapper_u16(GROUP_RELEASE_PREFIX, id)
     }
 
     pub fn get_bucket_id(id: &str) -> StorageKeyWrapper {
-        append(STORAGE_BUCKET_PREFIX, id.as_bytes()).into()
+        into_storage_key_wrapper_str(STORAGE_BUCKET_PREFIX, id)
     }
 }
 

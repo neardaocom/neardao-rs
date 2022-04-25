@@ -16,6 +16,7 @@ pub mod tags;
 
 pub mod action;
 pub mod callbacks;
+pub mod delegation;
 pub mod group;
 pub mod internal;
 pub mod media;
@@ -43,10 +44,6 @@ pub(crate) type InstanceWf = (Instance, ProposeSettings);
 #[inline]
 pub(crate) fn calc_percent_u128_unchecked(value: u128, total: u128, decimals: u128) -> u8 {
     ((value / decimals) as f64 / (total / decimals) as f64 * 100.0).round() as u8
-}
-
-pub(crate) fn append(key: &[u8], suffix: &[u8]) -> Vec<u8> {
-    [key, suffix].concat()
 }
 
 #[macro_export]

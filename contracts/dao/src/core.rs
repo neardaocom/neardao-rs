@@ -13,7 +13,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
 use near_sdk::serde::Serialize;
 use near_sdk::{
-    env, log, near_bindgen, AccountId, BorshStorageKey, IntoStorageKey, PanicOnDefault,
+    env, log, near_bindgen, AccountId, Balance, BorshStorageKey, IntoStorageKey, PanicOnDefault,
 };
 
 use crate::group::{Group, GroupInput};
@@ -35,6 +35,7 @@ pub struct ActivityLog {
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
+    Delegations,
     Proposals,
     Tags,
     FunctionCalls,
@@ -56,6 +57,12 @@ pub enum StorageKeys {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
+    /// Staking contract
+    pub staking_id: AccountId,
+    /// Delegations per user.
+    pub delegations: LookupMap<AccountId, Balance>,
+    /// Delegated token total amount.
+    pub total_delegation_amount: Balance,
     pub ft_total_supply: u32,
     pub ft_total_locked: u32,
     pub ft_total_distributed: u32,
@@ -86,6 +93,7 @@ impl Contract {
     #[allow(clippy::too_many_arguments)]
     #[init]
     pub fn new(
+        staking_id: AccountId,
         total_supply: u32,
         settings: DaoSettings,
         groups: Vec<GroupInput>,
@@ -101,6 +109,9 @@ impl Contract {
         assert_valid_dao_settings(&settings);
 
         let mut contract = Contract {
+            staking_id,
+            delegations: LookupMap::new(StorageKeys::Delegations),
+            total_delegation_amount: 0,
             ft_total_supply: total_supply,
             ft_total_locked: 0,
             ft_total_distributed: 0,
@@ -475,18 +486,4 @@ pub extern "C" fn upgrade_self() {
     let promise = env::promise_batch_create(&current_acc);
     env::promise_batch_action_deploy_contract(promise, code.as_slice());
     env::promise_batch_action_function_call(promise, method_name, &[], 0, GAS_UPGRADE);
-}
-
-pub struct StorageKeyWrapper(pub Vec<u8>);
-
-impl IntoStorageKey for StorageKeyWrapper {
-    fn into_storage_key(self) -> Vec<u8> {
-        self.0
-    }
-}
-
-impl From<Vec<u8>> for StorageKeyWrapper {
-    fn from(bytes: Vec<u8>) -> StorageKeyWrapper {
-        StorageKeyWrapper(bytes)
-    }
 }
