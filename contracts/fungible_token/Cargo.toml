@@ -1,0 +1,13 @@
+
+[package]
+name = "fungible_token"
+version = "1.0.0"
+authors = ["Near Inc <hello@nearprotocol.com>"]
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+near-sdk = "4.0.0-pre.8"
+near-contract-standards = "4.0.0-pre.8"

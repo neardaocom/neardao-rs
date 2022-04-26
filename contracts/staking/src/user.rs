@@ -2,6 +2,8 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{AccountId, Balance};
 
+use crate::consts::error_messages::ERR_NOT_ENOUGH_AMOUNT;
+
 /// User data.
 /// Recording deposited voting tokens, storage used and delegations and received delegations for voting.
 /// Once delegated - the tokens are used in the votes. It records for each delegate when was the last vote.
@@ -13,7 +15,8 @@ pub struct User {
     /// Amount of staked vote token.
     pub vote_amount: u128,
     /// List of delegations to other accounts.
-    /// Invariant: Sum of all delegations <= `self.vote_amount`.
+    /// Invariant 1: Sum of all delegations <= `self.vote_amount`.
+    /// Invariant 2: Each account_id must be unique.
     pub delegated_amounts: Vec<(AccountId, u128)>,
     /// Total delegated amount to this user by others.
     pub delegated_vote_amount: u128,
@@ -36,13 +39,6 @@ impl User {
         }
     }
 
-    //fn assert_storage(&self) {
-    //    assert!(
-    //        (self.storage_used as Balance) * env::storage_byte_cost() <= self.near_amount.0,
-    //        "ERR_NOT_ENOUGH_STORAGE"
-    //    );
-    //}
-
     pub(crate) fn delegated_amount(&self) -> Balance {
         self.delegated_amounts
             .iter()
@@ -51,39 +47,46 @@ impl User {
 
     /// Record delegation owned tokens from this account to another account.
     /// Fails if not enough available balance to delegate.
-    pub fn delegate_owned(&mut self, delegate_id: AccountId, amount: Balance) {
+    /// Return true if new delegate was added.
+    pub fn delegate_owned(&mut self, delegate_id: AccountId, amount: Balance) -> bool {
         assert!(
             self.delegated_amount() + amount <= self.vote_amount,
             "ERR_NOT_ENOUGH_AMOUNT"
         );
-        /* assert!(
-            env::block_timestamp() >= self.next_action_timestamp,
-            "ERR_NOT_ENOUGH_TIME_PASSED"
-        ); */
-        //self.storage_used += delegate_id.as_bytes().len() as StorageUsage + U128_LEN;
-        self.delegated_amounts.push((delegate_id, amount));
-        //self.assert_storage();
+
+        if let Some(delegate_pos) = self
+            .delegated_amounts
+            .iter()
+            .position(|(e, _)| e == &delegate_id)
+        {
+            self.delegated_amounts.get_mut(delegate_pos).unwrap().1 += amount;
+            false
+        } else {
+            self.delegated_amounts.push((delegate_id, amount));
+            true
+        }
     }
 
     /// Removes all delegations of delegators to this user.
     pub fn forward_delegated(&mut self) -> (u128, Vec<AccountId>) {
-        assert_eq!(self.delegated_vote_amount, 0, "Zero delegated tokens");
+        assert!(self.delegated_vote_amount > 0, "Zero delegated tokens");
         let amount = self.delegated_vote_amount;
         let delegators = std::mem::take(&mut self.delegators);
         self.delegated_vote_amount = 0;
         (amount, delegators)
     }
 
-    /// Add new delegated vote amount
+    /// Add new delegated vote amount.
     /// Adds new delegator if he is new one.
-    pub fn add_delegated(&mut self, delegator_id: AccountId, amount: Balance) {
+    pub fn add_delegator(&mut self, delegator_id: AccountId, amount: Balance) {
         if !self.is_delegator(&delegator_id) {
             self.delegators.push(delegator_id);
         }
         self.delegated_vote_amount += amount;
     }
 
-    /// Remove delegated vote amount
+    /// Remove delegated vote amount.
+    /// Removes delegator from delegators if amount is zero.
     pub fn remove_delegated(
         &mut self,
         delegator_id: &AccountId,
@@ -102,24 +105,33 @@ impl User {
     }
 
     /// Update delegate when the delegate forwards user's tokens to another user.
-    pub fn update_delegation(&mut self, old_delegate_id: &AccountId, new_delegate_id: &AccountId) {
-        let delegate_pos = self
+    pub fn update_delegation(&mut self, prev_delegate_id: &AccountId, new_delegate_id: &AccountId) {
+        let delegate_old_pos = self
             .delegated_amounts
             .iter()
-            .position(|(e, _)| e == old_delegate_id)
+            .position(|(e, _)| e == prev_delegate_id)
             .expect("Delegate not found");
-        self.delegated_amounts.get_mut(delegate_pos).unwrap().0 = new_delegate_id.clone();
+
+        let delegate_new_pos = self
+            .delegated_amounts
+            .iter()
+            .position(|(e, _)| e == new_delegate_id);
+
+        // If the new delegate is already in user's delegates, then just add amount of the old one.
+        // Else just update account id.
+        if let Some(new_pos) = delegate_new_pos {
+            let prev_amount = self.delegated_amounts[delegate_old_pos].1;
+            self.delegated_amounts.get_mut(new_pos).unwrap().1 += prev_amount;
+            self.delegated_amounts.swap_remove(delegate_old_pos);
+        } else {
+            self.delegated_amounts.get_mut(delegate_old_pos).unwrap().0 = new_delegate_id.clone();
+        }
     }
 
     /// Remove given amount from delegates.
     /// Fails if delegate not found or not enough amount delegated.
     /// Returns remaining amount.
-    pub fn undelegate(
-        &mut self,
-        delegate_id: &AccountId,
-        amount: Balance,
-        //undelegation_period: Duration,
-    ) -> u128 {
+    pub fn undelegate(&mut self, delegate_id: &AccountId, amount: Balance) -> u128 {
         let f = self
             .delegated_amounts
             .iter()
@@ -129,14 +141,12 @@ impl User {
         let element = (f.0, ((f.1).1));
         assert!(element.1 >= amount, "ERR_NOT_ENOUGH_AMOUNT");
         if element.1 == amount {
-            self.delegated_amounts.remove(element.0);
+            self.delegated_amounts.swap_remove(element.0);
             0
-            //self.storage_used -= delegate_id.as_bytes().len() as StorageUsage + U128_LEN;
         } else {
             (self.delegated_amounts[element.0].1) -= amount;
             self.delegated_amounts[element.0].1
         }
-        //self.next_action_timestamp = (env::block_timestamp() + undelegation_period).into();
     }
 
     /// Withdraw the amount.
@@ -144,12 +154,10 @@ impl User {
     pub fn withdraw(&mut self, amount: Balance) {
         assert!(
             self.delegated_amount() + amount <= self.vote_amount,
-            "ERR_NOT_ENOUGH_AVAILABLE_AMOUNT"
+            "{}",
+            ERR_NOT_ENOUGH_AMOUNT
         );
-        //assert!(
-        //    env::block_timestamp() >= self.next_action_timestamp,
-        //    "ERR_NOT_ENOUGH_TIME_PASSED"
-        //);
+
         self.vote_amount -= amount;
     }
 
@@ -161,9 +169,4 @@ impl User {
     fn is_delegator(&self, account_id: &AccountId) -> bool {
         self.delegators.contains(account_id)
     }
-
-    // /// Returns amount in NEAR that is available for storage.
-    // pub fn storage_available(&self) -> Balance {
-    //     self.near_amount.0 - self.storage_used as Balance * env::storage_byte_cost()
-    // }
 }

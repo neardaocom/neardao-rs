@@ -16,3 +16,12 @@ pub const GAS_FOR_REGISTER: Gas = Gas(10_000_000_000_000);
 
 /// Amount of gas for undelegate action.
 pub const GAS_FOR_UNDELEGATE: Gas = Gas(10_000_000_000_000);
+
+pub mod error_messages {
+    pub const ERR_NOT_ENOUGH_AMOUNT: &str = "Not enough amount";
+}
+
+pub const STORAGE_DEPOSIT_MIN: StorageUsage = 200;
+pub const STORAGE_PER_DAO: StorageUsage = 155;
+pub const STORAGE_DEPOSIT_FOR_DAO: StorageUsage = 125;
+pub const STORAGE_PER_DELEGATE: StorageUsage = 64 + 64 + 24 + 3;

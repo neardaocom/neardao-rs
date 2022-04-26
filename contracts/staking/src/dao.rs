@@ -2,7 +2,7 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::LookupMap,
     json_types::U128,
-    AccountId, Balance,
+    log, require, AccountId, Balance,
 };
 
 use crate::{User, VersionedUser};
@@ -21,28 +21,49 @@ pub struct Dao {
 // TODO: Unstake settings.
 impl Dao {
     fn save_user(&mut self, account_id: &AccountId, user: User) {
+        log!(
+            "Saved user: {} to dao: {}",
+            account_id,
+            self.account_id.as_str()
+        );
+        log!("{:?}", user);
         self.users.insert(account_id, &VersionedUser::Default(user));
     }
 
     /// Delegate give amount of votes to given account.
     /// If enough tokens and storage, forwards this to owner account.
-    pub fn delegate_owned(&mut self, sender_id: AccountId, delegate_id: AccountId, amount: u128) {
+    pub fn delegate_owned(
+        &mut self,
+        sender_id: AccountId,
+        delegate_id: AccountId,
+        amount: u128,
+    ) -> bool {
         let mut sender = self.get_user(&sender_id);
         let mut delegate = self.get_user(&delegate_id);
-        sender.delegate_owned(delegate_id.clone(), amount);
-        delegate.add_delegated(sender_id.clone(), amount);
+        let new_added = sender.delegate_owned(delegate_id.clone(), amount);
+        if new_added {
+            delegate.add_delegator(sender_id.clone(), amount);
+        }
         self.save_user(&sender_id, sender);
         self.save_user(&delegate_id, delegate);
+        new_added
     }
 
     /// Remove given amount of delegation.
-    pub fn undelegate(&mut self, sender_id: AccountId, delegate_id: AccountId, amount: u128) {
+    /// Returns true if delegate was removed.
+    pub fn undelegate(
+        &mut self,
+        sender_id: AccountId,
+        delegate_id: AccountId,
+        amount: u128,
+    ) -> bool {
         let mut sender = self.get_user(&sender_id);
         let mut delegate = self.get_user(&delegate_id);
-        let remaining_amount = sender.undelegate(&delegate_id, amount);
-        delegate.remove_delegated(&sender_id, amount, remaining_amount);
+        let remainaing_amount = sender.undelegate(&delegate_id, amount);
+        delegate.remove_delegated(&sender_id, amount, remainaing_amount);
         self.save_user(&sender_id, sender);
         self.save_user(&delegate_id, delegate);
+        remainaing_amount == 0
     }
 
     /// Delegate all delegated tokens aka transitive delegation.
@@ -59,7 +80,7 @@ impl Dao {
     fn update_delegate(&mut self, delegate_id: &AccountId, amount: u128, users: Vec<AccountId>) {
         let mut delegate = self.get_user(&delegate_id);
         for user in users {
-            delegate.add_delegated(user, amount);
+            delegate.add_delegator(user, amount);
         }
         self.save_user(&delegate_id, delegate);
     }
@@ -67,13 +88,13 @@ impl Dao {
     /// Updates delegate of users
     fn update_user_delegations(
         &mut self,
-        old_delegate_id: &AccountId,
+        prev_delegate_id: &AccountId,
         new_delegate_id: &AccountId,
         users: &[AccountId],
     ) {
         for acc in users {
             let mut user = self.get_user(&acc);
-            user.update_delegation(old_delegate_id, new_delegate_id);
+            user.update_delegation(prev_delegate_id, new_delegate_id);
             self.save_user(&acc, user);
         }
     }
@@ -96,14 +117,18 @@ impl Dao {
         self.total_amount -= amount;
     }
 
-    pub fn register_user(
-        &mut self,
-        owner_id: &AccountId,
-        sender_id: &AccountId,
-        near_amount: Balance,
-    ) {
+    /// Registers user in DAO:
+    pub fn register_user(&mut self, sender_id: &AccountId) {
         let user = User::new();
         self.save_user(sender_id, user);
+    }
+
+    /// Removes user from DAO.
+    /// Operation fails of user's amount of vote tokens is non-zero.
+    pub fn unregister_user(&mut self, sender_id: &AccountId) {
+        let user = self.get_user(sender_id);
+        require!(user.vote_amount == 0, "Non zero amount of vote tokens");
+        self.users.remove(sender_id);
     }
 
     /// Total number of tokens staked in this contract.
