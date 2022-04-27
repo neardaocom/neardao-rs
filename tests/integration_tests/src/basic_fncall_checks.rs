@@ -39,7 +39,7 @@ async fn skyward() -> Result<()> {
         .await?;
 
     assert!(outcome.is_success());
-    outcome_pretty("new", outcome);
+    outcome_pretty("new", &outcome);
 
     let args = json!({
         "testcase" : "skyward",
@@ -54,7 +54,7 @@ async fn skyward() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("skyward", outcome);
+    outcome_pretty("skyward", &outcome);
 
     Ok(())
 }

@@ -26,7 +26,7 @@ wasm_bin_getters!(
     get_fungible_token => TOKEN
 );
 
-pub(crate) fn outcome_pretty(name: &str, outcome: CallExecutionDetails) {
+pub(crate) fn outcome_pretty(name: &str, outcome: &CallExecutionDetails) {
     let result_data: String = outcome.json().unwrap_or_default();
 
     println!(
@@ -45,7 +45,7 @@ pub(crate) fn outcome_pretty(name: &str, outcome: CallExecutionDetails) {
     )
 }
 
-pub(crate) fn view_outcome_pretty<T>(name: &str, outcome: ViewResultDetails)
+pub(crate) fn view_outcome_pretty<T>(name: &str, outcome: &ViewResultDetails)
 where
     T: for<'de> serde::Deserialize<'de> + std::fmt::Debug,
 {
@@ -59,4 +59,11 @@ where
     "#,
         name, result_data, outcome.logs,
     )
+}
+
+pub(crate) fn parse_view_result<T>(outcome: &ViewResultDetails) -> Option<T>
+where
+    T: for<'de> serde::Deserialize<'de> + std::fmt::Debug,
+{
+    outcome.json().unwrap_or_default()
 }

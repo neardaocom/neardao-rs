@@ -198,7 +198,7 @@ impl Contract {
         account_stats.add_storage_used(storage_diff);
         self.save_account_stats(&sender_id, &account_stats);
         account_stats.assert_enough_deposit();
-        ext_dao::delegate(
+        ext_dao::transfer_amount(
             sender_id,
             delegate_id,
             amount.into(),
@@ -380,7 +380,7 @@ pub trait Contract {
     fn register_delegation(&mut self, account_id: AccountId);
     fn delegate_owned(&mut self, account_id: AccountId, amount: U128);
     fn undelegate(&mut self, account_id: AccountId, amount: U128);
-    fn delegate(&mut self, prev_account_id: AccountId, new_account_id: AccountId, amount: U128);
+    fn transfer_amount(&mut self, prev_account_id: AccountId, new_account_id: AccountId, amount: U128);
 }
 
 #[ext_contract(ext_self)]

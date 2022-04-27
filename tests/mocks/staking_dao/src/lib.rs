@@ -51,11 +51,9 @@ impl Contract {
     pub fn delegation_total_supply(&self) -> U128 {
         U128(self.total_delegation_amount)
     }
-}
 
-impl Contract {
-    pub fn get_user_weight(&self, account_id: &AccountId) -> Balance {
-        self.delegations.get(account_id).unwrap_or_default()
+    pub fn get_user_weight(&self, account_id: &AccountId) -> U128 {
+        U128(self.delegations.get(account_id).unwrap_or_default())
     }
 }
 
@@ -129,9 +127,9 @@ impl Contract {
         )
     }
 
-    /// Transfers amount to new account.
+    /// Transfers amount from previous account to new account.
     /// Returns amount of transfered and total delegated amount.
-    pub fn delegate(
+    pub fn transfer_amount(
         &mut self,
         prev_account_id: AccountId,
         new_account_id: AccountId,
@@ -154,7 +152,7 @@ impl Contract {
             .get(&new_account_id)
             .expect("ERR_NOT_REGISTERED");
 
-        prev_amount
+        let prev_amount = prev_amount
             .checked_sub(amount.0)
             .expect("Not enough tokens");
         new_amount += amount.0;
