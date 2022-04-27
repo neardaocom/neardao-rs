@@ -72,6 +72,7 @@ impl From<Vec<GroupMember>> for GroupMembers {
 pub struct GroupSettings {
     pub name: String,
     pub leader: Option<AccountId>,
+    pub parent_group: GroupId,
 }
 
 #[derive(Deserialize)]

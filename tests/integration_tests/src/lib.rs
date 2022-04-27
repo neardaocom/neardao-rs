@@ -3,4 +3,5 @@
 
 mod basic_fncall_checks;
 mod staking;
+mod technologic;
 mod utils;

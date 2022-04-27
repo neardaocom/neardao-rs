@@ -15,4 +15,5 @@ tokio = "1.17.0"
 workspaces = {version = "0.2.1", features = ["unstable"] }
 library = {path = "./../../library" }
 simple_dao = {path = "./../mocks/simple_dao" }
+rand = "0.8.5"
 

@@ -380,7 +380,12 @@ pub trait Contract {
     fn register_delegation(&mut self, account_id: AccountId);
     fn delegate_owned(&mut self, account_id: AccountId, amount: U128);
     fn undelegate(&mut self, account_id: AccountId, amount: U128);
-    fn transfer_amount(&mut self, prev_account_id: AccountId, new_account_id: AccountId, amount: U128);
+    fn transfer_amount(
+        &mut self,
+        prev_account_id: AccountId,
+        new_account_id: AccountId,
+        amount: U128,
+    );
 }
 
 #[ext_contract(ext_self)]

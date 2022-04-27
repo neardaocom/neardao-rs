@@ -11,22 +11,26 @@ mod unit_tests;
 
 pub mod constants;
 pub mod error;
-pub(crate) mod helper;
+//pub(crate) mod helper;
 pub mod tags;
 
 pub mod action;
-pub mod callbacks;
+pub mod callback;
 pub mod delegation;
+pub mod event;
 pub mod group;
 pub mod internal;
 pub mod media;
 pub mod proposal;
+pub mod role;
 pub mod settings;
 pub mod token_lock;
 
 pub mod core;
 pub mod view;
 
+pub(crate) type DurationSec = u64;
+pub(crate) type TimestampSec = u64;
 pub(crate) type ProposalId = u32;
 pub(crate) type TagId = u16;
 pub(crate) type StorageKey = String;
@@ -39,6 +43,8 @@ pub(crate) type CalculatedVoteResults = (VoteTotalPossible, Votes);
 pub(crate) type ProposalWf = (Proposal, Template, TemplateSettings);
 #[allow(dead_code)]
 pub(crate) type InstanceWf = (Instance, ProposeSettings);
+pub(crate) type RoleName = String;
+pub(crate) type RoleId = u16;
 
 /// Calculates votes as percents
 #[inline]

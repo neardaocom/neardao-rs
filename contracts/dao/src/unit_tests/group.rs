@@ -59,6 +59,7 @@ fn add_group() {
         settings: GroupSettings {
             name: "council_rest".into(),
             leader: Some(FOUNDER_4.to_string().try_into().unwrap()),
+            parent_group: 0,
         },
         members: new_group_members.clone(),
         token_lock: Some(GroupTokenLockInput {

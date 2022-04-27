@@ -15,6 +15,7 @@ use crate::{
     settings::DaoSettings,
     tags::TagInput,
     token_lock::{UnlockMethod, UnlockPeriodInput},
+    DurationSec,
 };
 
 //mod dao; // Require refactoring to match new structure
@@ -85,6 +86,7 @@ pub(crate) fn get_contract(
     function_call_metadata: Vec<Vec<ObjectMetadata>>,
     workflow_templates: Vec<Template>,
     workflow_template_settings: Vec<Vec<TemplateSettings>>,
+    tick_interval: DurationSec,
 ) -> Contract {
     Contract::new(
         staking_id,
@@ -98,6 +100,7 @@ pub(crate) fn get_contract(
         function_call_metadata,
         workflow_templates,
         workflow_template_settings,
+        tick_interval,
     )
 }
 
@@ -114,6 +117,7 @@ pub(crate) fn get_default_contract() -> Contract {
         get_default_fncall_metadata(),
         get_default_templates(),
         get_efault_template_settings(),
+        0,
     )
 }
 
@@ -152,6 +156,7 @@ pub(crate) fn get_default_groups() -> Vec<GroupInput> {
         settings: GroupSettings {
             name: "council".into(),
             leader: Some(FOUNDER_1.to_string().try_into().unwrap()),
+            parent_group: 0,
         },
         members: members,
         token_lock: Some(GroupTokenLockInput {

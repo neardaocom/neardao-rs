@@ -1,4 +1,6 @@
 use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
+use crate::event::EventQueue;
+use crate::role::Role;
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::tags::{TagInput, Tags};
 use library::storage::StorageBucket;
@@ -18,7 +20,10 @@ use near_sdk::{
 
 use crate::group::{Group, GroupInput};
 
-use crate::{calc_percent_u128_unchecked, proposal::*, StorageKey, TagCategory};
+use crate::{
+    calc_percent_u128_unchecked, proposal::*, DurationSec, RoleId, StorageKey, TagCategory,
+    TimestampSec,
+};
 use crate::{GroupId, ProposalId};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
@@ -36,6 +41,9 @@ pub struct ActivityLog {
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
     Delegations,
+    Events,
+    UserRoles,
+    GroupRoles,
     Proposals,
     Tags,
     FunctionCalls,
@@ -57,12 +65,21 @@ pub enum StorageKeys {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
-    /// Staking contract
+    /// Staking contract.
     pub staking_id: AccountId,
     /// Delegations per user.
     pub delegations: LookupMap<AccountId, Balance>,
     /// Delegated token total amount.
     pub total_delegation_amount: Balance,
+    /// Event queues for ticks.
+    pub events: LookupMap<TimestampSec, EventQueue>,
+    /// Nearest next tick.
+    pub next_tick: TimestampSec,
+    pub tick_interval: DurationSec,
+    /// User's roles.
+    pub user_roles: LookupMap<AccountId, Vec<(GroupId, RoleId)>>,
+    /// Group's roles.
+    pub group_roles: LookupMap<GroupId, Role>,
     pub ft_total_supply: u32,
     pub ft_total_locked: u32,
     pub ft_total_distributed: u32,
@@ -104,6 +121,7 @@ impl Contract {
         function_call_metadata: Vec<Vec<ObjectMetadata>>,
         workflow_templates: Vec<Template>,
         workflow_template_settings: Vec<Vec<TemplateSettings>>,
+        tick_interval: DurationSec,
     ) -> Self {
         assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
         assert_valid_dao_settings(&settings);
@@ -112,6 +130,11 @@ impl Contract {
             staking_id,
             delegations: LookupMap::new(StorageKeys::Delegations),
             total_delegation_amount: 0,
+            events: LookupMap::new(StorageKeys::Events),
+            next_tick: 0,
+            tick_interval,
+            user_roles: LookupMap::new(StorageKeys::UserRoles),
+            group_roles: LookupMap::new(StorageKeys::GroupRoles),
             ft_total_supply: total_supply,
             ft_total_locked: 0,
             ft_total_distributed: 0,
@@ -382,6 +405,40 @@ impl Contract {
             }
         }
         released
+    }
+
+    /// Ticks and tries to process `count` of events in the last tick.
+    /// Sets next_tick timestamp.
+    /// Returns number of remaining events in nearest queue.
+    /// DAO is supposed to tick when its possible.
+    pub fn tick(&mut self, count: usize) -> usize {
+        let current_timestamp = env::block_timestamp() / 10u64.pow(9);
+        assert!(current_timestamp >= self.next_tick, "Not ready to tick.");
+
+        let mut remaining = 0;
+        let mut processed = 0;
+        let mut event_queue = self.events.remove(&self.next_tick);
+        while let Some(mut queue) = event_queue.take() {
+            remaining = queue.unprocessed_len();
+            while let Some(event) = queue.next() {
+                self.process_event(event);
+                processed += 1;
+                remaining -= 1;
+                if processed == count {
+                    break;
+                }
+            }
+            if processed == count {
+                self.events.insert(&self.next_tick, &queue);
+                break;
+            }
+
+            while self.next_tick <= current_timestamp && event_queue.is_none() {
+                self.next_tick += self.tick_interval;
+                event_queue = self.events.get(&self.next_tick);
+            }
+        }
+        remaining
     }
 
     /// For dev/testing purposes only

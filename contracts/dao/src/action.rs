@@ -14,7 +14,7 @@ use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
 use near_sdk::{env, near_bindgen, AccountId, Gas, Promise};
 
-use crate::callbacks::ext_self;
+use crate::callback::ext_self;
 use crate::constants::{EVENT_CALLER_KEY, GLOBAL_BUCKET_IDENT};
 use crate::error::{ActionError, ActivityError};
 use crate::group::{GroupInput, GroupMember, GroupSettings};

@@ -12,19 +12,13 @@ use crate::{
         ActionError, ERR_DISTRIBUTION_NOT_ENOUGH_FT, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
         ERR_LOCK_AMOUNT_OVERFLOW, ERR_STORAGE_BUCKET_EXISTS,
     },
+    event::Event,
     group::{Group, GroupInput},
-    helper::{
-        deserialize::{
-            deserialize_dao_settings, deserialize_group_input, deserialize_group_members,
-            deserialize_group_settings,
-        },
-        get_datatype_from_values,
-    },
     proposal::Proposal,
     settings::DaoSettings,
     tags::{TagInput, Tags},
     token_lock::TokenLock,
-    CalculatedVoteResults, ProposalId, ProposalWf, VoteTotalPossible, Votes,
+    CalculatedVoteResults, ProposalId, ProposalWf, TimestampSec, VoteTotalPossible, Votes,
 };
 use library::{
     functions::binding::get_value_from_source,
@@ -768,6 +762,10 @@ impl Contract {
         };
         Ok(data)
     }
+
+    pub fn add_to_queue(&mut self, event: Event, tick: TimestampSec) {}
+
+    pub fn process_event(&mut self, event: Event) {}
 }
 
 pub mod utils {
