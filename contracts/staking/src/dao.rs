@@ -2,7 +2,7 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::LookupMap,
     json_types::U128,
-    log, require, AccountId, Balance,
+    require, AccountId, Balance,
 };
 
 use crate::{User, VersionedUser};
@@ -21,12 +21,6 @@ pub struct Dao {
 // TODO: Unstake settings.
 impl Dao {
     fn save_user(&mut self, account_id: &AccountId, user: User) {
-        log!(
-            "Saved user: {} to dao: {}",
-            account_id,
-            self.account_id.as_str()
-        );
-        log!("{:?}", user);
         self.users.insert(account_id, &VersionedUser::Default(user));
     }
 
@@ -113,12 +107,13 @@ impl Dao {
         let mut sender = self.get_user(&sender_id);
         sender.withdraw(amount);
         self.save_user(&sender_id, sender);
-        assert!(self.total_amount >= amount, "ERR_INTERNAL");
+        require!(self.total_amount >= amount, "ERR_INTERNAL");
         self.total_amount -= amount;
     }
 
     /// Registers user in DAO:
     pub fn register_user(&mut self, sender_id: &AccountId) {
+        require!(!self.users.contains_key(sender_id));
         let user = User::new();
         self.save_user(sender_id, user);
     }
@@ -149,6 +144,6 @@ impl Dao {
             .map(|versioned_user| match versioned_user {
                 VersionedUser::Default(user) => user,
             })
-            .expect("NO_USER")
+            .expect("Account not registered in dao")
     }
 }

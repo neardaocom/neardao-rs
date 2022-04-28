@@ -43,7 +43,6 @@ pub(crate) type CalculatedVoteResults = (VoteTotalPossible, Votes);
 pub(crate) type ProposalWf = (Proposal, Template, TemplateSettings);
 #[allow(dead_code)]
 pub(crate) type InstanceWf = (Instance, ProposeSettings);
-pub(crate) type RoleName = String;
 pub(crate) type RoleId = u16;
 
 /// Calculates votes as percents

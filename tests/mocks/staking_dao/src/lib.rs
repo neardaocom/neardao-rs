@@ -17,7 +17,9 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap;
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{env, log, near_bindgen, AccountId, Balance, BorshStorageKey, PanicOnDefault};
+use near_sdk::{
+    env, log, near_bindgen, require, AccountId, Balance, BorshStorageKey, PanicOnDefault,
+};
 use types::SourceMock;
 
 #[derive(BorshStorageKey, BorshSerialize)]
@@ -28,7 +30,7 @@ pub enum StorageKeys {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
-    /// Staking contract
+    /// Staking contract.
     pub staking_id: AccountId,
     /// Delegations per user.
     pub delegations: LookupMap<AccountId, Balance>,
@@ -61,22 +63,12 @@ impl Contract {
 impl Contract {
     #[payable]
     pub fn register_delegation(&mut self, account_id: AccountId) {
-        let storage_before = env::storage_usage();
         let staking_id = self.staking_id.clone();
-        assert_eq!(
-            env::predecessor_account_id(),
-            staking_id,
+        require!(
+            env::predecessor_account_id() == staking_id,
             "ERR_INVALID_CALLER"
         );
-        //assert_eq!(env::attached_deposit(), 16 * env::storage_byte_cost());
         self.delegations.insert(&account_id, &0);
-        let storage_after = env::storage_usage();
-        let storage_diff = storage_after - storage_before;
-        log!(
-            "register delegation on contract - storage diff: {}, account_len: {}",
-            storage_diff,
-            account_id.as_bytes().len()
-        );
     }
 
     /// Adds given amount to given account as delegated weight.
@@ -87,9 +79,8 @@ impl Contract {
         amount: near_sdk::json_types::U128,
     ) -> (U128, U128, U128) {
         let staking_id = self.staking_id.clone();
-        assert_eq!(
-            env::predecessor_account_id(),
-            staking_id,
+        require!(
+            env::predecessor_account_id() == staking_id,
             "ERR_INVALID_CALLER"
         );
         let prev_amount = self
@@ -110,9 +101,8 @@ impl Contract {
     /// Returns previous, new amount of this account and total delegated amount.
     pub fn undelegate(&mut self, account_id: AccountId, amount: U128) -> (U128, U128, U128) {
         let staking_id = self.staking_id.clone();
-        assert_eq!(
-            env::predecessor_account_id(),
-            staking_id,
+        require!(
+            env::predecessor_account_id() == staking_id,
             "ERR_INVALID_CALLER"
         );
         let prev_amount = self.delegations.get(&account_id).unwrap_or_default();
@@ -136,9 +126,8 @@ impl Contract {
         amount: U128,
     ) -> (U128, U128) {
         let staking_id = self.staking_id.clone();
-        assert_eq!(
-            env::predecessor_account_id(),
-            staking_id,
+        require!(
+            env::predecessor_account_id() == staking_id,
             "ERR_INVALID_CALLER"
         );
 

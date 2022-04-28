@@ -34,12 +34,14 @@ pub(crate) fn outcome_pretty(name: &str, outcome: &CallExecutionDetails) {
     -------- OUT: {} --------
     sucess: {:?},
     total TGAS burnt: {},
+    NEARs burnt: {},
     returned_data: {},
     logs: {:?},
     "#,
         name,
         outcome.is_success(),
         outcome.total_gas_burnt / 10u64.pow(12),
+        (outcome.total_gas_burnt / 10u64.pow(12)) as f64 / 10f64.powf(4.0),
         result_data,
         outcome.logs(),
     )

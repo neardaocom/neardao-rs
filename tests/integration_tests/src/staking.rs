@@ -1,5 +1,5 @@
 use anyhow::Result;
-use near_sdk::{env, json_types::U128, ONE_NEAR, ONE_YOCTO};
+use near_sdk::{json_types::U128, Balance, ONE_NEAR, ONE_YOCTO};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use workspaces::{network::DevAccountDeployer, result::ViewResultDetails};
@@ -13,6 +13,9 @@ const VIEW_METHOD_FT_TOTAL_SUPPLY: &str = "dao_ft_total_supply";
 const VIEW_METHOD_FT_BALANCE_OF: &str = "dao_ft_balance_of";
 
 const MIN_STORAGE: u128 = 945;
+
+const MIN_STORAGE_DEPOSIT: Balance = 2 * 10u128.pow(23);
+pub const MIN_REGISTER_DEPOSIT: Balance = 155 * 10u128.pow(21);
 
 /// Staking user structure
 #[derive(Serialize, Deserialize, Debug)]
@@ -28,7 +31,7 @@ pub struct User {
     /// List of users whom delegated their tokens to this user.
     pub delegators: Vec<workspaces::AccountId>,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StorageBalance {
     total: String,
@@ -96,8 +99,9 @@ fn check_user_result(
 /// TH withdraws 1000
 /// TH undelegates rest - 1500
 /// TH withdraws rest - 2000
-/// TH unregisters from DAO
-/// TH storage_unregister from staking service
+/// TH, D1 and D2 unregister from DAO
+/// Check DAO's storage balance
+/// DAO storage_unregister itself
 #[tokio::test]
 async fn staking_full_scenario() -> Result<()> {
     let worker = workspaces::sandbox().await?;
@@ -171,6 +175,31 @@ async fn staking_full_scenario() -> Result<()> {
     view_outcome_pretty::<String>("ft_balance_of token_holder check", &outcome);
     check_ft_balance_of(token_holder.id(), &outcome, 1_000_000_000);
 
+    // Storage deposit for DAO in staking.
+    let args = json!({
+        "account_id":dao.id(),
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = registrar
+        .call(&worker, staking.id(), "storage_deposit")
+        .args(args)
+        .max_gas()
+        .deposit(MIN_STORAGE_DEPOSIT)
+        .transact()
+        .await?;
+    assert!(outcome.is_success());
+    outcome_pretty("storage deposit DAO in staking", &outcome);
+
+    // Check storage balance of DAO before register.
+    let args = json!({
+        "account_id": dao.id(),
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
+    view_outcome_pretty::<StorageBalance>("dao storage balance check before register", &outcome);
+
     // Register new dao by registrar.
     let args = json!({
         "dao_id" : dao.id(),
@@ -187,50 +216,15 @@ async fn staking_full_scenario() -> Result<()> {
     assert!(outcome.is_success());
     outcome_pretty("register new dao by registrar", &outcome);
 
-    // Storage deposit token_holder in staking.
-    let args = json!({}).to_string().into_bytes();
-    let outcome = token_holder
-        .call(&worker, staking.id(), "storage_deposit")
-        .args(args)
-        .max_gas()
-        .deposit(MIN_STORAGE * env::storage_byte_cost())
-        .transact()
-        .await?;
-    assert!(outcome.is_success());
-    outcome_pretty("storage deposit token_holder in staking", &outcome);
-
-    // Check storage balance.
+    // Check storage balance of DAO before register.
     let args = json!({
-        "account_id": token_holder.id(),
+        "account_id": dao.id(),
     })
     .to_string()
     .into_bytes();
     let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("storage balance check", &outcome);
-
-    // Storage deposit delegate_1 in staking.
-    let args = json!({}).to_string().into_bytes();
-    let outcome = delegate_1
-        .call(&worker, staking.id(), "storage_deposit")
-        .args(args)
-        .max_gas()
-        .deposit(MIN_STORAGE * env::storage_byte_cost())
-        .transact()
-        .await?;
-    assert!(outcome.is_success());
-    outcome_pretty("storage deposit delegate_1 in staking", &outcome);
-
-    // Storage deposit delegate_2 in staking.
-    let args = json!({}).to_string().into_bytes();
-    let outcome = delegate_2
-        .call(&worker, staking.id(), "storage_deposit")
-        .args(args)
-        .max_gas()
-        .deposit(MIN_STORAGE * env::storage_byte_cost())
-        .transact()
-        .await?;
-    assert!(outcome.is_success());
-    outcome_pretty("storage deposit delegate_2 in staking", &outcome);
+    view_outcome_pretty::<StorageBalance>("dao storage balance check after register", &outcome);
+    let storage_balance_before = parse_view_result::<StorageBalance>(&outcome).unwrap();
 
     // Storage deposit staking in fungible_token.
     let args = json!({
@@ -258,19 +252,11 @@ async fn staking_full_scenario() -> Result<()> {
         .call(&worker, staking.id(), "register_in_dao")
         .args(args)
         .max_gas()
+        .deposit(MIN_REGISTER_DEPOSIT)
         .transact()
         .await?;
     assert!(outcome.is_success());
     outcome_pretty("register token_holder in dao", &outcome);
-
-    // Check storage balance.
-    let args = json!({
-        "account_id": token_holder.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("storage balance check", &outcome);
 
     // Register delegate_1 in dao.
     let args = json!({
@@ -282,6 +268,7 @@ async fn staking_full_scenario() -> Result<()> {
         .call(&worker, staking.id(), "register_in_dao")
         .args(args)
         .max_gas()
+        .deposit(MIN_REGISTER_DEPOSIT)
         .transact()
         .await?;
     assert!(outcome.is_success());
@@ -297,6 +284,7 @@ async fn staking_full_scenario() -> Result<()> {
         .call(&worker, staking.id(), "register_in_dao")
         .args(args)
         .max_gas()
+        .deposit(MIN_REGISTER_DEPOSIT)
         .transact()
         .await?;
     assert!(outcome.is_success());
@@ -385,12 +373,12 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Check storage balance.
     let args = json!({
-        "account_id": token_holder.id(),
+        "account_id": dao.id(),
     })
     .to_string()
     .into_bytes();
     let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("storage balance check", &outcome);
+    view_outcome_pretty::<StorageBalance>("dao storage balance check", &outcome);
 
     // Delegate 1000 ft owned to delegate_2.
     let args = json!({
@@ -422,12 +410,12 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Check storage balance.
     let args = json!({
-        "account_id": token_holder.id(),
+        "account_id": dao.id(),
     })
     .to_string()
     .into_bytes();
     let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("storage balance check", &outcome);
+    view_outcome_pretty::<StorageBalance>("dao storage balance check", &outcome);
 
     // Check delegations.
     let args = json!({
@@ -493,7 +481,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Check storage balance.
     let args = json!({
-        "account_id": token_holder.id(),
+        "account_id": dao.id(),
     })
     .to_string()
     .into_bytes();
@@ -660,12 +648,12 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Check storage balance.
     let args = json!({
-        "account_id": token_holder.id(),
+        "account_id": dao.id(),
     })
     .to_string()
     .into_bytes();
     let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("storage balance check", &outcome);
+    view_outcome_pretty::<StorageBalance>("dao storage balance check", &outcome);
 
     // Check undelegation.
     let args = json!({
@@ -715,7 +703,7 @@ async fn staking_full_scenario() -> Result<()> {
     view_outcome_pretty::<String>("ft_balance_of token_holder check", &outcome);
     check_ft_balance_of(token_holder.id(), &outcome, 1_000_000_000);
 
-    // Unregister in dao.
+    // Unregister token_holder in dao.
     let args = json!({
         "dao_id": dao.id(),
     })
@@ -730,18 +718,58 @@ async fn staking_full_scenario() -> Result<()> {
     assert!(outcome.is_success());
     outcome_pretty("unregister token_holder in dao", &outcome);
 
-    // Check storage balance.
+    // Unregister delegate_1 in dao.
     let args = json!({
-        "account_id": token_holder.id(),
+        "dao_id": dao.id(),
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = delegate_1
+        .call(&worker, staking.id(), "unregister_in_dao")
+        .args(args)
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(outcome.is_success());
+    outcome_pretty("unregister delegate_1 in dao", &outcome);
+
+    // Unregister delegate_2 in dao.
+    let args = json!({
+        "dao_id": dao.id(),
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = delegate_2
+        .call(&worker, staking.id(), "unregister_in_dao")
+        .args(args)
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(outcome.is_success());
+    outcome_pretty("unregister delegate_2 in dao", &outcome);
+
+    // Check storage balance after unregistering all 3 users.
+    let args = json!({
+        "account_id": dao.id(),
     })
     .to_string()
     .into_bytes();
     let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("storage balance check", &outcome);
+    view_outcome_pretty::<StorageBalance>(
+        "dao storage balance check after unregister all",
+        &outcome,
+    );
+    let storage_balance_after = parse_view_result::<StorageBalance>(&outcome).unwrap();
+    assert_eq!(
+        storage_balance_before, storage_balance_after,
+        "{}",
+        "Storage balance does not equal."
+    );
 
-    // Storage unregister in staking.
+    // Storage unregister DAO.
     let args = json!({}).to_string().into_bytes();
-    let outcome = token_holder
+    let outcome = dao
+        .as_account()
         .call(&worker, staking.id(), "storage_unregister")
         .args(args)
         .max_gas()
@@ -749,22 +777,12 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("storage unregister token_holder in staking", &outcome);
-
-    // Storage unregister token_holder check.
-    let args = json!({
-        "account_id": token_holder.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<String>("storage unregister token_holder in check", &outcome);
+    outcome_pretty("storage unregister dao", &outcome);
 
     Ok(())
 }
 
 #[tokio::test]
-#[should_panic]
 /// Withdraw amount (1500) > vote_amount (3000) - delegated amount (2000).
 async fn staking_withdraw_panic() {
     let worker = workspaces::sandbox().await.unwrap();
@@ -835,6 +853,22 @@ async fn staking_withdraw_panic() {
         .unwrap();
     assert!(outcome.is_success());
 
+    // Storage deposit for DAO in staking.
+    let args = json!({
+        "account_id":dao.id(),
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = registrar
+        .call(&worker, staking.id(), "storage_deposit")
+        .args(args)
+        .max_gas()
+        .deposit(MIN_STORAGE_DEPOSIT)
+        .transact()
+        .await
+        .unwrap();
+    assert!(outcome.is_success());
+
     // Register new dao by registrar.
     let args = json!({
         "dao_id" : dao.id(),
@@ -846,42 +880,6 @@ async fn staking_withdraw_panic() {
         .call(&worker, staking.id(), "register_new_dao")
         .args(args)
         .max_gas()
-        .transact()
-        .await
-        .unwrap();
-    assert!(outcome.is_success());
-
-    // Storage deposit token_holder in staking.
-    let args = json!({}).to_string().into_bytes();
-    let outcome = token_holder
-        .call(&worker, staking.id(), "storage_deposit")
-        .args(args)
-        .max_gas()
-        .deposit(ONE_NEAR)
-        .transact()
-        .await
-        .unwrap();
-    assert!(outcome.is_success());
-
-    // Storage deposit delegate_1 in staking.
-    let args = json!({}).to_string().into_bytes();
-    let outcome = delegate_1
-        .call(&worker, staking.id(), "storage_deposit")
-        .args(args)
-        .max_gas()
-        .deposit(ONE_NEAR)
-        .transact()
-        .await
-        .unwrap();
-    assert!(outcome.is_success());
-
-    // Storage deposit delegate_2 in staking.
-    let args = json!({}).to_string().into_bytes();
-    let outcome = delegate_2
-        .call(&worker, staking.id(), "storage_deposit")
-        .args(args)
-        .max_gas()
-        .deposit(ONE_NEAR)
         .transact()
         .await
         .unwrap();
@@ -913,6 +911,7 @@ async fn staking_withdraw_panic() {
         .call(&worker, staking.id(), "register_in_dao")
         .args(args)
         .max_gas()
+        .deposit(MIN_REGISTER_DEPOSIT)
         .transact()
         .await
         .unwrap();
@@ -928,6 +927,7 @@ async fn staking_withdraw_panic() {
         .call(&worker, staking.id(), "register_in_dao")
         .args(args)
         .max_gas()
+        .deposit(MIN_REGISTER_DEPOSIT)
         .transact()
         .await
         .unwrap();
@@ -943,6 +943,7 @@ async fn staking_withdraw_panic() {
         .call(&worker, staking.id(), "register_in_dao")
         .args(args)
         .max_gas()
+        .deposit(MIN_REGISTER_DEPOSIT)
         .transact()
         .await
         .unwrap();
@@ -1010,11 +1011,11 @@ async fn staking_withdraw_panic() {
     })
     .to_string()
     .into_bytes();
-    token_holder
+    assert!(token_holder
         .call(&worker, staking.id(), "withdraw")
         .args(args)
         .max_gas()
         .transact()
         .await
-        .unwrap();
+        .is_err());
 }

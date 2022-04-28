@@ -3,8 +3,8 @@ use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
 use near_sdk::json_types::U128;
+use near_sdk::near_bindgen;
 use near_sdk::serde::Serialize;
-use near_sdk::{near_bindgen, Balance};
 
 use crate::group::{GroupMember, GroupOutput};
 use crate::proposal::VProposal;

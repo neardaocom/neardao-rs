@@ -3,7 +3,7 @@
 //! Forked and modified code from https://github.com/near-daos/sputnik-dao-contract/blob/main/sputnikdao2/src/delegation.rs
 
 use crate::core::*;
-use near_sdk::{env, json_types::U128, log, near_bindgen, AccountId, Balance};
+use near_sdk::{env, json_types::U128, log, near_bindgen, require, AccountId, Balance};
 
 impl Contract {
     pub fn get_user_weight(&self, account_id: &AccountId) -> Balance {
@@ -15,12 +15,10 @@ impl Contract {
 impl Contract {
     pub fn register_delegation(&mut self, account_id: AccountId) {
         let staking_id = self.staking_id.clone();
-        assert_eq!(
-            env::predecessor_account_id(),
-            staking_id,
+        require!(
+            env::predecessor_account_id() == staking_id,
             "ERR_INVALID_CALLER"
         );
-        //assert_eq!(env::attached_deposit(), 16 * env::storage_byte_cost());
         self.delegations.insert(&account_id, &0);
     }
 
@@ -28,9 +26,8 @@ impl Contract {
     /// Returns previous amount, new amount and total delegated amount.
     pub fn delegate_owned(&mut self, account_id: AccountId, amount: U128) -> (U128, U128, U128) {
         let staking_id = self.staking_id.clone();
-        assert_eq!(
-            env::predecessor_account_id(),
-            staking_id,
+        require!(
+            env::predecessor_account_id() == staking_id,
             "ERR_INVALID_CALLER"
         );
         let prev_amount = self
@@ -51,9 +48,8 @@ impl Contract {
     /// Returns previous, new amount of this account and total delegated amount.
     pub fn undelegate(&mut self, account_id: AccountId, amount: U128) -> (U128, U128, U128) {
         let staking_id = self.staking_id.clone();
-        assert_eq!(
-            env::predecessor_account_id(),
-            staking_id,
+        require!(
+            env::predecessor_account_id() == staking_id,
             "ERR_INVALID_CALLER"
         );
         let prev_amount = self.delegations.get(&account_id).unwrap_or_default();
@@ -77,9 +73,8 @@ impl Contract {
         amount: U128,
     ) -> (U128, U128) {
         let staking_id = self.staking_id.clone();
-        assert_eq!(
-            env::predecessor_account_id(),
-            staking_id,
+        require!(
+            env::predecessor_account_id() == staking_id,
             "ERR_INVALID_CALLER"
         );
 
