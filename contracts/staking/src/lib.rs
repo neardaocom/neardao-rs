@@ -42,7 +42,7 @@ pub struct Contract {
     daos: LookupMap<AccountId, Dao>,
     /// Storage deposit amount of staked NEARs and used storage in bytes.
     dao_storage_balance: LookupMap<AccountId, AccountStats>,
-    /// Suffix used for new DAOs to avoid storage keys collision.
+    /// Sequence suffix used for new DAOs internal lookupmap to avoid storage keys collision.
     last_dao_key_suffix: u16,
 }
 
@@ -63,10 +63,11 @@ impl Contract {
     }
 
     /// Registers new dao in contract.
+    /// Dao must have done storage_deposit before this call.
     pub fn register_new_dao(&mut self, dao_id: AccountId, vote_token_id: AccountId) {
         require!(
             env::predecessor_account_id() == self.registrar_id,
-            "No rights"
+            "no rights"
         );
         let storage_before = env::storage_usage();
         let mut account_stats = self.get_account_stats(&dao_id);
@@ -84,7 +85,7 @@ impl Contract {
         };
         require!(
             self.daos.insert(&dao_id, &dao_struct).is_none(),
-            "Dao is already registered."
+            "dao is already registered"
         );
         let storage_after = env::storage_usage();
         let storage_diff = storage_after - storage_before;
@@ -92,13 +93,15 @@ impl Contract {
         self.save_account_stats(&dao_id, &account_stats);
     }
 
-    #[payable]
     /// Registers caller in dao
-    /// Requires some deposit to protect dao from malicious users as it adds the storage used by dao.
+    /// Adds DAO's storage used and increases user count by 1.
+    /// Requires some deposit to protect dao from malicious users.
+    /// This deposit is returned on unregister.
+    #[payable]
     pub fn register_in_dao(&mut self, dao_id: AccountId) {
         require!(
-            env::attached_deposit() >= MIN_REGISTER_DEPOSIT,
-            "Not enough deposit"
+            env::attached_deposit() == MIN_REGISTER_DEPOSIT,
+            "not enough deposit"
         );
         let storage_before = env::storage_usage();
         let sender_id = env::predecessor_account_id();
@@ -121,8 +124,12 @@ impl Contract {
         );
     }
 
+    /// Unregisters caller from dao.
+    /// Caller is supposed to have all his tokens withdrawn.
+    /// Frees DAO's storage used and decreases user count by 1.
+    /// Returns promise with register deposit transfer to the caller.
     #[payable]
-    pub fn unregister_in_dao(&mut self, dao_id: AccountId) {
+    pub fn unregister_in_dao(&mut self, dao_id: AccountId) -> Promise {
         let storage_before = env::storage_usage();
         let sender_id = env::predecessor_account_id();
         let mut account_stats = self.get_account_stats(&dao_id);
@@ -134,9 +141,10 @@ impl Contract {
         account_stats.dec_user_count();
         self.save_account_stats(&dao_id, &account_stats);
         account_stats.assert_enough_deposit();
+        Promise::new(sender_id).transfer(MIN_REGISTER_DEPOSIT)
     }
 
-    /// Delegates owned tokens.
+    /// Delegates `amount` owned tokens to the `delegate_id`.
     pub fn delegate_owned(
         &mut self,
         dao_id: AccountId,
@@ -155,7 +163,8 @@ impl Contract {
         account_stats.assert_enough_deposit();
         ext_dao::delegate_owned(delegate_id, amount, dao.account_id, 0, GAS_FOR_DELEGATE)
     }
-    /// Undelegates tokens.
+
+    /// Undelegates `amount` tokens from `delegate_id`.
     pub fn undelegate(
         &mut self,
         dao_id: AccountId,
@@ -174,8 +183,9 @@ impl Contract {
         account_stats.assert_enough_deposit();
         ext_dao::undelegate(delegate_id, amount, dao.account_id, 0, GAS_FOR_UNDELEGATE)
     }
-    // TODO: Figure out storage management - maybe just let it be this way.
-    /// Delegate all delegated tokens to delegate.
+
+    /// Delegate all delegated tokens from caller's delegators to `delegate_id`.
+    /// Once delegated, cannot be undelegated back.
     pub fn delegate(&mut self, dao_id: AccountId, delegate_id: AccountId) -> Promise {
         let storage_before = env::storage_usage();
         let sender_id = env::predecessor_account_id();
@@ -200,7 +210,8 @@ impl Contract {
             GAS_FOR_UNDELEGATE,
         )
     }
-    /// Withdraw staked tokens.
+    /// Withdraw vote tokens.
+    /// Only vote amount which is not delegated can be withdrawn.
     pub fn withdraw(&mut self, dao_id: AccountId, amount: U128) -> Promise {
         let sender_id = env::predecessor_account_id();
         let mut dao = self.get_dao(&dao_id);
@@ -234,7 +245,7 @@ impl Contract {
     ) {
         require!(
             env::promise_results_count() == 1,
-            "ERR_CALLBACK_POST_WITHDRAW_INVALID",
+            "internal withdraw callback",
         );
         match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),
@@ -266,6 +277,13 @@ impl Contract {
 
 #[near_bindgen]
 impl FungibleTokenReceiver for Contract {
+    /// Method called by FT contract which adds `amount` of vote tokens
+    /// to `sender_id` account in dao specified in `msg` as deserialized `TransferMsgInfo` object.
+    /// Fails if:
+    /// - malformed/missing `TransferMsgInfo` object in `msg`
+    /// - dao is not registered
+    /// - dao does not have caller's account registered as vote token
+    /// - user is not registered in dao
     fn ft_on_transfer(
         &mut self,
         sender_id: AccountId,
@@ -273,13 +291,13 @@ impl FungibleTokenReceiver for Contract {
         msg: String,
     ) -> PromiseOrValue<U128> {
         let dao_transfer: TransferMsgInfo =
-            serde_json::from_str(msg.as_str()).expect("Missing dao info");
+            serde_json::from_str(msg.as_str()).expect("missing dao info");
 
         let mut dao = self.get_dao(&dao_transfer.dao_id);
 
         require!(
             dao.vote_token_id == env::predecessor_account_id(),
-            "Invalid token"
+            "invalid token"
         );
 
         dao.user_deposit(sender_id, amount.0);
@@ -332,7 +350,7 @@ impl AccountStats {
         self.storage_used = self
             .storage_used
             .checked_sub(amount)
-            .expect("Internal error");
+            .expect("internal storage sub");
     }
     pub fn add_balance(&mut self, amount: Balance) {
         self.near_amount += amount;
@@ -341,7 +359,7 @@ impl AccountStats {
         self.near_amount = self
             .near_amount
             .checked_sub(amount)
-            .expect("Cannot remove more balance than available");
+            .expect("internal balance sub");
     }
     pub fn inc_user_count(&mut self) {
         self.users_registered += 1;
@@ -352,7 +370,7 @@ impl AccountStats {
     pub fn assert_enough_deposit(&self) {
         require!(
             self.storage_used as Balance * env::storage_byte_cost() <= self.near_amount,
-            "Dao does not have enough deposit."
+            "dao does not have enough storage deposit"
         )
     }
 }
@@ -382,7 +400,7 @@ pub trait Contract {
 
 impl Contract {
     pub fn get_dao(&self, dao_id: &AccountId) -> Dao {
-        self.daos.get(dao_id).expect("Dao not found")
+        self.daos.get(dao_id).expect("dao not found")
     }
     pub fn save_dao(&mut self, dao_id: &AccountId, dao: &Dao) -> Option<Dao> {
         self.daos.insert(dao_id, &dao)
@@ -397,7 +415,7 @@ impl Contract {
     pub fn get_account_stats(&self, account_id: &AccountId) -> AccountStats {
         self.dao_storage_balance
             .get(account_id)
-            .expect("Account not registered")
+            .expect("account not registered")
     }
     pub fn save_account_stats(&mut self, account_id: &AccountId, stats: &AccountStats) {
         self.dao_storage_balance.insert(account_id, stats);

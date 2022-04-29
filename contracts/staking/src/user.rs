@@ -1,8 +1,6 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{AccountId, Balance};
-
-use crate::consts::error_messages::ERR_NOT_ENOUGH_AMOUNT;
+use near_sdk::{require, AccountId, Balance};
 
 /// User data.
 /// Recording deposited voting tokens, storage used and delegations and received delegations for voting.
@@ -49,9 +47,9 @@ impl User {
     /// Fails if not enough available balance to delegate.
     /// Return true if new delegate was added.
     pub fn delegate_owned(&mut self, delegate_id: AccountId, amount: Balance) -> bool {
-        assert!(
+        require!(
             self.delegated_amount() + amount <= self.vote_amount,
-            "ERR_NOT_ENOUGH_AMOUNT"
+            "not enough vote tokens"
         );
 
         if let Some(delegate_pos) = self
@@ -67,9 +65,9 @@ impl User {
         }
     }
 
-    /// Removes all delegations of delegators to this user.
+    /// Removes all delegators and their delegations adn returns them.
     pub fn forward_delegated(&mut self) -> (u128, Vec<AccountId>) {
-        assert!(self.delegated_vote_amount > 0, "Zero delegated tokens");
+        require!(self.delegated_vote_amount > 0, "no delegated tokens");
         let amount = self.delegated_vote_amount;
         let delegators = std::mem::take(&mut self.delegators);
         self.delegated_vote_amount = 0;
@@ -77,7 +75,7 @@ impl User {
     }
 
     /// Add new delegated vote amount.
-    /// Adds new delegator if he is new one.
+    /// Adds new delegator if he .
     pub fn add_delegator(&mut self, delegator_id: AccountId, amount: Balance) {
         if !self.is_delegator(&delegator_id) {
             self.delegators.push(delegator_id);
@@ -87,7 +85,7 @@ impl User {
 
     /// Remove delegated vote amount.
     /// Removes delegator from delegators if amount is zero.
-    pub fn remove_delegated(
+    pub fn remove_delegated_amount(
         &mut self,
         delegator_id: &AccountId,
         amount: Balance,
@@ -98,7 +96,7 @@ impl User {
                 .delegators
                 .iter()
                 .position(|e| e == delegator_id)
-                .expect("Delegator not found");
+                .expect("internal delegator not found");
             self.delegators.swap_remove(delegator_pos);
         }
         self.delegated_vote_amount -= amount;
@@ -110,7 +108,7 @@ impl User {
             .delegated_amounts
             .iter()
             .position(|(e, _)| e == prev_delegate_id)
-            .expect("Delegate not found");
+            .expect("internal delegate not found");
 
         let delegate_new_pos = self
             .delegated_amounts
@@ -128,7 +126,7 @@ impl User {
         }
     }
 
-    /// Remove given amount from delegates.
+    /// Remove given `amount` from `delegate_id`.
     /// Fails if delegate not found or not enough amount delegated.
     /// Returns remaining amount.
     pub fn undelegate(&mut self, delegate_id: &AccountId, amount: Balance) -> u128 {
@@ -137,9 +135,9 @@ impl User {
             .iter()
             .enumerate()
             .find(|(_, (account_id, _))| account_id == delegate_id)
-            .expect("ERR_NO_DELEGATE");
+            .expect("delegate not found");
         let element = (f.0, ((f.1).1));
-        assert!(element.1 >= amount, "ERR_NOT_ENOUGH_AMOUNT");
+        require!(element.1 >= amount, "amount greater than delegated amount");
         if element.1 == amount {
             self.delegated_amounts.swap_remove(element.0);
             0
@@ -152,10 +150,9 @@ impl User {
     /// Withdraw the amount.
     /// Fails if there is not enough available balance.
     pub fn withdraw(&mut self, amount: Balance) {
-        assert!(
+        require!(
             self.delegated_amount() + amount <= self.vote_amount,
-            "{}",
-            ERR_NOT_ENOUGH_AMOUNT
+            "not enough free vote amount"
         );
 
         self.vote_amount -= amount;

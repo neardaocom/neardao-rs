@@ -4,4 +4,4 @@ This is fork of [sputnik-staking contract](https://github.com/near-daos/sputnik-
 
 
 ## TODO
-- error messages
+- cooldown period settings

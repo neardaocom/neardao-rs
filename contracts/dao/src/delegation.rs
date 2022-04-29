@@ -11,14 +11,15 @@ impl Contract {
     }
 }
 
+const ERR_NOT_REGISTERED: &str = "account not registered";
+const ERR_CALLER: &str = "invalid caller";
+const ERR_STAKING_INTERNAL: &str = "staking internal";
+
 #[near_bindgen]
 impl Contract {
     pub fn register_delegation(&mut self, account_id: AccountId) {
         let staking_id = self.staking_id.clone();
-        require!(
-            env::predecessor_account_id() == staking_id,
-            "ERR_INVALID_CALLER"
-        );
+        require!(env::predecessor_account_id() == staking_id, ERR_CALLER);
         self.delegations.insert(&account_id, &0);
     }
 
@@ -26,14 +27,8 @@ impl Contract {
     /// Returns previous amount, new amount and total delegated amount.
     pub fn delegate_owned(&mut self, account_id: AccountId, amount: U128) -> (U128, U128, U128) {
         let staking_id = self.staking_id.clone();
-        require!(
-            env::predecessor_account_id() == staking_id,
-            "ERR_INVALID_CALLER"
-        );
-        let prev_amount = self
-            .delegations
-            .get(&account_id)
-            .expect("ERR_NOT_REGISTERED");
+        require!(env::predecessor_account_id() == staking_id, ERR_CALLER);
+        let prev_amount = self.delegations.get(&account_id).expect(ERR_NOT_REGISTERED);
         let new_amount = prev_amount + amount.0;
         self.delegations.insert(&account_id, &new_amount);
         self.total_delegation_amount += amount.0;
@@ -48,12 +43,9 @@ impl Contract {
     /// Returns previous, new amount of this account and total delegated amount.
     pub fn undelegate(&mut self, account_id: AccountId, amount: U128) -> (U128, U128, U128) {
         let staking_id = self.staking_id.clone();
-        require!(
-            env::predecessor_account_id() == staking_id,
-            "ERR_INVALID_CALLER"
-        );
+        require!(env::predecessor_account_id() == staking_id, ERR_CALLER);
         let prev_amount = self.delegations.get(&account_id).unwrap_or_default();
-        assert!(prev_amount >= amount.0, "ERR_INVALID_STAKING_CONTRACT");
+        require!(prev_amount >= amount.0, ERR_STAKING_INTERNAL);
         let new_amount = prev_amount - amount.0;
         self.delegations.insert(&account_id, &new_amount);
         self.total_delegation_amount -= amount.0;
@@ -73,24 +65,21 @@ impl Contract {
         amount: U128,
     ) -> (U128, U128) {
         let staking_id = self.staking_id.clone();
-        require!(
-            env::predecessor_account_id() == staking_id,
-            "ERR_INVALID_CALLER"
-        );
+        require!(env::predecessor_account_id() == staking_id, ERR_CALLER);
 
         let prev_amount = self
             .delegations
             .get(&prev_account_id)
-            .expect("ERR_NOT_REGISTERED");
+            .expect(ERR_NOT_REGISTERED);
 
         let mut new_amount = self
             .delegations
             .get(&new_account_id)
-            .expect("ERR_NOT_REGISTERED");
+            .expect(ERR_NOT_REGISTERED);
 
         let prev_amount = prev_amount
             .checked_sub(amount.0)
-            .expect("Not enough tokens");
+            .expect(ERR_STAKING_INTERNAL);
         new_amount += amount.0;
 
         self.delegations.insert(&prev_account_id, &prev_amount);

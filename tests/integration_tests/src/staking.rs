@@ -360,16 +360,23 @@ async fn staking_full_scenario() -> Result<()> {
     assert!(outcome.is_success());
     outcome_pretty("delegate 1000 ft owned to delegate_1", &outcome);
 
-    // View delegate_1 weight
+    // delegate_1 check
     let args = json!({
+        "dao_id": dao.id(),
         "account_id": delegate_1.id(),
     })
     .to_string()
     .into_bytes();
-    let outcome = dao.view(&worker, "get_user_weight", args).await?;
-    view_outcome_pretty::<String>("view delegate_1 weight", &outcome);
-    let result = parse_view_result::<U128>(&outcome).unwrap().0;
-    assert_eq!(result, 1000);
+    let outcome = staking.view(&worker, VIEW_METHOD_GET_USER, args).await?;
+    view_outcome_pretty::<User>("delegate_1 check", &outcome);
+    check_user_result(
+        delegate_1.id(),
+        &outcome,
+        0,
+        1000,
+        vec![],
+        vec![token_holder.id().to_owned()],
+    );
 
     // Check storage balance.
     let args = json!({
@@ -397,16 +404,23 @@ async fn staking_full_scenario() -> Result<()> {
     assert!(outcome.is_success());
     outcome_pretty("delegate 1000 ft owned to delegate_2", &outcome);
 
-    // View delegate_2 weight
+    // delegate_2 check
     let args = json!({
+        "dao_id": dao.id(),
         "account_id": delegate_2.id(),
     })
     .to_string()
     .into_bytes();
-    let outcome = dao.view(&worker, "get_user_weight", args).await?;
-    view_outcome_pretty::<String>("view delegate_2 weight", &outcome);
-    let result = parse_view_result::<U128>(&outcome).unwrap().0;
-    assert_eq!(result, 1000);
+    let outcome = staking.view(&worker, VIEW_METHOD_GET_USER, args).await?;
+    view_outcome_pretty::<User>("delegate_2 check", &outcome);
+    check_user_result(
+        delegate_2.id(),
+        &outcome,
+        0,
+        1000,
+        vec![],
+        vec![token_holder.id().to_owned()],
+    );
 
     // Check storage balance.
     let args = json!({
@@ -417,7 +431,7 @@ async fn staking_full_scenario() -> Result<()> {
     let outcome = staking.view(&worker, "storage_balance_of", args).await?;
     view_outcome_pretty::<StorageBalance>("dao storage balance check", &outcome);
 
-    // Check delegations.
+    // Check token_holder.
     let args = json!({
         "dao_id": dao.id(),
         "account_id": token_holder.id(),
@@ -425,7 +439,7 @@ async fn staking_full_scenario() -> Result<()> {
     .to_string()
     .into_bytes();
     let outcome = staking.view(&worker, VIEW_METHOD_GET_USER, args).await?;
-    view_outcome_pretty::<User>("delegation owned check", &outcome);
+    view_outcome_pretty::<User>("token_holder check", &outcome);
     check_user_result(
         token_holder.id(),
         &outcome,
@@ -457,27 +471,34 @@ async fn staking_full_scenario() -> Result<()> {
         &outcome,
     );
 
-    // View delegate_1 weight
+    // delegate_1 check
     let args = json!({
+        "dao_id": dao.id(),
         "account_id": delegate_1.id(),
     })
     .to_string()
     .into_bytes();
-    let outcome = dao.view(&worker, "get_user_weight", args).await?;
-    view_outcome_pretty::<String>("view delegate_1 weight", &outcome);
-    let result = parse_view_result::<U128>(&outcome).unwrap().0;
-    assert_eq!(result, 0);
+    let outcome = staking.view(&worker, VIEW_METHOD_GET_USER, args).await?;
+    view_outcome_pretty::<User>("delegate_1 check", &outcome);
+    check_user_result(delegate_1.id(), &outcome, 0, 0, vec![], vec![]);
 
-    // View delegate_2 weight
+    // delegate_2 check
     let args = json!({
+        "dao_id": dao.id(),
         "account_id": delegate_2.id(),
     })
     .to_string()
     .into_bytes();
-    let outcome = dao.view(&worker, "get_user_weight", args).await?;
-    view_outcome_pretty::<String>("view delegate_2 weight", &outcome);
-    let result = parse_view_result::<U128>(&outcome).unwrap().0;
-    assert_eq!(result, 2000);
+    let outcome = staking.view(&worker, VIEW_METHOD_GET_USER, args).await?;
+    view_outcome_pretty::<User>("delegate_2 check", &outcome);
+    check_user_result(
+        delegate_2.id(),
+        &outcome,
+        0,
+        2000,
+        vec![],
+        vec![token_holder.id().to_owned()],
+    );
 
     // Check storage balance.
     let args = json!({
@@ -523,18 +544,25 @@ async fn staking_full_scenario() -> Result<()> {
     assert!(outcome.is_success());
     outcome_pretty("undelegate 500 ft from delegate_2", &outcome);
 
-    // View delegate_2 weight
+    // delegate_2 check
     let args = json!({
+        "dao_id": dao.id(),
         "account_id": delegate_2.id(),
     })
     .to_string()
     .into_bytes();
-    let outcome = dao.view(&worker, "get_user_weight", args).await?;
-    view_outcome_pretty::<String>("view delegate_2 weight", &outcome);
-    let result = parse_view_result::<U128>(&outcome).unwrap().0;
-    assert_eq!(result, 1500);
+    let outcome = staking.view(&worker, VIEW_METHOD_GET_USER, args).await?;
+    view_outcome_pretty::<User>("delegate_2 check", &outcome);
+    check_user_result(
+        delegate_2.id(),
+        &outcome,
+        0,
+        1500,
+        vec![],
+        vec![token_holder.id().to_owned()],
+    );
 
-    // Check undelegation.
+    // Check token_holder.
     let args = json!({
         "dao_id": dao.id(),
         "account_id": token_holder.id(),
@@ -542,7 +570,7 @@ async fn staking_full_scenario() -> Result<()> {
     .to_string()
     .into_bytes();
     let outcome = staking.view(&worker, VIEW_METHOD_GET_USER, args).await?;
-    view_outcome_pretty::<User>("undelegation check", &outcome);
+    view_outcome_pretty::<User>("token_holder check", &outcome);
     check_user_result(
         token_holder.id(),
         &outcome,
@@ -613,47 +641,16 @@ async fn staking_full_scenario() -> Result<()> {
     assert!(outcome.is_success());
     outcome_pretty("undelegate rest - 1500 ft", &outcome);
 
-    // View delegate_1 weight
+    // delegate_2 check
     let args = json!({
-        "account_id": delegate_1.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = dao.view(&worker, "get_user_weight", args).await?;
-    view_outcome_pretty::<String>("view delegate_1 weight", &outcome);
-    let result = parse_view_result::<U128>(&outcome).unwrap().0;
-    assert_eq!(result, 0);
-
-    // View delegate_2 weight
-    let args = json!({
+        "dao_id": dao.id(),
         "account_id": delegate_2.id(),
     })
     .to_string()
     .into_bytes();
-    let outcome = dao.view(&worker, "get_user_weight", args).await?;
-    view_outcome_pretty::<String>("view delegate_2 weight", &outcome);
-    let result = parse_view_result::<U128>(&outcome).unwrap().0;
-    assert_eq!(result, 0);
-
-    // View token_holder weight
-    let args = json!({
-        "account_id": token_holder.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = dao.view(&worker, "get_user_weight", args).await?;
-    view_outcome_pretty::<String>("view token_holder weight", &outcome);
-    let result = parse_view_result::<U128>(&outcome).unwrap().0;
-    assert_eq!(result, 0);
-
-    // Check storage balance.
-    let args = json!({
-        "account_id": dao.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("dao storage balance check", &outcome);
+    let outcome = staking.view(&worker, VIEW_METHOD_GET_USER, args).await?;
+    view_outcome_pretty::<User>("delegate_2 check", &outcome);
+    check_user_result(delegate_2.id(), &outcome, 0, 0, vec![], vec![]);
 
     // Check undelegation.
     let args = json!({
@@ -665,6 +662,26 @@ async fn staking_full_scenario() -> Result<()> {
     let outcome = staking.view(&worker, VIEW_METHOD_GET_USER, args).await?;
     view_outcome_pretty::<User>("undelegation check", &outcome);
     check_user_result(token_holder.id(), &outcome, 2000, 0, vec![], vec![]);
+
+    // token_holder token weight check
+    let args = json!({
+        "account_id": token_holder.id(),
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = dao.view(&worker, "get_user_weight", args).await?;
+    view_outcome_pretty::<String>("token_holder weight check", &outcome);
+    let result = parse_view_result::<U128>(&outcome).unwrap().0;
+    assert_eq!(result, 0);
+
+    // Check storage balance.
+    let args = json!({
+        "account_id": dao.id(),
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
+    view_outcome_pretty::<StorageBalance>("dao storage balance check", &outcome);
 
     // Withdraw rest - 1500 + 500 ft.
     let args = json!({
@@ -718,6 +735,17 @@ async fn staking_full_scenario() -> Result<()> {
     assert!(outcome.is_success());
     outcome_pretty("unregister token_holder in dao", &outcome);
 
+    let args = json!({
+        "dao_id": dao.id(),
+        "account_id": token_holder.id(),
+    })
+    .to_string()
+    .into_bytes();
+    assert!(staking
+        .view(&worker, VIEW_METHOD_GET_USER, args)
+        .await
+        .is_err());
+
     // Unregister delegate_1 in dao.
     let args = json!({
         "dao_id": dao.id(),
@@ -733,6 +761,17 @@ async fn staking_full_scenario() -> Result<()> {
     assert!(outcome.is_success());
     outcome_pretty("unregister delegate_1 in dao", &outcome);
 
+    let args = json!({
+        "dao_id": dao.id(),
+        "account_id": delegate_1.id(),
+    })
+    .to_string()
+    .into_bytes();
+    assert!(staking
+        .view(&worker, VIEW_METHOD_GET_USER, args)
+        .await
+        .is_err());
+
     // Unregister delegate_2 in dao.
     let args = json!({
         "dao_id": dao.id(),
@@ -747,6 +786,17 @@ async fn staking_full_scenario() -> Result<()> {
         .await?;
     assert!(outcome.is_success());
     outcome_pretty("unregister delegate_2 in dao", &outcome);
+
+    let args = json!({
+        "dao_id": dao.id(),
+        "account_id": delegate_2.id(),
+    })
+    .to_string()
+    .into_bytes();
+    assert!(staking
+        .view(&worker, VIEW_METHOD_GET_USER, args)
+        .await
+        .is_err());
 
     // Check storage balance after unregistering all 3 users.
     let args = json!({
@@ -778,6 +828,16 @@ async fn staking_full_scenario() -> Result<()> {
         .await?;
     assert!(outcome.is_success());
     outcome_pretty("storage unregister dao", &outcome);
+
+    let args = json!({
+        "dao_id": dao.id(),
+    })
+    .to_string()
+    .into_bytes();
+    assert!(staking
+        .view(&worker, VIEW_METHOD_FT_TOTAL_SUPPLY, args)
+        .await
+        .is_err());
 
     Ok(())
 }
