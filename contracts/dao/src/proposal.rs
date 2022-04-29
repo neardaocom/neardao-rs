@@ -4,6 +4,7 @@ use near_sdk::AccountId;
 use std::collections::HashMap;
 
 use crate::media::Media;
+use crate::TimestampSec;
 
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 
@@ -62,7 +63,7 @@ pub enum VoteResult {
 #[serde(crate = "near_sdk::serde")]
 pub struct Proposal {
     pub desc: String,
-    pub created: u64,
+    pub created: TimestampSec,
     pub created_by: AccountId,
     pub votes: HashMap<AccountId, u8>,
     pub state: ProposalState,
