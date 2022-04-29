@@ -1,5 +1,5 @@
 use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
-use crate::event::EventQueue;
+use crate::event::{run_tick, Event, EventProcessor, EventQueue};
 use crate::role::Role;
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::tags::{TagInput, Tags};
@@ -72,7 +72,7 @@ pub struct Contract {
     /// Delegated token total amount.
     pub total_delegation_amount: Balance,
     /// Event queues for ticks.
-    pub events: LookupMap<TimestampSec, EventQueue>,
+    pub events: LookupMap<TimestampSec, EventQueue<Event>>,
     /// Nearest next tick.
     pub next_tick: TimestampSec,
     pub tick_interval: DurationSec,
@@ -413,32 +413,7 @@ impl Contract {
     /// DAO is supposed to tick when its possible.
     pub fn tick(&mut self, count: usize) -> usize {
         let current_timestamp = env::block_timestamp() / 10u64.pow(9);
-        assert!(current_timestamp >= self.next_tick, "Not ready to tick.");
-
-        let mut remaining = 0;
-        let mut processed = 0;
-        let mut event_queue = self.events.remove(&self.next_tick);
-        while let Some(mut queue) = event_queue.take() {
-            remaining = queue.unprocessed_len();
-            while let Some(event) = queue.next() {
-                self.process_event(event);
-                processed += 1;
-                remaining -= 1;
-                if processed == count {
-                    break;
-                }
-            }
-            if processed == count {
-                self.events.insert(&self.next_tick, &queue);
-                break;
-            }
-
-            while self.next_tick <= current_timestamp && event_queue.is_none() {
-                self.next_tick += self.tick_interval;
-                event_queue = self.events.get(&self.next_tick);
-            }
-        }
-        remaining
+        run_tick(self, count, current_timestamp)
     }
 
     /// For dev/testing purposes only

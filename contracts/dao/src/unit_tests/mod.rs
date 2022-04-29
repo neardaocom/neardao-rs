@@ -20,6 +20,7 @@ use crate::{
 
 //mod dao; // Require refactoring to match new structure
 mod group;
+mod tick;
 mod unlocking;
 mod voting;
 
