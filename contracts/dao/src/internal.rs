@@ -2,7 +2,7 @@ use std::{collections::HashMap, convert::TryInto};
 
 use near_sdk::{
     env::{self},
-    AccountId, Balance, Promise,
+    require, AccountId, Balance, Promise,
 };
 
 use crate::{
@@ -12,8 +12,9 @@ use crate::{
         ActionError, ERR_DISTRIBUTION_NOT_ENOUGH_FT, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
         ERR_LOCK_AMOUNT_OVERFLOW, ERR_STORAGE_BUCKET_EXISTS,
     },
-    event::Event,
+    event::{Event, EventQueue},
     group::{Group, GroupInput},
+    internal::utils::current_timestamp_sec,
     proposal::Proposal,
     settings::DaoSettings,
     tags::{TagInput, Tags},
@@ -763,19 +764,31 @@ impl Contract {
         Ok(data)
     }
 
-    pub fn add_to_queue(&mut self, event: Event, tick: TimestampSec) {}
+    /// Adds `event` to event queue at `tick`.
+    /// Requires `tick` to be >= current_timestamp and exact tick timestamp.
+    pub fn dispatch_tick_event(&mut self, event: Event, tick: TimestampSec) {
+        let current_timestamp = current_timestamp_sec();
+        require!(tick >= current_timestamp, "tick time cannot be in past");
+        require!(
+            tick % self.tick_interval == 0,
+            "tick must be exact tick timestamp"
+        );
 
-    pub fn process_event(&mut self, event: Event) {}
+        let mut queue = self.events.get(&tick).unwrap_or_else(EventQueue::new);
+        queue.add_event(event);
+        self.events.insert(&tick, &queue);
+    }
 }
 
 pub mod utils {
     use library::functions::utils::{
-        append, into_storage_key_wrapper_str, into_storage_key_wrapper_u16, StorageKeyWrapper,
+        into_storage_key_wrapper_str, into_storage_key_wrapper_u16, StorageKeyWrapper,
     };
+    use near_sdk::env;
 
     use crate::{
         constants::{GROUP_RELEASE_PREFIX, STORAGE_BUCKET_PREFIX},
-        GroupId,
+        GroupId, TimestampSec,
     };
 
     pub fn get_group_key(id: GroupId) -> StorageKeyWrapper {
@@ -784,6 +797,10 @@ pub mod utils {
 
     pub fn get_bucket_id(id: &str) -> StorageKeyWrapper {
         into_storage_key_wrapper_str(STORAGE_BUCKET_PREFIX, id)
+    }
+
+    pub fn current_timestamp_sec() -> TimestampSec {
+        env::block_timestamp() / 10u64.pow(9)
     }
 }
 

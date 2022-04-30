@@ -29,7 +29,9 @@ pub mod token_lock;
 pub mod core;
 pub mod view;
 
+/// Duration in seconds.
 pub(crate) type DurationSec = u64;
+/// Timestamp in seconds.
 pub(crate) type TimestampSec = u64;
 pub(crate) type ProposalId = u32;
 pub(crate) type TagId = u16;

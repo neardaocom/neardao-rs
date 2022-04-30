@@ -3,21 +3,40 @@ use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
 use near_sdk::json_types::U128;
-use near_sdk::near_bindgen;
 use near_sdk::serde::Serialize;
+use near_sdk::{near_bindgen, AccountId};
 
 use crate::group::{GroupMember, GroupOutput};
 use crate::proposal::VProposal;
 use crate::settings::DaoSettings;
 use crate::tags::Tags;
-use crate::TagCategory;
 use crate::{core::*, GroupId, GroupName, StorageKey};
+use crate::{TagCategory, TimestampSec};
 
 #[near_bindgen]
 impl Contract {
     /// Returns total delegated stake.
     pub fn delegation_total_supply(&self) -> U128 {
         U128(self.total_delegation_amount)
+    }
+
+    /// Returns total user vote weight.
+    pub fn user_vote_weight(&self, account_id: AccountId) -> U128 {
+        self.get_user_weight(&account_id).into()
+    }
+
+    /// Searches for next tick looks ahead up to `search_max_tick` ticks.
+    pub fn next_tick(&self, search_max_ticks: usize) -> Option<TimestampSec> {
+        let mut next_tick = None;
+        let mut tick = self.last_tick;
+        for _ in 0..search_max_ticks {
+            tick += self.tick_interval;
+            if self.events.get(&tick).is_some() {
+                next_tick = Some(tick);
+                break;
+            }
+        }
+        next_tick
     }
 
     pub fn stats(self) -> Stats {

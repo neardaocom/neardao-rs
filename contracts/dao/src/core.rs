@@ -1,5 +1,6 @@
 use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
-use crate::event::{run_tick, Event, EventProcessor, EventQueue};
+use crate::event::{run_tick, Event, EventQueue};
+use crate::internal::utils::current_timestamp_sec;
 use crate::role::Role;
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::tags::{TagInput, Tags};
@@ -73,8 +74,9 @@ pub struct Contract {
     pub total_delegation_amount: Balance,
     /// Event queues for ticks.
     pub events: LookupMap<TimestampSec, EventQueue<Event>>,
-    /// Nearest next tick.
-    pub next_tick: TimestampSec,
+    /// Timestamp of the last fully processed tick queue.
+    pub last_tick: TimestampSec,
+    /// Interval between ticks.
     pub tick_interval: DurationSec,
     /// User's roles.
     pub user_roles: LookupMap<AccountId, Vec<(GroupId, RoleId)>>,
@@ -131,7 +133,7 @@ impl Contract {
             delegations: LookupMap::new(StorageKeys::Delegations),
             total_delegation_amount: 0,
             events: LookupMap::new(StorageKeys::Events),
-            next_tick: 0,
+            last_tick: 0,
             tick_interval,
             user_roles: LookupMap::new(StorageKeys::UserRoles),
             group_roles: LookupMap::new(StorageKeys::GroupRoles),
@@ -408,11 +410,11 @@ impl Contract {
     }
 
     /// Ticks and tries to process `count` of events in the last tick.
-    /// Sets next_tick timestamp.
-    /// Returns number of remaining events in nearest queue.
-    /// DAO is supposed to tick when its possible.
+    /// Updates last_tick timestamp.
+    /// Returns number of remaining events in last processed queue.
+    /// DAO is supposed to tick when whenever possible.
     pub fn tick(&mut self, count: usize) -> usize {
-        let current_timestamp = env::block_timestamp() / 10u64.pow(9);
+        let current_timestamp = current_timestamp_sec();
         run_tick(self, count, current_timestamp)
     }
 

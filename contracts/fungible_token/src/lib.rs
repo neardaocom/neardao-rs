@@ -26,9 +26,10 @@ use near_sdk::collections::LazyOption;
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, log, near_bindgen, require, AccountId, Balance, BorshStorageKey, PanicOnDefault,
+    env, log, near_bindgen, require, AccountId, Balance, BorshStorageKey, Gas, PanicOnDefault,
     PromiseOrValue,
 };
+
 use standard_impl::impl_ft_metadata::{
     FungibleTokenMetadata, FungibleTokenMetadataProvider, FT_METADATA_SPEC,
 };
@@ -36,8 +37,13 @@ use standard_impl::impl_fungible_token::FungibleToken;
 
 mod standard_impl;
 
+pub const VERSION: u8 = 1;
+pub const GAS_DOWNLOAD_NEW_VERSION: Gas = Gas(200_000_000_000_000);
+pub const GAS_UPGRADE: Gas = Gas(200_000_000_000_000);
+
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
+    NewVersionCode,
     Token,
     TokenMeta,
     Settings,
@@ -58,6 +64,9 @@ pub struct Settings {
     owner_id: AccountId,
     mint_allowed: bool,
     burn_allowed: bool,
+    /// Account id of contract allowed to provide new version.
+    /// If not set then upgrade is not allowed.
+    upgrade_provider: Option<AccountId>,
 }
 
 const DATA_IMAGE_SVG_NEAR_ICON: &str = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 288 288'%3E%3Cg id='l' data-name='l'%3E%3Cpath d='M187.58,79.81l-30.1,44.69a3.2,3.2,0,0,0,4.75,4.2L191.86,103a1.2,1.2,0,0,1,2,.91v80.46a1.2,1.2,0,0,1-2.12.77L102.18,77.93A15.35,15.35,0,0,0,90.47,72.5H87.34A15.34,15.34,0,0,0,72,87.84V201.16A15.34,15.34,0,0,0,87.34,216.5h0a15.35,15.35,0,0,0,13.08-7.31l30.1-44.69a3.2,3.2,0,0,0-4.75-4.2L96.14,186a1.2,1.2,0,0,1-2-.91V104.61a1.2,1.2,0,0,1,2.12-.77l89.55,107.23a15.35,15.35,0,0,0,11.71,5.43h3.13A15.34,15.34,0,0,0,216,201.16V87.84A15.34,15.34,0,0,0,200.66,72.5h0A15.35,15.35,0,0,0,187.58,79.81Z'/%3E%3C/g%3E%3C/svg%3E";
@@ -84,6 +93,11 @@ impl Contract {
         )
     }
 
+    #[init(ignore_state)]
+    pub fn upgrade() -> Self {
+        todo!()
+    }
+
     /// Initializes the contract with the given total supply owned by the given `owner_id` with
     /// the given fungible token metadata.
     #[init]
@@ -99,6 +113,7 @@ impl Contract {
             owner_id: owner_id.clone(),
             mint_allowed: false,
             burn_allowed: false,
+            upgrade_provider: None,
         });
         let mut this = Self {
             token: FungibleToken::new(StorageKeys::Token),
@@ -248,6 +263,81 @@ impl StorageManagement for Contract {
     fn storage_balance_of(&self, account_id: AccountId) -> Option<StorageBalance> {
         self.token.storage_balance_of(account_id)
     }
+}
+
+/// Triggers new version download from upgrade provider.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn download_new_version() {
+        env::setup_panic_hook();
+
+    // We are not able to access council members any other way so we have deserialize SC
+    let contract: Contract = env::state_read().unwrap();
+    let settings: Settings = contract.settings().unwrap();
+
+    require!(
+        settings.owner_id == env::predecessor_account_id(),
+        "no rights"
+    );
+
+    let factory_acc = settings.upgrade_provider.expect("upgrade is not allowed");
+    let method_name = "download_ft_bin";
+
+    env::promise_create(
+        factory_acc,
+        method_name,
+        &[VERSION],
+        0,
+        GAS_DOWNLOAD_NEW_VERSION,
+    );
+}
+
+/// Method called by upgrade provider as response to download_new_version method.
+/// Saves provided binary blob in storage under `StorageKey::NewVersionCode`.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn store_new_version() {
+    use near_sdk::IntoStorageKey;
+
+    env::setup_panic_hook();
+
+    let contract: Contract = env::state_read().unwrap();
+    let settings: Settings = contract.settings().unwrap();
+    require!(
+        settings.upgrade_provider.expect("upgrade is not allowed") == env::predecessor_account_id(),
+        "no rights"
+    );
+    env::storage_write(
+        &StorageKeys::NewVersionCode.into_storage_key(),
+        &env::input().unwrap(),
+    );
+}
+
+// TODO: Use near-sys to access low-level interface.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn upgrade_self() {
+    use near_sdk::IntoStorageKey;
+
+    env::setup_panic_hook();
+
+    // We are not able to access council members any other way so we have deserialize SC
+    let contract: Contract = env::state_read().unwrap();
+    let settings: Settings = contract.settings().unwrap();
+
+    require!(
+        settings.owner_id == env::predecessor_account_id(),
+        "no rights"
+    );
+
+    let current_acc = env::current_account_id();
+    let method_name = "upgrade";
+    let key = StorageKeys::NewVersionCode.into_storage_key();
+
+    let code = env::storage_read(key.as_slice()).expect("Failed to read new code from storage.");
+    let promise = env::promise_batch_create(&current_acc);
+    env::promise_batch_action_deploy_contract(promise, code.as_slice());
+    env::promise_batch_action_function_call(promise, method_name, &[], 0, GAS_UPGRADE);
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

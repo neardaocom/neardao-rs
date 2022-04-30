@@ -35,7 +35,7 @@ impl TickEvent for Event {}
 #[derive(Debug)]
 struct ProcessorMock {
     pub event_source: HashMap<TimestampSec, EventQueue<Event>>,
-    pub next_tick: TimestampSec,
+    pub last_tick: TimestampSec,
     pub tick_interval: TimestampSec,
     pub processing_results: Vec<String>,
 }
@@ -43,12 +43,12 @@ struct ProcessorMock {
 impl ProcessorMock {
     pub fn new(
         event_source: HashMap<TimestampSec, EventQueue<Event>>,
-        next_tick: TimestampSec,
+        last_tick: TimestampSec,
         tick_interval: TimestampSec,
     ) -> Self {
         Self {
             event_source,
-            next_tick,
+            last_tick,
             tick_interval,
             processing_results: vec![],
         }
@@ -62,8 +62,8 @@ impl ProcessorMock {
         )
     }
 
-    pub fn assert_next_tick(&self, next_tick: TimestampSec) {
-        assert_eq!(self.next_tick, next_tick);
+    pub fn assert_last_tick(&self, last_tick: TimestampSec) {
+        assert_eq!(self.last_tick, last_tick);
     }
 
     pub fn update_event_source(
@@ -71,8 +71,6 @@ impl ProcessorMock {
         keys: Vec<TimestampSec>,
         event_source: HashMap<TimestampSec, EventQueue<Event>>,
     ) {
-        let min = keys.iter().min().unwrap();
-        self.next_tick = *min;
         for key in keys {
             self.event_source
                 .insert(key, event_source.get(&key).unwrap().to_owned());
@@ -81,8 +79,10 @@ impl ProcessorMock {
 }
 
 impl EventProcessor<Event> for ProcessorMock {
-    fn get_next_tick(&self) -> TimestampSec {
-        self.next_tick
+    type ProcessingResult = ();
+
+    fn get_last_tick(&self) -> TimestampSec {
+        self.last_tick
     }
 
     fn tick_interval(&self) -> TimestampSec {
@@ -110,8 +110,8 @@ impl EventProcessor<Event> for ProcessorMock {
         self.event_source.insert(tick, queue.to_owned())
     }
 
-    fn set_next_tick(&mut self, tick: TimestampSec) {
-        self.next_tick = tick
+    fn set_last_tick(&mut self, tick: TimestampSec) {
+        self.last_tick = tick
     }
 }
 
@@ -139,23 +139,103 @@ fn tick_not_ready() {
 }
 
 #[test]
+fn tick_process_part_queue() {
+    let mut event_source = HashMap::new();
+    let mut expected_results = vec![];
+
+    make_test_data_and_result!(event_source, expected_results, 4,
+        10 => Group, Group, Roles, Roles, Rewards, Rewards, Group, Group;
+        20 => Roles,Roles, Rewards, Rewards, Group, Group;
+    );
+
+    let mut proc = ProcessorMock::new(event_source.clone(), 0, 10);
+
+    let remaining = tick(&mut proc, 4, 20);
+    assert_eq!(remaining, 4);
+    proc.assert_result(expected_results, "part queue");
+    proc.assert_last_tick(0);
+    assert!(proc.get_queue(0).is_none());
+    assert_eq!(proc.get_queue(10).unwrap().unprocessed_len(), 4);
+}
+
+#[test]
+fn tick_process_one_queue_exact() {
+    let mut event_source = HashMap::new();
+    let mut expected_results = vec![];
+
+    make_test_data_and_result!(event_source, expected_results, 8,
+        10 => Group, Group, Roles, Roles, Rewards, Rewards, Group, Group;
+        20 => Roles,Roles, Rewards, Rewards, Group, Group;
+    );
+
+    let mut proc = ProcessorMock::new(event_source.clone(), 0, 10);
+
+    let remaining = tick(&mut proc, 8, 30);
+    assert_eq!(remaining, 0);
+    proc.assert_result(expected_results, "queue one all");
+    proc.assert_last_tick(10);
+    assert!(proc.get_queue(10).is_none());
+    assert_eq!(proc.get_queue(20).unwrap().unprocessed_len(), 6);
+}
+
+#[test]
+fn tick_process_one_queue_available() {
+    let mut event_source = HashMap::new();
+    let mut expected_results = vec![];
+
+    make_test_data_and_result!(event_source, expected_results, 8,
+        10 => Group, Group, Roles, Roles, Rewards, Rewards, Group, Group;
+        20 => Roles,Roles, Rewards, Rewards, Group, Group;
+    );
+
+    let mut proc = ProcessorMock::new(event_source.clone(), 0, 10);
+
+    let remaining = tick(&mut proc, 8, 15);
+    assert_eq!(remaining, 0);
+    proc.assert_result(expected_results, "queue one all");
+    proc.assert_last_tick(10);
+    assert!(proc.get_queue(10).is_none());
+    assert_eq!(proc.get_queue(20).unwrap().unprocessed_len(), 6);
+}
+
+#[test]
 fn tick_process_one_and_half_queue() {
     let mut event_source = HashMap::new();
     let mut expected_results = vec![];
 
     make_test_data_and_result!(event_source, expected_results, 12,
-        0 => Group, Group, Roles, Roles, Rewards, Rewards, Group, Group;
-        10 => Roles,Roles, Rewards, Rewards, Group, Group;
+        10 => Group, Group, Roles, Roles, Rewards, Rewards, Group, Group;
+        20 => Roles,Roles, Rewards, Rewards, Group, Group;
     );
 
     let mut proc = ProcessorMock::new(event_source.clone(), 0, 10);
 
-    let remaining = tick(&mut proc, 12, 20);
+    let remaining = tick(&mut proc, 12, 40);
     assert_eq!(remaining, 2);
     proc.assert_result(expected_results, "queue 1: all");
-    proc.assert_next_tick(10);
-    assert!(proc.get_queue(0).is_none());
-    assert_eq!(proc.get_queue(10).unwrap().unprocessed_len(), 2);
+    proc.assert_last_tick(10);
+    assert!(proc.get_queue(10).is_none());
+    assert_eq!(proc.get_queue(20).unwrap().unprocessed_len(), 2);
+}
+
+#[test]
+fn tick_process_two_queues_with_gaps() {
+    let mut event_source = HashMap::new();
+    let mut expected_results = vec![];
+
+    make_test_data_and_result!(event_source, expected_results, 14,
+        30 => Group, Group, Roles, Roles, Rewards, Rewards, Group, Group;
+        60 => Roles,Roles, Rewards, Rewards, Group, Group;
+    );
+
+    let mut proc = ProcessorMock::new(event_source.clone(), 0, 10);
+
+    let remaining = tick(&mut proc, 20, 101);
+    assert_eq!(remaining, 0);
+    proc.assert_result(expected_results, "queue 1: all");
+    proc.assert_last_tick(100);
+    assert!(proc.get_queue(30).is_none());
+    assert!(proc.get_queue(60).is_none());
 }
 
 #[test]
@@ -164,109 +244,56 @@ fn tick_flow_scenario() {
     let mut expected_results = vec![];
 
     make_test_data_and_result!(event_source, expected_results, 14,
-        0 => Group, Group, Roles, Roles, Rewards, Rewards, Group, Group;
-        10 => Roles,Roles, Rewards, Rewards, Group, Group;
+        10 => Group, Group, Roles, Roles, Rewards, Rewards, Group, Group;
+        20 => Roles,Roles, Rewards, Rewards, Group, Group;
     );
 
     let mut proc = ProcessorMock::new(event_source.clone(), 0, 10);
+    proc.assert_last_tick(0);
 
-    // Process first queue
-    let remaining = tick(&mut proc, 2, 20);
-    assert_eq!(remaining, 6);
-    proc.assert_result(
-        expected_results.clone().into_iter().take(2).collect(),
-        "queue 1: 0-2",
-    );
-    proc.assert_next_tick(0);
-    assert_eq!(proc.get_queue(0).unwrap().unprocessed_len(), 6);
-    assert_eq!(proc.get_queue(10).unwrap().unprocessed_len(), 6);
-
-    let remaining = tick(&mut proc, 2, 21);
-    assert_eq!(remaining, 4);
-    proc.assert_result(
-        expected_results.clone().into_iter().take(4).collect(),
-        "queue 1: 2-4",
-    );
-    proc.assert_next_tick(0);
-    assert_eq!(proc.get_queue(0).unwrap().unprocessed_len(), 4);
-    assert_eq!(proc.get_queue(10).unwrap().unprocessed_len(), 6);
-
-    let remaining = tick(&mut proc, 4, 22);
+    // 1. Process both queues
+    let remaining = tick(&mut proc, 20, 20);
     assert_eq!(remaining, 0);
-    proc.assert_result(
-        expected_results.clone().into_iter().take(8).collect(),
-        "queue 1: 4-8",
-    );
-    proc.assert_next_tick(0);
-    assert!(proc.get_queue(0).is_some());
-    assert_eq!(proc.get_queue(10).unwrap().unprocessed_len(), 6);
-
-    // Process next queue
-    let remaining = tick(&mut proc, 4, 23);
-    assert_eq!(remaining, 2);
-    proc.assert_result(
-        expected_results.clone().into_iter().take(12).collect(),
-        "queue 2: 0-4",
-    );
-    proc.assert_next_tick(10);
-    assert!(proc.get_queue(0).is_none());
-    assert_eq!(proc.get_queue(10).unwrap().unprocessed_len(), 2);
-
-    let remaining = tick(&mut proc, 2, 24);
-    assert_eq!(remaining, 0);
-    proc.assert_result(expected_results.clone(), "queue 2: 4-6");
-    proc.assert_next_tick(10);
-    assert!(proc.get_queue(0).is_none());
-    assert_eq!(proc.get_queue(10).unwrap().unprocessed_len(), 0);
-
-    // No tick is available
-    let remaining = tick(&mut proc, 4, 30);
-    assert_eq!(remaining, 0);
-    proc.assert_result(expected_results.clone(), "no queue");
-    proc.assert_next_tick(40);
-    assert!(proc.get_queue(0).is_none());
+    proc.assert_result(expected_results.clone(), "flow_scenario - 1");
+    proc.assert_last_tick(20);
     assert!(proc.get_queue(10).is_none());
+    assert!(proc.get_queue(20).is_none());
 
-    // No tick is available
-    let remaining = tick(&mut proc, 4, 40);
+    // 2. Nothing to process
+    let remaining = tick(&mut proc, 20, 30);
     assert_eq!(remaining, 0);
-    proc.assert_result(expected_results.clone(), "no queue");
-    proc.assert_next_tick(40);
-    assert!(proc.get_queue(0).is_none());
-    assert!(proc.get_queue(10).is_none());
+    proc.assert_result(expected_results.clone(), "flow_scenario - 2");
+    proc.assert_last_tick(30);
 
-    // Tick available but time has not come yet
+    // 3. New events are dispatched to future tick
     let mut new_expected_results = vec![];
     make_test_data_and_result!(event_source, new_expected_results, 5,
         50 => Group, Group, Roles, Roles, Rewards;
     );
-    expected_results.append(&mut new_expected_results);
     proc.update_event_source(vec![50], event_source);
-
-    // Process last inserted tick - 50
-    let remaining = tick(&mut proc, 5, 50);
+    let remaining = tick(&mut proc, 20, 41);
     assert_eq!(remaining, 0);
-    proc.assert_result(expected_results.clone(), "no queue");
-    proc.assert_next_tick(50);
-    assert!(proc.get_queue(0).is_none());
-    assert!(proc.get_queue(10).is_none());
-    assert_eq!(proc.get_queue(50).unwrap().unprocessed_len(), 0);
+    proc.assert_result(expected_results.clone(), "flow_scenario - 3");
+    proc.assert_last_tick(40);
+    assert!(proc.get_queue(50).is_some());
 
-    // No tick is available
-    let remaining = tick(&mut proc, 5, 60);
+    // 4. Tick is too late
+    expected_results.append(&mut new_expected_results);
+    let remaining = tick(&mut proc, 20, 80);
     assert_eq!(remaining, 0);
-    proc.assert_result(expected_results.clone(), "no queue");
-    proc.assert_next_tick(70);
-    assert!(proc.get_queue(0).is_none());
-    assert!(proc.get_queue(10).is_none());
+    proc.assert_result(expected_results.clone(), "flow_scenario - 4");
+    proc.assert_last_tick(80);
     assert!(proc.get_queue(50).is_none());
 
-    // No tick is available
-    let remaining = tick(&mut proc, 5, 70);
+    // 5. Nothing to process
+    let remaining = tick(&mut proc, 20, 90);
     assert_eq!(remaining, 0);
-    proc.assert_result(expected_results, "no queue");
-    proc.assert_next_tick(70);
-    assert!(proc.get_queue(0).is_none());
-    assert!(proc.get_queue(10).is_none());
-    assert!(proc.get_queue(50).is_none());
+    proc.assert_result(expected_results.clone(), "flow_scenario - 5");
+    proc.assert_last_tick(90);
+
+    // 6. Nothing to process
+    let remaining = tick(&mut proc, 20, 199);
+    assert_eq!(remaining, 0);
+    proc.assert_result(expected_results.clone(), "flow_scenario - 6");
+    proc.assert_last_tick(190);
 }
