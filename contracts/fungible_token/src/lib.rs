@@ -174,6 +174,16 @@ impl Contract {
     pub fn settings(&self) -> Option<Settings> {
         self.settings.get()
     }
+
+    // Returns balances of provided accounts in same order.
+    pub fn ft_balances_of(&self, account_ids: Vec<AccountId>) -> Vec<(AccountId, U128)> {
+        let mut result = Vec::with_capacity(account_ids.len());
+        for acc in account_ids {
+            let amount = self.token.accounts.get(&acc).unwrap_or_default();
+            result.push((acc, amount.into()));
+        }
+        result
+    }
 }
 
 #[near_bindgen]
@@ -269,7 +279,7 @@ impl StorageManagement for Contract {
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn download_new_version() {
-        env::setup_panic_hook();
+    env::setup_panic_hook();
 
     // We are not able to access council members any other way so we have deserialize SC
     let contract: Contract = env::state_read().unwrap();

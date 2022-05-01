@@ -1,3 +1,4 @@
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use workspaces::result::{CallExecutionDetails, ViewResultDetails};
 
 pub(crate) const ROOT_PATH: &str = env!("CARGO_MANIFEST_DIR");
@@ -68,4 +69,18 @@ where
     T: for<'de> serde::Deserialize<'de> + std::fmt::Debug,
 {
     outcome.json().unwrap_or_default()
+}
+
+pub(crate) fn generate_random_strings(count: usize, string_len: usize) -> Vec<String> {
+    assert!(count > 0, "Called with zero");
+    let mut vec = Vec::with_capacity(count);
+    for _ in 0..count {
+        let string: String = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(string_len)
+            .map(char::from)
+            .collect();
+        vec.push(string);
+    }
+    vec
 }

@@ -202,7 +202,6 @@ impl Contract {
         false
     }
 
-    // TODO: Test coverage.
     /// Evaluates vote results by scenario and type of voters.
     /// Returns tuple (max_possible_amount,vote_results)
     #[allow(unused)]

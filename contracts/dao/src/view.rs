@@ -25,7 +25,7 @@ impl Contract {
         self.get_user_weight(&account_id).into()
     }
 
-    /// Searches for next tick looks ahead up to `search_max_tick` ticks.
+    /// Searches for next tick looks ahead up to `search_max_ticks` ticks.
     pub fn next_tick(&self, search_max_ticks: usize) -> Option<TimestampSec> {
         let mut next_tick = None;
         let mut tick = self.last_tick;

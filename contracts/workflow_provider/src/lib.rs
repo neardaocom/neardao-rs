@@ -1,10 +1,13 @@
+//! Workflow provider contract
+//! Providers workflow templates with necessary object metadata for them to work.
+
+#![allow(unused_imports)]
 use library::workflow::help::TemplateHelp;
 use library::workflow::template::Template;
 use library::workflow::types::ObjectMetadata;
 use library::{FnCallId, MethodName, Version};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap};
-#[allow(unused_imports)]
 use near_sdk::env;
 use near_sdk::serde::Serialize;
 use near_sdk::{near_bindgen, BorshStorageKey};
@@ -24,8 +27,9 @@ pub struct Contract {
     last_wf_id: u16,
     workflows: UnorderedMap<u16, Template>,
     workflow_help: UnorderedMap<u16, TemplateHelp>,
-    /// FnCalls and Standard FnCalls.
+    /// Function calls for workflow template.
     workflow_fncalls: LookupMap<u16, (Vec<FnCallId>, Vec<MethodName>)>,
+    /// Object metadata for fn_call id.
     fncall_metadata: UnorderedMap<FnCallId, Vec<ObjectMetadata>>,
     standard_fncall_metadata: UnorderedMap<MethodName, Vec<ObjectMetadata>>,
 }

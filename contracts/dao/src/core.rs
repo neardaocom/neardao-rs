@@ -160,9 +160,6 @@ impl Contract {
             proposed_workflow_settings: LookupMap::new(StorageKeys::ProposedWfTemplateSettings),
             workflow_activity_log: LookupMap::new(StorageKeys::ActivityLog),
         };
-
-        // TODO: Register self and mint all FT
-
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
         contract.init_groups(groups);
@@ -463,11 +460,11 @@ pub extern "C" fn download_new_version() {
         env::predecessor_account_id()
     );
 
-    let factory_acc = dao_settings.dao_admin_account_id;
+    let admin_acc = dao_settings.dao_admin_account_id;
     let method_name = "download_dao_bin";
 
     env::promise_create(
-        factory_acc,
+        admin_acc,
         method_name,
         &[VERSION],
         0,

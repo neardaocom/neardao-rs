@@ -119,7 +119,7 @@ impl Dao {
         self.users.remove(sender_id);
     }
 
-    /// Total number of tokens staked in this contract.
+    /// Total number of tokens staked in this dao.
     pub fn ft_total_supply(&self) -> U128 {
         U128(self.total_amount)
     }

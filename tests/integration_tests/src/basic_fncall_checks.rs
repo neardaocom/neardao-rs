@@ -19,7 +19,7 @@ use crate::utils::outcome_pretty;
 
 #[tokio::test]
 async fn skyward() -> Result<()> {
-    let worker = workspaces::testnet().await?;
+    let worker = workspaces::sandbox().await?;
     let wasm_blob = workspaces::compile_project("./../mocks/simple_dao").await?;
     let contract = worker.dev_deploy(&wasm_blob).await?;
 

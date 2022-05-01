@@ -18,6 +18,7 @@ pub enum StorageKeys {
     One,
     Two,
     Three,
+    HashMapMaxSizeTest,
 }
 
 #[near_bindgen]
@@ -29,6 +30,7 @@ pub struct Contract {
     pub key_2: u16,
     pub int_nested_lm: LookupMap<u16, LookupMap<u16, String>>,
     pub key_3: u16,
+    pub hm_max_size_test: LazyOption<HashMap<String, u8>>,
 }
 
 impl Default for Contract {
@@ -48,6 +50,10 @@ impl Contract {
             key_1: 0,
             key_2: 0,
             key_3: 0,
+            hm_max_size_test: LazyOption::new(
+                StorageKeys::HashMapMaxSizeTest,
+                Some(&HashMap::new()),
+            ),
         };
         contract
     }
@@ -88,5 +94,22 @@ impl Contract {
                 &error_msg
             );
         }
+    }
+
+    pub fn add_to_hm_size_test(&mut self, values: Vec<(String, u8)>) {
+        let init_size = env::storage_usage();
+        let mut hm = self.hm_max_size_test.get().unwrap();
+        for (acc, vote) in values {
+            hm.insert(acc, vote);
+        }
+        self.hm_max_size_test.set(&hm);
+        log!("storage usage diff: +{}", env::storage_usage() - init_size);
+    }
+
+    pub fn view_hm_size(&self) -> usize {
+        self.hm_max_size_test.get().unwrap().len()
+    }
+    pub fn view_hm(&self) -> Vec<(String, u8)> {
+        self.hm_max_size_test.get().unwrap().into_iter().collect()
     }
 }
