@@ -66,6 +66,8 @@ pub enum StorageKeys {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
+    /// Vote token id.
+    pub token_id: AccountId,
     /// Staking contract.
     pub staking_id: AccountId,
     /// Delegations per user.
@@ -112,8 +114,10 @@ impl Contract {
     #[allow(clippy::too_many_arguments)]
     #[init]
     pub fn new(
+        token_id: AccountId,
         staking_id: AccountId,
         total_supply: u32,
+        decimals: u8,
         settings: DaoSettings,
         groups: Vec<GroupInput>,
         tags: Vec<TagInput>,
@@ -129,6 +133,7 @@ impl Contract {
         assert_valid_dao_settings(&settings);
 
         let mut contract = Contract {
+            token_id,
             staking_id,
             delegations: LookupMap::new(StorageKeys::Delegations),
             total_delegation_amount: 0,
@@ -141,7 +146,7 @@ impl Contract {
             ft_total_locked: 0,
             ft_total_distributed: 0,
             total_members_count: 0,
-            decimal_const: 10u128.pow(24), // TODO
+            decimal_const: 10u128.pow(decimals as u32),
             settings: LazyOption::new(StorageKeys::DaoSettings, None),
             group_last_id: 0,
             groups: UnorderedMap::new(StorageKeys::Groups),

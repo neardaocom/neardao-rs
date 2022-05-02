@@ -119,11 +119,3 @@ impl Datatype {
         }
     }
 }
-
-#[allow(unused)]
-#[cfg(test)]
-mod test {
-    use near_sdk::{json_types::U128, serde_json};
-
-    use super::Value;
-}

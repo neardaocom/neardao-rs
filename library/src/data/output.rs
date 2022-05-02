@@ -1,16 +1,23 @@
-/********************  WF DATA FOR PROVIDER  ********************/
+//! Workflow data which are outputed on stdout and loaded to workflow provider by hand.
+//! TODO: Missing automation.
 
-use crate::data::bounty::{
-    workflow_bounty_template_data_1, workflow_bounty_template_settings_data_1,
-};
-use crate::{data::basic_workflows::*, workflow::DataType, workflow::ProposeSettings};
-
-use crate::data::skyward::{
-    workflow_skyward_template_data_1, workflow_skyward_template_settings_data_1,
-};
+use crate::workflow::types::ObjectMetadata;
 
 use near_sdk::serde_json;
 
+use super::standard_fn_calls::{
+    nep_141_ft_transfer, nep_141_ft_transfer_call, nep_171_nft_transfer, nep_171_nft_transfer_call,
+};
+
+fn pretty_print(name: &str, meta: Vec<ObjectMetadata>) {
+    println!(
+        "------------------------------ {} ------------------------------\n{}",
+        name,
+        serde_json::to_string(&meta).expect(name)
+    );
+}
+
+/*
 #[test]
 fn output_workflows_basic() {
     println!(
@@ -170,4 +177,13 @@ fn output_settings() {
             "------------------------------ PROPOSE SETTINGS SEND NEAR IN LOOP WORKFLOW ------------------------------\n{}",
             serde_json::to_string(&wf_settings_near_send).unwrap()
         );
+}
+ */
+
+#[test]
+fn standard_fn_calls() {
+    pretty_print("NEP_141_FT_TRANSFER", nep_141_ft_transfer());
+    pretty_print("NEP_141_FT_TRANSFER_CALL", nep_141_ft_transfer_call());
+    pretty_print("NEP_171_NFT_TRANSFER", nep_171_nft_transfer());
+    pretty_print("NEP_171_NFT_TRANSFER_CALL", nep_171_nft_transfer_call());
 }

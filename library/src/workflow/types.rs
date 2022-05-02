@@ -94,13 +94,16 @@ pub enum ActivityResult {
 #[serde(crate = "near_sdk::serde")]
 /// Defines source of value.
 pub enum ArgSrc {
-    /// User's input - defines arg pos.
+    /// User's input key name.
     User(String),
     /// Bind from template.
     ConstsTpl(String),
+    /// Bind from template settings.
     ConstsSettings(String),
+    ConstPropSettings(String),
     /// Bind from proposal settings.
     ConstActivityShared(String),
+    /// Bind from proposal settings.
     ConstAction(String),
     Storage(String),
     GlobalStorage(String),
@@ -113,11 +116,12 @@ pub enum ArgSrc {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Debug))]
 #[serde(crate = "near_sdk::serde")]
-pub enum SrcOrExpr {
+pub enum SrcOrExprOrValue {
     /// Source for value.
     Src(ArgSrc),
     /// Expression source which evaluates to the value.
     Expr(Expression),
+    Value(Value),
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
@@ -127,7 +131,7 @@ pub struct BindDefinition {
     /// Key being binded.
     pub key: String,
     /// Value source for `key`.
-    pub key_src: SrcOrExpr,
+    pub key_src: SrcOrExprOrValue,
     /// Prefixes for nested collection objects.
     /// Defined as `Vec<String>` for forward-compatible changes.
     pub prefixes: Vec<String>,

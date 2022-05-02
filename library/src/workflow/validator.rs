@@ -83,6 +83,7 @@ impl Validator {
                         ArgSrc::GlobalStorage(_) => todo!(),
                         //ArgSrcNew::Expression(_) => todo!(),
                         ArgSrc::Const(_) => todo!(),
+                        ArgSrc::ConstPropSettings(_) => todo!(),
                     }
                 }
                 expr.eval(binded_args.as_slice())?.try_into_bool()?
@@ -121,6 +122,7 @@ impl Validator {
                             ArgSrc::GlobalStorage(_) => todo!(),
                             //ArgSrcNew::Expression(_) => todo!(),
                             ArgSrc::Const(_) => todo!(),
+                            ArgSrc::ConstPropSettings(_) => todo!(),
                         }
                     }
                     // Return true only if all object attributes have been validated.

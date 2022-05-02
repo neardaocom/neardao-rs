@@ -1,12 +1,28 @@
+use near_sdk::json_types::U128;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use workspaces::result::{CallExecutionDetails, ViewResultDetails};
+use workspaces::{
+    result::{CallExecutionDetails, ViewResultDetails},
+    AccountId,
+};
+
+pub(crate) type DurationSec = u64;
+pub(crate) type TimestampSec = u64;
+pub(crate) type WrappedBalance = U128;
+pub(crate) type MethodName = String;
+pub(crate) type FnCallId = (AccountId, MethodName);
+
+pub(crate) const MAX_GAS: u64 = 300 * 10u64.pow(12);
 
 pub(crate) const ROOT_PATH: &str = env!("CARGO_MANIFEST_DIR");
-pub(crate) const DAO_WASM: &str = "dao.wasm";
-pub(crate) const DAO_FACTORY_WASM: &str = "dao_factory.wasm";
+pub(crate) const DAO: &str = "dao.wasm";
+pub(crate) const DAO_FACTORY: &str = "dao_factory.wasm";
 pub(crate) const WF_PROVIDER: &str = "workflow_provider";
 pub(crate) const STAKING: &str = "staking.wasm";
 pub(crate) const TOKEN: &str = "fungible_token.wasm";
+
+// 3rd party contracts.
+pub(crate) const SKYWARD: &str = "05022022_skyward.wasm";
+pub(crate) const WNEAR: &str = "w_near.wasm";
 
 macro_rules! wasm_bin_getters {
     ( $($fnname:ident => $const:expr)*) => {
@@ -17,14 +33,28 @@ macro_rules! wasm_bin_getters {
             }
         )*
     };
+    (EXTERNAL $($fnname:ident => $const:expr)*) => {
+        $(
+            /// Returns path of external wasm blob.
+            pub(crate) fn $fnname() -> String {
+                format!("{}/../res_3rd_party/{}",ROOT_PATH,$const)
+            }
+        )*
+    };
 }
 
 wasm_bin_getters!(
-    get_dao_wasm => DAO_WASM
-    get_dao_factory_wasm => DAO_FACTORY_WASM
+    get_dao_wasm => DAO
+    get_dao_factory_wasm => DAO_FACTORY
     get_wf_provider_wasm => WF_PROVIDER
-    get_staking => STAKING
-    get_fungible_token => TOKEN
+    get_staking_wasm => STAKING
+    get_fungible_token_wasm => TOKEN
+);
+
+wasm_bin_getters!(
+    EXTERNAL
+    get_skyward_wasm => SKYWARD
+    get_wnear_wasm => WNEAR
 );
 
 pub(crate) fn outcome_pretty(name: &str, outcome: &CallExecutionDetails) {

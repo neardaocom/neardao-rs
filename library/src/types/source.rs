@@ -26,7 +26,7 @@ pub trait MutableSource {
     fn set_prop_shared(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
     fn unset_prop(&mut self) -> Option<SourceDataVariant>;
     fn set_prop(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
-    fn replace_settings(&mut self, new: SourceDataVariant) -> SourceDataVariant;
+    fn replace_settings(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
     fn take_storage(&mut self) -> Option<StorageBucket>;
     fn take_global_storage(&mut self) -> Option<StorageBucket>;
 }
@@ -69,8 +69,9 @@ where
     T: Consts + Sized,
 {
     tpls: SourceDataVariant,
-    settings: SourceDataVariant,
+    settings: Option<SourceDataVariant>,
     prop: Option<SourceDataVariant>,
+    prop_action: Option<SourceDataVariant>,
     prop_shared: Option<SourceDataVariant>,
     dao_consts: T,
     storage: Option<StorageBucket>,
@@ -86,7 +87,11 @@ where
     }
 
     fn tpl_settings(&self, key: &str) -> Option<&Value> {
-        self.settings.get(key)
+        if let Some(settings) = &self.settings {
+            settings.get(key)
+        } else {
+            None
+        }
     }
 
     fn storage(&self, key: &str) -> Option<&Value> {
@@ -136,8 +141,13 @@ where
         todo!()
     }
 
-    fn replace_settings(&mut self, new: SourceDataVariant) -> SourceDataVariant {
-        std::mem::replace(&mut self.settings, new)
+    fn replace_settings(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
+        if let Some(mut settings) = self.settings.as_mut() {
+            Some(std::mem::replace(&mut settings, new))
+        } else {
+            self.settings = Some(new);
+            None
+        }
     }
 
     fn take_storage(&mut self) -> Option<StorageBucket> {
@@ -161,7 +171,8 @@ where
 {
     pub fn from(
         tpls: SourceDataVariant,
-        settings: SourceDataVariant,
+        settings: Option<SourceDataVariant>,
+        prop: Option<SourceDataVariant>,
         dao_consts: T,
         storage: Option<StorageBucket>,
         global_storage: Option<StorageBucket>,
@@ -169,7 +180,8 @@ where
         Self {
             tpls,
             settings,
-            prop: None,
+            prop,
+            prop_action: None,
             prop_shared: None,
             dao_consts,
             storage,
@@ -221,7 +233,7 @@ impl MutableSource for SourceMock {
     fn set_prop_shared(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
         todo!()
     }
-    fn replace_settings(&mut self, new: SourceDataVariant) -> SourceDataVariant {
+    fn replace_settings(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
         todo!()
     }
     fn take_storage(&mut self) -> Option<StorageBucket> {

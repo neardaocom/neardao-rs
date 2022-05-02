@@ -48,7 +48,7 @@ impl MutableSource for SourceMock {
         todo!()
     }
 
-    fn replace_settings(&mut self, new: SourceDataVariant) -> SourceDataVariant {
+    fn replace_settings(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
         todo!()
     }
 

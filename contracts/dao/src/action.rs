@@ -5,9 +5,8 @@ use library::interpreter::expression::EExpr;
 
 use library::storage::StorageBucket;
 use library::types::datatype::Value;
-use library::types::error::ProcessingError;
 use library::types::source::{DefaultSource, Source};
-use library::workflow::action::{ActionData, ActionInput, FnCallIdType};
+use library::workflow::action::{ActionData, ActionInput};
 use library::workflow::activity::TemplateActivity;
 use library::workflow::instance::InstanceState;
 use library::workflow::settings::TemplateSettings;
@@ -37,7 +36,7 @@ impl Contract {
         actions_inputs: Vec<Option<ActionInput>>,
     ) -> Result<(), ActivityError> {
         let (proposal, wft, wfs) = self.get_workflow_and_proposal(proposal_id);
-        let (mut wfi, prop_settings) = self.workflow_instance.get(&proposal_id).unwrap();
+        let (mut wfi, mut prop_settings) = self.workflow_instance.get(&proposal_id).unwrap();
         let dao_consts = self.dao_consts();
 
         let Template {
@@ -62,6 +61,7 @@ impl Contract {
         let mut sources: Box<dyn Source> = Box::new(DefaultSource::from(
             constants,
             wfs.constants,
+            prop_settings.global.take(),
             dao_consts,
             storage,
             Some(global_storage),

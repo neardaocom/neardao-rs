@@ -5,7 +5,8 @@ use serde_json::json;
 use workspaces::{network::DevAccountDeployer, result::ViewResultDetails};
 
 use crate::utils::{
-    get_fungible_token, get_staking, outcome_pretty, parse_view_result, view_outcome_pretty,
+    get_fungible_token_wasm, get_staking_wasm, outcome_pretty, parse_view_result,
+    view_outcome_pretty,
 };
 
 const VIEW_METHOD_GET_USER: &str = "dao_get_user";
@@ -105,13 +106,13 @@ fn check_user_result(
 #[tokio::test]
 async fn staking_full_scenario() -> Result<()> {
     let worker = workspaces::sandbox().await?;
-    let staking_blob_path = &get_staking();
+    let staking_blob_path = &get_staking_wasm();
     let staking = worker
         .dev_deploy(&std::fs::read(staking_blob_path)?)
         .await?;
     let wasm_blob_dao = workspaces::compile_project("./../mocks/staking_dao").await?;
     let dao = worker.dev_deploy(&wasm_blob_dao).await?;
-    let token_blob_path = &get_fungible_token();
+    let token_blob_path = &get_fungible_token_wasm();
     let token = worker.dev_deploy(&std::fs::read(token_blob_path)?).await?;
     let registrar = worker.dev_create_account().await?;
     let token_holder = worker.dev_create_account().await?;
@@ -846,7 +847,7 @@ async fn staking_full_scenario() -> Result<()> {
 /// Withdraw amount (1500) > vote_amount (3000) - delegated amount (2000).
 async fn staking_withdraw_panic() {
     let worker = workspaces::sandbox().await.unwrap();
-    let staking_blob_path = &get_staking();
+    let staking_blob_path = &get_staking_wasm();
     let staking = worker
         .dev_deploy(&std::fs::read(staking_blob_path).unwrap())
         .await
@@ -855,7 +856,7 @@ async fn staking_withdraw_panic() {
         .await
         .unwrap();
     let dao = worker.dev_deploy(&wasm_blob_dao).await.unwrap();
-    let token_blob_path = &get_fungible_token();
+    let token_blob_path = &get_fungible_token_wasm();
     let token = worker
         .dev_deploy(&std::fs::read(token_blob_path).unwrap())
         .await

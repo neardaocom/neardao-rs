@@ -1,12 +1,58 @@
-use crate::{
-    expression::{EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
-    workflow::{ActionType, DataTypeDef, ValidatorType, VoteScenario},
-    workflow::{
-        ActivityRight, ArgSrc, ExprArg, Expression, Template, TemplateActivity, TemplateSettings,
-        Transition,
-    },
-};
+pub fn workflow_wf_add() -> Template {
+    let map = HashMap::new();
+    Template {
+        code: "wf_add".into(),
+        version: "1".into(),
+        is_simple: true,
+        need_storage: true,
+        activities: vec![
+            Activity::Init,
+            Activity::Activity(TemplateActivity {
+                code: "wf_add".into(),
+                postprocessing: None,
+                actions: vec![TemplateAction {
+                    exec_condition: None,
+                    validators: vec![],
+                    action_data: ActionData::FnCall(FnCallData {
+                        id: FnCallIdType::Dynamic(
+                            ArgSrc::ConstPropSettings("provider_id".into()),
+                            "wf_template".into(),
+                        ),
+                        tgas: 30,
+                        deposit: None,
+                        binds: vec![BindDefinition {
+                            key: "id".into(),
+                            key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
+                                "workflow_id".into(),
+                            )),
+                            prefixes: vec![],
+                            is_collection: false,
+                        }],
+                    }),
+                    postprocessing: Some(Postprocessing {
+                        instructions: vec![Instruction::StoreWorkflow],
+                    }),
+                    must_succeed: true,
+                    optional: false,
+                }],
+                automatic: true,
+                terminal: Terminality::Automatic,
+                is_dao_activity: false,
+            }),
+        ],
+        expressions: vec![],
+        transitions: vec![vec![Transition {
+            activity_id: 1,
+            cond: None,
+            time_from_cond: None,
+            time_to_cond: None,
+        }]],
+        constants: SourceDataVariant::Map(map),
+        end: vec![1],
+    }
+}
 
+/* // TODO: Move to new version
 pub fn workflow_wf_add() -> Template {
     Template {
         code: "wf_add".into(),
@@ -614,3 +660,22 @@ pub fn workflow_media_invalidate() -> Template {
         validator_exprs: vec![],
     }
 }
+ */
+
+use std::collections::HashMap;
+
+use near_sdk::AccountId;
+
+use crate::{
+    types::source::SourceDataVariant,
+    workflow::{
+        action::{ActionData, FnCallData, FnCallIdType, TemplateAction},
+        activity::{Activity, TemplateActivity, Terminality, Transition},
+        expression::Expression,
+        postprocessing::Postprocessing,
+        template::Template,
+        types::{ArgSrc, BindDefinition, Instruction, SrcOrExprOrValue},
+    },
+};
+
+use super::skyward::SKYWARD_ACC;

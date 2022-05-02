@@ -6,7 +6,7 @@ use near_sdk::{
 };
 
 use crate::{
-    constants::{C_DAO_ACC_ID, GLOBAL_BUCKET_IDENT, TGAS},
+    constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, GLOBAL_BUCKET_IDENT, TGAS},
     core::{ActivityLog, Contract},
     error::{
         ActionError, ERR_DISTRIBUTION_NOT_ENOUGH_FT, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
@@ -688,7 +688,7 @@ impl Contract {
         sources: &dyn Source,
     ) -> Result<(AccountId, MethodName, Vec<ObjectMetadata>), ActionError> {
         let data = match id {
-            FnCallIdType::Static((account, method)) => {
+            FnCallIdType::Static(account, method) => {
                 if account.as_str() == "self" {
                     let name = env::current_account_id();
                     (
@@ -726,7 +726,7 @@ impl Contract {
                         .ok_or(ActionError::MissingFnCallMetadata(method))?,
                 )
             }
-            FnCallIdType::StandardStatic((account, method)) => {
+            FnCallIdType::StandardStatic(account, method) => {
                 if account.as_str() == "self" {
                     let name = env::current_account_id();
                     (
@@ -809,8 +809,9 @@ pub struct DaoConsts;
 impl Consts for DaoConsts {
     fn get(&self, key: u8) -> Option<Value> {
         match key {
-            C_DAO_ACC_ID => Some(Value::String(env::current_account_id().to_string())),
-            _ => None,
+            C_DAO_ID => Some(Value::String(env::current_account_id().to_string())),
+            C_CURRENT_TIMESTAMP_SECS => Some(Value::U64(current_timestamp_sec())),
+            _ => unimplemented!(),
         }
     }
 }

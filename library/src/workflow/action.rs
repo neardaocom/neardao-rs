@@ -1,6 +1,7 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
+    AccountId,
 };
 
 use crate::{types::activity_input::UserInput, FnCallId, MethodName};
@@ -72,7 +73,7 @@ impl DaoActionData {
 pub struct FnCallData {
     pub id: FnCallIdType,
     pub tgas: u16,
-    /// Deposit for fncall given by executing contract. Not caller.
+    /// Deposit for function call given by executing contract.
     pub deposit: Option<ArgSrc>,
     pub binds: Vec<BindDefinition>,
 }
@@ -84,9 +85,9 @@ pub struct FnCallData {
 /// Variants with prefix "Standard" define function calls for standart implementation methods, eg. FT NEP-141.
 /// Reason is that we do not have to store same metadata multiple times but only once.
 pub enum FnCallIdType {
-    Static(FnCallId),
+    Static(AccountId, MethodName),
     Dynamic(ArgSrc, MethodName),
-    StandardStatic(FnCallId),
+    StandardStatic(AccountId, MethodName),
     StandardDynamic(ArgSrc, MethodName),
 }
 
@@ -103,7 +104,7 @@ pub struct ActionInput {
 #[serde(crate = "near_sdk::serde")]
 pub enum DaoActionOrFnCall {
     DaoAction(DaoActionIdent),
-    FnCall(FnCallId),
+    FnCall(AccountId, MethodName),
 }
 
 impl PartialEq<ActionData> for DaoActionOrFnCall {
@@ -111,13 +112,13 @@ impl PartialEq<ActionData> for DaoActionOrFnCall {
         match (self, other) {
             (Self::DaoAction(l0), ActionData::Action(d)) => *l0 == d.name,
             (Self::DaoAction(_), ActionData::FnCall(_)) => false,
-            (Self::FnCall(l0), ActionData::FnCall(f)) => match &f.id {
-                FnCallIdType::Static(s) => *l0 == *s,
-                FnCallIdType::Dynamic(_, m) => *l0.0.as_str() == *m,
-                FnCallIdType::StandardStatic(s) => *l0 == *s,
-                FnCallIdType::StandardDynamic(_, m) => *l0.0.as_str() == *m,
+            (Self::FnCall(a0, m0), ActionData::FnCall(f)) => match &f.id {
+                FnCallIdType::Static(a, m) => *a0 == *a && *m0 == *m,
+                FnCallIdType::Dynamic(_, m) => *m0.as_str() == *m,
+                FnCallIdType::StandardStatic(a, m) => *a0 == *a && *m0 == *m,
+                FnCallIdType::StandardDynamic(_, m) => *m0.as_str() == *m,
             },
-            (Self::FnCall(_), ActionData::Action(_)) => false,
+            (Self::FnCall(_, _), ActionData::Action(_)) => false,
             _ => false,
         }
     }

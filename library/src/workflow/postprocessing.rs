@@ -24,7 +24,6 @@ use super::types::{ArgSrc, Instruction};
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Postprocessing {
-    pub storage_key: String,
     pub instructions: Vec<Instruction>,
 }
 
@@ -304,7 +303,6 @@ mod test {
         let user_input: Box<dyn ActivityInput> = Box::new(hm);
 
         let mut pp = Postprocessing {
-            storage_key: "key".into(),
             instructions: vec![
                 Instruction::Cond(
                     vec![],
@@ -358,7 +356,6 @@ mod test {
             .expect("PP - bind_and_convert failed.");
 
         let expected_pp_binded = Postprocessing {
-            storage_key: "key".into(),
             instructions: vec![
                 Instruction::CondBinded(
                     vec![],

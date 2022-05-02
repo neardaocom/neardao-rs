@@ -7,7 +7,7 @@ use library::{
     },
     workflow::{
         expression::Expression,
-        types::{ArgSrc, BindDefinition, ObjectMetadata, SrcOrExpr},
+        types::{ArgSrc, BindDefinition, ObjectMetadata, SrcOrExprOrValue},
         validator::{CollectionValidator, ObjectValidator, Validator},
     },
 };
@@ -174,19 +174,19 @@ fn testcase_skyward() -> TestCase {
     let binds: Vec<BindDefinition> = vec![
         BindDefinition {
             key: "sale.meta.reason".into(),
-            key_src: SrcOrExpr::Src(ArgSrc::ConstsTpl("sale.meta.reason".into())),
+            key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl("sale.meta.reason".into())),
             is_collection: false,
             prefixes: vec![],
         },
         BindDefinition {
             key: "sale_info".into(),
-            key_src: SrcOrExpr::Src(ArgSrc::ConstsTpl("sale_info".into())),
+            key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl("sale_info".into())),
             is_collection: false,
             prefixes: vec![],
         },
         BindDefinition {
             key: "token_account_id".into(),
-            key_src: SrcOrExpr::Expr(Expression {
+            key_src: SrcOrExprOrValue::Expr(Expression {
                 args: vec![ArgSrc::ConstsTpl("sale.out_tokens.token_account_id".into())],
                 expr_id: 2,
             }),

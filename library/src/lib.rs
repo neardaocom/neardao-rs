@@ -1,8 +1,7 @@
 use near_sdk::AccountId;
 use types::datatype::{Datatype, Value};
 use workflow::{template::Template, types::ObjectMetadata};
-
-//mod data;
+pub mod data;
 //mod unit_tests;
 
 pub mod functions;

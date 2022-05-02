@@ -98,8 +98,8 @@ impl Contract {
         Template,
         Vec<FnCallId>,
         Vec<Vec<ObjectMetadata>>,
-        Vec<MethodName>,
-        Vec<Vec<ObjectMetadata>>,
+        //Vec<MethodName>,
+        //Vec<Vec<ObjectMetadata>>,
     )> {
         match self.workflows.get(&id) {
             Some(t) => match self.workflow_fncalls.get(&id) {
@@ -118,8 +118,8 @@ impl Contract {
                         t,
                         fncalls,
                         fncalls_metadata,
-                        std_fncalls,
-                        std_fncalls_metadata,
+                        //std_fncalls,
+                        //std_fncalls_metadata,
                     ))
                 }
                 None => panic!("Missing FnCalls for the required template."),

@@ -1,15 +1,12 @@
+use crate::workflow::types::SrcOrExprOrValue::{Expr, Src, Value};
 use crate::{
     interpreter::expression::EExpr,
     types::{
         activity_input::ActivityInput,
-        datatype::Value,
         error::{ProcessingError, SourceError},
-        source::{Source, SourceProvider},
+        source::Source,
     },
-    workflow::types::{
-        ArgSrc, BindDefinition,
-        SrcOrExpr::{Expr, Src},
-    },
+    workflow::types::{ArgSrc, BindDefinition},
 };
 
 use super::utils::object_key;
@@ -36,6 +33,7 @@ where
                         _ => todo!(),
                     },
                     Expr(expr) => expr.bind_and_eval(sources, Some(input), expressions)?,
+                    Value(v) => v.clone(),
                 };
                 input.set(def.key.as_str(), value);
             }
@@ -54,6 +52,7 @@ where
                         _ => todo!(),
                     },
                     Expr(expr) => expr.bind_and_eval(sources, Some(input), expressions)?,
+                    Value(v) => v.clone(),
                 };
                 let mut counter: u32 = 0;
                 let mut key = object_key(prefix, counter.to_string().as_str(), def.key.as_str());
@@ -70,7 +69,10 @@ where
 }
 
 /// Helper function to fetch value ref from Source.
-pub fn get_value_from_source(sources: &dyn Source, src: &ArgSrc) -> Result<Value, SourceError> {
+pub fn get_value_from_source(
+    sources: &dyn Source,
+    src: &ArgSrc,
+) -> Result<crate::types::datatype::Value, SourceError> {
     match src {
         ArgSrc::ConstsTpl(key) => {
             let value = sources

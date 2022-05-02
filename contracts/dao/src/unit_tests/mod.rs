@@ -34,6 +34,7 @@ pub const DURATION_1Y: u64 = 31_536_000_000_000_000;
 pub const DURATION_2Y: u64 = 63_072_000_000_000_000;
 pub const DURATION_3Y: u64 = 94_608_000_000_000_000;
 
+const TOKEN_ACC: &str = "some.token.neardao.testnet";
 const DAO_ADMIN_ACC: &str = "admin.neardao.testnet";
 const STAKING_ACC: &str = "staking.neardao.testnet";
 const WF_PROVIDER_ACC: &str = "wf-provider.neardao.testnet";
@@ -76,6 +77,7 @@ pub(crate) fn get_context_builder() -> VMContextBuilder {
 }
 
 pub(crate) fn get_contract(
+    token_id: AccountId,
     staking_id: AccountId,
     total_supply: u32,
     settings: DaoSettings,
@@ -90,8 +92,10 @@ pub(crate) fn get_contract(
     tick_interval: DurationSec,
 ) -> Contract {
     Contract::new(
+        token_id,
         staking_id,
         total_supply,
+        24,
         settings,
         groups,
         tags,
@@ -107,7 +111,8 @@ pub(crate) fn get_contract(
 
 pub(crate) fn get_default_contract() -> Contract {
     get_contract(
-        AccountId::try_from(STAKING_ACC.to_string()).unwrap(),
+        AccountId::new_unchecked(TOKEN_ACC.into()),
+        AccountId::new_unchecked(STAKING_ACC.into()),
         TOKEN_TOTAL_SUPPLY,
         get_default_dao_config(),
         get_default_groups(),

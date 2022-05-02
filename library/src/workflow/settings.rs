@@ -26,14 +26,18 @@ pub struct TemplateSettings {
     pub deposit_vote: Option<U128>,
     /// Percents of proposal deposit to be returned.
     pub deposit_propose_return: u8,
-    pub constants: SourceDataVariant,
+    pub constants: Option<SourceDataVariant>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProposeSettings {
+    /// Top level binds.
+    pub global: Option<SourceDataVariant>,
+    /// Bind per activity.
     pub binds: Vec<Option<ActivityBind>>,
+    /// Storage key under which is the workflow data storage created.
     pub storage_key: Option<String>,
 }
 
@@ -41,6 +45,8 @@ pub struct ProposeSettings {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ActivityBind {
-    pub shared: SourceDataVariant,
+    /// Binds shared for all actions.
+    pub shared: Option<SourceDataVariant>,
+    /// Bind per activity actions.
     pub values: Vec<Option<SourceDataVariant>>,
 }

@@ -2,6 +2,8 @@
 #![allow(dead_code)]
 
 mod basic_fncall_checks;
+mod contract_utils;
+mod dao;
 mod staking;
 mod technologic;
 mod utils;
