@@ -4,7 +4,7 @@ use near_sdk::AccountId;
 use std::collections::HashMap;
 
 use crate::media::Media;
-use crate::TimestampSec;
+use crate::{ResourceId, TimestampSec};
 
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 
@@ -62,7 +62,7 @@ pub enum VoteResult {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Proposal {
-    pub desc: String,
+    pub desc: ResourceId,
     pub created: TimestampSec,
     pub created_by: AccountId,
     pub votes: HashMap<AccountId, u8>,
@@ -74,7 +74,7 @@ pub struct Proposal {
 impl Proposal {
     #[inline]
     pub fn new(
-        desc: String,
+        desc: ResourceId,
         created: u64,
         created_by: AccountId,
         workflow_id: u16,

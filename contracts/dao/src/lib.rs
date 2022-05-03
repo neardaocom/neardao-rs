@@ -46,6 +46,8 @@ pub(crate) type ProposalWf = (Proposal, Template, TemplateSettings);
 #[allow(dead_code)]
 pub(crate) type InstanceWf = (Instance, ProposeSettings);
 pub(crate) type RoleId = u16;
+/// Id of the resource on the resource provider.
+pub(crate) type ResourceId = u32;
 
 /// Calculates votes as percents
 #[inline]

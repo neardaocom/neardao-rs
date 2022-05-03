@@ -8,7 +8,7 @@ use crate::ProposalId;
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub enum MediaType {
+pub enum ResourceType {
     Text(String),
     Link(String),
     CID(CIDInfo),
@@ -30,7 +30,7 @@ pub struct Media {
     pub proposal_id: ProposalId,
     pub name: String,
     pub category: String,
-    pub media_type: MediaType,
+    pub media_type: ResourceType,
     pub tags: Vec<usize>,
     pub version: String,
     pub valid: bool,

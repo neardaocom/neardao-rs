@@ -52,62 +52,48 @@ pub fn workflow_wf_add() -> Template {
     }
 }
 
-/* // TODO: Move to new version
-pub fn workflow_wf_add() -> Template {
-    Template {
-        code: "wf_add".into(),
-        version: 1,
-        activities: vec![
-            None,
-            Some(TemplateActivity {
-                code: "wf_add".into(),
-                exec_condition: None,
-                action: ActionType::WorkflowAdd,
-                action_data: None,
-                arg_types: vec![DataTypeDef::U16(false)],
-                postprocessing: None,
-                activity_inputs: vec![vec![ArgSrc::Bind(0)]],
-                must_succeed: true,
-            }),
-        ],
-        transitions: vec![vec![1]],
-        start: vec![0],
-        end: vec![1],
-        binds: vec![],
-        obj_validators: vec![vec![ValidatorType::Simple(0)]],
-        validator_exprs: vec![Expression {
-            args: vec![ExprArg::User(0), ExprArg::Bind(0)],
-            expr: EExpr::Boolean(TExpr {
-                operators: vec![Op {
-                    op_type: EOp::Rel(RelOp::Eqs),
-                    operands_ids: [0, 1],
-                }],
-                terms: vec![ExprTerm::Arg(1), ExprTerm::Arg(0)],
-            }),
-        }],
-    }
-}
-
+/// Default testing template settings for workflow: wf_add.
 pub fn workflow_settings_wf_add() -> TemplateSettings {
     TemplateSettings {
-        activity_rights: vec![vec![ActivityRight::GroupLeader(1)]],
         allowed_proposers: vec![ActivityRight::Group(1)],
-        allowed_voters: ActivityRight::TokenHolder,
-        scenario: VoteScenario::TokenWeighted,
+        allowed_voters: ActivityRight::Group(1),
+        activity_rights: vec![vec![ActivityRight::Group(1)]],
+        transition_limits: vec![vec![1]],
+        scenario: VoteScenario::Democratic,
         duration: 60,
         quorum: 51,
         approve_threshold: 20,
         spam_threshold: 80,
         vote_only_once: true,
-        deposit_propose: Some(1.into()),
-        deposit_vote: Some(1000.into()),
+        deposit_propose: Some(ONE_NEAR.into()),
+        deposit_vote: Some(ONE_YOCTO.into()),
         deposit_propose_return: 0,
-        transition_constraints: vec![vec![Transition {
-            transition_limit: 1,
-            cond: None,
-        }]],
+        constants: None,
     }
 }
+/// Default testing template settings for workflow: skyward.
+pub fn workflow_settings_skyward_test() -> TemplateSettings {
+    TemplateSettings {
+        allowed_proposers: vec![ActivityRight::Group(1)],
+        allowed_voters: ActivityRight::Group(1),
+        activity_rights: vec![vec![ActivityRight::Group(1)]],
+        transition_limits: vec![vec![1]],
+        scenario: VoteScenario::Democratic,
+        duration: 60,
+        quorum: 51,
+        approve_threshold: 20,
+        spam_threshold: 80,
+        vote_only_once: true,
+        deposit_propose: Some(ONE_NEAR.into()),
+        deposit_vote: Some(ONE_YOCTO.into()),
+        deposit_propose_return: 0,
+        constants: None,
+    }
+}
+
+// TODO: Move to new version
+
+/*
 
 pub fn workflow_treasury_send_near_loop() -> Template {
     Template {
@@ -664,7 +650,7 @@ pub fn workflow_media_invalidate() -> Template {
 
 use std::collections::HashMap;
 
-use near_sdk::AccountId;
+use near_sdk::{AccountId, ONE_NEAR, ONE_YOCTO};
 
 use crate::{
     types::source::SourceDataVariant,
@@ -673,9 +659,12 @@ use crate::{
         activity::{Activity, TemplateActivity, Terminality, Transition},
         expression::Expression,
         postprocessing::Postprocessing,
+        settings::{ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ArgSrc, BindDefinition, Instruction, SrcOrExprOrValue},
+        types::{
+            ActivityRight, ArgSrc, BindDefinition, Instruction, SrcOrExprOrValue, VoteScenario,
+        },
     },
 };
 
-use super::skyward::SKYWARD_ACC;
+use super::skyward::{workflow_skyward_template_settings_data_1, SKYWARD_ACC};

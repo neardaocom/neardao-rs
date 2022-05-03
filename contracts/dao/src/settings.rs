@@ -11,6 +11,8 @@ pub enum VDaoSettings {
     Curr(DaoSettings),
 }
 
+// TODO: Resource provider.
+// TODO: Tick settings.
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]

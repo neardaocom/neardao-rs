@@ -23,6 +23,18 @@ use crate::{
     FnCallId,
 };
 
+pub struct SkywardTemplateDataOptions {
+    pub skyward_account_id: String,
+    pub wnear_account_id: String,
+}
+
+pub struct SkywardTemplateUserOptions {
+    pub token_account_id: String,
+    pub token_amount: u128,
+    pub auction_start: u128,
+    pub auction_duration: u128,
+}
+
 use super::{TemplateData, TemplateUserSettings};
 
 pub const SKYWARD_ACC: &str = "demo-skyward.petrstudynka.testnet";
@@ -34,11 +46,21 @@ pub const AUCTION_START: u128 = 1656633600000000000;
 /// One week
 pub const AUCTION_DURATION: u128 = 604800000000000;
 
+pub const OFFERED_TOKEN_KEY: &str = "offered_token";
+pub const OFFERED_TOKEN_AMOUNT_KEY: &str = "offered_amount";
+
 /// Workflow description:
 /// Workflow creates new action on skyward-finance.near.
 /// Token and its amount offered on skyward and sale start is defined by proposal settings.
 /// Workflow has predefined wrap.near as required token.
-pub fn workflow_skyward_template_data_1() -> TemplateData {
+pub fn workflow_skyward_template_data_1(
+    options: Option<SkywardTemplateDataOptions>,
+) -> TemplateData {
+    let (skyward_account_id, wnear_account_id) = match options {
+        Some(o) => (o.skyward_account_id, o.wnear_account_id),
+        None => (SKYWARD_ACC.into(), WNEAR_ACC.into()),
+    };
+
     let pp_register_tokens = Some(Postprocessing {
         instructions: vec![Instruction::StoreValue(
             "pp_1_result".into(),
@@ -61,8 +83,14 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
     });
 
     let mut tpl_consts_map = HashMap::new();
-    tpl_consts_map.insert("account_skyward".into(), Value::String(SKYWARD_ACC.into()));
-    tpl_consts_map.insert("account_wnear".into(), Value::String(WNEAR_ACC.into()));
+    tpl_consts_map.insert(
+        "account_skyward".into(),
+        Value::String(skyward_account_id.clone()),
+    );
+    tpl_consts_map.insert(
+        "account_wnear".into(),
+        Value::String(wnear_account_id.clone()),
+    );
     tpl_consts_map.insert(
         "ft_transfer_call_msg".into(),
         Value::String("\\\"AccountDeposit\\\"".into()),
@@ -84,8 +112,8 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
     let wf = Template {
         code: "wf_skyward".into(),
         version: "1".into(),
-        is_simple: todo!(),
-        need_storage: todo!(),
+        is_simple: false,
+        need_storage: true,
         activities: vec![
             Activity::Init,
             Activity::Activity(TemplateActivity {
@@ -96,7 +124,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                     validators: vec![],
                     action_data: ActionData::FnCall(FnCallData {
                         id: FnCallIdType::Static(
-                            AccountId::new_unchecked(SKYWARD_ACC.into()),
+                            AccountId::new_unchecked(skyward_account_id.clone()),
                             "register_tokens".into(),
                         ),
                         tgas: 30,
@@ -106,7 +134,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                             key_src: SrcOrExprOrValue::Expr(Expression {
                                 args: vec![
                                     ArgSrc::ConstsTpl("account_wnear".into()),
-                                    ArgSrc::ConstPropSettings("offered_token".into()),
+                                    ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
                                 ],
                                 expr_id: 0,
                             }),
@@ -131,7 +159,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                         validators: vec![],
                         action_data: ActionData::FnCall(FnCallData {
                             id: FnCallIdType::StandardStatic(
-                                AccountId::new_unchecked(WNEAR_ACC.into()),
+                                AccountId::new_unchecked(wnear_account_id.clone()),
                                 "storage_deposit".into(),
                             ),
                             tgas: 10,
@@ -154,7 +182,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                         validators: vec![],
                         action_data: ActionData::FnCall(FnCallData {
                             id: FnCallIdType::StandardDynamic(
-                                ArgSrc::ConstAction(TOKEN_ACC.into()),
+                                ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
                                 "storage_deposit".into(),
                             ),
                             tgas: 10,
@@ -177,7 +205,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                         validators: vec![],
                         action_data: ActionData::FnCall(FnCallData {
                             id: FnCallIdType::StandardDynamic(
-                                ArgSrc::ConstAction(TOKEN_ACC.into()),
+                                ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
                                 "ft_transfer_call".into(),
                             ),
                             tgas: 100,
@@ -186,7 +214,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                                 BindDefinition {
                                     key: "receiver_id".into(),
                                     key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                        "offered_token".into(),
+                                        skyward_account_id.clone(),
                                     )),
                                     prefixes: vec![],
                                     is_collection: false,
@@ -194,7 +222,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                                 BindDefinition {
                                     key: "amount".into(),
                                     key_src: SrcOrExprOrValue::Src(ArgSrc::ConstAction(
-                                        "offered_token".into(),
+                                        OFFERED_TOKEN_AMOUNT_KEY.into(),
                                     )),
                                     prefixes: vec![],
                                     is_collection: false,
@@ -232,7 +260,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                     validators: vec![],
                     action_data: ActionData::FnCall(FnCallData {
                         id: FnCallIdType::Static(
-                            AccountId::new_unchecked(SKYWARD_ACC.into()),
+                            AccountId::new_unchecked(skyward_account_id.clone()),
                             "sale_create".into(),
                         ),
                         tgas: 50,
@@ -259,7 +287,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                             BindDefinition {
                                 key: "token_account_id".into(),
                                 key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                    "offered_token".into(),
+                                    OFFERED_TOKEN_KEY.into(),
                                 )),
                                 prefixes: vec!["sale.out_tokens".into()],
                                 is_collection: true,
@@ -267,7 +295,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                             BindDefinition {
                                 key: "token_account_id".into(),
                                 key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                    "offered_token".into(),
+                                    OFFERED_TOKEN_KEY.into(),
                                 )),
                                 prefixes: vec!["sale.out_tokens".into()],
                                 is_collection: true,
@@ -275,7 +303,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
                             BindDefinition {
                                 key: "balance".into(),
                                 key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                    "offered_amount".into(),
+                                    OFFERED_TOKEN_AMOUNT_KEY.into(),
                                 )),
                                 prefixes: vec!["sale.out_tokens".into()],
                                 is_collection: true,
@@ -403,11 +431,11 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
 
     let fncalls: Vec<FnCallId> = vec![
         (
-            AccountId::new_unchecked(SKYWARD_ACC.into()),
+            AccountId::new_unchecked(skyward_account_id.clone()),
             "register_tokens".into(),
         ),
         (
-            AccountId::new_unchecked(SKYWARD_ACC.into()),
+            AccountId::new_unchecked(wnear_account_id.clone()),
             "sale_create".into(),
         ),
     ];
@@ -417,22 +445,7 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
         arg_types: vec![Datatype::VecString],
     }];
 
-    let metadata_2 = vec![ObjectMetadata {
-        arg_names: vec![
-            "memo".into(),
-            "amount".into(),
-            "receiver_id".into(),
-            "msg".into(),
-        ],
-        arg_types: vec![
-            Datatype::String(true),
-            Datatype::U128(false),
-            Datatype::String(false),
-            Datatype::String(false),
-        ],
-    }];
-
-    let metadata_3 = vec![
+    let metadata_2 = vec![
         ObjectMetadata {
             arg_names: vec!["sale".into()],
             arg_types: vec![Datatype::Object(1)],
@@ -471,11 +484,28 @@ pub fn workflow_skyward_template_data_1() -> TemplateData {
         },
     ];
 
-    let metadata = vec![metadata_1, metadata_2, metadata_3];
+    let metadata = vec![metadata_1, metadata_2];
     (wf, fncalls, metadata)
 }
 
-pub fn workflow_skyward_template_settings_data_1() -> TemplateUserSettings {
+pub fn workflow_skyward_template_settings_data_1(
+    options: Option<SkywardTemplateUserOptions>,
+) -> TemplateUserSettings {
+    let (token_account_id, token_amount, auction_start, auction_duration) = match options {
+        Some(o) => (
+            o.token_account_id,
+            o.token_amount,
+            o.auction_start,
+            o.auction_duration,
+        ),
+        None => (
+            TOKEN_ACC.into(),
+            TOKEN_AMOUNT,
+            AUCTION_START.into(),
+            AUCTION_DURATION.into(),
+        ),
+    };
+
     let wfs = vec![TemplateSettings {
         activity_rights: vec![
             vec![ActivityRight::GroupLeader(1)],
@@ -500,8 +530,14 @@ pub fn workflow_skyward_template_settings_data_1() -> TemplateUserSettings {
     }];
 
     let mut global_consts = HashMap::new();
-    global_consts.insert("offered_token".into(), Value::String(TOKEN_ACC.into()));
-    global_consts.insert("offered_amount".into(), Value::U128(TOKEN_AMOUNT.into()));
+    global_consts.insert(
+        OFFERED_TOKEN_KEY.into(),
+        Value::String(token_account_id.clone()),
+    );
+    global_consts.insert(
+        OFFERED_TOKEN_AMOUNT_KEY.into(),
+        Value::U128(token_amount.into()),
+    );
 
     // Sale create action
     let mut sale_create_map = HashMap::new();
@@ -509,9 +545,9 @@ pub fn workflow_skyward_template_settings_data_1() -> TemplateUserSettings {
     sale_create_map.insert("url".into(), Value::String("www.neardao.com".into()));
     sale_create_map.insert(
         "start_time".into(),
-        Value::U128(AUCTION_START.into()), // TODO: U128 might not work
+        Value::U128(auction_start.into()), // TODO: U128 might not work
     );
-    sale_create_map.insert("duration".into(), Value::U64(AUCTION_DURATION as u64));
+    sale_create_map.insert("duration".into(), Value::U64(auction_duration as u64));
 
     // User proposed settings type
     let settings = ProposeSettings {

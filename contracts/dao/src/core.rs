@@ -1,6 +1,7 @@
 use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
 use crate::event::{run_tick, Event, EventQueue};
 use crate::internal::utils::current_timestamp_sec;
+use crate::media::ResourceType;
 use crate::role::Role;
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::tags::{TagInput, Tags};
@@ -84,12 +85,14 @@ pub struct Contract {
     pub user_roles: LookupMap<AccountId, Vec<(GroupId, RoleId)>>,
     /// Group's roles.
     pub group_roles: LookupMap<GroupId, Role>,
+    /// Total amount of minted tokens.
     pub ft_total_supply: u32,
+    /// Decimals of token.
+    pub decimals: u8,
     pub ft_total_locked: u32,
     pub ft_total_distributed: u32,
     /// Count of all members in groups - that does not mean unique members.
     pub total_members_count: u32,
-    pub decimal_const: u128,
     pub group_last_id: GroupId,
     pub groups: UnorderedMap<GroupId, Group>,
     pub settings: LazyOption<VDaoSettings>,
@@ -146,7 +149,7 @@ impl Contract {
             ft_total_locked: 0,
             ft_total_distributed: 0,
             total_members_count: 0,
-            decimal_const: 10u128.pow(decimals as u32),
+            decimals,
             settings: LazyOption::new(StorageKeys::DaoSettings, None),
             group_last_id: 0,
             groups: UnorderedMap::new(StorageKeys::Groups),
@@ -194,7 +197,7 @@ impl Contract {
     #[payable]
     pub fn proposal_create(
         &mut self,
-        desc: String,
+        desc: ResourceType,
         template_id: u16,
         template_settings_id: u8,
         propose_settings: ProposeSettings,
@@ -224,8 +227,9 @@ impl Contract {
                 .insert(&self.proposal_last_id, &template_settings.unwrap());
         }
 
+        // TODO: Implement resource provider.
         let proposal = Proposal::new(
-            desc,
+            0,
             env::block_timestamp() / 10u64.pow(9) / 60 * 60 + 60, // Rounded up to minutes
             caller,
             template_id,
@@ -244,10 +248,10 @@ impl Contract {
         }
 
         // Check that proposal binds have valid structure.
-        self.assert_valid_proposal_binds_structure(
-            propose_settings.binds.as_slice(),
-            wft.activities.as_slice(),
-        );
+        //self.assert_valid_proposal_binds_structure(
+        //    propose_settings.binds.as_slice(),
+        //    wft.activities.as_slice(),
+        //);
 
         self.proposals
             .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
@@ -322,21 +326,21 @@ impl Contract {
                     if calc_percent_u128_unchecked(
                         vote_results[0],
                         max_possible_amount,
-                        self.decimal_const,
+                        10u128.pow(self.decimals as u32),
                     ) >= wfs.spam_threshold
                     {
                         Some(ProposalState::Spam)
                     } else if calc_percent_u128_unchecked(
                         vote_results.iter().sum(),
                         max_possible_amount,
-                        self.decimal_const,
+                        10u128.pow(self.decimals as u32),
                     ) < wfs.quorum
                     {
                         Some(ProposalState::Invalid)
                     } else if calc_percent_u128_unchecked(
                         vote_results[1],
                         vote_results.iter().sum(),
-                        self.decimal_const,
+                        10u128.pow(self.decimals as u32),
                     ) < wfs.approve_threshold
                     {
                         Some(ProposalState::Rejected)

@@ -2,9 +2,10 @@ use library::types::datatype::Value;
 use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
+use library::MethodName;
 use near_sdk::json_types::U128;
 use near_sdk::serde::Serialize;
-use near_sdk::{near_bindgen, AccountId};
+use near_sdk::{near_bindgen, AccountId, Balance};
 
 use crate::group::{GroupMember, GroupOutput};
 use crate::proposal::VProposal;
@@ -39,11 +40,14 @@ impl Contract {
         next_tick
     }
 
+    /// Returns information about token, staking and members.
     pub fn stats(self) -> Stats {
         Stats {
+            staking_id: self.staking_id,
+            token_id: self.token_id,
             ft_total_supply: self.ft_total_supply,
-            ft_total_locked: self.ft_total_locked,
-            ft_total_distributed: self.ft_total_distributed,
+            total_delegation_amount: self.total_delegation_amount,
+            decimals: self.decimals,
             total_members_count: self.total_members_count,
         }
     }
@@ -64,6 +68,10 @@ impl Contract {
 
     pub fn dao_settings(self) -> DaoSettings {
         self.settings.get().unwrap().into()
+    }
+
+    pub fn standard_fncall_names(self) -> Vec<MethodName> {
+        self.standard_function_call_metadata.keys().collect()
     }
 
     pub fn wf_template(self, id: u16) -> Option<(Template, Vec<TemplateSettings>)> {
@@ -102,6 +110,12 @@ impl Contract {
             .into_iter()
             .map(|(id, group)| GroupOutput::from_group(id, group))
             .collect()
+    }
+
+    pub fn group(self, id: u16) -> Option<GroupOutput> {
+        self.groups
+            .get(&id)
+            .map(|group| GroupOutput::from_group(id, group))
     }
 
     pub fn group_names(&self) -> Vec<GroupName> {
@@ -153,8 +167,10 @@ impl Contract {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Stats {
+    pub staking_id: AccountId,
+    pub token_id: AccountId,
     pub ft_total_supply: u32,
-    pub ft_total_locked: u32,
-    pub ft_total_distributed: u32,
+    pub total_delegation_amount: Balance,
+    pub decimals: u8,
     pub total_members_count: u32,
 }

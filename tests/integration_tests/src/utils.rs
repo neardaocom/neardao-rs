@@ -16,7 +16,7 @@ pub(crate) const MAX_GAS: u64 = 300 * 10u64.pow(12);
 pub(crate) const ROOT_PATH: &str = env!("CARGO_MANIFEST_DIR");
 pub(crate) const DAO: &str = "dao.wasm";
 pub(crate) const DAO_FACTORY: &str = "dao_factory.wasm";
-pub(crate) const WF_PROVIDER: &str = "workflow_provider";
+pub(crate) const WF_PROVIDER: &str = "workflow_provider.wasm";
 pub(crate) const STAKING: &str = "staking.wasm";
 pub(crate) const TOKEN: &str = "fungible_token.wasm";
 

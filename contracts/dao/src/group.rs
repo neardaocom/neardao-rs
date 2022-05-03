@@ -102,18 +102,14 @@ pub struct GroupOutput {
     pub id: GroupId,
     pub settings: GroupSettings,
     pub members: Vec<GroupMember>,
-    pub token_lock: TokenLock,
 }
 
 impl GroupOutput {
     pub fn from_group(id: GroupId, group: Group) -> Self {
-        let token_lock = group.token_lock.get().unwrap();
-
         GroupOutput {
             id,
             settings: group.settings,
             members: group.members.get_members(),
-            token_lock,
         }
     }
 }
