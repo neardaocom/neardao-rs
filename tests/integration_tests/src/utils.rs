@@ -63,7 +63,7 @@ pub(crate) fn outcome_pretty(name: &str, outcome: &CallExecutionDetails) {
     println!(
         r#"
     -------- OUT: {} --------
-    sucess: {:?},
+    success: {:?},
     total TGAS burnt: {},
     NEARs burnt: {},
     returned_data: {},

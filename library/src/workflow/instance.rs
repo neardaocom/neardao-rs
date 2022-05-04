@@ -3,9 +3,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::TransitionLimit;
-
-use super::{activity::Transition, template::Template};
+use super::activity::{Transition, TransitionCounter, TransitionLimit};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone))]
@@ -31,7 +29,7 @@ pub struct Instance {
     pub last_transition_done_at: u64,
     pub current_activity_id: u8,
     pub previous_activity_id: u8,
-    pub transition_counter: Vec<Vec<u16>>,
+    pub transition_counters: Vec<Vec<TransitionCounter>>,
     /// Last activity's count of done actions. < actions.len() during execution.
     pub actions_done_count: u8,
     pub actions_total: u8,
@@ -48,7 +46,7 @@ impl Instance {
             previous_activity_id: 0,
             actions_done_count: 0,
             actions_total: 0,
-            transition_counter: Vec::default(),
+            transition_counters: Vec::default(),
             template_id,
             awaiting_state: None,
         }
@@ -58,11 +56,17 @@ impl Instance {
     /// Does not check if transition is possible - might panic.
     pub fn transition_next(
         &mut self,
-        activity_id: u8,
+        activity_id: usize,
         activity_actions_count: u8,
         actions_already_done: u8,
     ) {
-        self.transition_counter[self.current_activity_id as usize][activity_id as usize] += 1;
+        let counter_pos = self
+            .find_transition_counter_pos(activity_id as u8)
+            .expect("fatal - transition not found");
+        self.transition_counters[self.current_activity_id as usize]
+            .get_mut(counter_pos)
+            .unwrap()
+            .inc_count();
         self.actions_done_count = actions_already_done;
         self.actions_total = activity_actions_count;
         self.previous_activity_id = self.current_activity_id;
@@ -73,19 +77,35 @@ impl Instance {
         self.actions_done_count = self.actions_total;
     }
 
-    pub fn init_transition_counter(&mut self, counter: Vec<Vec<u16>>) {
-        self.transition_counter = counter;
+    /// Inits transition counter.
+    /// Requires `settings_transitions` to have same structure as `template_transitions`.
+    /// But it should be checked in higher layers.
+    pub fn init_transition_counter(
+        &mut self,
+        template_transitions: &[Vec<Transition>],
+        settings_transitions: &[Vec<TransitionLimit>],
+    ) {
+        self.transition_counters = Vec::with_capacity(template_transitions.len());
+
+        for (i, transition_limit) in template_transitions.iter().enumerate() {
+            let mut limits = Vec::with_capacity(template_transitions.len());
+            for (j, _) in transition_limit.iter().enumerate() {
+                limits.push(TransitionCounter {
+                    to: settings_transitions[i][j].to,
+                    count: 0,
+                    limit: settings_transitions[i][j].limit,
+                });
+            }
+            self.transition_counters.push(limits);
+        }
     }
 
-    pub fn check_transition_counter(
-        &self,
-        activity_id: usize,
-        transition_limits: &[Vec<TransitionLimit>],
-    ) -> bool {
-        *self.transition_counter[self.current_activity_id as usize]
-            .get(activity_id)
-            .expect("Transition does not exists.")
-            < transition_limits[self.current_activity_id as usize][activity_id as usize]
+    pub fn check_transition_counter(&self, activity_id: usize) -> bool {
+        let counter_pos = self
+            .find_transition_counter_pos(activity_id as u8)
+            .expect("fatal - transition not found");
+        self.transition_counters[self.current_activity_id as usize][counter_pos]
+            .is_another_transition_allowed()
     }
 
     pub fn find_transition<'a>(
@@ -130,6 +150,13 @@ impl Instance {
         self.current_activity_id as usize == target_activity_id
             && self.actions_done_count == self.actions_total
             || self.current_activity_id as usize != target_activity_id
+    }
+
+    /// Finds pos of `TransitionCounter` for target `activity_id`.
+    fn find_transition_counter_pos(&self, activity_id: u8) -> Option<usize> {
+        self.transition_counters[self.current_activity_id as usize]
+            .iter()
+            .position(|c| c.to == activity_id)
     }
 }
 

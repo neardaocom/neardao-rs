@@ -4,9 +4,12 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::{types::source::SourceDataVariant, TransitionLimit};
+use crate::types::source::SourceDataVariant;
 
-use super::types::{ActivityRight, VoteScenario};
+use super::{
+    activity::TransitionLimit,
+    types::{ActivityRight, VoteScenario},
+};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]

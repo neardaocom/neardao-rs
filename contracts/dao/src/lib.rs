@@ -6,6 +6,7 @@ use library::workflow::{
     settings::{ProposeSettings, TemplateSettings},
     template::Template,
 };
+use near_sdk::log;
 use proposal::Proposal;
 mod unit_tests;
 
@@ -14,7 +15,7 @@ pub mod error;
 //pub(crate) mod helper;
 pub mod tags;
 
-pub mod action;
+pub mod activity;
 pub mod callback;
 pub mod delegation;
 pub mod event;
@@ -52,6 +53,12 @@ pub(crate) type ResourceId = u32;
 /// Calculates votes as percents
 #[inline]
 pub(crate) fn calc_percent_u128_unchecked(value: u128, total: u128, decimals: u128) -> u8 {
+    log!("val: {}", (value / decimals) as f64);
+    log!("total: {}", (total / decimals) as f64);
+    log!(
+        "divided: {}",
+        (value / decimals) as f64 / (total / decimals) as f64 * 100.0
+    );
     ((value / decimals) as f64 / (total / decimals) as f64 * 100.0).round() as u8
 }
 

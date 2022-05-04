@@ -1,14 +1,22 @@
-use library::data::skyward::{AUCTION_DURATION, AUCTION_START};
-use near_sdk::ONE_NEAR;
+use library::{
+    data::skyward::{AUCTION_DURATION, AUCTION_START},
+    workflow::instance::InstanceState,
+};
 use workspaces::network::DevAccountDeployer;
 
 use crate::contract_utils::{
     dao::{
+        activity::{run_activity, ActivityInputWorkflowAdd},
         init::{deploy_dao, init_dao},
-        proposal::{create_proposal, ps_wf_add_skyward, ts_for_skyward},
+        proposal::{
+            create_proposal, finish_proposal, ps_skyward, ps_wf_add, ts_for_skyward, vote_proposal,
+        },
         types::{
-            consts::{DAO_TPL_ID_WF_ADD, PROVIDER_TPL_ID_SKYWARD},
-            proposal::{ProposalType, WorkflowAddOptions},
+            consts::{
+                DAO_TPL_ID_WF_ADD, DEPOSIT_PROPOSE_WF_ADD, DEPOSIT_VOTE_WF_ADD,
+                PROVIDER_TPL_ID_SKYWARD,
+            },
+            proposal::ProposalState,
         },
     },
     functions::storage_deposit,
@@ -59,28 +67,70 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
     .await?;
 
     // Storage deposit staking in fungible_token.
-    let _ = storage_deposit(&worker, &factory, &token, staking.id()).await?;
+    storage_deposit(&worker, &factory, &token, staking.id()).await?;
 
     // Load workflows to provider.
-    let _ = load_workflow_templates(&worker, &wf_provider, wnear.id(), skyward.id()).await?;
+    load_workflow_templates(&worker, &wf_provider, wnear.id(), skyward.id()).await?;
 
     // Create proposal on DAO to download Skyward workflow.
-    let _ = create_proposal(
+    let proposal_id = create_proposal(
         &worker,
         &member,
         &dao,
         DAO_TPL_ID_WF_ADD,
-        ps_wf_add_skyward(token.id(), 1_000, AUCTION_START, AUCTION_DURATION),
-        Some(ts_for_skyward(PROVIDER_TPL_ID_SKYWARD)),
-        ONE_NEAR,
+        ps_wf_add(PROVIDER_TPL_ID_SKYWARD, wf_provider.id()),
+        Some(ts_for_skyward()),
+        DEPOSIT_PROPOSE_WF_ADD,
     )
     .await?;
 
     // Vote on proposal.
+    vote_proposal(
+        &worker,
+        vec![(&member, 1)],
+        &dao,
+        proposal_id,
+        DEPOSIT_VOTE_WF_ADD,
+    )
+    .await?;
+
+    // Finish proposal.
+    finish_proposal(
+        &worker,
+        &member,
+        &dao,
+        proposal_id,
+        ProposalState::InProgress,
+    )
+    .await?;
+
+    // Fast forward and finish.
+    worker.fast_forward(100).await?;
+    finish_proposal(&worker, &member, &dao, proposal_id, ProposalState::Accepted).await?;
 
     // Execute AddWorkflow by DAO member to add Skyward.
+    run_activity(
+        &worker,
+        &member,
+        &dao,
+        proposal_id,
+        1,
+        ActivityInputWorkflowAdd::activity_1(wf_provider.id(), PROVIDER_TPL_ID_SKYWARD),
+        InstanceState::Running,
+    )
+    .await?;
 
     // Propose Skyward.
+    /*     let proposal_id = create_proposal(
+        &worker,
+        &member,
+        &dao,
+        DAO_TPL_ID_WF_ADD,
+        ps_skyward(token.id(), 1_000, AUCTION_START, AUCTION_DURATION),
+        Some(ts_for_skyward()),
+        DEPOSIT_PROPOSE_WF_ADD,
+    )
+    .await?; */
 
     // Execute Skyward.
 

@@ -14,7 +14,8 @@ pub trait Source: SourceProvider + MutableSource {}
 pub trait SourceProvider {
     fn tpl(&self, key: &str) -> Option<&Value>;
     fn tpl_settings(&self, key: &str) -> Option<&Value>;
-    fn props(&self, key: &str) -> Option<&Value>;
+    fn props_global(&self, key: &str) -> Option<&Value>;
+    fn props_action(&self, key: &str) -> Option<&Value>;
     fn props_shared(&self, key: &str) -> Option<&Value>;
     fn storage(&self, key: &str) -> Option<&Value>;
     fn global_storage(&self, key: &str) -> Option<&Value>;
@@ -24,8 +25,8 @@ pub trait SourceProvider {
 pub trait MutableSource {
     fn replace_storage(&mut self, new: StorageBucket) -> Option<StorageBucket>;
     fn set_prop_shared(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
-    fn unset_prop(&mut self) -> Option<SourceDataVariant>;
-    fn set_prop(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
+    fn unset_prop_action(&mut self) -> Option<SourceDataVariant>;
+    fn set_prop_action(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
     fn replace_settings(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
     fn take_storage(&mut self) -> Option<StorageBucket>;
     fn take_global_storage(&mut self) -> Option<StorageBucket>;
@@ -106,12 +107,19 @@ where
         self.dao_consts.get(key)
     }
 
-    fn props(&self, key: &str) -> Option<&Value> {
+    fn props_action(&self, key: &str) -> Option<&Value> {
         todo!()
     }
 
     fn props_shared(&self, key: &str) -> Option<&Value> {
         todo!()
+    }
+    fn props_global(&self, key: &str) -> Option<&Value> {
+        if let Some(prop) = &self.prop {
+            prop.get(key)
+        } else {
+            None
+        }
     }
 }
 
@@ -128,7 +136,7 @@ where
         }
     }
 
-    fn set_prop(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
+    fn set_prop_action(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
         if let Some(mut prop) = self.prop.as_mut() {
             Some(std::mem::replace(&mut prop, new))
         } else {
@@ -158,8 +166,8 @@ where
         self.global_storage.take()
     }
 
-    fn unset_prop(&mut self) -> Option<SourceDataVariant> {
-        todo!()
+    fn unset_prop_action(&mut self) -> Option<SourceDataVariant> {
+        std::mem::take(&mut self.prop_action)
     }
 }
 
@@ -213,10 +221,14 @@ impl SourceProvider for SourceMock {
     fn dao_const(&self, key: u8) -> Option<Value> {
         todo!()
     }
-    fn props(&self, key: &str) -> Option<&Value> {
+    fn props_action(&self, key: &str) -> Option<&Value> {
         todo!()
     }
     fn props_shared(&self, key: &str) -> Option<&Value> {
+        todo!()
+    }
+
+    fn props_global(&self, key: &str) -> Option<&Value> {
         todo!()
     }
 }
@@ -227,7 +239,7 @@ impl MutableSource for SourceMock {
     fn replace_storage(&mut self, new: StorageBucket) -> Option<StorageBucket> {
         todo!()
     }
-    fn set_prop(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
+    fn set_prop_action(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
         todo!()
     }
     fn set_prop_shared(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
@@ -243,7 +255,7 @@ impl MutableSource for SourceMock {
         todo!()
     }
 
-    fn unset_prop(&mut self) -> Option<SourceDataVariant> {
+    fn unset_prop_action(&mut self) -> Option<SourceDataVariant> {
         todo!()
     }
 }

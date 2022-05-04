@@ -12,16 +12,7 @@ pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum VProposal {
-    //Prev(ProposalOld)
     Curr(Proposal),
-}
-
-impl VProposal {
-    /// Migration method
-    pub fn migrate(self) -> Self {
-        //TODO: implement when migrating
-        self
-    }
 }
 
 impl From<VProposal> for Proposal {

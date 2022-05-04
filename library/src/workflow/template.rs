@@ -35,3 +35,8 @@ impl Template {
         }
     }
 }
+
+// TODO: Implement.
+/// Metadata about template.
+/// Used to validate ProposeSettings and TemplateSettings.
+pub struct TemplateMetadata {}

@@ -104,3 +104,35 @@ pub struct Transition {
     pub time_from_cond: Option<Expression>,
     pub time_to_cond: Option<Expression>,
 }
+
+/// From activity_id is defined by its position in the hosting container (Vec).
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct TransitionLimit {
+    /// Target activity id.
+    pub to: u8,
+    /// Transition limit.
+    pub limit: u16,
+}
+
+/// From activity_id is defined by its position in the hosting container (Vec).
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct TransitionCounter {
+    /// Target activity id.
+    pub to: u8,
+    /// Transition counter to activity `to`.
+    pub count: u16,
+    pub limit: u16,
+}
+
+impl TransitionCounter {
+    pub fn is_another_transition_allowed(&self) -> bool {
+        self.count < self.limit
+    }
+    pub fn inc_count(&mut self) {
+        self.count += 1;
+    }
+}

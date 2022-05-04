@@ -1,10 +1,22 @@
-use library::workflow::settings::{ProposeSettings, TemplateSettings};
+use std::collections::HashMap;
+
+use library::workflow::{
+    instance::Instance,
+    settings::{ProposeSettings, TemplateSettings},
+};
 use serde::{Deserialize, Serialize};
+use workspaces::AccountId;
+
+use crate::utils::TimestampSec;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ProposalType {
     WorkflowAdd(WorkflowAddOptions),
     Skyward(SkywardOptions),
 }
+
+pub(crate) type ViewProposal = Option<(VProposal, Option<Vec<TemplateSettings>>)>;
+pub(crate) type Votes = HashMap<AccountId, u8>;
+pub(crate) type ViewInstance = Option<(Instance, ProposeSettings)>;
 
 /// Proposal settings for WorkflowAdd.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -65,5 +77,41 @@ pub enum ResourceType {
 impl Default for ResourceType {
     fn default() -> Self {
         Self::Text("default".into())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Proposal {
+    pub desc: u32,
+    pub created: TimestampSec,
+    pub created_by: AccountId,
+    pub votes: HashMap<AccountId, u8>,
+    pub state: ProposalState,
+    pub workflow_id: u16,
+    pub workflow_settings_id: u8,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub enum ProposalState {
+    InProgress,
+    Invalid,
+    Spam,
+    Rejected,
+    Accepted,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub enum VProposal {
+    Curr(Proposal),
+}
+
+impl From<VProposal> for Proposal {
+    fn from(v: VProposal) -> Self {
+        match v {
+            VProposal::Curr(v) => v,
+        }
     }
 }

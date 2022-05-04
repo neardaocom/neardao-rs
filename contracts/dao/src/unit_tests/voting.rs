@@ -77,3 +77,34 @@ test_voting!(
     YES: 6_666_666,
     NO: 3_333_333
 ); */
+
+macro_rules! test_calc_percent_u128 {
+    ($value:expr, $total_value:expr, $decimals:expr, $expected_percents:expr) => {
+        let decimal_const = 10u128.pow($decimals);
+        let total_vote = $total_value * decimal_const;
+        let vote = $value * decimal_const;
+        let expected_percents = $expected_percents;
+        assert_eq!(
+            expected_percents,
+            crate::calc_percent_u128_unchecked(vote, total_vote, decimal_const)
+        );
+    };
+}
+
+#[test]
+fn calculate_vote_weight() {
+    test_calc_percent_u128!(1, 1, 0, 100);
+    test_calc_percent_u128!(1, 1, 24, 100);
+    test_calc_percent_u128!(0, 1, 24, 0);
+    test_calc_percent_u128!(0, 0, 24, 0);
+    test_calc_percent_u128!(0, 50_000_000, 0, 0);
+    test_calc_percent_u128!(220_000, 50_000_000, 0, 0);
+    test_calc_percent_u128!(249_999, 50_000_000, 0, 0);
+    test_calc_percent_u128!(249_999, 50_000_000, 24, 0);
+    test_calc_percent_u128!(250_000, 50_000_000, 0, 1);
+    test_calc_percent_u128!(500_000, 50_000_000, 0, 1);
+    test_calc_percent_u128!(10_000_000, 50_000_000, 0, 20);
+    test_calc_percent_u128!(10_000_000, 50_000_000, 8, 20);
+    test_calc_percent_u128!(49_500_000, 50_000_000, 24, 99);
+    test_calc_percent_u128!(49_200_000, 50_000_000, 24, 98);
+}

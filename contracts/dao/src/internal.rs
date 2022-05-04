@@ -1,11 +1,9 @@
 use std::{collections::HashMap, convert::TryInto};
 
-use near_sdk::{
-    env::{self},
-    require, AccountId, Balance, Promise,
-};
+use near_sdk::{env, log, require, AccountId, Balance, Promise};
 
 use crate::{
+    calc_percent_u128_unchecked,
     constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, GLOBAL_BUCKET_IDENT, TGAS},
     core::{ActivityLog, Contract},
     error::{
@@ -15,7 +13,7 @@ use crate::{
     event::{Event, EventQueue},
     group::{Group, GroupInput},
     internal::utils::current_timestamp_sec,
-    proposal::Proposal,
+    proposal::{Proposal, ProposalState, VoteResult},
     settings::DaoSettings,
     tags::{TagInput, Tags},
     token_lock::TokenLock,
@@ -270,6 +268,59 @@ impl Contract {
         (max_possible_amount, vote_result)
     }
 
+    /// TODO: cross unit tests.
+    /// Evaluates proposal voting according to vote settings.
+    pub fn eval_votes(
+        &self,
+        proposal_votes: &HashMap<AccountId, u8>,
+        settings: &TemplateSettings,
+    ) -> ProposalState {
+        let (max_possible_amount, vote_results) =
+            self.calculate_votes(proposal_votes, &settings.scenario, &settings.allowed_voters);
+        log!("Votes: {}, {:?}", max_possible_amount, vote_results);
+        let decimals = if matches!(settings.scenario, VoteScenario::Democratic) {
+            1
+        } else {
+            10u128.pow(self.decimals as u32)
+        };
+        if calc_percent_u128_unchecked(vote_results[0], max_possible_amount, decimals)
+            >= settings.spam_threshold
+        {
+            log!(
+                "spam th: {}, max_possible: {}, current: {}",
+                settings.spam_threshold,
+                max_possible_amount,
+                vote_results[0],
+            );
+            ProposalState::Spam
+        } else if calc_percent_u128_unchecked(
+            vote_results.iter().sum(),
+            max_possible_amount,
+            decimals,
+        ) < settings.quorum
+        {
+            log!(
+                "quorum th: {}, max_possible: {}, current: {}",
+                settings.quorum,
+                max_possible_amount,
+                vote_results.iter().sum::<u128>(),
+            );
+            ProposalState::Invalid
+        } else if calc_percent_u128_unchecked(vote_results[1], vote_results.iter().sum(), decimals)
+            < settings.approve_threshold
+        {
+            log!(
+                "appprove th: {}, max_possible: {}, current: {}",
+                settings.approve_threshold,
+                vote_results.iter().sum::<u128>(),
+                vote_results[1],
+            );
+            ProposalState::Rejected
+        } else {
+            ProposalState::Accepted
+        }
+    }
+
     pub fn storage_bucket_add(&mut self, bucket_id: &str) {
         let bucket = StorageBucket::new(utils::get_bucket_id(bucket_id));
         assert!(
@@ -366,7 +417,7 @@ impl Contract {
         } else {
             if awaiting_state.is_new_transition {
                 wfi.transition_next(
-                    awaiting_state.activity_id,
+                    awaiting_state.activity_id as usize,
                     awaiting_state.new_activity_actions_count,
                     1,
                 );
@@ -422,7 +473,7 @@ impl Contract {
         // Check if its first action done
         } else if wfi.actions_done_count == 1 {
             wfi.transition_next(
-                awaiting_state.activity_id,
+                awaiting_state.activity_id as usize,
                 awaiting_state.new_activity_actions_count,
                 1,
             );
@@ -516,17 +567,6 @@ impl Contract {
         });
 
         self.workflow_activity_log.insert(&proposal_id, &logs);
-    }
-
-    /// Creates transition counter for `Instance`
-    pub fn create_transition_counter(&self, transitions: &[Vec<Transition>]) -> Vec<Vec<u16>> {
-        let mut counter = Vec::with_capacity(transitions.len());
-
-        for t in transitions {
-            counter.push(vec![0; t.len()]);
-        }
-
-        counter
     }
 
     /// Checks if inputs structure is same as activity definition.

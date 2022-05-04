@@ -12,7 +12,6 @@ pub mod workflow;
 
 pub type MethodName = String;
 pub type FnCallId = (AccountId, MethodName);
-pub type TransitionLimit = u16;
 pub type EventCode = String;
 
 pub type ActivityId = u8;

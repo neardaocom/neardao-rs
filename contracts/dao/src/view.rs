@@ -52,10 +52,10 @@ impl Contract {
         }
     }
 
-    pub fn proposal(&self, proposal_id: u32) -> Option<(VProposal, Option<Vec<TemplateSettings>>)> {
+    pub fn proposal(&self, id: u32) -> Option<(VProposal, Option<Vec<TemplateSettings>>)> {
         self.proposals
-            .get(&proposal_id)
-            .map(|p| (p, self.proposed_workflow_settings.get(&proposal_id)))
+            .get(&id)
+            .map(|p| (p, self.proposed_workflow_settings.get(&id)))
     }
 
     pub fn proposals(&self, from_index: u64, limit: u64) -> Vec<(u32, VProposal)> {

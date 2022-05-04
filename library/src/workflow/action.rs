@@ -4,7 +4,7 @@ use near_sdk::{
     AccountId,
 };
 
-use crate::{types::activity_input::UserInput, FnCallId, MethodName};
+use crate::{types::activity_input::UserInput, MethodName};
 
 use super::{
     expression::Expression,

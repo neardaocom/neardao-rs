@@ -1,10 +1,20 @@
+pub const DEFAULT_VOTING_DURATION: u32 = 60;
+
+pub struct WfAddProposeOptions {
+    pub template_id: u16,
+    pub provider_id: String,
+}
+
+pub const WF_ADD_PROVIDER_ID_KEY: &str = "provider_id";
+pub const WF_ADD_TEMPLATE_ID_KEY: &str = "workflow_id";
+
 pub fn workflow_wf_add() -> Template {
     let map = HashMap::new();
     Template {
         code: "wf_add".into(),
         version: "1".into(),
         is_simple: true,
-        need_storage: true,
+        need_storage: false, // TODO: Not sure if true is true.
         activities: vec![
             Activity::Init,
             Activity::Activity(TemplateActivity {
@@ -15,7 +25,7 @@ pub fn workflow_wf_add() -> Template {
                     validators: vec![],
                     action_data: ActionData::FnCall(FnCallData {
                         id: FnCallIdType::Dynamic(
-                            ArgSrc::ConstPropSettings("provider_id".into()),
+                            ArgSrc::ConstPropSettings(WF_ADD_PROVIDER_ID_KEY.into()),
                             "wf_template".into(),
                         ),
                         tgas: 30,
@@ -23,7 +33,7 @@ pub fn workflow_wf_add() -> Template {
                         binds: vec![BindDefinition {
                             key: "id".into(),
                             key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                "workflow_id".into(),
+                                WF_ADD_TEMPLATE_ID_KEY.into(),
                             )),
                             prefixes: vec![],
                             is_collection: false,
@@ -52,15 +62,45 @@ pub fn workflow_wf_add() -> Template {
     }
 }
 
+pub fn workflow_wf_add_propose_settings(options: Option<WfAddProposeOptions>) -> ProposeSettings {
+    let WfAddProposeOptions {
+        template_id,
+        provider_id,
+    } = options.expect("WfAddProposeOptions default options are not supported yet");
+    let mut global_consts = HashMap::new();
+    global_consts.insert(
+        WF_ADD_PROVIDER_ID_KEY.into(),
+        Value::String(provider_id.clone()),
+    );
+    global_consts.insert(
+        WF_ADD_TEMPLATE_ID_KEY.into(),
+        Value::U64(template_id as u64),
+    );
+
+    // User proposed settings type
+    let settings = ProposeSettings {
+        global: Some(SourceDataVariant::Map(global_consts)),
+        binds: vec![
+            None,
+            Some(ActivityBind {
+                shared: None,
+                values: vec![None],
+            }),
+        ],
+        storage_key: None,
+    };
+    settings
+}
+
 /// Default testing template settings for workflow: wf_add.
-pub fn workflow_settings_wf_add() -> TemplateSettings {
+pub fn workflow_settings_wf_add(duration: Option<u32>) -> TemplateSettings {
     TemplateSettings {
         allowed_proposers: vec![ActivityRight::Group(1)],
         allowed_voters: ActivityRight::Group(1),
-        activity_rights: vec![vec![ActivityRight::Group(1)]],
-        transition_limits: vec![vec![1]],
+        activity_rights: vec![vec![], vec![ActivityRight::Group(1)]],
+        transition_limits: vec![vec![TransitionLimit { to: 1, limit: 1 }]],
         scenario: VoteScenario::Democratic,
-        duration: 60,
+        duration: duration.unwrap_or(DEFAULT_VOTING_DURATION),
         quorum: 51,
         approve_threshold: 20,
         spam_threshold: 80,
@@ -71,13 +111,14 @@ pub fn workflow_settings_wf_add() -> TemplateSettings {
         constants: None,
     }
 }
+/// TODO: Limits + rights.
 /// Default testing template settings for workflow: skyward.
-pub fn workflow_settings_skyward_test() -> TemplateSettings {
+pub fn workflow_settings_skyward() -> TemplateSettings {
     TemplateSettings {
         allowed_proposers: vec![ActivityRight::Group(1)],
         allowed_voters: ActivityRight::Group(1),
-        activity_rights: vec![vec![ActivityRight::Group(1)]],
-        transition_limits: vec![vec![1]],
+        activity_rights: vec![vec![], vec![ActivityRight::Group(1)]],
+        transition_limits: vec![vec![TransitionLimit { to: 1, limit: 1 }]],
         scenario: VoteScenario::Democratic,
         duration: 60,
         quorum: 51,
@@ -653,13 +694,13 @@ use std::collections::HashMap;
 use near_sdk::{AccountId, ONE_NEAR, ONE_YOCTO};
 
 use crate::{
-    types::source::SourceDataVariant,
+    types::{datatype::Value, source::SourceDataVariant},
     workflow::{
         action::{ActionData, FnCallData, FnCallIdType, TemplateAction},
-        activity::{Activity, TemplateActivity, Terminality, Transition},
+        activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         postprocessing::Postprocessing,
-        settings::{ProposeSettings, TemplateSettings},
+        settings::{ActivityBind, ProposeSettings, TemplateSettings},
         template::Template,
         types::{
             ActivityRight, ArgSrc, BindDefinition, Instruction, SrcOrExprOrValue, VoteScenario,

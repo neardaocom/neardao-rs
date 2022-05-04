@@ -10,7 +10,7 @@ use crate::{
     },
     workflow::{
         action::{ActionData, FnCallData, FnCallIdType, TemplateAction},
-        activity::{Activity, TemplateActivity, Terminality, Transition},
+        activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         postprocessing::Postprocessing,
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
@@ -525,7 +525,20 @@ pub fn workflow_skyward_template_settings_data_1(
         deposit_propose: Some(1.into()),
         deposit_vote: Some(1000.into()),
         deposit_propose_return: 0,
-        transition_limits: vec![vec![10], vec![10, 10, 10], vec![10, 10], vec![10], vec![10]], // TODO: Update limits for production version.
+        transition_limits: vec![
+            vec![TransitionLimit { to: 1, limit: 10 }],
+            vec![
+                TransitionLimit { to: 2, limit: 10 },
+                TransitionLimit { to: 3, limit: 10 },
+                TransitionLimit { to: 4, limit: 10 },
+            ],
+            vec![
+                TransitionLimit { to: 3, limit: 10 },
+                TransitionLimit { to: 4, limit: 10 },
+            ],
+            vec![TransitionLimit { to: 4, limit: 10 }],
+            vec![TransitionLimit { to: 5, limit: 10 }],
+        ], // TODO: Update limits for production version.
         constants: None,
     }];
 

@@ -196,7 +196,7 @@ fn workflow_templates() -> Vec<Template> {
 }
 
 fn workflow_template_settings() -> Vec<Vec<TemplateSettings>> {
-    let settings = vec![vec![workflow_settings_wf_add()]];
+    let settings = vec![vec![workflow_settings_wf_add(None)]];
 
     settings
 }

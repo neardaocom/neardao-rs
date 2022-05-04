@@ -22,10 +22,7 @@ use near_sdk::{
 
 use crate::group::{Group, GroupInput};
 
-use crate::{
-    calc_percent_u128_unchecked, proposal::*, DurationSec, RoleId, StorageKey, TagCategory,
-    TimestampSec,
-};
+use crate::{proposal::*, DurationSec, RoleId, StorageKey, TagCategory, TimestampSec};
 use crate::{GroupId, ProposalId};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
@@ -208,14 +205,11 @@ impl Contract {
         let settings = wfs
             .get(template_settings_id as usize)
             .expect("Undefined settings id");
-
         assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or_else(|| 0.into()).0);
-
         if !self.check_rights(&settings.allowed_proposers, &caller) {
             panic!("You have no rights to propose this");
         }
         self.proposal_last_id += 1;
-
         //Assuming template_id for WorkflowAdd is always first wf added during dao init
         if template_id == 1 {
             assert!(
@@ -226,7 +220,6 @@ impl Contract {
             self.proposed_workflow_settings
                 .insert(&self.proposal_last_id, &template_settings.unwrap());
         }
-
         // TODO: Implement resource provider.
         let proposal = Proposal::new(
             0,
@@ -235,7 +228,6 @@ impl Contract {
             template_id,
             template_settings_id,
         );
-
         if wft.need_storage {
             if let Some(ref key) = propose_settings.storage_key {
                 assert!(
@@ -246,115 +238,76 @@ impl Contract {
                 panic!("Template requires storage, but no key was provided.");
             }
         }
-
         // Check that proposal binds have valid structure.
         //self.assert_valid_proposal_binds_structure(
         //    propose_settings.binds.as_slice(),
         //    wft.activities.as_slice(),
         //);
-
         self.proposals
             .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
         self.workflow_instance.insert(
             &self.proposal_last_id,
             &(Instance::new(template_id), propose_settings),
         );
-
         // TODO: Croncat registration to finish proposal
-
         self.proposal_last_id
     }
 
     #[payable]
-    pub fn proposal_vote(&mut self, proposal_id: u32, vote_kind: u8) -> VoteResult {
-        if vote_kind > 2 {
+    pub fn proposal_vote(&mut self, id: u32, vote: u8) -> VoteResult {
+        if vote > 2 {
             return VoteResult::InvalidVote;
         }
-
         let caller = env::predecessor_account_id();
-        let (mut proposal, _, wfs) = self.get_workflow_and_proposal(proposal_id);
-
+        let (mut proposal, _, wfs) = self.get_workflow_and_proposal(id);
         assert!(
             env::attached_deposit() >= wfs.deposit_vote.unwrap_or_else(|| 0.into()).0,
             "{}",
             "Not enough deposit."
         );
-
         let TemplateSettings {
             allowed_voters,
             duration,
             vote_only_once,
             ..
         } = wfs;
-
         if !self.check_rights(&[allowed_voters], &caller) {
             return VoteResult::NoRights;
         }
-
         if proposal.state != ProposalState::InProgress
             || proposal.created + (duration as u64) < env::block_timestamp() / 10u64.pow(9)
         {
             return VoteResult::VoteEnded;
         }
-
         if vote_only_once && proposal.votes.contains_key(&caller) {
             return VoteResult::AlreadyVoted;
         }
-
-        proposal.votes.insert(caller, vote_kind);
-
-        self.proposals
-            .insert(&proposal_id, &VProposal::Curr(proposal));
-
+        proposal.votes.insert(caller, vote);
+        self.proposals.insert(&id, &VProposal::Curr(proposal));
         VoteResult::Ok
     }
 
-    pub fn finish_proposal(&mut self, proposal_id: u32) -> ProposalState {
-        let (mut proposal, wft, wfs) = self.get_workflow_and_proposal(proposal_id);
-        let (mut instance, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+    pub fn proposal_finish(&mut self, id: u32) -> ProposalState {
+        let (mut proposal, wft, wfs) = self.get_workflow_and_proposal(id);
+        let (mut instance, settings) = self.workflow_instance.get(&id).unwrap();
 
         let new_state = match proposal.state {
             ProposalState::InProgress => {
                 if proposal.created + wfs.duration as u64 > env::block_timestamp() / 10u64.pow(9) {
                     None
                 } else {
-                    // count votes
-                    let (max_possible_amount, vote_results) =
-                        self.calculate_votes(&proposal.votes, &wfs.scenario, &wfs.allowed_voters);
-                    log!("Votes: {}, {:?}", max_possible_amount, vote_results);
-                    // check spam
-                    if calc_percent_u128_unchecked(
-                        vote_results[0],
-                        max_possible_amount,
-                        10u128.pow(self.decimals as u32),
-                    ) >= wfs.spam_threshold
-                    {
-                        Some(ProposalState::Spam)
-                    } else if calc_percent_u128_unchecked(
-                        vote_results.iter().sum(),
-                        max_possible_amount,
-                        10u128.pow(self.decimals as u32),
-                    ) < wfs.quorum
-                    {
-                        Some(ProposalState::Invalid)
-                    } else if calc_percent_u128_unchecked(
-                        vote_results[1],
-                        vote_results.iter().sum(),
-                        10u128.pow(self.decimals as u32),
-                    ) < wfs.approve_threshold
-                    {
-                        Some(ProposalState::Rejected)
-                    } else {
+                    let vote_result = self.eval_votes(&proposal.votes, &wfs);
+                    if matches!(vote_result, ProposalState::Accepted) {
                         instance.state = InstanceState::Running;
                         instance.init_transition_counter(
-                            self.create_transition_counter(&wft.transitions),
+                            wft.transitions.as_slice(),
+                            wfs.transition_limits.as_slice(),
                         );
-
                         if let Some(ref storage_key) = settings.storage_key {
                             self.storage_bucket_add(storage_key);
                         }
-                        Some(ProposalState::Accepted)
                     }
+                    Some(vote_result)
                 }
             }
             _ => None,
@@ -362,11 +315,9 @@ impl Contract {
 
         match new_state {
             Some(state) => {
-                self.workflow_instance
-                    .insert(&proposal_id, &(instance, settings));
+                self.workflow_instance.insert(&id, &(instance, settings));
                 proposal.state = state.clone();
-                self.proposals
-                    .insert(&proposal_id, &VProposal::Curr(proposal));
+                self.proposals.insert(&id, &VProposal::Curr(proposal));
 
                 if wft.is_simple {
                     //TODO: Dispatch wf execution with Croncat.

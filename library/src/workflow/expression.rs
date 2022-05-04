@@ -7,10 +7,7 @@ use crate::{
     functions::binding::get_value_from_source,
     interpreter::{condition::Condition, expression::EExpr},
     types::{
-        activity_input::ActivityInput,
-        datatype::Value,
-        error::ProcessingError,
-        source::{Source, SourceProvider},
+        activity_input::ActivityInput, datatype::Value, error::ProcessingError, source::Source,
     },
 };
 
@@ -52,7 +49,6 @@ where {
                         return Err(ProcessingError::InvalidExpressionStructure);
                     }
                 }
-
                 _ => binded_args.push(get_value_from_source(sources, arg_src)?),
             }
         }

@@ -25,12 +25,8 @@ where
             false => {
                 let value = match &def.key_src {
                     Src(arg_src) => match arg_src {
-                        ArgSrc::ConstsTpl(ref key) => sources
-                            .tpl(key.as_str())
-                            .expect("Failed to get tpl value for binding")
-                            .clone(),
                         ArgSrc::User(_) => continue,
-                        _ => todo!(),
+                        _ => get_value_from_source(sources, arg_src)?,
                     },
                     Expr(expr) => expr.bind_and_eval(sources, Some(input), expressions)?,
                     Value(v) => v.clone(),
@@ -44,12 +40,8 @@ where
 
                 let value = match &def.key_src {
                     Src(arg_src) => match arg_src {
-                        ArgSrc::ConstsTpl(ref key) => sources
-                            .tpl(key.as_str())
-                            .expect("Failed to get tpl value for binding")
-                            .clone(),
                         ArgSrc::User(_) => continue,
-                        _ => todo!(),
+                        _ => get_value_from_source(sources, arg_src)?,
                     },
                     Expr(expr) => expr.bind_and_eval(sources, Some(input), expressions)?,
                     Value(v) => v.clone(),
@@ -111,6 +103,13 @@ pub fn get_value_from_source(
         ArgSrc::Const(key) => {
             let value = sources
                 .dao_const(*key)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
+            Ok(value)
+        }
+        ArgSrc::ConstPropSettings(key) => {
+            let value = sources
+                .props_global(key)
                 .ok_or(SourceError::SourceMissing)?
                 .to_owned();
             Ok(value)

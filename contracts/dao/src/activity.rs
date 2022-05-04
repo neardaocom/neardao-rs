@@ -11,7 +11,7 @@ use library::workflow::activity::TemplateActivity;
 use library::workflow::instance::InstanceState;
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
-use near_sdk::{env, near_bindgen, AccountId, Gas, Promise};
+use near_sdk::{env, log, near_bindgen, AccountId, Gas, Promise};
 
 use crate::callback::ext_self;
 use crate::constants::{EVENT_CALLER_KEY, GLOBAL_BUCKET_IDENT};
@@ -29,7 +29,7 @@ impl Contract {
     // TODO: Auto-finish WF then there is no other possible transition regardless terminality.
     #[payable]
     #[handle_result]
-    pub fn wf_run_activity(
+    pub fn workflow_run_activity(
         &mut self,
         proposal_id: u32,
         activity_id: usize,
@@ -86,10 +86,7 @@ impl Contract {
 
             // Check transition counter
             assert!(
-                wfi.check_transition_counter(
-                    activity_id as usize,
-                    wfs.transition_limits.as_slice()
-                ),
+                wfi.check_transition_counter(activity_id as usize),
                 "Reached transition limit."
             );
 
@@ -177,11 +174,7 @@ impl Contract {
                 wfi.last_transition_done_at = env::block_timestamp() / 10u64.pow(9);
 
                 if is_new_transition {
-                    wfi.transition_next(
-                        activity_id as u8,
-                        ctx.actions_count(),
-                        ctx.actions_done_now,
-                    );
+                    wfi.transition_next(activity_id, ctx.actions_count(), ctx.actions_done_now);
                 } else {
                     wfi.actions_done_count = ctx.actions_done_now;
                 }
@@ -213,7 +206,6 @@ impl Contract {
                 actions_inputs,
                 &mut optional_actions,
             );
-
             if result.is_err() && ctx.actions_done() == 0 {
                 panic!("Not a single action was executed.");
             } else {
@@ -295,10 +287,10 @@ impl Contract {
                     .expect("Missing activity bind")
                     .take()
                 {
-                    sources.set_prop(prop_binds);
+                    sources.set_prop_action(prop_binds);
                 }
             } else {
-                sources.unset_prop();
+                sources.unset_prop_action();
             }
 
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
@@ -374,6 +366,7 @@ impl Contract {
         // Loop which tries to execute all actions, starting from the last done. Returns when something goes wrong.
         // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
         let last_action_done = ctx.actions_done_before as usize;
+        log!("last action done: {}", last_action_done);
 
         // This strange variable is here because "optional-required-optional" actions case might happen.
         // Therefore we must not considered 3th action as sucessfull but instead of that break the cycle.
@@ -399,8 +392,7 @@ impl Contract {
             };
 
             let tpl_action = ctx.actions.get_mut(idx).unwrap();
-
-            // Check exec condition
+            // Check exec condition.
             if let Some(cond) = tpl_action.exec_condition.as_ref() {
                 if !cond
                     .bind_and_eval(sources, Some(action_input.as_ref()), expressions)?
@@ -424,10 +416,10 @@ impl Contract {
                     .expect("Missing activity bind")
                     .take()
                 {
-                    sources.set_prop(prop_binds);
+                    sources.set_prop_action(prop_binds);
                 }
             } else {
-                sources.unset_prop();
+                sources.unset_prop_action();
             }
 
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
