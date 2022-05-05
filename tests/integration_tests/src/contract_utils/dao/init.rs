@@ -1,11 +1,11 @@
 use library::{
     data::{
-        basic_workflows::{workflow_settings_wf_add, workflow_wf_add},
-        standard_fn_calls::{
+        object_metadata::standard_fn_calls::{
             nep_141_ft_transfer, nep_141_ft_transfer_call, nep_145_storage_deposit,
             nep_145_storage_unregister, nep_145_storage_withdraw, nep_171_nft_transfer,
             nep_171_nft_transfer_call,
         },
+        workflows::basic::wf_add::WfAdd1,
     },
     types::datatype::Datatype,
     workflow::{settings::TemplateSettings, template::Template, types::ObjectMetadata},
@@ -13,7 +13,7 @@ use library::{
 use workspaces::{network::DevAccountDeployer, Account, AccountId, Contract, DevNetwork, Worker};
 
 use crate::{
-    contract_utils::dao::dao::internal_check_group,
+    contract_utils::dao::check::internal_check_group,
     utils::{get_dao_wasm, outcome_pretty, FnCallId, MethodName},
 };
 
@@ -190,13 +190,13 @@ fn function_call_metadata() -> Vec<Vec<ObjectMetadata>> {
 }
 
 fn workflow_templates() -> Vec<Template> {
-    let tpls = vec![workflow_wf_add()];
+    let tpls = vec![WfAdd1::template()];
 
     tpls
 }
 
 fn workflow_template_settings() -> Vec<Vec<TemplateSettings>> {
-    let settings = vec![vec![workflow_settings_wf_add(None)]];
+    let settings = vec![vec![WfAdd1::template_settings(Some(10))]];
 
     settings
 }

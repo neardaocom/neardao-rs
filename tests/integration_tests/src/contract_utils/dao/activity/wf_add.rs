@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
 use library::{
-    types::{
-        activity_input::{InputHashMap, UserInput},
-        datatype::Value,
-    },
+    types::{activity_input::UserInput, datatype::Value},
     workflow::action::{ActionInput, DaoActionOrFnCall},
 };
 use near_sdk::AccountId;
@@ -12,9 +9,9 @@ use workspaces::AccountId as WorkspaceAccountId;
 
 use crate::contract_utils::dao::types::consts::PROVIDER_VIEW_TEMPLATE;
 
-pub struct ActivityInputWorkflowAdd;
-
-impl ActivityInputWorkflowAdd {
+/// Activity inputs for `WfAdd1`.
+pub struct ActivityInputWfAdd1;
+impl ActivityInputWfAdd1 {
     pub fn activity_1(
         provider_id: &WorkspaceAccountId,
         wf_template_id: u16,
@@ -24,7 +21,7 @@ impl ActivityInputWorkflowAdd {
         let provider_id = AccountId::new_unchecked(provider_id.to_string());
         vec![Some(ActionInput {
             action: DaoActionOrFnCall::FnCall(provider_id, PROVIDER_VIEW_TEMPLATE.to_string()),
-            values: UserInput::Map(InputHashMap(map)),
+            values: UserInput::Map(map),
         })]
     }
 }

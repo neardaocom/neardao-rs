@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use library::{
     interpreter::expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
     types::{
-        activity_input::{ActivityInput, InputHashMap, UserInput},
+        activity_input::{ActivityInput, UserInput},
         datatype::{Datatype, Value},
     },
     workflow::{
@@ -204,7 +206,7 @@ fn testcase_skyward() -> TestCase {
     }
 }
 fn input_skyward() -> UserInput {
-    let mut hm = InputHashMap::new();
+    let mut hm = HashMap::new();
 
     // Object 0
     hm.set("sale_info", Value::String("Sale info from user".into()));

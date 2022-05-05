@@ -6,9 +6,8 @@ use near_sdk::{
 
 use crate::{
     interpreter::{condition::Condition, expression::EExpr},
-    storage::StorageBucket,
     types::datatype::{Datatype, Value},
-    FnCallResultDatatype, ObjectId, ValidatorId,
+    FnCallResultDatatype,
 };
 
 use super::expression::Expression;
@@ -25,8 +24,10 @@ pub struct ValueContainer<'a, T: AsRef<[Value]>> {
     pub global_storage: &'a mut StorageBucket,
 } */
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Copy, Clone, PartialEq)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
+#[derive(
+    BorshDeserialize, BorshSerialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq,
+)]
+//#[cfg_attr(not(target_arch = "wasm32"), derive())]
 #[serde(crate = "near_sdk::serde")]
 pub enum DaoActionIdent {
     GroupAdd,
@@ -89,8 +90,9 @@ pub enum ActivityResult {
     ErrTimeLimit,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Debug))]
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 /// Defines source of value.
 pub enum ArgSrc {
@@ -113,8 +115,9 @@ pub enum ArgSrc {
     Const(u8),
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Debug))]
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum SrcOrExprOrValue {
     /// Source for value.
@@ -124,8 +127,9 @@ pub enum SrcOrExprOrValue {
     Value(Value),
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct BindDefinition {
     /// Key being binded.

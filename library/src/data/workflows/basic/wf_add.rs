@@ -1,134 +1,126 @@
-pub const DEFAULT_VOTING_DURATION: u32 = 60;
+pub const DEFAULT_VOTING_DURATION: u32 = 10;
 
-pub struct WfAddProposeOptions {
+pub struct WfAdd1ProposeOptions {
     pub template_id: u16,
     pub provider_id: String,
 }
 
-pub const WF_ADD_PROVIDER_ID_KEY: &str = "provider_id";
-pub const WF_ADD_TEMPLATE_ID_KEY: &str = "workflow_id";
+pub const WF_ADD1_PROVIDER_ID_KEY: &str = "provider_id";
+pub const WF_ADD1_TEMPLATE_ID_KEY: &str = "workflow_id";
 
-pub fn workflow_wf_add() -> Template {
-    let map = HashMap::new();
-    Template {
-        code: "wf_add".into(),
-        version: "1".into(),
-        is_simple: true,
-        need_storage: false, // TODO: Not sure if true is true.
-        activities: vec![
-            Activity::Init,
-            Activity::Activity(TemplateActivity {
-                code: "wf_add".into(),
-                postprocessing: None,
-                actions: vec![TemplateAction {
-                    exec_condition: None,
-                    validators: vec![],
-                    action_data: ActionData::FnCall(FnCallData {
-                        id: FnCallIdType::Dynamic(
-                            ArgSrc::ConstPropSettings(WF_ADD_PROVIDER_ID_KEY.into()),
-                            "wf_template".into(),
-                        ),
-                        tgas: 30,
-                        deposit: None,
-                        binds: vec![BindDefinition {
-                            key: "id".into(),
-                            key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                WF_ADD_TEMPLATE_ID_KEY.into(),
-                            )),
-                            prefixes: vec![],
-                            is_collection: false,
-                        }],
-                    }),
-                    postprocessing: Some(Postprocessing {
-                        instructions: vec![Instruction::StoreWorkflow],
-                    }),
-                    must_succeed: true,
-                    optional: false,
-                }],
-                automatic: true,
-                terminal: Terminality::Automatic,
-                is_dao_activity: false,
-            }),
-        ],
-        expressions: vec![],
-        transitions: vec![vec![Transition {
-            activity_id: 1,
-            cond: None,
-            time_from_cond: None,
-            time_to_cond: None,
-        }]],
-        constants: SourceDataVariant::Map(map),
-        end: vec![1],
+pub const WF_ADD1_SETTINGS_DEPOSIT_PROPOSE: u128 = ONE_NEAR;
+pub const WF_ADD1_SETTINGS_DEPOSIT_VOTE: u128 = ONE_YOCTO;
+
+/// Expects provider_id and id of template to download defined in global propose settings.
+pub struct WfAdd1;
+impl WfAdd1 {
+    pub fn template() -> Template {
+        let map = HashMap::new();
+        Template {
+            code: "wf_add".into(),
+            version: "1".into(),
+            is_simple: true,
+            need_storage: false, // TODO: Not sure if true is true.
+            activities: vec![
+                Activity::Init,
+                Activity::Activity(TemplateActivity {
+                    code: "wf_add".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionData::FnCall(FnCallData {
+                            id: FnCallIdType::Dynamic(
+                                ArgSrc::ConstPropSettings(WF_ADD1_PROVIDER_ID_KEY.into()),
+                                "wf_template".into(),
+                            ),
+                            tgas: 30,
+                            deposit: None,
+                            binds: vec![BindDefinition {
+                                key: "id".into(),
+                                key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
+                                    WF_ADD1_TEMPLATE_ID_KEY.into(),
+                                )),
+                                prefixes: vec![],
+                                is_collection: false,
+                            }],
+                        }),
+                        postprocessing: Some(Postprocessing {
+                            instructions: vec![Instruction::StoreWorkflow],
+                        }),
+                        must_succeed: true,
+                        optional: false,
+                    }],
+                    automatic: true,
+                    terminal: Terminality::Automatic,
+                    is_dao_activity: false,
+                }),
+            ],
+            expressions: vec![],
+            transitions: vec![vec![Transition {
+                activity_id: 1,
+                cond: None,
+                time_from_cond: None,
+                time_to_cond: None,
+            }]],
+            constants: SourceDataVariant::Map(map),
+            end: vec![1],
+        }
     }
-}
+    pub fn propose_settings(options: Option<WfAdd1ProposeOptions>) -> ProposeSettings {
+        let WfAdd1ProposeOptions {
+            template_id,
+            provider_id,
+        } = options.expect("WfAddProposeOptions default options are not supported yet");
+        let mut global_consts = HashMap::new();
+        global_consts.insert(
+            WF_ADD1_PROVIDER_ID_KEY.into(),
+            Value::String(provider_id.clone()),
+        );
+        global_consts.insert(
+            WF_ADD1_TEMPLATE_ID_KEY.into(),
+            Value::U64(template_id as u64),
+        );
 
-pub fn workflow_wf_add_propose_settings(options: Option<WfAddProposeOptions>) -> ProposeSettings {
-    let WfAddProposeOptions {
-        template_id,
-        provider_id,
-    } = options.expect("WfAddProposeOptions default options are not supported yet");
-    let mut global_consts = HashMap::new();
-    global_consts.insert(
-        WF_ADD_PROVIDER_ID_KEY.into(),
-        Value::String(provider_id.clone()),
-    );
-    global_consts.insert(
-        WF_ADD_TEMPLATE_ID_KEY.into(),
-        Value::U64(template_id as u64),
-    );
-
-    // User proposed settings type
-    let settings = ProposeSettings {
-        global: Some(SourceDataVariant::Map(global_consts)),
-        binds: vec![
-            None,
-            Some(ActivityBind {
-                shared: None,
-                values: vec![None],
-            }),
-        ],
-        storage_key: None,
-    };
-    settings
-}
-
-/// Default testing template settings for workflow: wf_add.
-pub fn workflow_settings_wf_add(duration: Option<u32>) -> TemplateSettings {
-    TemplateSettings {
-        allowed_proposers: vec![ActivityRight::Group(1)],
-        allowed_voters: ActivityRight::Group(1),
-        activity_rights: vec![vec![], vec![ActivityRight::Group(1)]],
-        transition_limits: vec![vec![TransitionLimit { to: 1, limit: 1 }]],
-        scenario: VoteScenario::Democratic,
-        duration: duration.unwrap_or(DEFAULT_VOTING_DURATION),
-        quorum: 51,
-        approve_threshold: 20,
-        spam_threshold: 80,
-        vote_only_once: true,
-        deposit_propose: Some(ONE_NEAR.into()),
-        deposit_vote: Some(ONE_YOCTO.into()),
-        deposit_propose_return: 0,
-        constants: None,
+        // User proposed settings type
+        let settings = ProposeSettings {
+            global: Some(SourceDataVariant::Map(global_consts)),
+            binds: vec![
+                None,
+                Some(ActivityBind {
+                    shared: None,
+                    values: vec![None],
+                }),
+            ],
+            storage_key: None,
+        };
+        settings
     }
-}
-/// TODO: Limits + rights.
-/// Default testing template settings for workflow: skyward.
-pub fn workflow_settings_skyward() -> TemplateSettings {
-    TemplateSettings {
-        allowed_proposers: vec![ActivityRight::Group(1)],
-        allowed_voters: ActivityRight::Group(1),
-        activity_rights: vec![vec![], vec![ActivityRight::Group(1)]],
-        transition_limits: vec![vec![TransitionLimit { to: 1, limit: 1 }]],
-        scenario: VoteScenario::Democratic,
-        duration: 60,
-        quorum: 51,
-        approve_threshold: 20,
-        spam_threshold: 80,
-        vote_only_once: true,
-        deposit_propose: Some(ONE_NEAR.into()),
-        deposit_vote: Some(ONE_YOCTO.into()),
-        deposit_propose_return: 0,
-        constants: None,
+
+    /// Default testing template settings for workflow: wf_add.
+    pub fn template_settings(duration: Option<u32>) -> TemplateSettings {
+        TemplateSettings {
+            allowed_proposers: vec![ActivityRight::Group(1)],
+            allowed_voters: ActivityRight::Group(1),
+            activity_rights: vec![vec![], vec![ActivityRight::Group(1)]],
+            transition_limits: vec![vec![TransitionLimit { to: 1, limit: 1 }]],
+            scenario: VoteScenario::Democratic,
+            duration: duration.unwrap_or(DEFAULT_VOTING_DURATION),
+            quorum: 51,
+            approve_threshold: 20,
+            spam_threshold: 80,
+            vote_only_once: true,
+            deposit_propose: Some(Self::deposit_propose().into()),
+            deposit_vote: Some(Self::deposit_vote().into()),
+            deposit_propose_return: 0,
+            constants: None,
+        }
+    }
+    pub fn deposit_propose() -> u128 {
+        WF_ADD1_SETTINGS_DEPOSIT_PROPOSE
+    }
+    pub fn deposit_vote() -> u128 {
+        WF_ADD1_SETTINGS_DEPOSIT_VOTE
     }
 }
 
@@ -707,5 +699,3 @@ use crate::{
         },
     },
 };
-
-use super::skyward::{workflow_skyward_template_settings_data_1, SKYWARD_ACC};

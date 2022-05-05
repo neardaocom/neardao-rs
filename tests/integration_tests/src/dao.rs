@@ -1,35 +1,38 @@
+#[allow(unused)]
+use std::time::Duration;
+#[allow(unused)]
+use tokio::time::sleep;
+
 use library::{
-    data::skyward::{AUCTION_DURATION, AUCTION_START},
+    data::workflows::{
+        basic::wf_add::{WfAdd1, WfAdd1ProposeOptions},
+        integration::skyward::{
+            Skyward1, Skyward1ProposeOptions, AUCTION_DURATION, AUCTION_START, SKYWARD1_STORAGE_KEY,
+        },
+    },
+    types::datatype::Value,
     workflow::instance::InstanceState,
 };
 use workspaces::network::DevAccountDeployer;
 
 use crate::contract_utils::{
     dao::{
-        activity::{run_activity, ActivityInputWorkflowAdd},
+        activity::{run_activity, ActivityInputSkyward1, ActivityInputWfAdd1},
+        check::{check_instance, check_wf_storage_values, check_wf_templates},
         init::{deploy_dao, init_dao},
-        proposal::{
-            create_proposal, finish_proposal, ps_skyward, ps_wf_add, ts_for_skyward, vote_proposal,
-        },
+        proposal::{create_proposal, finish_proposal, vote_proposal},
         types::{
-            consts::{
-                DAO_TPL_ID_WF_ADD, DEPOSIT_PROPOSE_WF_ADD, DEPOSIT_VOTE_WF_ADD,
-                PROVIDER_TPL_ID_SKYWARD,
-            },
+            consts::{DAO_TPL_ID_SKYWARD, DAO_TPL_ID_WF_ADD, PROVIDER_TPL_ID_SKYWARD},
             proposal::ProposalState,
         },
     },
     functions::storage_deposit,
     fungible_token::init_fungible_token,
-    skyward::init_skyward,
+    skyward::{check_sale, init_skyward},
     staking::init_staking,
     wnear::init_wnear,
     workflow_provider::{init_workflow_provider, load_workflow_templates},
 };
-
-fn dao_init_args_as_bytes() -> Vec<u8> {
-    vec![]
-}
 
 const DAO_FT_TOTAL_SUPPLY: u128 = 1_000_000_000;
 
@@ -78,9 +81,12 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
         &member,
         &dao,
         DAO_TPL_ID_WF_ADD,
-        ps_wf_add(PROVIDER_TPL_ID_SKYWARD, wf_provider.id()),
-        Some(ts_for_skyward()),
-        DEPOSIT_PROPOSE_WF_ADD,
+        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+            template_id: PROVIDER_TPL_ID_SKYWARD,
+            provider_id: wf_provider.id().to_string(),
+        })),
+        Some(Skyward1::template_settings()),
+        WfAdd1::deposit_propose(),
     )
     .await?;
 
@@ -90,7 +96,7 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
         vec![(&member, 1)],
         &dao,
         proposal_id,
-        DEPOSIT_VOTE_WF_ADD,
+        WfAdd1::deposit_vote(),
     )
     .await?;
 
@@ -106,6 +112,7 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
 
     // Fast forward and finish.
     worker.fast_forward(100).await?;
+    //sleep(Duration::from_secs(65)).await;
     finish_proposal(&worker, &member, &dao, proposal_id, ProposalState::Accepted).await?;
 
     // Execute AddWorkflow by DAO member to add Skyward.
@@ -115,27 +122,111 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
         &dao,
         proposal_id,
         1,
-        ActivityInputWorkflowAdd::activity_1(wf_provider.id(), PROVIDER_TPL_ID_SKYWARD),
-        InstanceState::Running,
+        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_SKYWARD),
     )
     .await?;
+    worker.fast_forward(10).await?;
+    //sleep(Duration::from_secs(10)).await;
+    check_wf_templates(&worker, &dao, 2).await?;
+    check_instance(&worker, &dao, proposal_id, 1, InstanceState::Finished).await?;
 
     // Propose Skyward.
-    /*     let proposal_id = create_proposal(
+    let proposal_id = create_proposal(
         &worker,
         &member,
         &dao,
-        DAO_TPL_ID_WF_ADD,
-        ps_skyward(token.id(), 1_000, AUCTION_START, AUCTION_DURATION),
-        Some(ts_for_skyward()),
-        DEPOSIT_PROPOSE_WF_ADD,
+        DAO_TPL_ID_SKYWARD,
+        Skyward1::propose_settings(
+            Some(Skyward1ProposeOptions {
+                token_account_id: token.id().to_string(),
+                token_amount: 1_000,
+                auction_start: AUCTION_START,
+                auction_duration: AUCTION_DURATION,
+            }),
+            None,
+        ),
+        None,
+        Skyward1::deposit_propose(),
     )
-    .await?; */
+    .await?;
 
-    // Execute Skyward.
+    // Vote on proposed Skyward.
+    vote_proposal(
+        &worker,
+        vec![(&member, 1)],
+        &dao,
+        proposal_id,
+        Skyward1::deposit_vote(),
+    )
+    .await?;
+
+    // Finish last proposal.
+    worker.fast_forward(100).await?;
+    //sleep(Duration::from_secs(65)).await;
+    finish_proposal(&worker, &member, &dao, proposal_id, ProposalState::Accepted).await?;
+
+    // Execute workflow Skyward1.
+    run_activity(
+        &worker,
+        &member,
+        &dao,
+        proposal_id,
+        1,
+        ActivityInputSkyward1::activity_1(skyward.id()),
+    )
+    .await?;
+    worker.fast_forward(5).await?;
+
+    run_activity(
+        &worker,
+        &member,
+        &dao,
+        proposal_id,
+        2,
+        ActivityInputSkyward1::activity_2(wnear.id(), token.id()),
+    )
+    .await?;
+    worker.fast_forward(5).await?;
+
+    run_activity(
+        &worker,
+        &member,
+        &dao,
+        proposal_id,
+        3,
+        ActivityInputSkyward1::activity_3(
+            skyward.id(),
+            "NearDAO auction.".into(),
+            "wwww.neardao.com".into(),
+        ),
+    )
+    .await?;
+    worker.fast_forward(5).await?;
 
     // Check Skyward auction registered on DAO.
+    check_wf_storage_values(
+        &worker,
+        &dao,
+        SKYWARD1_STORAGE_KEY.into(),
+        vec![
+            ("pp_1_result".into(), Value::Bool(true)),
+            ("pp_4_result".into(), Value::U64(0)),
+        ],
+    )
+    .await?;
+
     // Check auction created on Skyward.
+    check_sale(
+        &worker,
+        &skyward,
+        0,
+        "NearDAO auction.".into(),
+        "wwww.neardao.com".into(),
+        token.id(),
+        1_000,
+        wnear.id(),
+    )
+    .await?;
 
     /*     let args = dao_init_args_as_bytes();
     // DAO init. Dao should register init members in FT and immediatelly send them their tokens.

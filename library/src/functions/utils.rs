@@ -1,5 +1,10 @@
 use near_sdk::IntoStorageKey;
 
+use crate::{
+    types::{error::SourceError, source::Source},
+    workflow::types::ArgSrc,
+};
+
 pub(crate) fn object_key(prefix: &str, mid: &str, suffix: &str) -> String {
     let mut key = String::with_capacity(prefix.len() + mid.len() + suffix.len() + 2);
     key.push_str(prefix);
@@ -36,5 +41,67 @@ impl IntoStorageKey for StorageKeyWrapper {
 impl From<Vec<u8>> for StorageKeyWrapper {
     fn from(bytes: Vec<u8>) -> StorageKeyWrapper {
         StorageKeyWrapper(bytes)
+    }
+}
+
+/// Helper function to fetch value ref from Source.
+pub fn get_value_from_source(
+    sources: &dyn Source,
+    src: &ArgSrc,
+) -> Result<crate::types::datatype::Value, SourceError> {
+    match src {
+        ArgSrc::ConstsTpl(key) => {
+            let value = sources
+                .tpl(key)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
+            Ok(value)
+        }
+        ArgSrc::ConstsSettings(key) => {
+            let value = sources
+                .tpl_settings(key)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
+            Ok(value)
+        }
+        ArgSrc::ConstAction(key) => {
+            let value = sources
+                .props_action(key)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
+            Ok(value)
+        }
+        ArgSrc::ConstActivityShared(key) => {
+            let value = sources
+                .props_shared(key)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
+            Ok(value)
+        }
+        ArgSrc::Storage(key) => {
+            let value = sources.storage(key).ok_or(SourceError::SourceMissing)?;
+            Ok(value)
+        }
+        ArgSrc::GlobalStorage(key) => {
+            let value = sources
+                .global_storage(key)
+                .ok_or(SourceError::SourceMissing)?;
+            Ok(value)
+        }
+        ArgSrc::Const(key) => {
+            let value = sources
+                .dao_const(*key)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
+            Ok(value)
+        }
+        ArgSrc::ConstPropSettings(key) => {
+            let value = sources
+                .props_global(key)
+                .ok_or(SourceError::SourceMissing)?
+                .to_owned();
+            Ok(value)
+        }
+        _ => Err(SourceError::InvalidSourceVariant),
     }
 }

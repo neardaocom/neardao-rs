@@ -117,8 +117,8 @@ pub struct TransitionLimit {
 }
 
 /// From activity_id is defined by its position in the hosting container (Vec).
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct TransitionCounter {
     /// Target activity id.

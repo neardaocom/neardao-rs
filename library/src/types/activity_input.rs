@@ -16,11 +16,12 @@ pub trait ActivityInput {
     fn to_vec(&self) -> Vec<(String, Value)>;
 }
 
-#[derive(Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, Serialize))]
+// TODO: Remove Debug and Clone in production.
+#[derive(Deserialize, Debug, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Serialize))]
 #[serde(crate = "near_sdk::serde")]
 pub enum UserInput {
-    Map(InputHashMap),
+    Map(HashMap<String, Value>),
 }
 
 impl UserInput {
@@ -31,38 +32,28 @@ impl UserInput {
     }
 }
 
-#[derive(Deserialize, Default)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, Serialize))]
-#[serde(crate = "near_sdk::serde")]
-pub struct InputHashMap(pub HashMap<String, Value>);
-impl InputHashMap {
-    pub fn new() -> Self {
-        InputHashMap(HashMap::new())
-    }
-}
-
-impl ActivityInput for InputHashMap {
+impl ActivityInput for HashMap<String, Value> {
     fn get(&self, key: &str) -> Option<&Value> {
-        self.0.get(key)
+        self.get(key)
     }
 
     fn set(&mut self, key: &str, val: Value) {
-        self.0.insert(key.to_string(), val);
+        self.insert(key.to_string(), val);
     }
 
     fn take(&mut self, key: &str) -> Option<Value> {
-        self.0.insert(key.to_owned(), Value::default())
+        self.insert(key.to_owned(), Value::default())
     }
 
     fn remove(&mut self, key: &str) -> Option<Value> {
-        self.0.remove(key)
+        self.remove(key)
     }
 
     fn has_key(&self, key: &str) -> bool {
-        self.0.contains_key(key)
+        self.contains_key(key)
     }
 
     fn to_vec(&self) -> Vec<(String, Value)> {
-        self.0.clone().into_iter().collect()
+        self.clone().into_iter().collect()
     }
 }

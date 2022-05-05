@@ -22,13 +22,7 @@ pub type ValidatorId = u8;
 pub type ExpressionId = u8;
 pub type TransitionId = u8;
 pub type FnCallResultDatatype = Option<Datatype>;
-pub type ProviderTemplateData = (
-    Template,
-    Vec<FnCallId>,
-    Vec<Vec<ObjectMetadata>>,
-    Vec<MethodName>,
-    Vec<Vec<ObjectMetadata>>,
-);
+pub type ProviderTemplateData = (Template, Vec<FnCallId>, Vec<Vec<ObjectMetadata>>);
 
 /// Flatten object's values type for action input.
 pub type ObjectValues = Vec<Vec<Value>>;

@@ -1,4 +1,4 @@
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, U64};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use workspaces::{
     result::{CallExecutionDetails, ViewResultDetails},
@@ -8,6 +8,8 @@ use workspaces::{
 pub(crate) type DurationSec = u64;
 pub(crate) type TimestampSec = u64;
 pub(crate) type WrappedBalance = U128;
+pub(crate) type WrappedDuration = U64;
+pub(crate) type WrappedTimestamp = U64;
 pub(crate) type MethodName = String;
 pub(crate) type FnCallId = (AccountId, MethodName);
 

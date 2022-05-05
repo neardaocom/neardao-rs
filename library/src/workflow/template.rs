@@ -23,6 +23,7 @@ pub struct Template {
     pub transitions: Vec<Vec<Transition>>,
     // TODO figure out structure.
     pub constants: SourceDataVariant,
+    /// Ids of activities which make possible to finish workflow when their are successfully executed.
     pub end: Vec<u8>,
 }
 

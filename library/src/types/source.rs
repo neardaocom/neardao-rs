@@ -17,8 +17,8 @@ pub trait SourceProvider {
     fn props_global(&self, key: &str) -> Option<&Value>;
     fn props_action(&self, key: &str) -> Option<&Value>;
     fn props_shared(&self, key: &str) -> Option<&Value>;
-    fn storage(&self, key: &str) -> Option<&Value>;
-    fn global_storage(&self, key: &str) -> Option<&Value>;
+    fn storage(&self, key: &str) -> Option<Value>;
+    fn global_storage(&self, key: &str) -> Option<Value>;
     fn dao_const(&self, key: u8) -> Option<Value>;
 }
 
@@ -95,11 +95,15 @@ where
         }
     }
 
-    fn storage(&self, key: &str) -> Option<&Value> {
-        todo!()
+    fn storage(&self, key: &str) -> Option<Value> {
+        if let Some(storage) = &self.storage {
+            storage.get_data(&key.into())
+        } else {
+            None
+        }
     }
 
-    fn global_storage(&self, key: &str) -> Option<&Value> {
+    fn global_storage(&self, key: &str) -> Option<Value> {
         todo!()
     }
 
@@ -212,10 +216,10 @@ impl SourceProvider for SourceMock {
     fn tpl_settings(&self, key: &str) -> Option<&Value> {
         todo!()
     }
-    fn storage(&self, key: &str) -> Option<&Value> {
+    fn storage(&self, key: &str) -> Option<Value> {
         todo!()
     }
-    fn global_storage(&self, key: &str) -> Option<&Value> {
+    fn global_storage(&self, key: &str) -> Option<Value> {
         todo!()
     }
     fn dao_const(&self, key: u8) -> Option<Value> {

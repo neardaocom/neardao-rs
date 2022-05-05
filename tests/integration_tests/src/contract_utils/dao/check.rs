@@ -1,10 +1,13 @@
-use library::workflow::instance::InstanceState;
+use library::{types::datatype::Value, workflow::instance::InstanceState};
 use serde_json::json;
 use workspaces::{AccountId, Contract, DevNetwork, Worker};
 
 use crate::utils::{parse_view_result, view_outcome_pretty};
 
-use super::{types::init::GroupOutput, views::workflow_instance};
+use super::{
+    types::init::GroupOutput,
+    view::{workflow_instance, workflow_storage, workflow_templates},
+};
 
 pub(crate) async fn check_group<T>(
     worker: &Worker<T>,
@@ -61,13 +64,55 @@ where
     let instance = workflow_instance(worker, dao, proposal_id)
         .await?
         .expect("failed to get workflow instance");
+    dbg!(instance.clone());
     assert_eq!(
-        instance.current_activity_id, expected_activity_id,
+        instance.get_current_activity_id(),
+        expected_activity_id,
         "check_instance_state: instance activities are not equal"
     );
     assert_eq!(
-        instance.state, expected_state,
+        instance.get_state(),
+        expected_state,
         "check_instance_state: instance states are not equal"
     );
+    Ok(())
+}
+
+pub(crate) async fn check_wf_templates<T>(
+    worker: &Worker<T>,
+    dao: &Contract,
+    expected_count: usize,
+) -> anyhow::Result<()>
+where
+    T: DevNetwork,
+{
+    let templates = workflow_templates(worker, dao).await?;
+    assert_eq!(
+        templates.len(),
+        expected_count,
+        "check_wf_templates: dao wf templates count does not match expected",
+    );
+    Ok(())
+}
+
+pub(crate) async fn check_wf_storage_values<T>(
+    worker: &Worker<T>,
+    dao: &Contract,
+    workflow_storage_key: String,
+    expected_values: Vec<(String, Value)>,
+) -> anyhow::Result<()>
+where
+    T: DevNetwork,
+{
+    let storage = workflow_storage(worker, dao, workflow_storage_key)
+        .await?
+        .expect("check_wf_storage_values: workflow storage not found");
+
+    for value in expected_values {
+        assert!(
+            storage.contains(&value),
+            "check_wf_templates: some of the expected values not found in the workflow storage"
+        );
+    }
     Ok(())
 }

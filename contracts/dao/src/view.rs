@@ -137,14 +137,10 @@ impl Contract {
         self.tags.get(&category)
     }
 
-    pub fn storage_bucket_data_all(self, bucket_id: StorageKey) -> Option<Vec<Value>> {
-        self.storage.get(&bucket_id).map(|bucket| {
-            bucket
-                .get_all_data()
-                .into_iter()
-                .map(|(_, data)| data)
-                .collect()
-        })
+    pub fn storage_bucket_data_all(self, bucket_id: StorageKey) -> Option<Vec<(String, Value)>> {
+        self.storage
+            .get(&bucket_id)
+            .map(|bucket| bucket.get_all_data())
     }
 
     pub fn storage_buckets(self) -> Vec<StorageKey> {

@@ -5,8 +5,9 @@ use workspaces::{Contract, DevNetwork, Worker};
 use crate::utils::{parse_view_result, view_outcome_pretty};
 
 use super::types::{
-    consts::DAO_VIEW_INSTANCE,
-    proposal::{Proposal, ViewInstance, ViewProposal, Votes},
+    consts::{DAO_VIEW_INSTANCE, DAO_VIEW_TEMPLATES, DAO_VIEW_WORKFLOW_STORAGE},
+    proposal::{Proposal, Votes},
+    view::{ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
 };
 
 pub(crate) async fn proposal<T>(
@@ -52,4 +53,37 @@ where
         .flatten()
         .map(|(i, _)| i);
     Ok(instance)
+}
+
+pub(crate) async fn workflow_templates<T>(
+    worker: &Worker<T>,
+    dao: &Contract,
+) -> anyhow::Result<ViewTemplates>
+where
+    T: DevNetwork,
+{
+    let args = json!({}).to_string().into_bytes();
+    let outcome = dao.view(&worker, DAO_VIEW_TEMPLATES, args).await?;
+    view_outcome_pretty::<ViewTemplates>("dao view templates", &outcome);
+    let instance =
+        parse_view_result::<ViewTemplates>(&outcome).expect("failed to parse workflow templates");
+    Ok(instance)
+}
+
+pub(crate) async fn workflow_storage<T>(
+    worker: &Worker<T>,
+    dao: &Contract,
+    workflow_storage_key: String,
+) -> anyhow::Result<ViewWorkflowStorage>
+where
+    T: DevNetwork,
+{
+    let args = json!({ "bucket_id": workflow_storage_key })
+        .to_string()
+        .into_bytes();
+    let outcome = dao.view(&worker, DAO_VIEW_WORKFLOW_STORAGE, args).await?;
+    view_outcome_pretty::<ViewWorkflowStorage>("dao view workflow storage", &outcome);
+    let storage = parse_view_result::<ViewWorkflowStorage>(&outcome)
+        .expect("failed to parse workflow storage");
+    Ok(storage)
 }

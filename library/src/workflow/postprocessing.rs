@@ -6,7 +6,7 @@ use near_sdk::{
 };
 
 use crate::{
-    functions::binding::get_value_from_source,
+    functions::utils::get_value_from_source,
     storage::StorageBucket,
     types::{
         activity_input::ActivityInput,
@@ -150,15 +150,10 @@ impl Postprocessing {
                     global_storage.add_data(key, &result);
                 }
                 Instruction::StoreWorkflow => {
-                    let (workflow, fncalls, fncall_metadata, std_fncalls, std_fncall_metadata): ProviderTemplateData = serde_json::from_slice(&fn_result_val).unwrap();
+                    let (workflow, fncalls, fncall_metadata): ProviderTemplateData =
+                        serde_json::from_slice(&fn_result_val).unwrap();
 
-                    *new_template = Some((
-                        workflow,
-                        fncalls,
-                        fncall_metadata,
-                        std_fncalls,
-                        std_fncall_metadata,
-                    ))
+                    *new_template = Some((workflow, fncalls, fncall_metadata))
                 }
                 Instruction::StoreExpression(_, _, _, _) => return Err(()),
                 Instruction::StoreExpressionGlobal(_, _, _, _) => return Err(()),
@@ -266,6 +261,8 @@ impl Postprocessing {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use near_sdk::{serde_json, test_utils::VMContextBuilder, testing_env};
 
     use crate::{
@@ -275,7 +272,7 @@ mod test {
         },
         storage::StorageBucket,
         types::{
-            activity_input::{ActivityInput, InputHashMap},
+            activity_input::ActivityInput,
             datatype::{Datatype, Value},
             source::SourceMock,
         },
@@ -296,7 +293,7 @@ mod test {
     fn postprocessing_simple_cond_1() {
         testing_env!(VMContextBuilder::new().build());
 
-        let mut hm = InputHashMap::new();
+        let mut hm = HashMap::new();
         hm.set("key_1", Value::String("value_1".into()));
         hm.set("key_2", Value::U64(420));
 

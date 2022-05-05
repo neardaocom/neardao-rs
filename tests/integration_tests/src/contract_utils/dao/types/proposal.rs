@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use library::workflow::{
     instance::Instance,
     settings::{ProposeSettings, TemplateSettings},
+    template::Template,
 };
 use serde::{Deserialize, Serialize};
 use workspaces::AccountId;
@@ -14,9 +15,7 @@ pub enum ProposalType {
     Skyward(SkywardOptions),
 }
 
-pub(crate) type ViewProposal = Option<(VProposal, Option<Vec<TemplateSettings>>)>;
 pub(crate) type Votes = HashMap<AccountId, u8>;
-pub(crate) type ViewInstance = Option<(Instance, ProposeSettings)>;
 
 /// Proposal settings for WorkflowAdd.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

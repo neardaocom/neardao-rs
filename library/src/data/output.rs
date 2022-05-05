@@ -5,7 +5,7 @@ use crate::workflow::types::ObjectMetadata;
 
 use near_sdk::serde_json;
 
-use super::standard_fn_calls::{
+use super::object_metadata::standard_fn_calls::{
     nep_141_ft_transfer, nep_141_ft_transfer_call, nep_171_nft_transfer, nep_171_nft_transfer_call,
 };
 

@@ -18,11 +18,11 @@ impl SourceProvider for SourceMock {
         todo!()
     }
 
-    fn storage(&self, key: &str) -> Option<&Value> {
+    fn storage(&self, key: &str) -> Option<Value> {
         todo!()
     }
 
-    fn global_storage(&self, key: &str) -> Option<&Value> {
+    fn global_storage(&self, key: &str) -> Option<Value> {
         todo!()
     }
 

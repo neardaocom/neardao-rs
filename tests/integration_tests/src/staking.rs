@@ -104,6 +104,7 @@ fn check_user_result(
 /// Check DAO's storage balance
 /// DAO storage_unregister itself
 #[tokio::test]
+#[ignore]
 async fn staking_full_scenario() -> Result<()> {
     let worker = workspaces::sandbox().await?;
     let staking_blob_path = &get_staking_wasm();

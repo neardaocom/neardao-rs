@@ -1,10 +1,5 @@
 use library::{
-    data::{
-        basic_workflows::{
-            workflow_settings_skyward, workflow_wf_add_propose_settings, WfAddProposeOptions,
-        },
-        skyward::{workflow_skyward_template_settings_data_1, SkywardTemplateUserOptions},
-    },
+    data::workflows::integration::skyward::{Skyward1, Skyward1ProposeOptions},
     workflow::settings::{ProposeSettings, TemplateSettings},
 };
 use serde_json::json;
@@ -13,7 +8,7 @@ use workspaces::{Account, AccountId, Contract, DevNetwork, Worker};
 use crate::{
     contract_utils::dao::{
         types::proposal::{ProposalCreateInput, ProposalState},
-        views::{proposal, votes},
+        view::{proposal, votes},
     },
     utils::outcome_pretty,
 };
@@ -124,31 +119,21 @@ where
 
     Ok(())
 }
-
-pub(crate) fn ps_wf_add(template_id: u16, provider_id: &AccountId) -> ProposeSettings {
-    workflow_wf_add_propose_settings(Some(WfAddProposeOptions {
-        template_id,
-        provider_id: provider_id.to_string(),
-    }))
-}
-
-/// Default template settings for proposal wf add skyward.
-pub(crate) fn ts_for_skyward() -> TemplateSettings {
-    workflow_settings_skyward()
-}
-
 /// Default proposal settings for proposal wf add skyward.
 pub(crate) fn ps_skyward(
     token_id: &AccountId,
     token_amount: u128,
     auction_start: u128,
     auction_duration: u128,
+    storage_key: Option<&str>,
 ) -> ProposeSettings {
-    workflow_skyward_template_settings_data_1(Some(SkywardTemplateUserOptions {
-        token_account_id: token_id.to_string(),
-        token_amount,
-        auction_start,
-        auction_duration,
-    }))
-    .1
+    Skyward1::propose_settings(
+        Some(Skyward1ProposeOptions {
+            token_account_id: token_id.to_string(),
+            token_amount,
+            auction_start,
+            auction_duration,
+        }),
+        storage_key,
+    )
 }

@@ -20,7 +20,7 @@ use crate::{
     CalculatedVoteResults, ProposalId, ProposalWf, TimestampSec, VoteTotalPossible, Votes,
 };
 use library::{
-    functions::binding::get_value_from_source,
+    functions::utils::get_value_from_source,
     storage::StorageBucket,
     types::{
         activity_input::ActivityInput, consts::Consts, datatype::Value, error::ProcessingError,
@@ -402,41 +402,24 @@ impl Contract {
         } */
     }
 
+    // TODO: Review process.
     /// Error callback.
     /// If promise did not have to succeed, then instance is still updated.
     pub fn postprocessing_failed(&mut self, proposal_id: u32, must_succeed: bool) {
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
-
-        let awaiting_state = wfi.awaiting_state.take().unwrap();
-
         if must_succeed {
-            // Switch state back to running.
-            wfi.unset_awaiting_state(InstanceState::Running);
-
-            // TODO: Question is if to do postprocessing as well or just update instance.
+            wfi.promise_failed();
         } else {
-            if awaiting_state.is_new_transition {
-                wfi.transition_next(
-                    awaiting_state.activity_id as usize,
-                    awaiting_state.new_activity_actions_count,
-                    1,
-                );
-            } else {
-                wfi.actions_done_count += 1;
-            }
-
-            // This might be unnecessary as activity with one optional action does not make much sense.
-            if wfi.actions_done_count == wfi.actions_total && awaiting_state.wf_finish {
-                wfi.unset_awaiting_state(InstanceState::Finished);
-            } else {
-                wfi.awaiting_state = Some(awaiting_state);
-            }
+            let timestamp = current_timestamp_sec();
+            wfi.promise_success();
+            wfi.try_to_advance_activity();
+            wfi.try_to_finish(1, timestamp);
         }
-
         self.workflow_instance
             .insert(&proposal_id, &(wfi, settings));
     }
 
+    // TODO: Review process.
     /// Success callback.
     /// Modifies workflow's instance.
     /// If `postprocessing` is included, then also postprocessing script is executed.
@@ -450,34 +433,17 @@ impl Contract {
         promise_call_result: Vec<u8>,
     ) {
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
-
-        let awaiting_state = wfi.awaiting_state.take().unwrap();
-
         // Action transaction check if previous action succesfully finished.
-        if wfi.actions_done_count < action_id {
-            wfi.unset_awaiting_state(InstanceState::Running);
+        if wfi.check_invalid_action(action_id) {
             self.workflow_instance
                 .insert(&proposal_id, &(wfi, settings));
             return;
         }
-        wfi.last_transition_done_at = env::block_timestamp();
-        wfi.actions_done_count += 1;
-
-        // Check if its last action done.
-        if wfi.actions_done_count == wfi.actions_total {
-            if awaiting_state.wf_finish {
-                wfi.unset_awaiting_state(InstanceState::Finished);
-            } else {
-                wfi.unset_awaiting_state(InstanceState::Running);
-            }
-        // Check if its first action done
-        } else if wfi.actions_done_count == 1 {
-            wfi.transition_next(
-                awaiting_state.activity_id as usize,
-                awaiting_state.new_activity_actions_count,
-                1,
-            );
-        }
+        // Check if its first action done in the activity
+        wfi.promise_success();
+        wfi.try_to_advance_activity();
+        wfi.try_to_finish(1, current_timestamp_sec());
+        log!("{:?}", wfi);
 
         // Execute postprocessing script which must always succeed.
         if let Some(pp) = postprocessing {
@@ -499,17 +465,10 @@ impl Contract {
                 )
                 .is_err()
             {
-                wfi.unset_awaiting_state(InstanceState::FatalError);
+                wfi.set_fatal_error();
             } else {
                 // Only in case its workflow Add.
-                if let Some((
-                    workflow,
-                    fncalls,
-                    fncall_metadata,
-                    std_fncalls,
-                    std_fncall_metadata,
-                )) = new_template
-                {
+                if let Some((workflow, fncalls, fncall_metadata)) = new_template {
                     // Unwraping is ok as settings are inserted when this proposal is accepted.
                     let settings = self
                         .proposed_workflow_settings
@@ -520,7 +479,6 @@ impl Contract {
                     self.workflow_template
                         .insert(&self.workflow_last_id, &(workflow, settings));
                     self.init_function_calls(fncalls, fncall_metadata);
-                    self.init_standard_function_calls(std_fncalls, std_fncall_metadata);
                 }
 
                 // Save updated storages.
@@ -531,8 +489,6 @@ impl Contract {
                     .insert(&GLOBAL_BUCKET_IDENT.into(), &global_storage);
             }
         };
-
-        wfi.awaiting_state = Some(awaiting_state);
         self.workflow_instance
             .insert(&proposal_id, &(wfi, settings));
     }
@@ -570,9 +526,8 @@ impl Contract {
     }
 
     /// Checks if inputs structure is same as activity definition.
+    /// First action input must belong to next action to be done.
     /// Same order as activity's actions is required.
-    /// Done activities are not required to be in inputs.
-    /// Skips done actions.
     pub fn check_activity_input(
         &self,
         actions: &[TemplateAction],

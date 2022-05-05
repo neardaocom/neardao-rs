@@ -1,6 +1,6 @@
 use library::{
     data::{
-        skyward::{workflow_skyward_template_data_1, SkywardTemplateDataOptions},
+        workflows::integration::skyward::{Skyward1, Skyward1TemplateOptions},
         TemplateData,
     },
     workflow::help::TemplateHelp,
@@ -75,7 +75,7 @@ fn wf_templates(
 ) -> Vec<(String, TemplateData, Option<TemplateHelp>)> {
     let templates = vec![(
         "skyward".into(),
-        workflow_skyward_template_data_1(Some(SkywardTemplateDataOptions {
+        Skyward1::template(Some(Skyward1TemplateOptions {
             skyward_account_id: skyward_id.to_string(),
             wnear_account_id: wnear_id.to_string(),
         })),

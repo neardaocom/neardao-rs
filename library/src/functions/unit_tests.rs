@@ -14,7 +14,7 @@ use crate::{
     interpreter::expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
     storage::StorageBucket,
     types::{
-        activity_input::{ActivityInput, InputHashMap},
+        activity_input::ActivityInput,
         datatype::{Datatype, Value},
         source::{SourceMock, SourceProvider},
     },
@@ -187,7 +187,7 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
         }),
     ];
 
-    let mut hm = InputHashMap::new();
+    let mut hm = HashMap::new();
 
     // Object 0
     hm.set("sale_info", Value::String("Sale info from user".into()));
@@ -292,7 +292,7 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
         },
     ];
 
-    let mut hm = InputHashMap::new();
+    let mut hm = HashMap::new();
 
     // Object 0
     hm.set("sale_info", Value::String("sale info binded".into()));
@@ -551,7 +551,7 @@ fn serialize_complex() {
         },
     ];
 
-    let mut input_data = InputHashMap(HashMap::new());
+    let mut input_data = HashMap::new();
     input_data.set("first_name", Value::String("Mike".into()));
     input_data.set("surname", Value::String("Segal".into()));
     input_data.set("age", Value::U64(25));

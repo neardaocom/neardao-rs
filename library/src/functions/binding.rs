@@ -1,15 +1,11 @@
 use crate::workflow::types::SrcOrExprOrValue::{Expr, Src, Value};
 use crate::{
     interpreter::expression::EExpr,
-    types::{
-        activity_input::ActivityInput,
-        error::{ProcessingError, SourceError},
-        source::Source,
-    },
+    types::{activity_input::ActivityInput, error::ProcessingError, source::Source},
     workflow::types::{ArgSrc, BindDefinition},
 };
 
-use super::utils::object_key;
+use super::utils::{get_value_from_source, object_key};
 
 // TODO: Replace panic
 pub fn bind_input(
@@ -58,62 +54,4 @@ where
     }
 
     Ok(())
-}
-
-/// Helper function to fetch value ref from Source.
-pub fn get_value_from_source(
-    sources: &dyn Source,
-    src: &ArgSrc,
-) -> Result<crate::types::datatype::Value, SourceError> {
-    match src {
-        ArgSrc::ConstsTpl(key) => {
-            let value = sources
-                .tpl(key)
-                .ok_or(SourceError::SourceMissing)?
-                .to_owned();
-            Ok(value)
-        }
-        ArgSrc::ConstsSettings(key) => {
-            let value = sources
-                .tpl_settings(key)
-                .ok_or(SourceError::SourceMissing)?
-                .to_owned();
-            Ok(value.to_owned())
-        }
-        ArgSrc::ConstAction(_key) => {
-            unimplemented!();
-        }
-        ArgSrc::ConstActivityShared(_key) => {
-            unimplemented!();
-        }
-        ArgSrc::Storage(key) => {
-            let value = sources
-                .storage(key)
-                .ok_or(SourceError::SourceMissing)?
-                .to_owned();
-            Ok(value)
-        }
-        ArgSrc::GlobalStorage(key) => {
-            let value = sources
-                .global_storage(key)
-                .ok_or(SourceError::SourceMissing)?
-                .to_owned();
-            Ok(value)
-        }
-        ArgSrc::Const(key) => {
-            let value = sources
-                .dao_const(*key)
-                .ok_or(SourceError::SourceMissing)?
-                .to_owned();
-            Ok(value)
-        }
-        ArgSrc::ConstPropSettings(key) => {
-            let value = sources
-                .props_global(key)
-                .ok_or(SourceError::SourceMissing)?
-                .to_owned();
-            Ok(value)
-        }
-        _ => Err(SourceError::InvalidSourceVariant),
-    }
 }

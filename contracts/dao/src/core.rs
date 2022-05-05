@@ -13,11 +13,14 @@ use library::workflow::template::Template;
 use library::workflow::types::{DaoActionIdent, ObjectMetadata};
 use library::{FnCallId, MethodName};
 
+use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
-use near_sdk::serde::Serialize;
+use near_sdk::json_types::U128;
+use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, log, near_bindgen, AccountId, Balance, BorshStorageKey, IntoStorageKey, PanicOnDefault,
+    PromiseOrValue,
 };
 
 use crate::group::{Group, GroupInput};
@@ -247,7 +250,10 @@ impl Contract {
             .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
         self.workflow_instance.insert(
             &self.proposal_last_id,
-            &(Instance::new(template_id), propose_settings),
+            &(
+                Instance::new(template_id, wft.end.clone()),
+                propose_settings,
+            ),
         );
         // TODO: Croncat registration to finish proposal
         self.proposal_last_id
@@ -298,8 +304,7 @@ impl Contract {
                 } else {
                     let vote_result = self.eval_votes(&proposal.votes, &wfs);
                     if matches!(vote_result, ProposalState::Accepted) {
-                        instance.state = InstanceState::Running;
-                        instance.init_transition_counter(
+                        instance.init_running(
                             wft.transitions.as_slice(),
                             wfs.transition_limits.as_slice(),
                         );
@@ -329,6 +334,7 @@ impl Contract {
         }
     }
 
+    // TODO: Implement autofinish on FatalError.
     /// Changes workflow instance state to finish.
     /// Rights to close are same as the "end" activity rights.
     pub fn wf_finish(&mut self, proposal_id: u32) -> bool {
@@ -339,13 +345,13 @@ impl Contract {
 
         let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
 
-        if wfi.state == InstanceState::FatalError
+        // TODO: Transition timestamp should not be included in this case.
+        if wfi.get_state() == InstanceState::FatalError
             || self.check_rights(
-                wfs.activity_rights[wfi.current_activity_id as usize - 1].as_slice(),
+                wfs.activity_rights[wfi.get_current_activity_id() as usize - 1].as_slice(),
                 &caller,
-            ) && wft.end.contains(&wfi.current_activity_id)
+            ) && wfi.try_to_finish(0, current_timestamp_sec())
         {
-            wfi.state = InstanceState::Finished;
             self.workflow_instance
                 .insert(&proposal_id, &(wfi, settings));
             true
@@ -399,6 +405,27 @@ impl Contract {
     #[private]
     pub fn delete_self(&mut self) -> Promise {
         Promise::new(env::current_account_id()).delete_account("neardao.testnet".into())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct TokenReceiverMessage {
+    pub proposal_id: u32,
+    pub workflow_id: u16,
+    pub activity_id: u8,
+}
+
+impl FungibleTokenReceiver for Contract {
+    /// TODO: Implement.
+    /// Required for some workflow scenarios.
+    fn ft_on_transfer(
+        &mut self,
+        sender_id: AccountId,
+        amount: U128,
+        msg: String,
+    ) -> PromiseOrValue<U128> {
+        todo!()
     }
 }
 

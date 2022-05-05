@@ -94,33 +94,15 @@ impl Contract {
     pub fn wf_template(
         self,
         id: u16,
-    ) -> Option<(
-        Template,
-        Vec<FnCallId>,
-        Vec<Vec<ObjectMetadata>>,
-        //Vec<MethodName>,
-        //Vec<Vec<ObjectMetadata>>,
-    )> {
+    ) -> Option<(Template, Vec<FnCallId>, Vec<Vec<ObjectMetadata>>)> {
         match self.workflows.get(&id) {
             Some(t) => match self.workflow_fncalls.get(&id) {
-                Some((fncalls, std_fncalls)) => {
+                Some((fncalls, _)) => {
                     let mut fncalls_metadata = Vec::with_capacity(fncalls.len());
                     for fncall in fncalls.iter() {
                         fncalls_metadata.push(self.fncall_metadata.get(fncall).unwrap());
                     }
-
-                    let mut std_fncalls_metadata = Vec::with_capacity(std_fncalls.len());
-                    for std_fncall in std_fncalls.iter() {
-                        std_fncalls_metadata
-                            .push(self.standard_fncall_metadata.get(std_fncall).unwrap());
-                    }
-                    Some((
-                        t,
-                        fncalls,
-                        fncalls_metadata,
-                        //std_fncalls,
-                        //std_fncalls_metadata,
-                    ))
+                    Some((t, fncalls, fncalls_metadata))
                 }
                 None => panic!("Missing FnCalls for the required template."),
             },

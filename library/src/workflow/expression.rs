@@ -4,7 +4,7 @@ use near_sdk::{
 };
 
 use crate::{
-    functions::binding::get_value_from_source,
+    functions::utils::get_value_from_source,
     interpreter::{condition::Condition, expression::EExpr},
     types::{
         activity_input::ActivityInput, datatype::Value, error::ProcessingError, source::Source,
@@ -12,8 +12,10 @@ use crate::{
 };
 
 use super::types::ArgSrc;
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 /// Expression wrapper for workflows
 /// with defined sources for expression.

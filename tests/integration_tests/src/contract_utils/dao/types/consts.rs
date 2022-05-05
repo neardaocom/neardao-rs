@@ -11,5 +11,7 @@ pub const DEPOSIT_PROPOSE_WF_ADD: u128 = ONE_NEAR;
 pub const DEPOSIT_VOTE_WF_ADD: u128 = ONE_YOCTO;
 
 pub const DAO_VIEW_INSTANCE: &str = "wf_instance";
+pub const DAO_VIEW_TEMPLATES: &str = "wf_templates";
+pub const DAO_VIEW_WORKFLOW_STORAGE: &str = "storage_bucket_data_all";
 
 pub const PROVIDER_VIEW_TEMPLATE: &str = "wf_template";

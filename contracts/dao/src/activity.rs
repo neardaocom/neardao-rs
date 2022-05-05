@@ -1,13 +1,13 @@
-use library::functions::binding::{bind_input, get_value_from_source};
 use library::functions::serialization::serialize_to_json;
 use library::functions::validation::validate;
+use library::functions::{binding::bind_input, utils::get_value_from_source};
 use library::interpreter::expression::EExpr;
 
 use library::storage::StorageBucket;
 use library::types::datatype::Value;
 use library::types::source::{DefaultSource, Source};
 use library::workflow::action::{ActionData, ActionInput};
-use library::workflow::activity::TemplateActivity;
+use library::workflow::activity::{TemplateActivity, Terminality};
 use library::workflow::instance::InstanceState;
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
@@ -17,6 +17,7 @@ use crate::callback::ext_self;
 use crate::constants::{EVENT_CALLER_KEY, GLOBAL_BUCKET_IDENT};
 use crate::error::{ActionError, ActivityError};
 use crate::group::{GroupInput, GroupMember, GroupSettings};
+use crate::internal::utils::current_timestamp_sec;
 use crate::internal::ActivityContext;
 use crate::proposal::ProposalState;
 use crate::settings::{assert_valid_dao_settings, DaoSettings};
@@ -56,7 +57,6 @@ impl Contract {
             Some(ref key) => self.storage.get(key),
             _ => None,
         };
-        let mut is_new_transition = false;
         let global_storage = self.storage.get(&GLOBAL_BUCKET_IDENT.into()).unwrap();
         let mut sources: Box<dyn Source> = Box::new(DefaultSource::from(
             constants,
@@ -73,10 +73,25 @@ impl Contract {
             "Proposal is not accepted."
         );
         assert!(
-            wfi.state == InstanceState::Running,
+            wfi.get_state() == InstanceState::Running,
             "Workflow is not running."
         );
+        assert!(activities.get(activity_id).is_some(), "activity not found");
 
+        // Finds activity.
+        let TemplateActivity {
+            is_dao_activity,
+            automatic,
+            terminal,
+            actions,
+            postprocessing,
+            ..
+        } = activities
+            .swap_remove(activity_id)
+            .into_activity()
+            .expect("Activity is init");
+
+        // TODO: Register transition
         // Loop / other activity case
         if wfi.is_new_transition(activity_id) {
             // Find transition
@@ -86,7 +101,7 @@ impl Contract {
 
             // Check transition counter
             assert!(
-                wfi.check_transition_counter(activity_id as usize),
+                wfi.update_transition_counter(activity_id as usize),
                 "Reached transition limit."
             );
 
@@ -103,36 +118,29 @@ impl Contract {
                     .unwrap_or(true),
                 "Transition condition failed."
             );
-
-            is_new_transition = true;
+            wfi.register_new_activity(
+                activity_id as u8,
+                actions.len() as u8,
+                terminal == Terminality::Automatic,
+            );
+        } else {
+            assert!(wfi.actions_remaining() > 0, "activity is already finished");
         }
 
-        // Finds activity
-        let TemplateActivity {
-            is_dao_activity,
-            automatic,
-            terminal,
-            actions,
-            postprocessing,
-            ..
-        } = activities
-            .swap_remove(activity_id)
-            .into_activity()
-            .expect("Activity is init");
-
+        // Create execution context DTO.
         let mut ctx = ActivityContext::new(
             proposal_id,
             activity_id,
             env::predecessor_account_id(),
             env::attached_deposit(),
             prop_settings,
-            wfi.actions_done_count,
+            wfi.actions_done_count(),
             postprocessing,
             terminal,
             actions,
         );
 
-        // Skip right checks for automatic activity.
+        // Skip rights check for automatic activity.
         // TODO: This might be solved by settings run rights "Anyone" to the automatic activity.
         if automatic {
             // Check rights
@@ -149,6 +157,8 @@ impl Contract {
         }
 
         // Check action input structure including optional actions.
+        //dbg!(actions_inputs.clone());
+        //assert!(
         assert!(
             self.check_activity_input(
                 ctx.actions.as_slice(),
@@ -167,22 +177,12 @@ impl Contract {
             );
 
             // In case not a single DaoAction was executed, then consider this call as failed and panic!
-            if result.is_err() && ctx.actions_done() == 0 {
+            if result.is_err() || ctx.actions_done() == 0 {
                 panic!("Not a single action was executed.");
             } else {
                 //At least one action was executed.
-                wfi.last_transition_done_at = env::block_timestamp() / 10u64.pow(9);
-
-                if is_new_transition {
-                    wfi.transition_next(activity_id, ctx.actions_count(), ctx.actions_done_now);
-                } else {
-                    wfi.actions_done_count = ctx.actions_done_now;
-                }
-
-                // This can happen only if no error occured.
-                if ctx.all_actions_done() && ctx.activity_autofinish() {
-                    wfi.state = InstanceState::Finished;
-                }
+                wfi.try_to_advance_activity();
+                wfi.try_to_finish(ctx.actions_done(), current_timestamp_sec());
 
                 // Save mutated storage.
                 if let Some(storage) = sources.take_storage() {
@@ -209,14 +209,9 @@ impl Contract {
             if result.is_err() && ctx.actions_done() == 0 {
                 panic!("Not a single action was executed.");
             } else {
-                wfi.actions_done_count += optional_actions;
-                wfi.set_new_awaiting_state(
-                    activity_id as u8,
-                    is_new_transition,
-                    ctx.actions_done_now,
-                    ctx.activity_autofinish(),
-                );
+                wfi.await_promises(ctx.actions_done());
             }
+            log!("{:?}", wfi);
         }
 
         // Decide if is fatal error.
@@ -224,7 +219,7 @@ impl Contract {
             let e = ActivityError::from(e);
 
             if e.is_fatal() {
-                wfi.state = InstanceState::FatalError;
+                wfi.set_fatal_error();
             }
             Err(e)
         } else {

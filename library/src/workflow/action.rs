@@ -25,8 +25,8 @@ pub struct TemplateAction {
     pub optional: bool,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Clone))]
 #[serde(crate = "near_sdk::serde")]
 pub enum ActionData {
     FnCall(FnCallData),
@@ -50,8 +50,9 @@ impl ActionData {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
+// TODO: Remove Debug and Clone in production.
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct DaoActionData {
     pub name: DaoActionIdent,
@@ -67,8 +68,9 @@ impl DaoActionData {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
+// TODO: Remove Debug and Clone in production.
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Clone))]
 #[serde(crate = "near_sdk::serde")]
 pub struct FnCallData {
     pub id: FnCallIdType,
@@ -78,8 +80,9 @@ pub struct FnCallData {
     pub binds: Vec<BindDefinition>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]
+// TODO: Remove Debug and Clone in production.
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 /// Defines type of function call and source of its receiver.
 /// Variants with prefix "Standard" define function calls for standart implementation methods, eg. FT NEP-141.
@@ -91,16 +94,17 @@ pub enum FnCallIdType {
     StandardDynamic(ArgSrc, MethodName),
 }
 
-#[derive(Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, Serialize))]
+// TODO: Remove Debug and Clone in production.
+#[derive(Deserialize, Debug, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Serialize))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ActionInput {
     pub action: DaoActionOrFnCall,
     pub values: UserInput,
 }
-
-#[derive(Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, Serialize))]
+// TODO: Remove Debug and Clone in production.
+#[derive(Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Serialize))]
 #[serde(crate = "near_sdk::serde")]
 pub enum DaoActionOrFnCall {
     DaoAction(DaoActionIdent),

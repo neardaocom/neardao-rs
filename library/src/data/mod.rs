@@ -1,12 +1,3 @@
-#![allow(unused)]
-
-pub mod standard_fn_calls;
-
-// Workflow data for tests and provider
-pub mod basic_workflows;
-//pub mod bounty;
-pub mod skyward;
-
 use crate::{
     workflow::{
         settings::{ProposeSettings, TemplateSettings},
@@ -16,7 +7,9 @@ use crate::{
     FnCallId,
 };
 
-// Output for provider
+pub mod object_metadata;
+pub mod workflows;
+
 #[cfg(test)]
 pub mod output;
 
