@@ -2,7 +2,7 @@ use near_sdk::AccountId;
 use types::datatype::{Datatype, Value};
 use workflow::{template::Template, types::ObjectMetadata};
 pub mod data;
-//mod unit_tests;
+mod unit_tests;
 
 pub mod functions;
 pub mod interpreter;

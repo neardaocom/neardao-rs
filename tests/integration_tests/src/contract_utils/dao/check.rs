@@ -68,12 +68,12 @@ where
     assert_eq!(
         instance.get_current_activity_id(),
         expected_activity_id,
-        "check_instance_state: instance activities are not equal"
+        "check_instance_state: instance activities are not equal",
     );
     assert_eq!(
         instance.get_state(),
         expected_state,
-        "check_instance_state: instance states are not equal"
+        "check_instance_state: instance states are not equal",
     );
     Ok(())
 }
@@ -111,7 +111,7 @@ where
     for value in expected_values {
         assert!(
             storage.contains(&value),
-            "check_wf_templates: some of the expected values not found in the workflow storage"
+            "check_wf_templates: some of the expected values not found in the workflow storage: {:?}", storage
         );
     }
     Ok(())

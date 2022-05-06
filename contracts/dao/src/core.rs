@@ -58,6 +58,7 @@ pub enum StorageKeys {
     FunctionCallWhitelist,
     WfTemplate,
     WfTemplateSettings,
+    WfProposeSettings,
     ProposedWfTemplateSettings,
     ActivityLog,
     WfInstance,
@@ -106,10 +107,13 @@ pub struct Contract {
     pub standard_function_call_metadata: UnorderedMap<MethodName, Vec<ObjectMetadata>>,
     pub workflow_last_id: u16,
     pub workflow_template: UnorderedMap<u16, (Template, Vec<TemplateSettings>)>,
-    pub workflow_instance: UnorderedMap<ProposalId, (Instance, ProposeSettings)>,
+    pub workflow_instance: UnorderedMap<ProposalId, Instance>,
+    pub workflow_propose_settings: UnorderedMap<ProposalId, ProposeSettings>,
     /// Proposed workflow template settings for WorkflowAdd.
     pub proposed_workflow_settings: LookupMap<ProposalId, Vec<TemplateSettings>>,
     pub workflow_activity_log: LookupMap<ProposalId, Vec<ActivityLog>>, // Logs will be moved to indexer when its ready
+    // TODO: Remove in production.
+    pub debug_log: Vec<String>,
 }
 
 #[near_bindgen]
@@ -165,8 +169,11 @@ impl Contract {
             workflow_last_id: 0,
             workflow_template: UnorderedMap::new(StorageKeys::WfTemplate),
             workflow_instance: UnorderedMap::new(StorageKeys::WfInstance),
+            workflow_propose_settings: UnorderedMap::new(StorageKeys::WfProposeSettings),
+
             proposed_workflow_settings: LookupMap::new(StorageKeys::ProposedWfTemplateSettings),
             workflow_activity_log: LookupMap::new(StorageKeys::ActivityLog),
+            debug_log: Vec::default(),
         };
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
@@ -241,6 +248,7 @@ impl Contract {
                 panic!("Template requires storage, but no key was provided.");
             }
         }
+        // TODO: Refactor.
         // Check that proposal binds have valid structure.
         //self.assert_valid_proposal_binds_structure(
         //    propose_settings.binds.as_slice(),
@@ -248,13 +256,8 @@ impl Contract {
         //);
         self.proposals
             .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
-        self.workflow_instance.insert(
-            &self.proposal_last_id,
-            &(
-                Instance::new(template_id, wft.end.clone()),
-                propose_settings,
-            ),
-        );
+        self.workflow_propose_settings
+            .insert(&self.proposal_last_id, &propose_settings);
         // TODO: Croncat registration to finish proposal
         self.proposal_last_id
     }
@@ -295,8 +298,9 @@ impl Contract {
 
     pub fn proposal_finish(&mut self, id: u32) -> ProposalState {
         let (mut proposal, wft, wfs) = self.get_workflow_and_proposal(id);
-        let (mut instance, settings) = self.workflow_instance.get(&id).unwrap();
-
+        let mut instance =
+            Instance::new(proposal.workflow_id, wft.activities.len(), wft.end.clone());
+        let propose_settings = self.workflow_propose_settings.get(&id).unwrap();
         let new_state = match proposal.state {
             ProposalState::InProgress => {
                 if proposal.created + wfs.duration as u64 > env::block_timestamp() / 10u64.pow(9) {
@@ -308,7 +312,7 @@ impl Contract {
                             wft.transitions.as_slice(),
                             wfs.transition_limits.as_slice(),
                         );
-                        if let Some(ref storage_key) = settings.storage_key {
+                        if let Some(ref storage_key) = propose_settings.storage_key {
                             self.storage_bucket_add(storage_key);
                         }
                     }
@@ -320,11 +324,11 @@ impl Contract {
 
         match new_state {
             Some(state) => {
-                self.workflow_instance.insert(&id, &(instance, settings));
+                self.workflow_instance.insert(&id, &instance);
                 proposal.state = state.clone();
                 self.proposals.insert(&id, &VProposal::Curr(proposal));
 
-                if wft.is_simple {
+                if wft.auto_exec {
                     //TODO: Dispatch wf execution with Croncat.
                 }
 
@@ -343,17 +347,16 @@ impl Contract {
 
         assert!(proposal.state == ProposalState::Accepted);
 
-        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
 
         // TODO: Transition timestamp should not be included in this case.
         if wfi.get_state() == InstanceState::FatalError
             || self.check_rights(
                 wfs.activity_rights[wfi.get_current_activity_id() as usize - 1].as_slice(),
                 &caller,
-            ) && wfi.try_to_finish(0, current_timestamp_sec())
+            ) && wfi.new_actions_done(0, current_timestamp_sec())
         {
-            self.workflow_instance
-                .insert(&proposal_id, &(wfi, settings));
+            self.workflow_instance.insert(&proposal_id, &wfi);
             true
         } else {
             false

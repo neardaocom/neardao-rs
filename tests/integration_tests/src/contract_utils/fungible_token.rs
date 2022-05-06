@@ -27,7 +27,7 @@ where
         .max_gas()
         .transact()
         .await?;
-    outcome_pretty("fungible token init", &outcome);
+    outcome_pretty::<()>("fungible token init", &outcome);
     assert!(outcome.is_success(), "fungible token init failed");
     Ok(token)
 }

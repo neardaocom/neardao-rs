@@ -16,7 +16,7 @@ where
         .max_gas()
         .transact()
         .await?;
-    outcome_pretty("wnear init", &outcome);
+    outcome_pretty::<()>("wnear init", &outcome);
     assert!(outcome.is_success(), "wnear init failed");
     Ok(wnear)
 }

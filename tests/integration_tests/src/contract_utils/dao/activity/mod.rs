@@ -38,7 +38,7 @@ where
         "dao: running proposal_id: {} activity_id: {}",
         proposal_id, activity_id
     );
-    outcome_pretty(&msg, &outcome);
+    outcome_pretty::<()>(&msg, &outcome);
     assert!(outcome.is_success(), "dao running activity failed");
 
     Ok(())

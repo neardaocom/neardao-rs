@@ -55,9 +55,12 @@ impl Activity {
     }
 }
 
+// TODO: Remove Debug in production.
 /// Defines activity relation to workflow finish.
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Clone, Copy)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
+#[derive(
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Clone, Copy, Debug,
+)]
+//#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
 pub enum Terminality {
     /// Is not "end" activity.
@@ -77,9 +80,11 @@ pub struct TemplateActivity {
     pub actions: Vec<TemplateAction>,
     /// Execution can be done by anyone anytime.
     pub automatic: bool,
-    /// Workflow can be autoclosed when this was successful.
+    /// Relation to autoclosing workflow and successful execution of the activity.
     pub terminal: Terminality,
+    /// Postprocessing script in case of successfull execution.
     pub postprocessing: Option<Postprocessing>,
+    /// Helper flag.
     pub is_dao_activity: bool,
 }
 
@@ -105,9 +110,10 @@ pub struct Transition {
     pub time_to_cond: Option<Expression>,
 }
 
+// TODO: Remove Debug in production.
 /// From activity_id is defined by its position in the hosting container (Vec).
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct TransitionLimit {
     /// Target activity id.

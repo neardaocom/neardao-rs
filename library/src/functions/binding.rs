@@ -1,3 +1,4 @@
+use crate::workflow::types::CollectionBindingStyle::{ForceSame, Overwrite};
 use crate::workflow::types::SrcOrExprOrValue::{Expr, Src, Value};
 use crate::{
     interpreter::expression::EExpr,
@@ -17,8 +18,8 @@ pub fn bind_input(
 where
 {
     for def in bind_definitions.iter() {
-        match def.is_collection {
-            false => {
+        match &def.collection_data {
+            None => {
                 let value = match &def.key_src {
                     Src(arg_src) => match arg_src {
                         ArgSrc::User(_) => continue,
@@ -29,11 +30,12 @@ where
                 };
                 input.set(def.key.as_str(), value);
             }
-            true => {
-                // At this version we support only one collection in the whole object.
-                // Nested collection are not supported yet.
-                let prefix = def.prefixes.get(0).expect("Prefix 0 not found").as_str();
-
+            Some(data) => {
+                // Version 1.x does not supports nested collections.
+                let prefix = data
+                    .prefixes
+                    .get(0)
+                    .expect("At least 0 prefix must be defined for a collection");
                 let value = match &def.key_src {
                     Src(arg_src) => match arg_src {
                         ArgSrc::User(_) => continue,
@@ -44,10 +46,23 @@ where
                 };
                 let mut counter: u32 = 0;
                 let mut key = object_key(prefix, counter.to_string().as_str(), def.key.as_str());
-                while input.has_key(key.as_str()) {
-                    input.set(key.as_str(), value.clone());
-                    counter += 1;
-                    key = object_key(prefix, counter.to_string().as_str(), def.key.as_str());
+                match data.collection_binding_type {
+                    Overwrite => {
+                        while input.has_key(key.as_str()) {
+                            input.set(key.as_str(), value.clone());
+                            counter += 1;
+                            key =
+                                object_key(prefix, counter.to_string().as_str(), def.key.as_str());
+                        }
+                    }
+                    ForceSame(number) => {
+                        for _ in 0..number as usize {
+                            input.set(key.as_str(), value.clone());
+                            counter += 1;
+                            key =
+                                object_key(prefix, counter.to_string().as_str(), def.key.as_str());
+                        }
+                    }
                 }
             }
         }

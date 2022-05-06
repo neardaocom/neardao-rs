@@ -1,14 +1,14 @@
-use near_sdk::{json_types::U128, ONE_NEAR};
 use serde_json::json;
 use workspaces::{Account, AccountId, Contract, DevNetwork, Worker};
 
-use crate::utils::outcome_pretty;
+use crate::{contract_utils::dao::types::view::StorageBalance, utils::outcome_pretty};
 
 pub(crate) async fn storage_deposit<T>(
     worker: &Worker<T>,
     caller: &Account,
     contract: &Contract,
     account_id: &AccountId,
+    deposit: u128,
 ) -> anyhow::Result<()>
 where
     T: DevNetwork,
@@ -18,7 +18,7 @@ where
         .call(&worker, contract.id(), "storage_deposit")
         .args(args)
         .max_gas()
-        .deposit(ONE_NEAR)
+        .deposit(deposit)
         .transact()
         .await?;
     assert!(outcome.is_success());
@@ -28,6 +28,6 @@ where
         contract.id(),
         account_id
     );
-    outcome_pretty(&msg, &outcome);
+    outcome_pretty::<StorageBalance>(&msg, &outcome);
     Ok(())
 }

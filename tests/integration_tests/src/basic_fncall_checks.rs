@@ -9,7 +9,10 @@ use library::{
     },
     workflow::{
         expression::Expression,
-        types::{ArgSrc, BindDefinition, ObjectMetadata, SrcOrExprOrValue},
+        types::{
+            ArgSrc, BindDefinition, CollectionBindData, CollectionBindingStyle, ObjectMetadata,
+            SrcOrExprOrValue,
+        },
         validator::{CollectionValidator, ObjectValidator, Validator},
     },
 };
@@ -19,6 +22,7 @@ use workspaces::network::DevAccountDeployer;
 
 use crate::utils::outcome_pretty;
 
+/// Test validation, binding and parsing to json with Skyward1 - sale_create input object with mock contract.
 #[tokio::test]
 async fn skyward() -> Result<()> {
     let worker = workspaces::sandbox().await?;
@@ -41,7 +45,7 @@ async fn skyward() -> Result<()> {
         .await?;
 
     assert!(outcome.is_success());
-    outcome_pretty("new", &outcome);
+    outcome_pretty::<()>("new", &outcome);
 
     let args = json!({
         "testcase" : "skyward",
@@ -56,7 +60,7 @@ async fn skyward() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("skyward", &outcome);
+    outcome_pretty::<()>("skyward", &outcome);
 
     Ok(())
 }
@@ -177,14 +181,12 @@ fn testcase_skyward() -> TestCase {
         BindDefinition {
             key: "sale.meta.reason".into(),
             key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl("sale.meta.reason".into())),
-            is_collection: false,
-            prefixes: vec![],
+            collection_data: None,
         },
         BindDefinition {
             key: "sale_info".into(),
             key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl("sale_info".into())),
-            is_collection: false,
-            prefixes: vec![],
+            collection_data: None,
         },
         BindDefinition {
             key: "token_account_id".into(),
@@ -192,8 +194,10 @@ fn testcase_skyward() -> TestCase {
                 args: vec![ArgSrc::ConstsTpl("sale.out_tokens.token_account_id".into())],
                 expr_id: 2,
             }),
-            is_collection: true,
-            prefixes: vec!["sale.out_tokens".into()],
+            collection_data: Some(CollectionBindData {
+                prefixes: vec!["sale.out_tokens".into()],
+                collection_binding_type: CollectionBindingStyle::Overwrite,
+            }),
         },
     ];
 

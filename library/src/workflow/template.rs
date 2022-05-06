@@ -13,13 +13,14 @@ use super::activity::{Activity, TemplateActivity, Transition};
 pub struct Template {
     pub code: String,
     pub version: Version,
-    /// Whole workflow can be auto-executed.
-    pub is_simple: bool,
+    /// Workflow can be auto-executed.
+    pub auto_exec: bool,
     pub need_storage: bool,
     /// First activity is init activity as workflow might diverge from init.
     pub activities: Vec<Activity>,
     /// Expressions shared for all template entities.
     pub expressions: Vec<EExpr>,
+    /// Index of transition is id of activity from.
     pub transitions: Vec<Vec<Transition>>,
     // TODO figure out structure.
     pub constants: SourceDataVariant,

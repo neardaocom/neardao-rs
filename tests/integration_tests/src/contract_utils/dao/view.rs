@@ -1,13 +1,14 @@
 use library::workflow::instance::Instance;
+use near_sdk::json_types::U128;
 use serde_json::json;
-use workspaces::{Contract, DevNetwork, Worker};
+use workspaces::{AccountId, Contract, DevNetwork, Worker};
 
 use crate::utils::{parse_view_result, view_outcome_pretty};
 
 use super::types::{
     consts::{DAO_VIEW_INSTANCE, DAO_VIEW_TEMPLATES, DAO_VIEW_WORKFLOW_STORAGE},
     proposal::{Proposal, Votes},
-    view::{ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
+    view::{StorageBalance, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
 };
 
 pub(crate) async fn proposal<T>(
@@ -49,9 +50,7 @@ where
         .into_bytes();
     let outcome = dao.view(&worker, DAO_VIEW_INSTANCE, args).await?;
     view_outcome_pretty::<ViewInstance>("dao view instance", &outcome);
-    let instance = parse_view_result::<ViewInstance>(&outcome)
-        .flatten()
-        .map(|(i, _)| i);
+    let instance = parse_view_result::<ViewInstance>(&outcome).flatten();
     Ok(instance)
 }
 
@@ -86,4 +85,83 @@ where
     let storage = parse_view_result::<ViewWorkflowStorage>(&outcome)
         .expect("failed to parse workflow storage");
     Ok(storage)
+}
+
+pub(crate) async fn ft_balance_of<T>(
+    worker: &Worker<T>,
+    ft_contract: &Contract,
+    account_id: &AccountId,
+) -> anyhow::Result<U128>
+where
+    T: DevNetwork,
+{
+    let args = json!({ "account_id": account_id.to_string() })
+        .to_string()
+        .into_bytes();
+    let outcome = ft_contract.view(&worker, "ft_balance_of", args).await?;
+    let title = format!(
+        "view ft_balance_of account: {} on contract: {}",
+        ft_contract.id().as_str(),
+        account_id.as_str()
+    );
+    view_outcome_pretty::<U128>(&title, &outcome);
+    let amount = parse_view_result::<U128>(&outcome).expect("failed to parse ft_balance_of amount");
+    Ok(amount)
+}
+
+pub(crate) async fn storage_balance_of<T, U>(
+    worker: &Worker<T>,
+    contract: &Contract,
+    account_id: &AccountId,
+) -> anyhow::Result<U>
+where
+    T: DevNetwork,
+    U: for<'de> serde::Deserialize<'de> + std::fmt::Debug,
+{
+    let args = json!({ "account_id": account_id.to_string() })
+        .to_string()
+        .into_bytes();
+    let outcome = contract.view(&worker, "storage_balance_of", args).await?;
+    let title = format!(
+        "view storage_balance_of account: {} on contract: {}",
+        account_id.as_str(),
+        contract.id().as_str(),
+    );
+    view_outcome_pretty::<U>(&title, &outcome);
+    let amount =
+        parse_view_result::<U>(&outcome).expect("failed to parse storage_balance_of amount");
+    Ok(amount)
+}
+
+pub(crate) async fn storage_minimum_balance<T>(
+    worker: &Worker<T>,
+    contract: &Contract,
+) -> anyhow::Result<U128>
+where
+    T: DevNetwork,
+{
+    let args = json!({}).to_string().into_bytes();
+    let outcome = contract
+        .view(&worker, "storage_minimum_balance", args)
+        .await?;
+    let title = format!(
+        "view storage_minimum_balance on contract: {}",
+        contract.id().as_str(),
+    );
+    view_outcome_pretty::<U128>(&title, &outcome);
+    let amount = parse_view_result::<U128>(&outcome)
+        .expect("failed to parse storage_minimum_balance amount");
+    Ok(amount)
+}
+
+pub(crate) async fn debug_log<T>(worker: &Worker<T>, dao: &Contract) -> anyhow::Result<Vec<String>>
+where
+    T: DevNetwork,
+{
+    let args = json!({}).to_string().into_bytes();
+    let outcome = dao.view(&worker, "promise_log", args).await?;
+    let title = format!("view promise log on dao: {}", dao.id().as_str(),);
+    view_outcome_pretty::<Vec<String>>(&title, &outcome);
+    let logs = parse_view_result::<Vec<String>>(&outcome).expect("failed to parse spromise log");
+    Ok(logs)
 }

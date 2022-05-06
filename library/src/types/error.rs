@@ -22,7 +22,7 @@ impl Error for TypeError {}
 pub enum SourceError {
     InvalidSourceVariant,
     /// Source is not available but workflow requires it.
-    SourceMissing,
+    SourceMissing(String),
     /// Case when id pos from ArgSrc enum is not in the source.
     InvalidArgId,
 }
@@ -31,7 +31,7 @@ impl Display for SourceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SourceError::InvalidSourceVariant => write!(f, "Invalid source variant."),
-            SourceError::SourceMissing => write!(f, "Missing source."),
+            SourceError::SourceMissing(s) => write!(f, "Missing source: {}", s),
             SourceError::InvalidArgId => write!(f, "Argument ID is invalid."),
         }
     }

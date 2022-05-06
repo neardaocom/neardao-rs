@@ -80,7 +80,7 @@ pub enum ActionError {
     NotEnoughDeposit,
     InvalidSource,
     InvalidDataType,
-    InvalidWfStructure,
+    InvalidWfStructure(String),
     MissingFnCallMetadata(String),
     Binding,
     SerDe,
@@ -109,8 +109,8 @@ impl Display for ActionError {
             ActionError::Condition(action_id) => {
                 write!(f, "Action condition failed. Action: {}.", action_id)
             }
-            ActionError::InvalidWfStructure => {
-                write!(f, "WF has invalid structure.")
+            ActionError::InvalidWfStructure(s) => {
+                write!(f, "WF has invalid structure: {}", s)
             }
             ActionError::InputStructure(action_id) => {
                 write!(f, "Input has invalid structure. Action: {}", action_id)
@@ -157,10 +157,10 @@ impl From<ProcessingError> for ActionError {
     fn from(error: ProcessingError) -> Self {
         match error {
             ProcessingError::Conversion => Self::InvalidDataType,
-            ProcessingError::Source(_) => Self::InvalidWfStructure,
-            ProcessingError::Eval(_) => Self::InvalidWfStructure,
+            ProcessingError::Source(s) => Self::InvalidWfStructure(format!("{:?}", s)),
+            ProcessingError::Eval(e) => Self::InvalidWfStructure(format!("{:?}", e)),
             ProcessingError::UserInput(pos) => Self::InputStructure(pos),
-            ProcessingError::Unreachable => Self::InvalidWfStructure,
+            ProcessingError::Unreachable => Self::InvalidWfStructure("unreachable".into()),
             ProcessingError::InvalidValidatorDefinition => todo!(),
             ProcessingError::MissingExpression => todo!(),
             ProcessingError::InvalidExpressionStructure => todo!(),

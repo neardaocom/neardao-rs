@@ -39,7 +39,7 @@ where
         .deposit(deposit)
         .transact()
         .await?;
-    outcome_pretty("dao create_proposal", &outcome);
+    outcome_pretty::<u32>("dao create_proposal", &outcome);
     assert!(outcome.is_success(), "dao create proposal failed");
     let proposal_id: u32 = outcome.json().expect("failed to parse proposal_id.");
     let proposal = proposal(worker, dao, proposal_id).await?;
@@ -75,7 +75,7 @@ where
             .deposit(deposit)
             .transact()
             .await?;
-        outcome_pretty("dao vote_proposal", &outcome);
+        outcome_pretty::<ProposalState>("dao vote_proposal", &outcome);
         assert!(outcome.is_success(), "dao vote failed");
     }
     let actual_votes = votes(worker, dao, proposal_id).await?;
@@ -105,7 +105,7 @@ where
         .max_gas()
         .transact()
         .await?;
-    outcome_pretty("dao finish_proposal", &outcome);
+    outcome_pretty::<u32>("dao finish_proposal", &outcome);
     assert!(outcome.is_success(), "dao finish_proposal failed");
 
     let proposal = proposal(worker, dao, id)

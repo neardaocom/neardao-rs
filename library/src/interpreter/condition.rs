@@ -6,8 +6,10 @@ use near_sdk::{
 
 use super::{error::EvalError, expression::EExpr};
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+// TODO: Remove all Debug in production.
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Condition {
     pub expr: EExpr,

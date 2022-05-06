@@ -82,15 +82,24 @@ impl Contract {
         self.workflow_template.to_vec()
     }
 
-    pub fn wf_instance(self, proposal_id: u32) -> Option<(Instance, ProposeSettings)> {
+    pub fn wf_instance(self, proposal_id: u32) -> Option<Instance> {
         self.workflow_instance.get(&proposal_id)
     }
 
-    pub fn wf_instances(self) -> Vec<Option<(Instance, ProposeSettings)>> {
+    pub fn wf_propose_settings(self, proposal_id: u32) -> Option<ProposeSettings> {
+        self.workflow_propose_settings.get(&proposal_id)
+    }
+
+    pub fn wf_instances(self) -> Vec<Option<Instance>> {
         (1..=self.proposal_last_id)
             .into_iter()
             .map(|i| self.workflow_instance.get(&i))
             .collect()
+    }
+
+    // For debugging purposes only.
+    pub fn promise_log(self) -> Vec<String> {
+        self.debug_log
     }
 
     #[allow(unused_variables)]

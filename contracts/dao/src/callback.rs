@@ -42,14 +42,26 @@ impl Contract {
         );
         match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),
-            PromiseResult::Successful(val) => self.postprocessing_success(
-                instance_id,
-                action_id,
-                storage_key,
-                postprocessing,
-                val,
-            ),
-            PromiseResult::Failed => self.postprocessing_failed(instance_id, must_succeed),
+            PromiseResult::Successful(val) => {
+                self.debug_log.push(format!(
+                    "promise log: SUCCESS instance_id: {}, action_id: {}; ",
+                    instance_id, action_id
+                ));
+                self.postprocessing_success(
+                    instance_id,
+                    action_id,
+                    storage_key,
+                    postprocessing,
+                    val,
+                )
+            }
+            PromiseResult::Failed => {
+                self.debug_log.push(format!(
+                    "promise log: ERROR instance_id: {}, action_id: {}; ",
+                    instance_id, action_id
+                ));
+                self.postprocessing_failed(instance_id, must_succeed)
+            }
         }
     }
 }

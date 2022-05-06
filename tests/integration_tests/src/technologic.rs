@@ -91,7 +91,7 @@ async fn hashmap_max_size() -> anyhow::Result<()> {
         .await?;
 
     assert!(outcome.is_success());
-    outcome_pretty("add to hm size 1", &outcome);
+    outcome_pretty::<()>("add to hm size 1", &outcome);
 
     let accounts_count = 3 * 1024;
     let accounts_len = 24;
@@ -114,7 +114,7 @@ async fn hashmap_max_size() -> anyhow::Result<()> {
         .await?;
 
     assert!(outcome.is_success());
-    outcome_pretty("add to hm size 2 - rest", &outcome);
+    outcome_pretty::<()>("add to hm size 2 - rest", &outcome);
 
     let args = json!({}).to_string().into_bytes();
     let outcome = contract.view(&worker, "view_hm_size", args).await?;

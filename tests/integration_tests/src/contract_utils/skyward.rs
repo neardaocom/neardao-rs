@@ -59,7 +59,7 @@ where
         .max_gas()
         .transact()
         .await?;
-    outcome_pretty("skyward init", &outcome);
+    outcome_pretty::<()>("skyward init", &outcome);
     assert!(outcome.is_success(), "skyward init failed");
     Ok(skyward)
 }

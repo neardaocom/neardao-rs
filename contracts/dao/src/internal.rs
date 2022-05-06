@@ -406,17 +406,16 @@ impl Contract {
     /// Error callback.
     /// If promise did not have to succeed, then instance is still updated.
     pub fn postprocessing_failed(&mut self, proposal_id: u32, must_succeed: bool) {
-        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
         if must_succeed {
             wfi.promise_failed();
         } else {
             let timestamp = current_timestamp_sec();
             wfi.promise_success();
-            wfi.try_to_advance_activity();
-            wfi.try_to_finish(1, timestamp);
+            //wfi.try_to_advance_activity();
+            wfi.new_actions_done(1, timestamp);
         }
-        self.workflow_instance
-            .insert(&proposal_id, &(wfi, settings));
+        self.workflow_instance.insert(&proposal_id, &wfi);
     }
 
     // TODO: Review process.
@@ -432,18 +431,17 @@ impl Contract {
         postprocessing: Option<Postprocessing>,
         promise_call_result: Vec<u8>,
     ) {
-        let (mut wfi, settings) = self.workflow_instance.get(&proposal_id).unwrap();
+        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
         // Action transaction check if previous action succesfully finished.
         if wfi.check_invalid_action(action_id) {
-            self.workflow_instance
-                .insert(&proposal_id, &(wfi, settings));
+            self.workflow_instance.insert(&proposal_id, &wfi);
             return;
         }
         // Check if its first action done in the activity
         wfi.promise_success();
-        wfi.try_to_advance_activity();
-        wfi.try_to_finish(1, current_timestamp_sec());
-        log!("{:?}", wfi);
+        //wfi.try_to_advance_activity();
+        wfi.new_actions_done(1, current_timestamp_sec());
+        log!("wfi after update: {:?}", wfi);
 
         // Execute postprocessing script which must always succeed.
         if let Some(pp) = postprocessing {
@@ -453,9 +451,7 @@ impl Contract {
             } else {
                 None
             };
-
             let mut new_template = None;
-
             if pp
                 .execute(
                     promise_call_result,
@@ -489,8 +485,8 @@ impl Contract {
                     .insert(&GLOBAL_BUCKET_IDENT.into(), &global_storage);
             }
         };
-        self.workflow_instance
-            .insert(&proposal_id, &(wfi, settings));
+        log!("wfi before save: {:?}", wfi);
+        self.workflow_instance.insert(&proposal_id, &wfi);
     }
 
     /// Closure which might be required in workflow.
@@ -676,6 +672,7 @@ impl Contract {
         */
     }
 
+    // TODO: Tests.
     /// Binds dao FnCall
     pub fn get_fncall_id_with_metadata(
         &self,
@@ -683,27 +680,13 @@ impl Contract {
         sources: &dyn Source,
     ) -> Result<(AccountId, MethodName, Vec<ObjectMetadata>), ActionError> {
         let data = match id {
-            FnCallIdType::Static(account, method) => {
-                if account.as_str() == "self" {
-                    let name = env::current_account_id();
-                    (
-                        AccountId::try_from(name.to_string())
-                            .map_err(|_| ActionError::InvalidDataType)?,
-                        method.clone(),
-                        self.function_call_metadata
-                            .get(&(name.clone(), method.clone()))
-                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                    )
-                } else {
-                    (
-                        account.clone(),
-                        method.clone(),
-                        self.function_call_metadata
-                            .get(&(account, method.clone()))
-                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                    )
-                }
-            }
+            FnCallIdType::Static(account, method) => (
+                account.clone(),
+                method.clone(),
+                self.function_call_metadata
+                    .get(&(account, method.clone()))
+                    .ok_or(ActionError::MissingFnCallMetadata(method))?,
+            ),
             FnCallIdType::Dynamic(arg_src, method) => {
                 let name = get_value_from_source(sources, &arg_src)
                     .map_err(ProcessingError::Source)?
@@ -721,26 +704,13 @@ impl Contract {
                         .ok_or(ActionError::MissingFnCallMetadata(method))?,
                 )
             }
-            FnCallIdType::StandardStatic(account, method) => {
-                if account.as_str() == "self" {
-                    let name = env::current_account_id();
-                    (
-                        name.clone(),
-                        method.clone(),
-                        self.standard_function_call_metadata
-                            .get(&method.clone())
-                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                    )
-                } else {
-                    (
-                        account.clone(),
-                        method.clone(),
-                        self.function_call_metadata
-                            .get(&(account, method.clone()))
-                            .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                    )
-                }
-            }
+            FnCallIdType::StandardStatic(account, method) => (
+                account.clone(),
+                method.clone(),
+                self.standard_function_call_metadata
+                    .get(&method.clone())
+                    .ok_or(ActionError::MissingFnCallMetadata(method))?,
+            ),
             FnCallIdType::StandardDynamic(arg_src, method) => {
                 let name = get_value_from_source(sources, &arg_src)
                     .map_err(ProcessingError::Source)?
@@ -750,7 +720,7 @@ impl Contract {
                         .map_err(|_| ActionError::InvalidDataType)?,
                     method.clone(),
                     self.standard_function_call_metadata
-                        .get(&name)
+                        .get(&method)
                         .ok_or(ActionError::MissingFnCallMetadata(method))?,
                 )
             }
@@ -811,7 +781,9 @@ impl Consts for DaoConsts {
     }
 }
 
+// TODO: Remove Debug in production.
 /// Helper data struct during activity execution.
+#[derive(Debug)]
 pub struct ActivityContext {
     pub caller: AccountId,
     pub proposal_id: u32,
@@ -854,6 +826,8 @@ impl ActivityContext {
         }
     }
 
+    /// Actions done during activity execution.
+    /// In case of FnCall its count of dispatched promises.
     pub fn actions_done(&self) -> u8 {
         self.actions_done_now - self.actions_done_before
     }

@@ -19,9 +19,10 @@ use crate::{
 
 use super::types::{ArgSrc, Instruction};
 
+// TODO: Remove Debug in production.
 /// Simple post-fncall instructions which say what to do based on FnCall result.
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Postprocessing {
     pub instructions: Vec<Instruction>,
@@ -46,7 +47,7 @@ impl Postprocessing {
                     let value = match arg_src {
                         ArgSrc::User(ref key) => user_input
                             .get(key)
-                            .ok_or(SourceError::SourceMissing)?
+                            .ok_or(SourceError::SourceMissing("user input".into()))?
                             .to_owned(),
                         _ => get_value_from_source(sources, arg_src)?,
                     };
@@ -58,7 +59,7 @@ impl Postprocessing {
                         let value = match src {
                             ArgSrc::User(ref key) => user_input
                                 .get(key)
-                                .ok_or(SourceError::SourceMissing)?
+                                .ok_or(SourceError::SourceMissing("user input".into()))?
                                 .to_owned(),
                             _ => get_value_from_source(sources, src)?,
                         };
@@ -76,7 +77,7 @@ impl Postprocessing {
                         let value = match src {
                             ArgSrc::User(ref key) => user_input
                                 .get(key)
-                                .ok_or(SourceError::SourceMissing)?
+                                .ok_or(SourceError::SourceMissing("user input".into()))?
                                 .to_owned(),
                             _ => get_value_from_source(sources, src)?,
                         };
@@ -96,7 +97,7 @@ impl Postprocessing {
                         let value = match src {
                             ArgSrc::User(ref key) => user_input
                                 .get(key)
-                                .ok_or(SourceError::SourceMissing)?
+                                .ok_or(SourceError::SourceMissing("user input".into()))?
                                 .to_owned(),
                             _ => get_value_from_source(sources, src)?,
                         };

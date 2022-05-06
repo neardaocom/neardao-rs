@@ -10,9 +10,9 @@ use super::{
     activity::TransitionLimit,
     types::{ActivityRight, VoteScenario},
 };
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+// TODO: Remove all Debug in production!
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct TemplateSettings {
     pub allowed_proposers: Vec<ActivityRight>,
@@ -32,20 +32,20 @@ pub struct TemplateSettings {
     pub constants: Option<SourceDataVariant>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProposeSettings {
-    /// Top level binds.
+    /// Top level binds. Shared across all activities.
     pub global: Option<SourceDataVariant>,
-    /// Bind per activity.
+    /// Bind per activity. Init activity's binds must be 0th.
     pub binds: Vec<Option<ActivityBind>>,
     /// Storage key under which is the workflow data storage created.
     pub storage_key: Option<String>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ActivityBind {
     /// Binds shared for all actions.

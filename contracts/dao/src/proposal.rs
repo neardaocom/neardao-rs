@@ -4,7 +4,7 @@ use near_sdk::AccountId;
 use std::collections::HashMap;
 
 use crate::media::Media;
-use crate::{ResourceId, TimestampSec};
+use crate::{ResourceId, StorageKey, TimestampSec};
 
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 

@@ -22,34 +22,44 @@ pub enum InstanceState {
     Finished,
 }
 
+/// Workflow executing state used by DAO contract.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Instance {
     state: InstanceState,
+    /// Timestamp of last successfully done transition.
     last_transition_done_at: u64,
+    /// Currently executing activity. Activity is done when `actions_done_count` == `actions_total`.
     current_activity_id: u8,
-    previous_activity_id: u8,
-    transition_counters: Vec<Vec<TransitionCounter>>,
-    /// Last activity's count of done actions. < actions.len() during execution.
+    /// Stack of ids executed activities and their max actions count.
+    activities_done: Vec<(u8, u8)>,
+    /// Current activity's count of done actions.
     actions_done_count: u8,
+    /// Current activity's total count of actions.
     actions_total: u8,
+    /// Template id stored in DAO this Instance is created from.
     template_id: u16,
     /// Flag with info if its new activity transition.
     transition_to_new_activity: Option<ActivityInfo>,
+    /// Ids of end activities.
     end_activities: Vec<u8>,
     /// Flag if current activity can be autofinished.
+    /// This value is not accurate when rollback was done right before the check.
     current_activity_autofinish: bool,
+    /// Count of dispatched promises. When > 0 then state must be set to `InstanceState::AwaitingPromise`.
     dispatched_promises_count: u8,
+    /// Counters of all possible transitions.
+    transition_counters: Vec<Vec<TransitionCounter>>,
 }
 
 impl Instance {
-    pub fn new(template_id: u16, end_activities: Vec<u8>) -> Self {
+    pub fn new(template_id: u16, activities_len: usize, end_activities: Vec<u8>) -> Self {
         Instance {
             state: InstanceState::Waiting,
             last_transition_done_at: 0,
             current_activity_id: 0,
-            previous_activity_id: 0,
+            activities_done: Vec::with_capacity(activities_len),
             actions_done_count: 0,
             actions_total: 0,
             transition_counters: Vec::default(),
@@ -93,12 +103,18 @@ impl Instance {
         new_activity_actions_count: u8,
         autofinish: bool,
     ) {
+        debug_assert_eq!(self.state, InstanceState::Running);
+        self.activities_done
+            .push((self.current_activity_id, self.actions_total));
+        self.current_activity_id = activity_id;
+        self.actions_total = new_activity_actions_count;
         self.actions_done_count = 0;
-        self.transition_to_new_activity = Some(ActivityInfo::new(
+        self.current_activity_autofinish = autofinish;
+        /*         self.transition_to_new_activity = Some(ActivityInfo::new(
             activity_id,
             new_activity_actions_count,
             autofinish,
-        ));
+        )); */
     }
 
     // Update transition counter if transition is possible.
@@ -122,10 +138,6 @@ impl Instance {
         transitions: &'a [Vec<Transition>],
         activity_id: usize,
     ) -> Option<&'a Transition> {
-        // Current activity is not finished yet.
-        if self.actions_done_count != self.actions_total {
-            return None;
-        }
         transitions
             .get(self.current_activity_id as usize)
             .expect("Activity does not exists.")
@@ -147,14 +159,17 @@ impl Instance {
             .position(|c| c.to == activity_id)
     }
 
-    /// Check if action is invalid as next action.
-    /// In case of true switches self back to running state and returns true.
-    /// Used to secure function call transaction.
+    /// Security check in case of promises resolve out of order.
+    /// In case of true switch self back to running state and returns true.
+    /// Caller should ignore promise with this action_id and all other incoming promises.
     pub fn check_invalid_action(&mut self, action_id: u8) -> bool {
         if self.actions_done_count < action_id {
             self.transition_to_new_activity = None;
             self.state = InstanceState::Running;
             self.dispatched_promises_count = 0;
+            if self.actions_done_count == 0 {
+                self.rollback_activity_transition();
+            }
             true
         } else {
             false
@@ -164,28 +179,25 @@ impl Instance {
     /// Try to advance next to activity.
     /// If successful then update internal states and return true.
     /// New actions done and timestamp must be updated `try_to_finish` function after.
-    pub fn try_to_advance_activity(&mut self) -> bool {
+    /*     pub fn try_to_advance_activity(&mut self) -> bool {
         if let Some(info) = self.transition_to_new_activity.as_ref().take() {
             self.last_transition_done_at = 0;
             self.actions_done_count = 0;
             self.actions_total = info.new_activity_actions_count;
-            self.previous_activity_id = self.current_activity_id;
+            self.activities_done = self.current_activity_id;
             self.current_activity_id = info.activity_id as u8;
             self.current_activity_autofinish = info.autofinish;
             true
         } else {
             false
         }
-    }
+    } */
 
     /// Update actions done count and timestamp and try to finish workflow.
-    pub fn try_to_finish(
-        &mut self,
-        new_actions_done_count: u8,
-        current_timestamp_sec: u64,
-    ) -> bool {
-        self.actions_done_count += new_actions_done_count;
+    pub fn new_actions_done(&mut self, count: u8, current_timestamp_sec: u64) -> bool {
+        self.actions_done_count += count;
         self.last_transition_done_at = current_timestamp_sec;
+        debug_assert!(self.actions_done_count <= self.actions_total);
         if self.dispatched_promises_count == 0
             && self.current_activity_autofinish
             && self.actions_done_count == self.actions_total
@@ -202,21 +214,38 @@ impl Instance {
     }
 
     pub fn await_promises(&mut self, promise_count: u8) {
+        debug_assert_eq!(self.state, InstanceState::Running);
         self.state = InstanceState::AwaitingPromise;
         self.dispatched_promises_count = promise_count;
     }
 
     /// At least one of the promises failed.
     /// Set internal state back to running.
+    /// Cancels activity transition if it was first action done.
     pub fn promise_failed(&mut self) {
+        debug_assert_eq!(self.state, InstanceState::AwaitingPromise);
         self.state = InstanceState::Running;
-        self.transition_to_new_activity = None;
+        if self.actions_done_count == 0 {
+            self.rollback_activity_transition();
+        }
         self.dispatched_promises_count = 0;
+    }
+
+    fn rollback_activity_transition(&mut self) {
+        let (activity_id, total_actions) = self
+            .activities_done
+            .pop()
+            .expect("fatal - instance rollback");
+        self.current_activity_id = activity_id;
+        self.actions_total = total_actions;
+        self.actions_done_count = total_actions;
     }
 
     /// Decreases counter for dispatched promises.
     /// Panics if called more times than count of promises dispatched.
+    /// Sets state to running once all promises were done.
     pub fn promise_success(&mut self) {
+        debug_assert_eq!(self.state, InstanceState::AwaitingPromise);
         self.dispatched_promises_count = self
             .dispatched_promises_count
             .checked_sub(1)
@@ -226,6 +255,8 @@ impl Instance {
         }
     }
 
+    /// Sets state to fatal error.
+    /// Must be called only when error happened and it was not user's mistake.
     pub fn set_fatal_error(&mut self) {
         self.state = InstanceState::FatalError;
     }

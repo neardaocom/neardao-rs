@@ -59,8 +59,11 @@ wasm_bin_getters!(
     get_wnear_wasm => WNEAR
 );
 
-pub(crate) fn outcome_pretty(name: &str, outcome: &CallExecutionDetails) {
-    let result_data: String = outcome.json().unwrap_or_default();
+pub(crate) fn outcome_pretty<T>(name: &str, outcome: &CallExecutionDetails)
+where
+    T: for<'de> serde::Deserialize<'de> + std::fmt::Debug,
+{
+    let result_data: Option<T> = outcome.json().unwrap_or_default();
 
     println!(
         r#"
@@ -68,7 +71,7 @@ pub(crate) fn outcome_pretty(name: &str, outcome: &CallExecutionDetails) {
     success: {:?},
     total TGAS burnt: {},
     NEARs burnt: {},
-    returned_data: {},
+    returned_data: {:?},
     logs: {:?},
     "#,
         name,

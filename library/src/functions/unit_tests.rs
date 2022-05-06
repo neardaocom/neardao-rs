@@ -20,7 +20,10 @@ use crate::{
     },
     workflow::{
         expression::Expression,
-        types::{ArgSrc, BindDefinition, ObjectMetadata, SrcOrExprOrValue},
+        types::{
+            ArgSrc, BindDefinition, CollectionBindData, CollectionBindingStyle, ObjectMetadata,
+            SrcOrExprOrValue,
+        },
         validator::{CollectionValidator, ObjectValidator, Validator},
     },
 };
@@ -272,14 +275,12 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
         BindDefinition {
             key: "sale.meta.reason".into(),
             key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl("sale.meta.reason".into())),
-            is_collection: false,
-            prefixes: vec![],
+            collection_data: None,
         },
         BindDefinition {
             key: "sale_info".into(),
             key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl("sale_info".into())),
-            is_collection: false,
-            prefixes: vec![],
+            collection_data: None,
         },
         BindDefinition {
             key: "token_account_id".into(),
@@ -287,13 +288,15 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
                 args: vec![ArgSrc::ConstsTpl("sale.out_tokens.token_account_id".into())],
                 expr_id: 2,
             }),
-            is_collection: true,
-            prefixes: vec!["sale.out_tokens".into()],
+            collection_data: Some(CollectionBindData {
+                prefixes: vec!["sale.out_tokens".into()],
+                collection_binding_type: CollectionBindingStyle::Overwrite,
+            }),
         },
     ];
 
+    // Create expected bind result.
     let mut hm = HashMap::new();
-
     // Object 0
     hm.set("sale_info", Value::String("sale info binded".into()));
 

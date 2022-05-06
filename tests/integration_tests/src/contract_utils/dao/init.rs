@@ -1,9 +1,7 @@
 use library::{
     data::{
         object_metadata::standard_fn_calls::{
-            nep_141_ft_transfer, nep_141_ft_transfer_call, nep_145_storage_deposit,
-            nep_145_storage_unregister, nep_145_storage_withdraw, nep_171_nft_transfer,
-            nep_171_nft_transfer_call,
+            standard_fn_call_metadatas, standard_fn_call_methods,
         },
         workflows::basic::wf_add::WfAdd1,
     },
@@ -54,7 +52,7 @@ where
         .max_gas()
         .transact()
         .await?;
-    outcome_pretty("dao init", &outcome);
+    outcome_pretty::<()>("dao init", &outcome);
     assert!(outcome.is_success(), "dao init failed");
 
     internal_check_group(worker, dao, expected_group).await?;
@@ -148,36 +146,16 @@ fn default_group(members: Vec<&AccountId>) -> GroupInput {
 }
 
 fn standard_function_calls() -> Vec<MethodName> {
-    let calls = vec![
-        "nep_141_ft_transfer".into(),
-        "nep_141_ft_transfer_call".into(),
-        "nep_145_storage_deposit".into(),
-        "nep_145_storage_unregister".into(),
-        "nep_145_storage_withdraw".into(),
-        "nep_171_nft_transfer".into(),
-        "nep_171_nft_transfer_call".into(),
-    ];
-
-    calls
+    standard_fn_call_methods()
 }
 
 fn function_calls(provider_id: AccountId) -> Vec<FnCallId> {
     let calls = vec![(provider_id, "wf_template".to_string())];
-
     calls
 }
 
 fn standard_function_call_metadata() -> Vec<Vec<ObjectMetadata>> {
-    let meta = vec![
-        nep_141_ft_transfer(),
-        nep_141_ft_transfer_call(),
-        nep_145_storage_deposit(),
-        nep_145_storage_unregister(),
-        nep_145_storage_withdraw(),
-        nep_171_nft_transfer(),
-        nep_171_nft_transfer_call(),
-    ];
-    meta
+    standard_fn_call_metadatas()
 }
 
 fn function_call_metadata() -> Vec<Vec<ObjectMetadata>> {
@@ -185,18 +163,15 @@ fn function_call_metadata() -> Vec<Vec<ObjectMetadata>> {
         arg_names: vec!["id".into()],
         arg_types: vec![Datatype::U64(false)],
     }]];
-
     meta
 }
 
 fn workflow_templates() -> Vec<Template> {
     let tpls = vec![WfAdd1::template()];
-
     tpls
 }
 
 fn workflow_template_settings() -> Vec<Vec<TemplateSettings>> {
     let settings = vec![vec![WfAdd1::template_settings(Some(10))]];
-
     settings
 }

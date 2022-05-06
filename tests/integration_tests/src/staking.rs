@@ -132,7 +132,7 @@ async fn staking_full_scenario() -> Result<()> {
         .max_gas()
         .transact()
         .await?;
-    outcome_pretty("staking init", &outcome);
+    outcome_pretty::<()>("staking init", &outcome);
 
     // Dao init.
     let args = json!({
@@ -148,7 +148,7 @@ async fn staking_full_scenario() -> Result<()> {
         .await?;
 
     assert!(outcome.is_success());
-    outcome_pretty("dao init", &outcome);
+    outcome_pretty::<()>("dao init", &outcome);
 
     // FT init.
     let args = json!({
@@ -165,7 +165,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("fungible token init", &outcome);
+    outcome_pretty::<()>("fungible token init", &outcome);
 
     // Check on FT.
     let args = json!({
@@ -191,7 +191,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("storage deposit DAO in staking", &outcome);
+    outcome_pretty::<StorageBalance>("storage deposit DAO in staking", &outcome);
 
     // Check storage balance of DAO before register.
     let args = json!({
@@ -216,7 +216,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("register new dao by registrar", &outcome);
+    outcome_pretty::<()>("register new dao by registrar", &outcome);
 
     // Check storage balance of DAO before register.
     let args = json!({
@@ -242,7 +242,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("storage deposit staking in fungible_token", &outcome);
+    outcome_pretty::<StorageBalance>("storage deposit staking in fungible_token", &outcome);
 
     // Register token_holder in dao.
     let args = json!({
@@ -258,7 +258,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("register token_holder in dao", &outcome);
+    outcome_pretty::<()>("register token_holder in dao", &outcome);
 
     // Register delegate_1 in dao.
     let args = json!({
@@ -274,7 +274,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("register delegate_1 in dao", &outcome);
+    outcome_pretty::<()>("register delegate_1 in dao", &outcome);
 
     // Register delegate_2 in dao.
     let args = json!({
@@ -290,7 +290,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("register delegate_2 in dao", &outcome);
+    outcome_pretty::<()>("register delegate_2 in dao", &outcome);
 
     // Transfer token to staking.
     let transfer_info = format!("{{\"dao_id\":\"{}\"}}", dao.id());
@@ -311,7 +311,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("transfer token to staking", &outcome);
+    outcome_pretty::<()>("transfer token to staking", &outcome);
 
     // Check transfer.
     let args = json!({
@@ -360,7 +360,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("delegate 1000 ft owned to delegate_1", &outcome);
+    outcome_pretty::<()>("delegate 1000 ft owned to delegate_1", &outcome);
 
     // delegate_1 check
     let args = json!({
@@ -404,7 +404,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("delegate 1000 ft owned to delegate_2", &outcome);
+    outcome_pretty::<()>("delegate 1000 ft owned to delegate_2", &outcome);
 
     // delegate_2 check
     let args = json!({
@@ -468,7 +468,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty(
+    outcome_pretty::<()>(
         "delegate delegated tokens from delegate_1 to delegate_2",
         &outcome,
     );
@@ -544,7 +544,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("undelegate 500 ft from delegate_2", &outcome);
+    outcome_pretty::<()>("undelegate 500 ft from delegate_2", &outcome);
 
     // delegate_2 check
     let args = json!({
@@ -596,7 +596,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("withdraw 1000 ft", &outcome);
+    outcome_pretty::<()>("withdraw 1000 ft", &outcome);
 
     // Withdraw check.
     let args = json!({
@@ -641,7 +641,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("undelegate rest - 1500 ft", &outcome);
+    outcome_pretty::<()>("undelegate rest - 1500 ft", &outcome);
 
     // delegate_2 check
     let args = json!({
@@ -699,7 +699,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("withdraw rest - 1500 + 500 ft", &outcome);
+    outcome_pretty::<()>("withdraw rest - 1500 + 500 ft", &outcome);
 
     // Withdraw check.
     let args = json!({
@@ -735,7 +735,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("unregister token_holder in dao", &outcome);
+    outcome_pretty::<()>("unregister token_holder in dao", &outcome);
 
     let args = json!({
         "dao_id": dao.id(),
@@ -761,7 +761,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("unregister delegate_1 in dao", &outcome);
+    outcome_pretty::<()>("unregister delegate_1 in dao", &outcome);
 
     let args = json!({
         "dao_id": dao.id(),
@@ -787,7 +787,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("unregister delegate_2 in dao", &outcome);
+    outcome_pretty::<()>("unregister delegate_2 in dao", &outcome);
 
     let args = json!({
         "dao_id": dao.id(),
@@ -829,7 +829,7 @@ async fn staking_full_scenario() -> Result<()> {
         .transact()
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty("storage unregister dao", &outcome);
+    outcome_pretty::<()>("storage unregister dao", &outcome);
 
     let args = json!({
         "dao_id": dao.id(),

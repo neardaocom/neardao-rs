@@ -11,16 +11,18 @@ use crate::{
 
 use super::types::ArgSrc;
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+// TODO: Remove all Debug in production!
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum Validator {
     Object(ObjectValidator),
     Collection(CollectionValidator),
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ObjectValidator {
     /// Id of expression "doing" the validation.
@@ -29,8 +31,8 @@ pub struct ObjectValidator {
     pub key_src: Vec<ArgSrc>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct CollectionValidator {
     /// Id of expression "doing" the validation.

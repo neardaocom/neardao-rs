@@ -19,7 +19,7 @@ impl WfAdd1 {
         Template {
             code: "wf_add".into(),
             version: "1".into(),
-            is_simple: true,
+            auto_exec: true,
             need_storage: false, // TODO: Not sure if true is true.
             activities: vec![
                 Activity::Init,
@@ -41,8 +41,7 @@ impl WfAdd1 {
                                 key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
                                     WF_ADD1_TEMPLATE_ID_KEY.into(),
                                 )),
-                                prefixes: vec![],
-                                is_collection: false,
+                                collection_data: None,
                             }],
                         }),
                         postprocessing: Some(Postprocessing {

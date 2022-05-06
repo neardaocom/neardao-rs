@@ -49,15 +49,17 @@ pub enum DaoActionIdent {
     Event,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum VoteScenario {
     Democratic,
     TokenWeighted,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)] //Remove clone + debug in prod
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum ActivityRight {
@@ -136,12 +138,32 @@ pub struct BindDefinition {
     pub key: String,
     /// Value source for `key`.
     pub key_src: SrcOrExprOrValue,
+    /// Data related to collection object.
+    pub collection_data: Option<CollectionBindData>,
+}
+
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct CollectionBindData {
     /// Prefixes for nested collection objects.
     /// Defined as `Vec<String>` for forward-compatible changes.
     pub prefixes: Vec<String>,
-    pub is_collection: bool,
+    /// Defines type of binding for involved collection object.
+    pub collection_binding_type: CollectionBindingStyle,
 }
 
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub enum CollectionBindingStyle {
+    /// Overwrites only user provided collection attributes.
+    Overwrite,
+    /// Makes up to defined number collection attributes.
+    ForceSame(u8),
+}
 /// Object metadata.
 /// Nested objects are referenced by specific `Datatype` in previous metadata.
 /// These objects must be containerized, eg. in Vec.
@@ -161,8 +183,9 @@ pub enum ActionType {
     FnCall,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum Instruction {
     DeleteKey(String),

@@ -31,9 +31,9 @@ pub trait MutableSource {
     fn take_storage(&mut self) -> Option<StorageBucket>;
     fn take_global_storage(&mut self) -> Option<StorageBucket>;
 }
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum SourceDataVariant {
     Map(HashMap<String, Value>),
@@ -104,7 +104,11 @@ where
     }
 
     fn global_storage(&self, key: &str) -> Option<Value> {
-        todo!()
+        if let Some(storage) = &self.global_storage {
+            storage.get_data(&key.into())
+        } else {
+            None
+        }
     }
 
     fn dao_const(&self, key: u8) -> Option<Value> {
@@ -112,11 +116,19 @@ where
     }
 
     fn props_action(&self, key: &str) -> Option<&Value> {
-        todo!()
+        if let Some(prop) = &self.prop_action {
+            prop.get(key)
+        } else {
+            None
+        }
     }
 
     fn props_shared(&self, key: &str) -> Option<&Value> {
-        todo!()
+        if let Some(prop) = &self.prop_shared {
+            prop.get(key)
+        } else {
+            None
+        }
     }
     fn props_global(&self, key: &str) -> Option<&Value> {
         if let Some(prop) = &self.prop {
@@ -141,16 +153,16 @@ where
     }
 
     fn set_prop_action(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
-        if let Some(mut prop) = self.prop.as_mut() {
+        if let Some(mut prop) = self.prop_action.as_mut() {
             Some(std::mem::replace(&mut prop, new))
         } else {
-            self.prop = Some(new);
+            self.prop_action = Some(new);
             None
         }
     }
 
     fn set_prop_shared(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
-        todo!()
+        std::mem::replace(&mut self.prop_shared, Some(new))
     }
 
     fn replace_settings(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {

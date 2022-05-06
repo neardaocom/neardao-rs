@@ -25,7 +25,7 @@ where
         .max_gas()
         .transact()
         .await?;
-    outcome_pretty("staking init", &outcome);
+    outcome_pretty::<()>("staking init", &outcome);
     assert!(outcome.is_success(), "staking init failed");
     Ok(staking)
 }

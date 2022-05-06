@@ -55,7 +55,7 @@ where
             .transact()
             .await?;
         let title = format!("wf provider add workflow: {name}");
-        outcome_pretty(&title, &outcome);
+        outcome_pretty::<u16>(&title, &outcome);
         assert!(outcome.is_success(), "wf provider add workflows failed.");
     }
 

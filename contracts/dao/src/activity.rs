@@ -37,7 +37,8 @@ impl Contract {
         actions_inputs: Vec<Option<ActionInput>>,
     ) -> Result<(), ActivityError> {
         let (proposal, wft, wfs) = self.get_workflow_and_proposal(proposal_id);
-        let (mut wfi, mut prop_settings) = self.workflow_instance.get(&proposal_id).unwrap();
+        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
+        let mut prop_settings = self.workflow_propose_settings.get(&proposal_id).unwrap();
         let dao_consts = self.dao_consts();
 
         let Template {
@@ -51,7 +52,6 @@ impl Contract {
         let TemplateSettings {
             activity_rights, ..
         } = wfs;
-
         let storage_key = prop_settings.storage_key.to_owned();
         let storage: Option<StorageBucket> = match storage_key {
             Some(ref key) => self.storage.get(key),
@@ -91,7 +91,6 @@ impl Contract {
             .into_activity()
             .expect("Activity is init");
 
-        // TODO: Register transition
         // Loop / other activity case
         if wfi.is_new_transition(activity_id) {
             // Find transition
@@ -125,6 +124,17 @@ impl Contract {
             );
         } else {
             assert!(wfi.actions_remaining() > 0, "activity is already finished");
+        }
+
+        // Put activity's shared values into Source object if defined.
+        if let Some(activity_input) = prop_settings
+            .binds
+            .get_mut(activity_id)
+            .expect("fatal - missing activity bind")
+        {
+            if let Some(prop_shared) = activity_input.shared.take() {
+                sources.set_prop_shared(prop_shared);
+            }
         }
 
         // Create execution context DTO.
@@ -181,10 +191,7 @@ impl Contract {
                 panic!("Not a single action was executed.");
             } else {
                 //At least one action was executed.
-                wfi.try_to_advance_activity();
-                wfi.try_to_finish(ctx.actions_done(), current_timestamp_sec());
-
-                // Save mutated storage.
+                // Save storages.
                 if let Some(storage) = sources.take_storage() {
                     self.storage.insert(&storage_key.unwrap(), &storage);
                 }
@@ -194,6 +201,7 @@ impl Contract {
                         .take_global_storage()
                         .expect("Missing global storage"),
                 );
+                wfi.new_actions_done(ctx.actions_done(), current_timestamp_sec());
             }
         } else {
             // Optional actions will be immediatelly added to instance.
@@ -206,12 +214,14 @@ impl Contract {
                 actions_inputs,
                 &mut optional_actions,
             );
-            if result.is_err() && ctx.actions_done() == 0 {
-                panic!("Not a single action was executed.");
+            if result.is_err() || ctx.actions_done() == 0 {
+                panic!(
+                    "Not a single action was executed. error: {:?}, {:?}",
+                    result, ctx
+                );
             } else {
                 wfi.await_promises(ctx.actions_done());
             }
-            log!("{:?}", wfi);
         }
 
         // Decide if is fatal error.
@@ -227,8 +237,7 @@ impl Contract {
         };
 
         // Save mutated instance state.
-        self.workflow_instance
-            .insert(&proposal_id, &(wfi, ctx.proposal_settings));
+        self.workflow_instance.insert(&proposal_id, &wfi);
 
         result
     }
@@ -290,7 +299,9 @@ impl Contract {
 
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                 .try_into_action_data()
-                .ok_or(ActionError::InvalidWfStructure)?;
+                .ok_or(ActionError::InvalidWfStructure(
+                    "missing action data".into(),
+                ))?;
 
             // Need metadata coz validations and bindings. Metadata are always included in DAO.
             let binds = action_data.binds.as_slice();
@@ -367,6 +378,7 @@ impl Contract {
         // Therefore we must not considered 3th action as sucessfull but instead of that break the cycle.
         // This might be redundant and "YAGNI" stuff I let it stay here for now.
         let mut optional_state = 0;
+        let mut promise: Option<Promise> = None;
         for idx in last_action_done..ctx.actions.len() {
             let mut action_input = match input.get_mut(idx).unwrap().take() {
                 Some(a) => {
@@ -419,7 +431,9 @@ impl Contract {
 
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                 .try_into_fncall_data()
-                .ok_or(ActionError::InvalidWfStructure)?;
+                .ok_or(ActionError::InvalidWfStructure(
+                    "missing action data".into(),
+                ))?;
 
             // Metadata are provided by workflow provider when workflow is added.
             // Missing metadata are fault of the workflow provider and are considered as fatal runtime error.
@@ -452,11 +466,13 @@ impl Contract {
             } else {
                 None
             };
-
             let args = serialize_to_json(action_input, metadata.as_slice());
-
+            self.debug_log.push(format!(
+                "promise dispatch - contract: {}, method: {}; args: {}; ",
+                &name, &method, &args
+            ));
             // Dispatch fncall and its postprocessing.
-            Promise::new(name)
+            let new_promise = Promise::new(name)
                 .function_call(
                     method,
                     args.into_bytes(),
@@ -473,8 +489,12 @@ impl Contract {
                     0,
                     Gas(50 * 10u64.pow(12)),
                 ));
-
-            // We need number of successfully dispatched promises.
+            promise = if let Some(p) = promise {
+                Some(p.and(new_promise))
+            } else {
+                Some(new_promise)
+            };
+            // Number of successfully dispatched promises.
             ctx.set_next_action_done();
         }
 

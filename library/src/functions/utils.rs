@@ -53,52 +53,57 @@ pub fn get_value_from_source(
         ArgSrc::ConstsTpl(key) => {
             let value = sources
                 .tpl(key)
-                .ok_or(SourceError::SourceMissing)?
+                .ok_or(SourceError::SourceMissing("const tpl".into()))?
                 .to_owned();
             Ok(value)
         }
         ArgSrc::ConstsSettings(key) => {
             let value = sources
                 .tpl_settings(key)
-                .ok_or(SourceError::SourceMissing)?
+                .ok_or(SourceError::SourceMissing("const tpl settings".into()))?
                 .to_owned();
             Ok(value)
         }
         ArgSrc::ConstAction(key) => {
             let value = sources
                 .props_action(key)
-                .ok_or(SourceError::SourceMissing)?
+                .ok_or(SourceError::SourceMissing("const action".into()))?
                 .to_owned();
             Ok(value)
         }
         ArgSrc::ConstActivityShared(key) => {
             let value = sources
                 .props_shared(key)
-                .ok_or(SourceError::SourceMissing)?
+                .ok_or(SourceError::SourceMissing("const activity shared".into()))?
                 .to_owned();
             Ok(value)
         }
         ArgSrc::Storage(key) => {
-            let value = sources.storage(key).ok_or(SourceError::SourceMissing)?;
+            let value = sources
+                .storage(key)
+                .ok_or(SourceError::SourceMissing("storage".into()))?;
             Ok(value)
         }
         ArgSrc::GlobalStorage(key) => {
             let value = sources
                 .global_storage(key)
-                .ok_or(SourceError::SourceMissing)?;
+                .ok_or(SourceError::SourceMissing("global storage".into()))?;
             Ok(value)
         }
         ArgSrc::Const(key) => {
             let value = sources
                 .dao_const(*key)
-                .ok_or(SourceError::SourceMissing)?
+                .ok_or(SourceError::SourceMissing("dao const".into()))?
                 .to_owned();
             Ok(value)
         }
         ArgSrc::ConstPropSettings(key) => {
             let value = sources
                 .props_global(key)
-                .ok_or(SourceError::SourceMissing)?
+                .ok_or(SourceError::SourceMissing(format!(
+                    "const global prop - key: {}",
+                    key
+                )))?
                 .to_owned();
             Ok(value)
         }

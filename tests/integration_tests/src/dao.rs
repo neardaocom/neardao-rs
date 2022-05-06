@@ -1,3 +1,4 @@
+use near_sdk::ONE_NEAR;
 #[allow(unused)]
 use std::time::Duration;
 #[allow(unused)]
@@ -13,7 +14,7 @@ use library::{
     types::datatype::Value,
     workflow::instance::InstanceState,
 };
-use workspaces::network::DevAccountDeployer;
+use workspaces::network::{DevAccountDeployer, Sandbox};
 
 use crate::contract_utils::{
     dao::{
@@ -25,6 +26,7 @@ use crate::contract_utils::{
             consts::{DAO_TPL_ID_SKYWARD, DAO_TPL_ID_WF_ADD, PROVIDER_TPL_ID_SKYWARD},
             proposal::ProposalState,
         },
+        view::{debug_log, ft_balance_of},
     },
     functions::storage_deposit,
     fungible_token::init_fungible_token,
@@ -70,7 +72,7 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
     .await?;
 
     // Storage deposit staking in fungible_token.
-    storage_deposit(&worker, &factory, &token, staking.id()).await?;
+    storage_deposit(&worker, &factory, &token, staking.id(), ONE_NEAR).await?;
 
     // Load workflows to provider.
     load_workflow_templates(&worker, &wf_provider, wnear.id(), skyward.id()).await?;
@@ -112,7 +114,7 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
 
     // Fast forward and finish.
     worker.fast_forward(100).await?;
-    //sleep(Duration::from_secs(65)).await;
+    //sleep(Duration::from_secs(120)).await;
     finish_proposal(&worker, &member, &dao, proposal_id, ProposalState::Accepted).await?;
 
     // Execute AddWorkflow by DAO member to add Skyward.
@@ -162,7 +164,7 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
 
     // Finish last proposal.
     worker.fast_forward(100).await?;
-    //sleep(Duration::from_secs(65)).await;
+    //sleep(Duration::from_secs(120)).await;
     finish_proposal(&worker, &member, &dao, proposal_id, ProposalState::Accepted).await?;
 
     // Execute workflow Skyward1.
@@ -175,6 +177,7 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
         ActivityInputSkyward1::activity_1(skyward.id()),
     )
     .await?;
+    //sleep(Duration::from_secs(10)).await;
     worker.fast_forward(5).await?;
 
     run_activity(
@@ -186,22 +189,62 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
         ActivityInputSkyward1::activity_2(wnear.id(), token.id()),
     )
     .await?;
+    //sleep(Duration::from_secs(10)).await;
     worker.fast_forward(5).await?;
 
+    // Check storage
+    check_wf_storage_values(
+        &worker,
+        &dao,
+        SKYWARD1_STORAGE_KEY.into(),
+        vec![("pp_1_result".into(), Value::Bool(true))],
+    )
+    .await?;
+    debug_log(&worker, &dao).await?;
     run_activity(
         &worker,
         &member,
         &dao,
         proposal_id,
         3,
-        ActivityInputSkyward1::activity_3(
+        ActivityInputSkyward1::activity_3(token.id()),
+    )
+    .await?;
+    //sleep(Duration::from_secs(10)).await;
+    worker.fast_forward(10).await?;
+    //check_instance(&worker, &dao, proposal_id, 3, InstanceState::Running).await?;
+    ft_balance_of(&worker, &token, &skyward.id()).await?;
+
+    /*     // Check storage
+    check_wf_storage_values(
+        &worker,
+        &dao,
+        SKYWARD1_STORAGE_KEY.into(),
+        vec![
+            ("pp_1_result".into(), Value::Bool(true)),
+            ("pp_3_result".into(), Value::Bool(true)),
+        ],
+    )
+    .await?; */
+
+    debug_log(&worker, &dao).await?;
+
+    run_activity(
+        &worker,
+        &member,
+        &dao,
+        proposal_id,
+        4,
+        ActivityInputSkyward1::activity_4(
             skyward.id(),
             "NearDAO auction.".into(),
             "wwww.neardao.com".into(),
         ),
     )
     .await?;
+    //sleep(Duration::from_secs(10)).await;
     worker.fast_forward(5).await?;
+    debug_log(&worker, &dao).await?;
 
     // Check Skyward auction registered on DAO.
     check_wf_storage_values(
@@ -210,10 +253,12 @@ async fn workflow_skyward_scenario() -> anyhow::Result<()> {
         SKYWARD1_STORAGE_KEY.into(),
         vec![
             ("pp_1_result".into(), Value::Bool(true)),
-            ("pp_4_result".into(), Value::U64(0)),
+            ("pp_3_result".into(), Value::Bool(true)),
+            ("skyward_auction_id".into(), Value::U64(0)),
         ],
     )
     .await?;
+    check_instance(&worker, &dao, proposal_id, 4, InstanceState::Finished).await?;
 
     // Check auction created on Skyward.
     check_sale(

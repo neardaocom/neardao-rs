@@ -13,8 +13,9 @@ use super::{
     validator::Validator,
 };
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct TemplateAction {
     pub exec_condition: Option<Expression>,
