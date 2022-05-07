@@ -6,7 +6,7 @@ use near_sdk::{
 use crate::ActivityId;
 
 use super::{
-    action::{ActionData, TemplateAction},
+    action::{ActionType, TemplateAction},
     expression::Expression,
     postprocessing::Postprocessing,
     types::DaoActionIdent,
@@ -24,10 +24,10 @@ pub enum Activity {
 }
 
 impl Activity {
-    pub fn is_dao_activity(&self) -> bool {
+    pub fn is_executable_activity(&self) -> bool {
         match self {
             Activity::Init => false,
-            Activity::Activity(a) => a.is_dao_activity,
+            Activity::Activity(a) => a.is_executable_activity,
         }
     }
 }
@@ -85,14 +85,14 @@ pub struct TemplateActivity {
     /// Postprocessing script in case of successfull execution.
     pub postprocessing: Option<Postprocessing>,
     /// Helper flag.
-    pub is_dao_activity: bool,
+    pub is_executable_activity: bool,
 }
 
 impl TemplateActivity {
     pub fn get_dao_action_ident(&self, id: u8) -> Option<DaoActionIdent> {
         match self.actions.get(id as usize) {
             Some(action) => match &action.action_data {
-                ActionData::Action(a) => Some(a.name),
+                ActionType::Action(a) => Some(a.name),
                 _ => None,
             },
             _ => None,

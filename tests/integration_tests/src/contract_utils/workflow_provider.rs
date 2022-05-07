@@ -1,9 +1,15 @@
+use std::collections::HashMap;
+
 use library::{
     data::{
-        workflows::integration::skyward::{Skyward1, Skyward1TemplateOptions},
+        workflows::{
+            basic::trade::Trade1,
+            integration::skyward::{Skyward1, Skyward1TemplateOptions},
+        },
         TemplateData,
     },
-    workflow::help::TemplateHelp,
+    types::source::SourceDataVariant,
+    workflow::{help::TemplateHelp, template::Template, types::ObjectMetadata},
     Version,
 };
 use serde::{Deserialize, Serialize};
@@ -29,8 +35,8 @@ where
 pub(crate) async fn load_workflow_templates<T>(
     worker: &Worker<T>,
     provider: &Contract,
-    wnear_id: &AccountId,
-    skyward_id: &AccountId,
+    wnear_id: Option<&AccountId>,
+    skyward_id: Option<&AccountId>,
 ) -> anyhow::Result<()>
 where
     T: DevNetwork,
@@ -70,17 +76,24 @@ where
 }
 
 fn wf_templates(
-    wnear_id: &AccountId,
-    skyward_id: &AccountId,
+    wnear_id: Option<&AccountId>,
+    skyward_id: Option<&AccountId>,
 ) -> Vec<(String, TemplateData, Option<TemplateHelp>)> {
-    let templates = vec![(
-        "skyward".into(),
-        Skyward1::template(Some(Skyward1TemplateOptions {
-            skyward_account_id: skyward_id.to_string(),
-            wnear_account_id: wnear_id.to_string(),
-        })),
-        None,
-    )];
+    let mut templates = vec![];
+    // Skyward1 is always pos 0.
+    if wnear_id.is_some() && skyward_id.is_some() {
+        templates.push((
+            "skyward".into(),
+            Skyward1::template(Some(Skyward1TemplateOptions {
+                skyward_account_id: skyward_id.unwrap().to_string(),
+                wnear_account_id: wnear_id.unwrap().to_string(),
+            })),
+            None,
+        ));
+    } else {
+        templates.push(dummy_template_data());
+    }
+    templates.push(("trade1".into(), Trade1::template(), None));
     templates
 }
 
@@ -105,4 +118,27 @@ pub struct Metadata {
     pub fncalls: Vec<FnCallId>,
     pub standard_fncalls: Vec<MethodName>,
     pub help: bool,
+}
+
+/// Makes padding so templates always have same id on provider.
+fn dummy_template_data() -> (String, TemplateData, Option<TemplateHelp>) {
+    (
+        "dummy".into(),
+        (
+            Template {
+                code: "dummy template".into(),
+                version: "1.0".into(),
+                auto_exec: false,
+                need_storage: false,
+                activities: vec![],
+                expressions: vec![],
+                transitions: vec![],
+                constants: SourceDataVariant::Map(HashMap::default()),
+                end: vec![],
+            },
+            vec![],
+            vec![],
+        ),
+        None,
+    )
 }

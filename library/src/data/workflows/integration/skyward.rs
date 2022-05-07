@@ -13,7 +13,7 @@ use crate::{
         source::SourceDataVariant,
     },
     workflow::{
-        action::{ActionData, FnCallData, FnCallIdType, TemplateAction},
+        action::{ActionType, FnCallData, FnCallIdType, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         postprocessing::Postprocessing,
@@ -143,7 +143,7 @@ impl Skyward1 {
                         actions: vec![TemplateAction {
                             exec_condition: None,
                             validators: vec![],
-                            action_data: ActionData::FnCall(FnCallData {
+                            action_data: ActionType::FnCall(FnCallData {
                                 id: FnCallIdType::Static(
                                     AccountId::new_unchecked(skyward_account_id.clone()),
                                     SKYWARD_FNCALL1_NAME.into(),
@@ -168,7 +168,7 @@ impl Skyward1 {
                         }],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_dao_activity: false,
+                        is_executable_activity: false,
                     }),
                     Activity::Activity(TemplateActivity {
                         code: "storage_deposit".into(),
@@ -177,7 +177,7 @@ impl Skyward1 {
                             TemplateAction {
                                 exec_condition: None,
                                 validators: vec![],
-                                action_data: ActionData::FnCall(FnCallData {
+                                action_data: ActionType::FnCall(FnCallData {
                                     id: FnCallIdType::StandardStatic(
                                         AccountId::new_unchecked(wnear_account_id.clone()),
                                         SKYWARD_FNCALL2_NAME.into(),
@@ -199,7 +199,7 @@ impl Skyward1 {
                             TemplateAction {
                                 exec_condition: None,
                                 validators: vec![],
-                                action_data: ActionData::FnCall(FnCallData {
+                                action_data: ActionType::FnCall(FnCallData {
                                     id: FnCallIdType::StandardDynamic(
                                         ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
                                         SKYWARD_FNCALL3_NAME.into(),
@@ -221,7 +221,7 @@ impl Skyward1 {
                         ],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_dao_activity: false,
+                        is_executable_activity: false,
                     }),
                     // Taken from previous because of gas limit.
                     Activity::Activity(TemplateActivity {
@@ -230,7 +230,7 @@ impl Skyward1 {
                         actions: vec![TemplateAction {
                             exec_condition: None,
                             validators: vec![],
-                            action_data: ActionData::FnCall(FnCallData {
+                            action_data: ActionType::FnCall(FnCallData {
                                 id: FnCallIdType::StandardDynamic(
                                     ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
                                     SKYWARD_FNCALL4_NAME.into(),
@@ -272,7 +272,7 @@ impl Skyward1 {
                         }],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_dao_activity: false,
+                        is_executable_activity: false,
                     }),
                     Activity::Activity(TemplateActivity {
                         code: "sale_create".into(),
@@ -280,7 +280,7 @@ impl Skyward1 {
                         actions: vec![TemplateAction {
                             exec_condition: None,
                             validators: vec![],
-                            action_data: ActionData::FnCall(FnCallData {
+                            action_data: ActionType::FnCall(FnCallData {
                                 id: FnCallIdType::Static(
                                     AccountId::new_unchecked(skyward_account_id.clone()),
                                     SKYWARD_FNCALL5_NAME.into(),
@@ -288,22 +288,6 @@ impl Skyward1 {
                                 tgas: 50,
                                 deposit: Some(ArgSrc::ConstsTpl("deposit_sale_create".into())),
                                 binds: vec![
-                                    /*                                 BindDefinition {
-                                                                        key: "sale.title".into(),
-                                                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstAction(
-                                                                            "title".into(),
-                                                                        )),
-                                                                        prefixes: vec![],
-                                                                        is_collection: false,
-                                                                    }, */
-                                    /*                                 BindDefinition {
-                                                                        key: "sale.url".into(),
-                                                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstAction(
-                                                                            "url".into(),
-                                                                        )),
-                                                                        prefixes: vec![],
-                                                                        is_collection: false,
-                                                                    }, */
                                     BindDefinition {
                                         key: "sale.permissions_contract_id".into(),
                                         key_src: SrcOrExprOrValue::Src(ArgSrc::Const(0)),
@@ -369,7 +353,7 @@ impl Skyward1 {
                         }],
                         automatic: false,
                         terminal: Terminality::Automatic,
-                        is_dao_activity: false,
+                        is_executable_activity: false,
                     }),
                 ],
                 expressions: vec![
@@ -657,7 +641,7 @@ impl Skyward2 {
                         actions: vec![TemplateAction {
                             exec_condition: None,
                             validators: vec![],
-                            action_data: ActionData::FnCall(FnCallData {
+                            action_data: ActionType::FnCall(FnCallData {
                                 id: FnCallIdType::Static(
                                     AccountId::new_unchecked(skyward_account_id.clone()),
                                     SKYWARD_FNCALL1_NAME.into(),
@@ -682,7 +666,7 @@ impl Skyward2 {
                         }],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_dao_activity: false,
+                        is_executable_activity: false,
                     }),
                     Activity::Activity(TemplateActivity {
                         code: "storage_deposit".into(),
@@ -691,7 +675,7 @@ impl Skyward2 {
                             TemplateAction {
                                 exec_condition: None,
                                 validators: vec![],
-                                action_data: ActionData::FnCall(FnCallData {
+                                action_data: ActionType::FnCall(FnCallData {
                                     id: FnCallIdType::StandardStatic(
                                         AccountId::new_unchecked(wnear_account_id.clone()),
                                         SKYWARD_FNCALL2_NAME.into(),
@@ -713,7 +697,7 @@ impl Skyward2 {
                             TemplateAction {
                                 exec_condition: None,
                                 validators: vec![],
-                                action_data: ActionData::FnCall(FnCallData {
+                                action_data: ActionType::FnCall(FnCallData {
                                     id: FnCallIdType::StandardDynamic(
                                         ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
                                         SKYWARD_FNCALL3_NAME.into(),
@@ -735,7 +719,7 @@ impl Skyward2 {
                         ],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_dao_activity: false,
+                        is_executable_activity: false,
                     }),
                     // Taken from previous because of gas limit.
                     Activity::Activity(TemplateActivity {
@@ -744,7 +728,7 @@ impl Skyward2 {
                         actions: vec![TemplateAction {
                             exec_condition: None,
                             validators: vec![],
-                            action_data: ActionData::FnCall(FnCallData {
+                            action_data: ActionType::FnCall(FnCallData {
                                 id: FnCallIdType::StandardDynamic(
                                     ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
                                     SKYWARD_FNCALL4_NAME.into(),
@@ -786,7 +770,7 @@ impl Skyward2 {
                         }],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_dao_activity: false,
+                        is_executable_activity: false,
                     }),
                     Activity::Activity(TemplateActivity {
                         code: "sale_create".into(),
@@ -794,7 +778,7 @@ impl Skyward2 {
                         actions: vec![TemplateAction {
                             exec_condition: None,
                             validators: vec![],
-                            action_data: ActionData::FnCall(FnCallData {
+                            action_data: ActionType::FnCall(FnCallData {
                                 id: FnCallIdType::Static(
                                     AccountId::new_unchecked(skyward_account_id.clone()),
                                     SKYWARD_FNCALL5_NAME.into(),
@@ -883,7 +867,7 @@ impl Skyward2 {
                         }],
                         automatic: false,
                         terminal: Terminality::User,
-                        is_dao_activity: false,
+                        is_executable_activity: false,
                     }),
                 ],
                 expressions: vec![

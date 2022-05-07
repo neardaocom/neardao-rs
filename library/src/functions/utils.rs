@@ -44,6 +44,7 @@ impl From<Vec<u8>> for StorageKeyWrapper {
     }
 }
 
+// TODO: Fix error messages.
 /// Helper function to fetch value ref from Source.
 pub fn get_value_from_source(
     sources: &dyn Source,
@@ -81,7 +82,10 @@ pub fn get_value_from_source(
         ArgSrc::Storage(key) => {
             let value = sources
                 .storage(key)
-                .ok_or(SourceError::SourceMissing("storage".into()))?;
+                .ok_or(SourceError::SourceMissing(format!(
+                    "storage - key: {}",
+                    key
+                )))?;
             Ok(value)
         }
         ArgSrc::GlobalStorage(key) => {

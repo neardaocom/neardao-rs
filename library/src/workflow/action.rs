@@ -1,10 +1,15 @@
+use std::collections::HashMap;
+
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
     AccountId,
 };
 
-use crate::{types::activity_input::UserInput, MethodName};
+use crate::{
+    types::{activity_input::UserInput, datatype::Datatype},
+    MethodName,
+};
 
 use super::{
     expression::Expression,
@@ -20,7 +25,7 @@ use super::{
 pub struct TemplateAction {
     pub exec_condition: Option<Expression>,
     pub validators: Vec<Validator>,
-    pub action_data: ActionData,
+    pub action_data: ActionType,
     pub postprocessing: Option<Postprocessing>,
     pub must_succeed: bool,
     pub optional: bool,
@@ -29,13 +34,15 @@ pub struct TemplateAction {
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq, Clone))]
 #[serde(crate = "near_sdk::serde")]
-pub enum ActionData {
+pub enum ActionType {
     FnCall(FnCallData),
     Action(DaoActionData),
+    Event(EventData),
+    SendNear(ArgSrc, ArgSrc),
     None,
 }
 
-impl ActionData {
+impl ActionType {
     pub fn try_into_action_data(self) -> Option<DaoActionData> {
         match self {
             Self::Action(data) => Some(data),
@@ -43,9 +50,29 @@ impl ActionData {
         }
     }
 
+    pub fn try_into_event_data(self) -> Option<EventData> {
+        match self {
+            Self::Event(data) => Some(data),
+            _ => None,
+        }
+    }
+
     pub fn try_into_fncall_data(self) -> Option<FnCallData> {
         match self {
             Self::FnCall(data) => Some(data),
+            _ => None,
+        }
+    }
+    pub fn is_fncall(&self) -> bool {
+        match self {
+            Self::FnCall(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn try_into_send_near_sources(self) -> Option<(ArgSrc, ArgSrc)> {
+        match self {
+            Self::SendNear(a1, a2) => Some((a1, a2)),
             _ => None,
         }
     }
@@ -62,11 +89,18 @@ pub struct DaoActionData {
     pub required_deposit: Option<ArgSrc>,
     pub binds: Vec<BindDefinition>,
 }
-
-impl DaoActionData {
-    pub fn is_event(&self) -> bool {
-        self.name == DaoActionIdent::Event
-    }
+// TODO: Remove Debug and Clone in production.
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct EventData {
+    /// Event code.
+    pub code: String,
+    /// Map of expected keys and values.
+    pub expected_input: Option<Vec<(String, Datatype)>>,
+    /// Binded dynamically.
+    pub required_deposit: Option<ArgSrc>,
+    pub binds: Vec<BindDefinition>,
 }
 
 // TODO: Remove Debug and Clone in production.
@@ -103,6 +137,8 @@ pub struct ActionInput {
     pub action: DaoActionOrFnCall,
     pub values: UserInput,
 }
+
+// TODO: Update structure.
 // TODO: Remove Debug and Clone in production.
 #[derive(Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Serialize))]
@@ -110,20 +146,22 @@ pub struct ActionInput {
 pub enum DaoActionOrFnCall {
     DaoAction(DaoActionIdent),
     FnCall(AccountId, MethodName),
+    SendNear,
 }
 
-impl PartialEq<ActionData> for DaoActionOrFnCall {
-    fn eq(&self, other: &ActionData) -> bool {
+impl PartialEq<ActionType> for DaoActionOrFnCall {
+    fn eq(&self, other: &ActionType) -> bool {
         match (self, other) {
-            (Self::DaoAction(l0), ActionData::Action(d)) => *l0 == d.name,
-            (Self::DaoAction(_), ActionData::FnCall(_)) => false,
-            (Self::FnCall(a0, m0), ActionData::FnCall(f)) => match &f.id {
+            (Self::DaoAction(l0), ActionType::Action(d)) => *l0 == d.name,
+            (Self::DaoAction(_), ActionType::FnCall(_)) => false,
+            (Self::FnCall(a0, m0), ActionType::FnCall(f)) => match &f.id {
                 FnCallIdType::Static(a, m) => *a0 == *a && *m0 == *m,
                 FnCallIdType::Dynamic(_, m) => *m0.as_str() == *m,
                 FnCallIdType::StandardStatic(a, m) => *a0 == *a && *m0 == *m,
                 FnCallIdType::StandardDynamic(_, m) => *m0.as_str() == *m,
             },
-            (Self::FnCall(_, _), ActionData::Action(_)) => false,
+            (Self::FnCall(_, _), ActionType::Action(_)) => false,
+            (Self::SendNear, ActionType::SendNear(_, _)) => true,
             _ => false,
         }
     }

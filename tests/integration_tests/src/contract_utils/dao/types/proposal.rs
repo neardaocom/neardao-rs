@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 
-use library::workflow::{
-    instance::Instance,
-    settings::{ProposeSettings, TemplateSettings},
-    template::Template,
-};
+use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use serde::{Deserialize, Serialize};
 use workspaces::AccountId;
 
@@ -55,14 +51,14 @@ impl ProposalCreateInput {
     pub fn default(
         template_id: u16,
         propose_settings: ProposeSettings,
-        template_settings: Option<TemplateSettings>,
+        template_settings: Option<Vec<TemplateSettings>>,
     ) -> Self {
         ProposalCreateInput {
             desc: ResourceType::default(),
             template_id,
             template_settings_id: 0,
             propose_settings,
-            template_settings: template_settings.map(|s| Some(vec![s])).flatten(),
+            template_settings,
         }
     }
 }

@@ -1,8 +1,13 @@
+use async_trait::async_trait;
+use std::time::Duration;
+use tokio::time::sleep;
+
 use near_sdk::json_types::{U128, U64};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use workspaces::{
+    network::{Sandbox, Testnet},
     result::{CallExecutionDetails, ViewResultDetails},
-    AccountId,
+    AccountId, Worker,
 };
 
 pub(crate) type DurationSec = u64;
@@ -118,4 +123,25 @@ pub(crate) fn generate_random_strings(count: usize, string_len: usize) -> Vec<St
         vec.push(string);
     }
     vec
+}
+
+#[async_trait]
+pub trait Wait {
+    async fn wait(&self, min_seconds: u64) -> anyhow::Result<()>;
+}
+
+#[async_trait]
+impl Wait for Worker<Sandbox> {
+    async fn wait(&self, min_seconds: u64) -> anyhow::Result<()> {
+        self.fast_forward(min_seconds + 3).await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Wait for Worker<Testnet> {
+    async fn wait(&self, min_seconds: u64) -> anyhow::Result<()> {
+        sleep(Duration::from_secs(min_seconds)).await;
+        Ok(())
+    }
 }

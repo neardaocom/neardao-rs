@@ -1,3 +1,22 @@
+use std::collections::HashMap;
+
+use near_sdk::{AccountId, ONE_NEAR, ONE_YOCTO};
+
+use crate::{
+    types::{datatype::Value, source::SourceDataVariant},
+    workflow::{
+        action::{ActionType, FnCallData, FnCallIdType, TemplateAction},
+        activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
+        expression::Expression,
+        postprocessing::Postprocessing,
+        settings::{ActivityBind, ProposeSettings, TemplateSettings},
+        template::Template,
+        types::{
+            ActivityRight, ArgSrc, BindDefinition, Instruction, SrcOrExprOrValue, VoteScenario,
+        },
+    },
+};
+
 pub const DEFAULT_VOTING_DURATION: u32 = 10;
 
 pub struct WfAdd1ProposeOptions {
@@ -29,7 +48,7 @@ impl WfAdd1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionData::FnCall(FnCallData {
+                        action_data: ActionType::FnCall(FnCallData {
                             id: FnCallIdType::Dynamic(
                                 ArgSrc::ConstPropSettings(WF_ADD1_PROVIDER_ID_KEY.into()),
                                 "wf_template".into(),
@@ -52,7 +71,7 @@ impl WfAdd1 {
                     }],
                     automatic: true,
                     terminal: Terminality::Automatic,
-                    is_dao_activity: false,
+                    is_executable_activity: false,
                 }),
             ],
             expressions: vec![],
@@ -679,22 +698,3 @@ pub fn workflow_media_invalidate() -> Template {
     }
 }
  */
-
-use std::collections::HashMap;
-
-use near_sdk::{AccountId, ONE_NEAR, ONE_YOCTO};
-
-use crate::{
-    types::{datatype::Value, source::SourceDataVariant},
-    workflow::{
-        action::{ActionData, FnCallData, FnCallIdType, TemplateAction},
-        activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
-        expression::Expression,
-        postprocessing::Postprocessing,
-        settings::{ActivityBind, ProposeSettings, TemplateSettings},
-        template::Template,
-        types::{
-            ActivityRight, ArgSrc, BindDefinition, Instruction, SrcOrExprOrValue, VoteScenario,
-        },
-    },
-};

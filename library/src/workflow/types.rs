@@ -46,7 +46,6 @@ pub enum DaoActionIdent {
     TreasurySendNFtContract,
     TreasurySendNear,
     WorkflowAdd,
-    Event,
 }
 
 // TODO: Remove Debug in production.
@@ -173,14 +172,6 @@ pub enum CollectionBindingStyle {
 pub struct ObjectMetadata {
     pub arg_names: Vec<String>,
     pub arg_types: Vec<Datatype>,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, PartialEq)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
-#[serde(crate = "near_sdk::serde")]
-pub enum ActionType {
-    DaoAction,
-    FnCall,
 }
 
 // TODO: Remove Debug in production.

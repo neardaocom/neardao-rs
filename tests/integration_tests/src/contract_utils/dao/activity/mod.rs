@@ -1,4 +1,5 @@
 mod skyward;
+pub mod trade;
 mod wf_add;
 
 use library::workflow::action::ActionInput;
@@ -17,6 +18,7 @@ pub(crate) async fn run_activity<T>(
     proposal_id: u32,
     activity_id: u8,
     actions_inputs: Vec<Option<ActionInput>>,
+    expected_success: bool,
 ) -> anyhow::Result<()>
 where
     T: DevNetwork,
@@ -33,13 +35,20 @@ where
         .args(args)
         .max_gas()
         .transact()
-        .await?;
+        .await;
     let msg = format!(
         "dao: running proposal_id: {} activity_id: {}",
         proposal_id, activity_id
     );
-    outcome_pretty::<()>(&msg, &outcome);
-    assert!(outcome.is_success(), "dao running activity failed");
+    if expected_success {
+        assert!(
+            outcome.as_ref().unwrap().is_success(),
+            "dao running activity failed"
+        );
+        outcome_pretty::<()>(&msg, &outcome.unwrap());
+    } else {
+        assert!(outcome.is_err(), "dao running activity failed");
+    }
 
     Ok(())
 }

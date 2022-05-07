@@ -4,9 +4,8 @@ use library::functions::{binding::bind_input, utils::get_value_from_source};
 use library::interpreter::expression::EExpr;
 
 use library::storage::StorageBucket;
-use library::types::datatype::Value;
 use library::types::source::{DefaultSource, Source};
-use library::workflow::action::{ActionData, ActionInput};
+use library::workflow::action::{ActionInput, ActionType};
 use library::workflow::activity::{TemplateActivity, Terminality};
 use library::workflow::instance::InstanceState;
 use library::workflow::settings::TemplateSettings;
@@ -14,7 +13,7 @@ use library::workflow::template::Template;
 use near_sdk::{env, log, near_bindgen, AccountId, Gas, Promise};
 
 use crate::callback::ext_self;
-use crate::constants::{EVENT_CALLER_KEY, GLOBAL_BUCKET_IDENT};
+use crate::constants::GLOBAL_BUCKET_IDENT;
 use crate::error::{ActionError, ActivityError};
 use crate::group::{GroupInput, GroupMember, GroupSettings};
 use crate::internal::utils::current_timestamp_sec;
@@ -80,7 +79,7 @@ impl Contract {
 
         // Finds activity.
         let TemplateActivity {
-            is_dao_activity,
+            is_executable_activity,
             automatic,
             terminal,
             actions,
@@ -178,8 +177,8 @@ impl Contract {
             "Activity input structure is invalid."
         );
         let result;
-        if is_dao_activity {
-            result = self.run_dao_activity(
+        if is_executable_activity {
+            result = self.run_sync_activity(
                 &mut ctx,
                 expressions.as_slice(),
                 sources.as_mut(),
@@ -207,7 +206,7 @@ impl Contract {
             // Optional actions will be immediatelly added to instance.
             let mut optional_actions = 0;
             // In case of fn calls activity storages are mutated in postprocessing as promises resolve.
-            result = self.run_fncall_activity(
+            result = self.run_async_activity(
                 &mut ctx,
                 expressions.as_slice(),
                 sources.as_mut(),
@@ -247,7 +246,7 @@ impl Contract {
 impl Contract {
     /// Tries to run all activity's actions.
     /// Some checks must be done before calling this function.
-    pub fn run_dao_activity(
+    pub fn run_sync_activity(
         &mut self,
         ctx: &mut ActivityContext,
         expressions: &[EExpr],
@@ -297,7 +296,7 @@ impl Contract {
                 sources.unset_prop_action();
             }
 
-            let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
+            let action_data = std::mem::replace(&mut tpl_action.action_data, ActionType::None)
                 .try_into_action_data()
                 .ok_or(ActionError::InvalidWfStructure(
                     "missing action data".into(),
@@ -319,24 +318,19 @@ impl Contract {
             // Bind user inputs.
             bind_input(sources, binds, expressions, action_input.as_mut())?;
 
-            if action_data.is_event() {
-                let deposit = match &action_data.required_deposit {
-                    Some(arg_src) => get_value_from_source(sources, arg_src)
-                        .map_err(|_| ActionError::InvalidSource)?
-                        .try_into_u128()?,
-                    _ => 0,
-                };
+            let deposit = match &action_data.required_deposit {
+                Some(arg_src) => get_value_from_source(sources, arg_src)
+                    .map_err(|_| ActionError::InvalidSource)?
+                    .try_into_u128()?,
+                _ => 0,
+            };
 
-                ctx.attached_deposit = ctx
-                    .attached_deposit
-                    .checked_sub(deposit)
-                    .ok_or(ActionError::NotEnoughDeposit)?;
+            ctx.attached_deposit = ctx
+                .attached_deposit
+                .checked_sub(deposit)
+                .ok_or(ActionError::NotEnoughDeposit)?;
 
-                // Insert caller into 0th position.
-                action_input.set(EVENT_CALLER_KEY, Value::String(ctx.caller.to_string()));
-            } else {
-                self.execute_dao_action(ctx.proposal_id, action_data.name, action_input.as_mut())?;
-            }
+            self.execute_dao_action(ctx.proposal_id, action_data.name, action_input.as_mut())?;
 
             // TODO: Handle error so we do only part of the batch.
             if let Some(mut pp) = tpl_action.postprocessing.take() {
@@ -361,7 +355,7 @@ impl Contract {
         Ok(())
     }
     /// FnCall version of `run_dao_activity` function.
-    pub fn run_fncall_activity(
+    pub fn run_async_activity(
         &mut self,
         ctx: &mut ActivityContext,
         expressions: &[EExpr],
@@ -429,71 +423,106 @@ impl Contract {
                 sources.unset_prop_action();
             }
 
-            let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
-                .try_into_fncall_data()
-                .ok_or(ActionError::InvalidWfStructure(
-                    "missing action data".into(),
-                ))?;
+            let new_promise;
+            if tpl_action.action_data.is_fncall() {
+                let action_data = std::mem::replace(&mut tpl_action.action_data, ActionType::None)
+                    .try_into_fncall_data()
+                    .ok_or(ActionError::InvalidWfStructure(
+                        "missing action data".into(),
+                    ))?;
 
-            // Metadata are provided by workflow provider when workflow is added.
-            // Missing metadata are fault of the workflow provider and are considered as fatal runtime error.
-            let (name, method, metadata) =
-                self.get_fncall_id_with_metadata(action_data.id, sources)?;
+                // Metadata are provided by workflow provider when workflow is added.
+                // Missing metadata are fault of the workflow provider and are considered as fatal runtime error.
+                let (name, method, metadata) =
+                    self.get_fncall_id_with_metadata(action_data.id, sources)?;
 
-            if !validate(
-                sources,
-                tpl_action.validators.as_slice(),
-                expressions,
-                action_input.as_ref(),
-            )? {
-                return Err(ActionError::Validation(idx as u8));
+                if !validate(
+                    sources,
+                    tpl_action.validators.as_slice(),
+                    expressions,
+                    action_input.as_ref(),
+                )? {
+                    return Err(ActionError::Validation(idx as u8));
+                }
+
+                let binds = action_data.binds.as_slice();
+                bind_input(sources, binds, expressions, action_input.as_mut())?;
+
+                let deposit = match action_data.deposit {
+                    Some(arg_src) => get_value_from_source(sources, &arg_src)
+                        .map_err(|_| ActionError::InvalidSource)?
+                        .try_into_u128()?,
+                    None => 0,
+                };
+
+                let pp = if let Some(mut pp) = tpl_action.postprocessing.take() {
+                    pp.bind_instructions(sources, action_input.as_ref())
+                        .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
+                    Some(pp)
+                } else {
+                    None
+                };
+                let args = serialize_to_json(action_input, metadata.as_slice());
+                self.debug_log.push(format!(
+                    "promise dispatch - contract: {}, method: {}; args: {}; ",
+                    &name, &method, &args
+                ));
+                // Dispatch fncall and its postprocessing.
+                new_promise = Promise::new(name)
+                    .function_call(
+                        method,
+                        args.into_bytes(),
+                        deposit,
+                        Gas(action_data.tgas as u64 * 10u64.pow(12)),
+                    )
+                    .then(ext_self::postprocess(
+                        ctx.proposal_id,
+                        idx as u8,
+                        tpl_action.must_succeed,
+                        ctx.proposal_settings.storage_key.clone(),
+                        pp,
+                        env::current_account_id(),
+                        0,
+                        Gas(50 * 10u64.pow(12)),
+                    ));
+            } else {
+                let (sender_src, amount_src) =
+                    std::mem::replace(&mut tpl_action.action_data, ActionType::None)
+                        .try_into_send_near_sources()
+                        .ok_or(ActionError::InvalidWfStructure(
+                            "send near invalid data".into(),
+                        ))?;
+                let name = get_value_from_source(sources, &sender_src)
+                    .expect("failed to get value from source")
+                    .try_into_string()?;
+                let amount = get_value_from_source(sources, &amount_src)
+                    .expect("failed to get value from source")
+                    .try_into_u128()?;
+                self.debug_log.push(format!(
+                    "promise send near - name: {}, amount: {}; ",
+                    &name, amount,
+                ));
+                new_promise =
+                    Promise::new(AccountId::try_from(name).expect("invalid account_id name"))
+                        .transfer(amount)
+                        .then(ext_self::postprocess(
+                            ctx.proposal_id,
+                            idx as u8,
+                            tpl_action.must_succeed,
+                            ctx.proposal_settings.storage_key.clone(),
+                            None,
+                            env::current_account_id(),
+                            0,
+                            Gas(10 * 10u64.pow(12)),
+                        ));
             }
 
-            let binds = action_data.binds.as_slice();
-            bind_input(sources, binds, expressions, action_input.as_mut())?;
-
-            let deposit = match action_data.deposit {
-                Some(arg_src) => get_value_from_source(sources, &arg_src)
-                    .map_err(|_| ActionError::InvalidSource)?
-                    .try_into_u128()?,
-                None => 0,
-            };
-
-            let pp = if let Some(mut pp) = tpl_action.postprocessing.take() {
-                pp.bind_instructions(sources, action_input.as_ref())
-                    .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
-                Some(pp)
-            } else {
-                None
-            };
-            let args = serialize_to_json(action_input, metadata.as_slice());
-            self.debug_log.push(format!(
-                "promise dispatch - contract: {}, method: {}; args: {}; ",
-                &name, &method, &args
-            ));
-            // Dispatch fncall and its postprocessing.
-            let new_promise = Promise::new(name)
-                .function_call(
-                    method,
-                    args.into_bytes(),
-                    deposit,
-                    Gas(action_data.tgas as u64 * 10u64.pow(12)),
-                )
-                .then(ext_self::postprocess(
-                    ctx.proposal_id,
-                    idx as u8,
-                    tpl_action.must_succeed,
-                    ctx.proposal_settings.storage_key.clone(),
-                    pp,
-                    env::current_account_id(),
-                    0,
-                    Gas(50 * 10u64.pow(12)),
-                ));
             promise = if let Some(p) = promise {
                 Some(p.and(new_promise))
             } else {
                 Some(new_promise)
             };
+
             // Number of successfully dispatched promises.
             ctx.set_next_action_done();
         }

@@ -187,10 +187,8 @@ impl Postprocessing {
                         let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
                         values.push(result);
                     }
-
                     let result = expr.eval(values.as_slice()).map_err(|_| ())?;
                     storage.as_mut().unwrap().add_data(key, &result);
-
                     values.pop();
                 }
                 Instruction::StoreExpressionGlobalBinded(
@@ -213,7 +211,6 @@ impl Postprocessing {
             }
             // Swap instruction back.
             std::mem::swap(&mut self.instructions[i], &mut ins);
-
             i += 1;
         }
 

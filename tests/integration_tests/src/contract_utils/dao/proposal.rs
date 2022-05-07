@@ -3,7 +3,7 @@ use library::{
     workflow::settings::{ProposeSettings, TemplateSettings},
 };
 use serde_json::json;
-use workspaces::{Account, AccountId, Contract, DevNetwork, Worker};
+use workspaces::{network::Sandbox, Account, AccountId, Contract, DevNetwork, Worker};
 
 use crate::{
     contract_utils::dao::{
@@ -21,7 +21,7 @@ pub(crate) async fn create_proposal<T>(
     dao: &Contract,
     used_template_id: u16,
     proposal_settings: ProposeSettings,
-    template_settings: Option<TemplateSettings>,
+    template_settings: Option<Vec<TemplateSettings>>,
     deposit: u128,
 ) -> anyhow::Result<u32>
 where
@@ -136,4 +136,37 @@ pub(crate) fn ps_skyward(
         }),
         storage_key,
     )
+}
+
+/// Wrapper around create propose, vote and finish proposal.
+pub(crate) async fn proposal_to_finish(
+    worker: &Worker<Sandbox>,
+    proposer: &Account,
+    dao: &Contract,
+    dao_template_id: u16,
+    propose_settings: ProposeSettings,
+    template_settings: Option<Vec<TemplateSettings>>,
+    voters: Vec<(&Account, u8)>,
+    voting_duration: u64,
+    deposit_proposal: u128,
+    deposit_vote: u128,
+    expected_state: ProposalState,
+) -> anyhow::Result<u32> {
+    let proposal_id = create_proposal(
+        worker,
+        proposer,
+        dao,
+        dao_template_id,
+        propose_settings,
+        template_settings,
+        deposit_proposal,
+    )
+    .await?;
+
+    vote_proposal(worker, voters, dao, proposal_id, deposit_vote).await?;
+
+    worker.fast_forward(voting_duration + 10).await?;
+
+    finish_proposal(&worker, proposer, &dao, proposal_id, expected_state).await?;
+    Ok(proposal_id)
 }
