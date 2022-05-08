@@ -71,7 +71,7 @@ impl WfAdd1 {
                     }],
                     automatic: true,
                     terminal: Terminality::Automatic,
-                    is_executable_activity: false,
+                    is_sync: false,
                 }),
             ],
             expressions: vec![],

@@ -27,7 +27,7 @@ impl Activity {
     pub fn is_executable_activity(&self) -> bool {
         match self {
             Activity::Init => false,
-            Activity::Activity(a) => a.is_executable_activity,
+            Activity::Activity(a) => a.is_sync,
         }
     }
 }
@@ -85,7 +85,7 @@ pub struct TemplateActivity {
     /// Postprocessing script in case of successfull execution.
     pub postprocessing: Option<Postprocessing>,
     /// Helper flag.
-    pub is_executable_activity: bool,
+    pub is_sync: bool,
 }
 
 impl TemplateActivity {

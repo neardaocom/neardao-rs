@@ -39,6 +39,7 @@ pub enum ActionType {
     Action(DaoActionData),
     Event(EventData),
     SendNear(ArgSrc, ArgSrc),
+    Stake(ArgSrc, ArgSrc),
     None,
 }
 
@@ -66,6 +67,13 @@ impl ActionType {
     pub fn is_fncall(&self) -> bool {
         match self {
             Self::FnCall(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_action(&self) -> bool {
+        match self {
+            Self::Action(_) => true,
             _ => false,
         }
     }
@@ -134,7 +142,7 @@ pub enum FnCallIdType {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Serialize))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ActionInput {
-    pub action: DaoActionOrFnCall,
+    pub action: ActionInputType,
     pub values: UserInput,
 }
 
@@ -143,13 +151,16 @@ pub struct ActionInput {
 #[derive(Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Serialize))]
 #[serde(crate = "near_sdk::serde")]
-pub enum DaoActionOrFnCall {
+pub enum ActionInputType {
     DaoAction(DaoActionIdent),
     FnCall(AccountId, MethodName),
+    // TODO: Implement checks on DAO.
+    Event(String),
     SendNear,
+    Stake,
 }
 
-impl PartialEq<ActionType> for DaoActionOrFnCall {
+impl PartialEq<ActionType> for ActionInputType {
     fn eq(&self, other: &ActionType) -> bool {
         match (self, other) {
             (Self::DaoAction(l0), ActionType::Action(d)) => *l0 == d.name,
@@ -162,6 +173,7 @@ impl PartialEq<ActionType> for DaoActionOrFnCall {
             },
             (Self::FnCall(_, _), ActionType::Action(_)) => false,
             (Self::SendNear, ActionType::SendNear(_, _)) => true,
+            (Self::Event(code), ActionType::Event(d)) => *code == d.code,
             _ => false,
         }
     }

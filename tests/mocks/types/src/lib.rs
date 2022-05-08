@@ -41,6 +41,14 @@ impl SourceProvider for SourceMock {
     fn props_global(&self, key: &str) -> Option<&Value> {
         todo!()
     }
+
+    fn storage_mut(&mut self) -> Option<&mut StorageBucket> {
+        todo!()
+    }
+
+    fn global_storage_mut(&mut self) -> Option<&mut StorageBucket> {
+        todo!()
+    }
 }
 
 impl MutableSource for SourceMock {
@@ -69,6 +77,10 @@ impl MutableSource for SourceMock {
     }
 
     fn unset_prop_action(&mut self) -> Option<SourceDataVariant> {
+        todo!()
+    }
+
+    fn replace_global_storage(&mut self, new: StorageBucket) -> Option<StorageBucket> {
         todo!()
     }
 }

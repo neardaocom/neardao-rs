@@ -20,3 +20,4 @@ pub const EVENT_CALLER_KEY: &str = "event_caller";
 // DAO consts ids.
 pub const C_DAO_ID: u8 = 0;
 pub const C_CURRENT_TIMESTAMP_SECS: u8 = 1;
+pub const C_PREDECESSOR: u8 = 2;

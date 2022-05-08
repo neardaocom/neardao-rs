@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use library::{
     data::{
         workflows::{
-            basic::trade::Trade1,
+            basic::{bounty::Bounty1, trade::Trade1},
             integration::skyward::{Skyward1, Skyward1TemplateOptions},
         },
         TemplateData,
@@ -94,6 +94,7 @@ fn wf_templates(
         templates.push(dummy_template_data());
     }
     templates.push(("trade1".into(), Trade1::template(), None));
+    templates.push(("bounty1".into(), Bounty1::template(), None));
     templates
 }
 

@@ -4,7 +4,7 @@ use near_sdk::{env, log, require, AccountId, Balance, Promise};
 
 use crate::{
     calc_percent_u128_unchecked,
-    constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, GLOBAL_BUCKET_IDENT, TGAS},
+    constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, C_PREDECESSOR, GLOBAL_BUCKET_IDENT, TGAS},
     core::{ActivityLog, Contract},
     error::{
         ActionError, ERR_DISTRIBUTION_NOT_ENOUGH_FT, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
@@ -776,6 +776,7 @@ impl Consts for DaoConsts {
         match key {
             C_DAO_ID => Some(Value::String(env::current_account_id().to_string())),
             C_CURRENT_TIMESTAMP_SECS => Some(Value::U64(current_timestamp_sec())),
+            C_PREDECESSOR => Some(Value::String(env::predecessor_account_id().to_string())),
             _ => unimplemented!(),
         }
     }

@@ -10,6 +10,7 @@ use library::workflow::activity::{TemplateActivity, Terminality};
 use library::workflow::instance::InstanceState;
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
+use library::workflow::types::ArgSrc::User;
 use near_sdk::{env, log, near_bindgen, AccountId, Gas, Promise};
 
 use crate::callback::ext_self;
@@ -79,7 +80,7 @@ impl Contract {
 
         // Finds activity.
         let TemplateActivity {
-            is_executable_activity,
+            is_sync,
             automatic,
             terminal,
             actions,
@@ -177,7 +178,7 @@ impl Contract {
             "Activity input structure is invalid."
         );
         let result;
-        if is_executable_activity {
+        if is_sync {
             result = self.run_sync_activity(
                 &mut ctx,
                 expressions.as_slice(),
@@ -187,7 +188,10 @@ impl Contract {
 
             // In case not a single DaoAction was executed, then consider this call as failed and panic!
             if result.is_err() || ctx.actions_done() == 0 {
-                panic!("Not a single action was executed.");
+                panic!(
+                    "Not a single action was executed. error: {:?}, {:?}",
+                    result, ctx
+                );
             } else {
                 //At least one action was executed.
                 // Save storages.
@@ -296,47 +300,83 @@ impl Contract {
                 sources.unset_prop_action();
             }
 
-            let action_data = std::mem::replace(&mut tpl_action.action_data, ActionType::None)
-                .try_into_action_data()
-                .ok_or(ActionError::InvalidWfStructure(
-                    "missing action data".into(),
-                ))?;
+            // TODO: Refactor.
+            if tpl_action.action_data.is_action() {
+                let action_data = std::mem::replace(&mut tpl_action.action_data, ActionType::None)
+                    .try_into_action_data()
+                    .ok_or(ActionError::InvalidWfStructure(
+                        "missing action data".into(),
+                    ))?;
 
-            // Need metadata coz validations and bindings. Metadata are always included in DAO.
-            let binds = action_data.binds.as_slice();
+                // Need metadata coz validations and bindings. Metadata are always included in DAO.
+                let binds = action_data.binds.as_slice();
 
-            // Check input validators.
-            if !validate(
-                sources,
-                tpl_action.validators.as_slice(),
-                expressions,
-                action_input.as_ref(),
-            )? {
-                return Err(ActionError::Validation(idx as u8));
-            }
+                // Check input validators.
+                if !validate(
+                    sources,
+                    tpl_action.validators.as_slice(),
+                    expressions,
+                    action_input.as_ref(),
+                )? {
+                    return Err(ActionError::Validation(idx as u8));
+                }
 
-            // Bind user inputs.
-            bind_input(sources, binds, expressions, action_input.as_mut())?;
+                // Bind user inputs.
+                bind_input(sources, binds, expressions, action_input.as_mut())?;
 
-            let deposit = match &action_data.required_deposit {
-                Some(arg_src) => get_value_from_source(sources, arg_src)
-                    .map_err(|_| ActionError::InvalidSource)?
-                    .try_into_u128()?,
-                _ => 0,
+                let deposit = match &action_data.required_deposit {
+                    Some(arg_src) => get_value_from_source(sources, arg_src)
+                        .map_err(|_| ActionError::InvalidSource)?
+                        .try_into_u128()?,
+                    _ => 0,
+                };
+
+                ctx.attached_deposit = ctx
+                    .attached_deposit
+                    .checked_sub(deposit)
+                    .ok_or(ActionError::NotEnoughDeposit)?;
+
+                self.execute_dao_action(ctx.proposal_id, action_data.name, action_input.as_mut())?;
+            } else {
+                let action_data = std::mem::replace(&mut tpl_action.action_data, ActionType::None)
+                    .try_into_event_data()
+                    .ok_or(ActionError::InvalidWfStructure("missing event data".into()))?;
+
+                // Need metadata coz validations and bindings. Metadata are always included in DAO.
+                let binds = action_data.binds.as_slice();
+
+                // Check input validators.
+                if !validate(
+                    sources,
+                    tpl_action.validators.as_slice(),
+                    expressions,
+                    action_input.as_ref(),
+                )? {
+                    return Err(ActionError::Validation(idx as u8));
+                }
+
+                // Bind user inputs.
+                bind_input(sources, binds, expressions, action_input.as_mut())?;
+
+                let deposit = match &action_data.required_deposit {
+                    Some(arg_src) => get_value_from_source(sources, arg_src)
+                        .map_err(|_| ActionError::InvalidSource)?
+                        .try_into_u128()?,
+                    _ => 0,
+                };
+
+                ctx.attached_deposit = ctx
+                    .attached_deposit
+                    .checked_sub(deposit)
+                    .ok_or(ActionError::NotEnoughDeposit)?;
             };
-
-            ctx.attached_deposit = ctx
-                .attached_deposit
-                .checked_sub(deposit)
-                .ok_or(ActionError::NotEnoughDeposit)?;
-
-            self.execute_dao_action(ctx.proposal_id, action_data.name, action_input.as_mut())?;
 
             // TODO: Handle error so we do only part of the batch.
             if let Some(mut pp) = tpl_action.postprocessing.take() {
                 pp.bind_instructions(sources, action_input.as_ref())
                     .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
                 // TODO: Different execute version for DaoActions?
+                // TODO: Global storage manipulation.
                 let mut storage = sources.take_storage();
                 let mut global_storage = sources
                     .take_global_storage()
@@ -347,8 +387,14 @@ impl Contract {
                 {
                     return Err(ActionError::ActionPostprocessing(idx as u8));
                 }
+                sources.replace_global_storage(global_storage);
+                if let Some(storage) = storage {
+                    sources.replace_storage(storage);
+                }
             }
 
+            self.debug_log
+                .push(format!("dao action executed: {}", ctx.activity_id));
             ctx.set_next_action_done();
         }
 
@@ -492,12 +538,25 @@ impl Contract {
                         .ok_or(ActionError::InvalidWfStructure(
                             "send near invalid data".into(),
                         ))?;
-                let name = get_value_from_source(sources, &sender_src)
-                    .expect("failed to get value from source")
-                    .try_into_string()?;
-                let amount = get_value_from_source(sources, &amount_src)
-                    .expect("failed to get value from source")
-                    .try_into_u128()?;
+                let name = match &sender_src {
+                    User(key) => action_input
+                        .get(&key)
+                        .ok_or(ActionError::InputStructure(idx as u8))?
+                        .to_owned(),
+                    _ => get_value_from_source(sources, &sender_src)
+                        .map_err(|_| ActionError::InputStructure(idx as u8))?,
+                }
+                .try_into_string()?;
+
+                let amount = match &amount_src {
+                    User(key) => action_input
+                        .get(&key)
+                        .ok_or(ActionError::InputStructure(idx as u8))?
+                        .to_owned(),
+                    _ => get_value_from_source(sources, &amount_src)
+                        .map_err(|_| ActionError::InputStructure(idx as u8))?,
+                }
+                .try_into_u128()?;
                 self.debug_log.push(format!(
                     "promise send near - name: {}, amount: {}; ",
                     &name, amount,

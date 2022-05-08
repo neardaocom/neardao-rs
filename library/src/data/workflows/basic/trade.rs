@@ -5,18 +5,14 @@ use near_sdk::{ONE_NEAR, ONE_YOCTO};
 use crate::{
     data::TemplateData,
     interpreter::expression::{EExpr, EOp, ExprTerm, LogOp, Op, RelOp, TExpr},
-    types::{
-        datatype::{Datatype, Value},
-        source::SourceDataVariant,
-    },
+    types::{datatype::Value, source::SourceDataVariant},
     workflow::{
-        action::{ActionType, EventData, TemplateAction},
+        action::{ActionType, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
-        postprocessing::Postprocessing,
-        settings::{ActivityBind, ProposeSettings, TemplateSettings},
+        settings::{ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, ArgSrc, Instruction, VoteScenario},
+        types::{ActivityRight, ArgSrc, VoteScenario},
     },
 };
 
@@ -48,45 +44,6 @@ impl Trade1 {
             need_storage: true,
             activities: vec![
                 Activity::Init,
-                /* Activity::Activity(TemplateActivity {
-                    code: "receiver_tokens".into(),
-                    postprocessing: None,
-                    actions: vec![TemplateAction {
-                        exec_condition: None,
-                        validators: vec![],
-                        action_data: ActionType::Event(EventData {
-                            code: "receive_tokens".into(),
-                            expected_input: Some(vec![
-                                ("token_sender".into(), Datatype::String(false)),
-                                ("token_id".into(), Datatype::String(false)),
-                                ("token_amount".into(), Datatype::U128(false)),
-                            ]),
-                            required_deposit: None,
-                            binds: vec![],
-                        }),
-                        postprocessing: Some(Postprocessing {
-                            instructions: vec![
-                                Instruction::StoreDynValue(
-                                    "receiver".into(),
-                                    ArgSrc::User("token_sender".into()),
-                                ),
-                                Instruction::StoreDynValue(
-                                    "received_token".into(),
-                                    ArgSrc::User("token_id".into()),
-                                ),
-                                Instruction::StoreDynValue(
-                                    "received_amount".into(),
-                                    ArgSrc::User("token_amount".into()),
-                                ),
-                            ],
-                        }),
-                        must_succeed: true,
-                        optional: false,
-                    }],
-                    automatic: true,
-                    terminal: Terminality::Automatic,
-                    is_executable_activity: false,
-                }), */
                 Activity::Activity(TemplateActivity {
                     code: "send_near".into(),
                     postprocessing: None,
@@ -111,7 +68,7 @@ impl Trade1 {
                     }],
                     automatic: true,
                     terminal: Terminality::Automatic,
-                    is_executable_activity: false,
+                    is_sync: false,
                 }),
             ],
             expressions: vec![EExpr::Boolean(TExpr {

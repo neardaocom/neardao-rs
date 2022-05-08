@@ -1,3 +1,4 @@
+// TODO: Refactoring.
 use std::collections::HashMap;
 
 use near_sdk::{
@@ -20,10 +21,13 @@ pub trait SourceProvider {
     fn storage(&self, key: &str) -> Option<Value>;
     fn global_storage(&self, key: &str) -> Option<Value>;
     fn dao_const(&self, key: u8) -> Option<Value>;
+    fn storage_mut(&mut self) -> Option<&mut StorageBucket>;
+    fn global_storage_mut(&mut self) -> Option<&mut StorageBucket>;
 }
 
 pub trait MutableSource {
     fn replace_storage(&mut self, new: StorageBucket) -> Option<StorageBucket>;
+    fn replace_global_storage(&mut self, new: StorageBucket) -> Option<StorageBucket>;
     fn set_prop_shared(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
     fn unset_prop_action(&mut self) -> Option<SourceDataVariant>;
     fn set_prop_action(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
@@ -137,6 +141,14 @@ where
             None
         }
     }
+
+    fn storage_mut(&mut self) -> Option<&mut StorageBucket> {
+        self.storage.as_mut()
+    }
+
+    fn global_storage_mut(&mut self) -> Option<&mut StorageBucket> {
+        self.global_storage.as_mut()
+    }
 }
 
 impl<T> MutableSource for DefaultSource<T>
@@ -184,6 +196,15 @@ where
 
     fn unset_prop_action(&mut self) -> Option<SourceDataVariant> {
         std::mem::take(&mut self.prop_action)
+    }
+
+    fn replace_global_storage(&mut self, new: StorageBucket) -> Option<StorageBucket> {
+        if let Some(mut storage) = self.global_storage.as_mut() {
+            Some(std::mem::replace(&mut storage, new))
+        } else {
+            self.global_storage = Some(new);
+            None
+        }
     }
 }
 
@@ -247,6 +268,14 @@ impl SourceProvider for SourceMock {
     fn props_global(&self, key: &str) -> Option<&Value> {
         todo!()
     }
+
+    fn storage_mut(&mut self) -> Option<&mut StorageBucket> {
+        todo!()
+    }
+
+    fn global_storage_mut(&mut self) -> Option<&mut StorageBucket> {
+        todo!()
+    }
 }
 
 #[allow(unused)]
@@ -272,6 +301,10 @@ impl MutableSource for SourceMock {
     }
 
     fn unset_prop_action(&mut self) -> Option<SourceDataVariant> {
+        todo!()
+    }
+
+    fn replace_global_storage(&mut self, new: StorageBucket) -> Option<StorageBucket> {
         todo!()
     }
 }

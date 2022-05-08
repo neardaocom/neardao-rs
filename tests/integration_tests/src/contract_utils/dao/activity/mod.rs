@@ -1,3 +1,4 @@
+pub mod bounty;
 mod skyward;
 pub mod trade;
 mod wf_add;

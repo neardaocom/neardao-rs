@@ -12,7 +12,7 @@ use library::{
         activity_input::{ActivityInput, UserInput},
         datatype::Value,
     },
-    workflow::action::{ActionInput, DaoActionOrFnCall},
+    workflow::action::{ActionInput, ActionInputType},
 };
 use near_sdk::AccountId;
 use workspaces::AccountId as WorkspaceAccountId;
@@ -23,7 +23,7 @@ impl ActivityInputSkyward1 {
     pub fn activity_1(skyward_id: &WorkspaceAccountId) -> Vec<Option<ActionInput>> {
         let skyward_id: AccountId = AccountId::new_unchecked(skyward_id.to_string());
         vec![Some(ActionInput {
-            action: DaoActionOrFnCall::FnCall(skyward_id, SKYWARD_FNCALL1_NAME.to_string()),
+            action: ActionInputType::FnCall(skyward_id, SKYWARD_FNCALL1_NAME.to_string()),
             values: UserInput::Map(HashMap::default()),
         })]
     }
@@ -35,17 +35,11 @@ impl ActivityInputSkyward1 {
         let token_id: AccountId = AccountId::new_unchecked(token_id.to_string());
         vec![
             Some(ActionInput {
-                action: DaoActionOrFnCall::FnCall(
-                    wnear_id.clone(),
-                    SKYWARD_FNCALL2_NAME.to_string(),
-                ),
+                action: ActionInputType::FnCall(wnear_id.clone(), SKYWARD_FNCALL2_NAME.to_string()),
                 values: UserInput::Map(HashMap::default()),
             }),
             Some(ActionInput {
-                action: DaoActionOrFnCall::FnCall(
-                    token_id.clone(),
-                    SKYWARD_FNCALL3_NAME.to_string(),
-                ),
+                action: ActionInputType::FnCall(token_id.clone(), SKYWARD_FNCALL3_NAME.to_string()),
                 values: UserInput::Map(HashMap::default()),
             }),
         ]
@@ -54,7 +48,7 @@ impl ActivityInputSkyward1 {
     pub fn activity_3(token_id: &WorkspaceAccountId) -> Vec<Option<ActionInput>> {
         let token_id: AccountId = AccountId::new_unchecked(token_id.to_string());
         vec![Some(ActionInput {
-            action: DaoActionOrFnCall::FnCall(token_id.clone(), SKYWARD_FNCALL4_NAME.to_string()),
+            action: ActionInputType::FnCall(token_id.clone(), SKYWARD_FNCALL4_NAME.to_string()),
             values: UserInput::Map(HashMap::default()),
         })]
     }
@@ -68,7 +62,7 @@ impl ActivityInputSkyward1 {
         map.set("sale.title".into(), Value::String(sale_title));
         map.set("sale.url".into(), Value::String(sale_url));
         vec![Some(ActionInput {
-            action: DaoActionOrFnCall::FnCall(skyward_id, SKYWARD_FNCALL5_NAME.to_string()),
+            action: ActionInputType::FnCall(skyward_id, SKYWARD_FNCALL5_NAME.to_string()),
             values: UserInput::Map(map),
         })]
     }

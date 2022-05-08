@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use library::{
     types::{activity_input::UserInput, datatype::Value},
-    workflow::action::{ActionInput, DaoActionOrFnCall},
+    workflow::action::{ActionInput, ActionInputType},
 };
 use near_sdk::AccountId;
 use workspaces::AccountId as WorkspaceAccountId;
@@ -20,7 +20,7 @@ impl ActivityInputWfAdd1 {
         map.insert("id".to_string(), Value::U64(wf_template_id as u64));
         let provider_id = AccountId::new_unchecked(provider_id.to_string());
         vec![Some(ActionInput {
-            action: DaoActionOrFnCall::FnCall(provider_id, PROVIDER_VIEW_TEMPLATE.to_string()),
+            action: ActionInputType::FnCall(provider_id, PROVIDER_VIEW_TEMPLATE.to_string()),
             values: UserInput::Map(map),
         })]
     }

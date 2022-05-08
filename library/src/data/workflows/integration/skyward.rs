@@ -168,7 +168,7 @@ impl Skyward1 {
                         }],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_executable_activity: false,
+                        is_sync: false,
                     }),
                     Activity::Activity(TemplateActivity {
                         code: "storage_deposit".into(),
@@ -221,7 +221,7 @@ impl Skyward1 {
                         ],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_executable_activity: false,
+                        is_sync: false,
                     }),
                     // Taken from previous because of gas limit.
                     Activity::Activity(TemplateActivity {
@@ -272,7 +272,7 @@ impl Skyward1 {
                         }],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_executable_activity: false,
+                        is_sync: false,
                     }),
                     Activity::Activity(TemplateActivity {
                         code: "sale_create".into(),
@@ -353,7 +353,7 @@ impl Skyward1 {
                         }],
                         automatic: false,
                         terminal: Terminality::Automatic,
-                        is_executable_activity: false,
+                        is_sync: false,
                     }),
                 ],
                 expressions: vec![
@@ -666,7 +666,7 @@ impl Skyward2 {
                         }],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_executable_activity: false,
+                        is_sync: false,
                     }),
                     Activity::Activity(TemplateActivity {
                         code: "storage_deposit".into(),
@@ -719,7 +719,7 @@ impl Skyward2 {
                         ],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_executable_activity: false,
+                        is_sync: false,
                     }),
                     // Taken from previous because of gas limit.
                     Activity::Activity(TemplateActivity {
@@ -770,7 +770,7 @@ impl Skyward2 {
                         }],
                         automatic: true,
                         terminal: Terminality::NonTerminal,
-                        is_executable_activity: false,
+                        is_sync: false,
                     }),
                     Activity::Activity(TemplateActivity {
                         code: "sale_create".into(),
@@ -867,7 +867,7 @@ impl Skyward2 {
                         }],
                         automatic: false,
                         terminal: Terminality::User,
-                        is_executable_activity: false,
+                        is_sync: false,
                     }),
                 ],
                 expressions: vec![
