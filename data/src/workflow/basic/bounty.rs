@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use near_sdk::{ONE_NEAR, ONE_YOCTO};
-
-use crate::{
-    data::TemplateData,
+use crate::TemplateData;
+use library::{
     interpreter::expression::{EExpr, EOp, ExprTerm, LogOp, Op, RelOp, TExpr},
     types::{
         datatype::{Datatype, Value},
@@ -20,6 +18,7 @@ use crate::{
         validator::{ObjectValidator, Validator},
     },
 };
+use near_sdk::{ONE_NEAR, ONE_YOCTO};
 
 pub const DEFAULT_VOTING_DURATION: u32 = 10;
 

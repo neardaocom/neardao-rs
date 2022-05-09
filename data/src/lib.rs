@@ -1,4 +1,4 @@
-use crate::{
+use library::{
     workflow::{
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
@@ -8,7 +8,7 @@ use crate::{
 };
 
 pub mod object_metadata;
-pub mod workflows;
+pub mod workflow;
 
 #[cfg(test)]
 pub mod output;

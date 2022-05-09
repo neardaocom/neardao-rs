@@ -1,7 +1,7 @@
 //! Workflow data which are outputed on stdout and loaded to workflow provider by hand.
 //! TODO: Missing automation.
 
-use crate::workflow::types::ObjectMetadata;
+use library::workflow::types::ObjectMetadata;
 
 use near_sdk::serde_json;
 

@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use library::{
-    data::{
-        workflows::{
-            basic::{bounty::Bounty1, trade::Trade1},
-            integration::skyward::{Skyward1, Skyward1TemplateOptions},
-        },
-        TemplateData,
+use data::{
+    workflow::{
+        basic::{bounty::Bounty1, trade::Trade1},
+        integration::skyward::{Skyward1, Skyward1TemplateOptions},
     },
+    TemplateData,
+};
+use library::{
     types::source::SourceDataVariant,
     workflow::{help::TemplateHelp, template::Template, types::ObjectMetadata},
     Version,

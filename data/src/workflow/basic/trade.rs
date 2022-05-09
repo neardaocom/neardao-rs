@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use near_sdk::{ONE_NEAR, ONE_YOCTO};
 
-use crate::{
-    data::TemplateData,
+use crate::TemplateData;
+use library::{
     interpreter::expression::{EExpr, EOp, ExprTerm, LogOp, Op, RelOp, TExpr},
     types::{datatype::Value, source::SourceDataVariant},
     workflow::{

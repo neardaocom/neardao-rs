@@ -5,7 +5,7 @@
 //! - NEP-171 (NFT - Core)
 //! - NEP-145 (Storage management)
 
-use crate::{types::datatype::Datatype, workflow::types::ObjectMetadata, MethodName};
+use library::{types::datatype::Datatype, workflow::types::ObjectMetadata, MethodName};
 
 // TODO: Could be solved with a macro.
 pub const NEP_141_FT_TRANSFER: &str = "ft_transfer";

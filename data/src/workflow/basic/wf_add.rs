@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use near_sdk::{AccountId, ONE_NEAR, ONE_YOCTO};
 
-use crate::{
+use library::{
     types::{datatype::Value, source::SourceDataVariant},
     workflow::{
         action::{ActionType, FnCallData, FnCallIdType, TemplateAction},

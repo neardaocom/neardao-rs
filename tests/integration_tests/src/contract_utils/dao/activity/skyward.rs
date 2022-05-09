@@ -1,13 +1,11 @@
 //! Workflow and its data for interaction with Skyward finance (https://app.skyward.finance).
 //! Reference: https://github.com/skyward-finance/contracts/tree/master/skyward
 
-use std::collections::HashMap;
-
+use data::workflow::integration::skyward::{
+    SKYWARD_FNCALL1_NAME, SKYWARD_FNCALL2_NAME, SKYWARD_FNCALL3_NAME, SKYWARD_FNCALL4_NAME,
+    SKYWARD_FNCALL5_NAME,
+};
 use library::{
-    data::workflows::integration::skyward::{
-        SKYWARD_FNCALL1_NAME, SKYWARD_FNCALL2_NAME, SKYWARD_FNCALL3_NAME, SKYWARD_FNCALL4_NAME,
-        SKYWARD_FNCALL5_NAME,
-    },
     types::{
         activity_input::{ActivityInput, UserInput},
         datatype::Value,
@@ -15,6 +13,7 @@ use library::{
     workflow::action::{ActionInput, ActionInputType},
 };
 use near_sdk::AccountId;
+use std::collections::HashMap;
 use workspaces::AccountId as WorkspaceAccountId;
 
 /// Activity inputs for `Skyward1` workflow.

@@ -1,10 +1,8 @@
+use data::{
+    object_metadata::standard_fn_calls::{standard_fn_call_metadatas, standard_fn_call_methods},
+    workflow::basic::wf_add::WfAdd1,
+};
 use library::{
-    data::{
-        object_metadata::standard_fn_calls::{
-            standard_fn_call_metadatas, standard_fn_call_methods,
-        },
-        workflows::basic::wf_add::WfAdd1,
-    },
     types::datatype::Datatype,
     workflow::{settings::TemplateSettings, template::Template, types::ObjectMetadata},
 };

@@ -1,7 +1,5 @@
-use library::{
-    data::workflows::integration::skyward::{Skyward1, Skyward1ProposeOptions},
-    workflow::settings::{ProposeSettings, TemplateSettings},
-};
+use data::workflow::integration::skyward::{Skyward1, Skyward1ProposeOptions};
+use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use serde_json::json;
 use workspaces::{network::Sandbox, Account, AccountId, Contract, DevNetwork, Worker};
 

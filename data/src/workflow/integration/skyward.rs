@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use near_sdk::{AccountId, ONE_NEAR, ONE_YOCTO};
 
 use crate::{
-    data::{
-        object_metadata::standard_fn_calls::{NEP_141_FT_TRANSFER_CALL, NEP_145_STORAGE_DEPOSIT},
-        TemplateData,
-    },
+    object_metadata::standard_fn_calls::{NEP_141_FT_TRANSFER_CALL, NEP_145_STORAGE_DEPOSIT},
+    TemplateData,
+};
+
+use library::{
     interpreter::expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
     types::{
         datatype::{Datatype, Value},

@@ -135,7 +135,7 @@ pub struct TransitionCounter {
 }
 
 impl TransitionCounter {
-    pub fn is_another_transition_allowed(&self) -> bool {
+    pub fn is_transition_allowed(&self) -> bool {
         self.count < self.limit
     }
     pub fn inc_count(&mut self) {

@@ -2,7 +2,9 @@
 members = [
     "contracts/*", 
     "library", 
+    "data",
     "tests/integration_tests",
+    "tests/unit_tests",
     "tests/mocks/*"
 ]
 

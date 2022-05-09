@@ -1,17 +1,14 @@
 use near_sdk::ONE_NEAR;
 
-use library::{
-    data::workflows::{
-        basic::{
-            bounty::{Bounty1, Bounty1ProposeOptions},
-            trade::{Trade1, Trade1ProposeOptions},
-            wf_add::{WfAdd1, WfAdd1ProposeOptions},
-        },
-        integration::skyward::{Skyward1, Skyward1ProposeOptions, AUCTION_DURATION, AUCTION_START},
+use data::workflow::{
+    basic::{
+        bounty::{Bounty1, Bounty1ProposeOptions},
+        trade::{Trade1, Trade1ProposeOptions},
+        wf_add::{WfAdd1, WfAdd1ProposeOptions},
     },
-    types::datatype::Value,
-    workflow::instance::InstanceState,
+    integration::skyward::{Skyward1, Skyward1ProposeOptions, AUCTION_DURATION, AUCTION_START},
 };
+use library::{types::datatype::Value, workflow::instance::InstanceState};
 use workspaces::network::DevAccountDeployer;
 
 use crate::{
