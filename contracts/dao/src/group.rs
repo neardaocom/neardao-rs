@@ -2,12 +2,10 @@ use std::collections::HashMap;
 
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    collections::LazyOption,
     serde::{Deserialize, Serialize},
     AccountId, IntoStorageKey,
 };
 
-use crate::token_lock::{TokenLock, UnlockPeriodInput};
 use crate::{GroupId, TagId};
 
 #[derive(Serialize, Deserialize)]
@@ -78,22 +76,9 @@ pub struct GroupSettings {
 #[derive(Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Serialize))]
 #[serde(crate = "near_sdk::serde")]
-pub struct GroupTokenLockInput {
-    pub amount: u32,
-    pub start_from: u64,
-    pub duration: u64,
-    pub init_distribution: u32,
-    pub unlock_interval: u32,
-    pub periods: Vec<UnlockPeriodInput>,
-}
-
-#[derive(Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Serialize))]
-#[serde(crate = "near_sdk::serde")]
 pub struct GroupInput {
     pub settings: GroupSettings,
     pub members: Vec<GroupMember>,
-    pub token_lock: Option<GroupTokenLockInput>,
 }
 
 #[derive(Serialize)]
@@ -118,16 +103,10 @@ impl GroupOutput {
 pub struct Group {
     pub settings: GroupSettings,
     pub members: GroupMembers,
-    pub token_lock: LazyOption<TokenLock>,
 }
 
 impl Group {
-    pub fn new<T: IntoStorageKey>(
-        release_key: T,
-        settings: GroupSettings,
-        members: Vec<GroupMember>,
-        token_lock: Option<TokenLock>,
-    ) -> Self {
+    pub fn new(settings: GroupSettings, members: Vec<GroupMember>) -> Self {
         if let Some(ref leader) = settings.leader {
             assert!(
                 !leader.as_str().is_empty(),
@@ -141,7 +120,6 @@ impl Group {
         Group {
             settings,
             members: members.into(),
-            token_lock: LazyOption::new(release_key.into_storage_key(), token_lock.as_ref()),
         }
     }
 
@@ -170,31 +148,6 @@ impl Group {
         self.members.remove_member(account_id)
     }
 
-    /// Removes storage used by the group.
-    /// ATM it's only TokenLock that is taking the storage.
-    pub fn remove_storage_data(&mut self) -> TokenLock {
-        let token_lock = self.token_lock.get().unwrap();
-        self.token_lock.remove();
-        token_lock
-    }
-
-    /// Unlocks locked FT for self.
-    /// `current_timestamp` must be in seconds.
-    pub fn unlock_ft(&mut self, current_timestamp: u64) -> u32 {
-        let mut tl = self.token_lock.get().unwrap();
-
-        if tl.amount == tl.unlocked {
-            return 0;
-        }
-
-        let unlocked = tl.unlock(current_timestamp);
-
-        assert!(tl.amount >= tl.unlocked, "Unlocking overflow error.");
-
-        self.token_lock.set(&tl);
-        unlocked
-    }
-
     pub fn get_members_accounts(&self) -> Vec<AccountId> {
         self.members
             .get_members()
@@ -217,16 +170,5 @@ impl Group {
             .filter(|m| m.tags.iter().any(|r| *r == role))
             .map(|m| m.account_id)
             .collect()
-    }
-
-    pub fn distribute_ft(&mut self, amount: u32) -> bool {
-        let mut token_lock = self.token_lock.get().unwrap();
-
-        if token_lock.distribute(amount) {
-            self.token_lock.set(&token_lock);
-            true
-        } else {
-            false
-        }
     }
 }

@@ -11,17 +11,16 @@ use near_sdk::{test_utils::VMContextBuilder, AccountId};
 
 use crate::{
     core::Contract,
-    group::{GroupInput, GroupMember, GroupSettings, GroupTokenLockInput},
+    group::{GroupInput, GroupMember, GroupSettings},
     settings::DaoSettings,
     tags::TagInput,
-    token_lock::{UnlockMethod, UnlockPeriodInput},
     DurationSec,
 };
 
 //mod dao; // Require refactoring to match new structure
 mod group;
 mod tick;
-mod unlocking;
+// mod unlocking; // TODO: Refactoring
 mod voting;
 
 pub const DURATION_1Y_S: u32 = 31_536_000;
@@ -165,18 +164,6 @@ pub(crate) fn get_default_groups() -> Vec<GroupInput> {
             parent_group: 0,
         },
         members: members,
-        token_lock: Some(GroupTokenLockInput {
-            amount: 100_000_000,
-            start_from: 0,
-            duration: 3600,
-            init_distribution: 10_000_000,
-            unlock_interval: 60,
-            periods: vec![UnlockPeriodInput {
-                kind: UnlockMethod::Linear,
-                duration: 3600,
-                amount: 90_000_000,
-            }],
-        }),
     });
 
     groups

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto};
+use std::collections::HashMap;
 
 use near_sdk::{env, log, require, AccountId, Balance, Promise};
 
@@ -16,7 +16,6 @@ use crate::{
     proposal::{Proposal, ProposalState, VoteResult},
     settings::DaoSettings,
     tags::{TagInput, Tags},
-    token_lock::TokenLock,
     CalculatedVoteResults, ProposalId, ProposalWf, TimestampSec, VoteTotalPossible, Votes,
 };
 use library::{
@@ -338,7 +337,7 @@ impl Contract {
         // Already counted members still counts as new.
         self.total_members_count += group.members.len() as u32;
 
-        let token_lock = if let Some(tl) = group.token_lock {
+        /*         let token_lock = if let Some(tl) = group.token_lock {
             self.ft_total_locked += tl.amount;
 
             // Check if dao has enough free tokens to distribute ft
@@ -364,15 +363,14 @@ impl Contract {
             Some(tl)
         } else {
             None
-        };
+        }; */
 
         // Create StorageKey for nested structure
         self.group_last_id += 1;
-        let token_lock_key = utils::get_group_key(self.group_last_id);
 
         self.groups.insert(
             &self.group_last_id,
-            &Group::new(token_lock_key, group.settings, group.members, token_lock),
+            &Group::new(group.settings, group.members),
         );
     }
 

@@ -1,57 +1,45 @@
-use std::convert::TryFrom;
+use std::convert::From;
 
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
 
-use crate::group::GroupTokenLockInput;
+// TODO: Integration tests.
 
 #[derive(Deserialize, Serialize, BorshDeserialize, BorshSerialize, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, Copy, Clone))]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
-#[repr(u8)]
 pub enum UnlockMethod {
-    /// All FT immediately unlocked.
+    /// All is immediately unlocked in the time period.
     None = 0,
-    /// Linear unlocker over specified time period.
+    /// Linear unlocking over the time period.
     Linear,
 }
 
-impl TryFrom<u64> for UnlockMethod {
-    type Error = &'static str;
-
-    fn try_from(value: u64) -> Result<Self, Self::Error> {
+impl From<&str> for UnlockMethod {
+    fn from(value: &str) -> Self {
         match value {
-            0 => Ok(Self::None),
-            1 => Ok(Self::Linear),
-            _ => Err("Invalid ReleaseModelType repr."),
+            "linear" => Self::Linear,
+            _ => Self::None,
         }
     }
 }
 
-impl TryFrom<String> for UnlockMethod {
-    type Error = &'static str;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        match value.as_str() {
-            "none" => Ok(Self::None),
-            "linear" => Ok(Self::Linear),
-            _ => Err("Invalid ReleaseModelType value."),
-        }
-    }
-}
-
+/// TODO: Verify possible amounts limits.
+/// Lock model implements unlocking function via interpolating intervals with linear unlocking.
+/// Currently unlocks only integer amounts.
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct TokenLock {
-    pub amount: u32,
-    pub unlocked: u32,
-    pub distributed: u32,
-    /// Amount of tokens distributed during creation.
-    pub init_distribution: u32,
+pub struct Lock {
+    /// Total locked amount.
+    pub amount_locked: u32,
+    /// Available unlocked amount.
+    pub amount_unlocked: u32,
+    /// Amount of tokens unlocked during creation.
+    pub amount_init_unlocked: u32,
     /// Timestamp in seconds.
     pub start_from: u64,
     /// Duration in seconds.
@@ -62,11 +50,9 @@ pub struct TokenLock {
     pub pos: u16,
     /// Total amount unlocked from current period.
     pub current_period_unlocked: u32,
-    /// Info for external scheduler.
-    pub unlock_interval: u32,
 }
 
-impl TokenLock {
+impl Lock {
     pub fn check_duration_and_amount(
         duration: u64,
         amount: u32,
@@ -83,8 +69,9 @@ impl TokenLock {
 
     /// Calculates amount of tokens to be unlocked depending on current time.
     /// Updates owns stats about unlocking if necessary.
+    /// Currently unlocks only integer amounts.
     pub fn unlock(&mut self, current_time: u64) -> u32 {
-        if self.amount == self.unlocked {
+        if self.amount_locked == self.amount_unlocked {
             return 0;
         }
 
@@ -163,23 +150,30 @@ impl TokenLock {
 
         // Save new stats
         self.pos = pos as u16;
-        self.unlocked += new_unlocked;
+        self.amount_unlocked += new_unlocked;
 
         new_unlocked
     }
 
-    /// Distributes `amount` if possible (meaning unlocked >= amount) and updates stats.
-    pub fn distribute(&mut self, amount: u32) -> bool {
+    pub fn total_locked(&self) -> u32 {
+        self.amount_locked
+    }
+    pub fn available(&self) -> u32 {
+        self.amount_unlocked
+    }
+
+    // /// Distributes `amount` if possible (meaning unlocked >= amount) and updates stats.
+    /*     pub fn distribute(&mut self, amount: u32) -> bool {
         if self.unlocked >= self.distributed + amount {
             self.distributed += amount;
             true
         } else {
             false
         }
-    }
+    } */
 }
 
-impl TryFrom<GroupTokenLockInput> for TokenLock {
+/* impl TryFrom<GroupTokenLockInput> for TokenLock {
     type Error = &'static str;
     fn try_from(input: GroupTokenLockInput) -> Result<Self, Self::Error> {
         if !Self::check_duration_and_amount(
@@ -215,7 +209,7 @@ impl TryFrom<GroupTokenLockInput> for TokenLock {
             unlock_interval: input.unlock_interval,
         })
     }
-}
+} */
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug))]

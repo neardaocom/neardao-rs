@@ -24,10 +24,12 @@ pub mod media;
 pub mod proposal;
 pub mod role;
 pub mod settings;
-pub mod token_lock;
 
 pub mod core;
+pub mod rewards;
+pub mod treasury;
 pub mod view;
+pub mod wallet;
 
 /// Duration in seconds.
 pub(crate) type DurationSec = u64;

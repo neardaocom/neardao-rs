@@ -4,7 +4,7 @@ use library::workflow::types::{ActivityRight, VoteScenario};
 use near_sdk::{testing_env, MockedBlockchain};
 
 use crate::{
-    group::{GroupInput, GroupMember, GroupSettings, GroupTokenLockInput},
+    group::{GroupInput, GroupMember, GroupSettings},
     unit_tests::{
         decimal_const, get_default_contract, FOUNDER_1, FOUNDER_2, FOUNDER_3, FOUNDER_4, FOUNDER_5,
     },
@@ -62,14 +62,6 @@ fn add_group() {
             parent_group: 0,
         },
         members: new_group_members.clone(),
-        token_lock: Some(GroupTokenLockInput {
-            amount: 0,
-            start_from: 0,
-            duration: 0,
-            init_distribution: 0,
-            unlock_interval: 0,
-            periods: vec![],
-        }),
     });
 
     assert_eq!(contract.total_members_count, 5);

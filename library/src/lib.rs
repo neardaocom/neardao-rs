@@ -4,6 +4,7 @@ use workflow::{template::Template, types::ObjectMetadata};
 
 pub mod functions;
 pub mod interpreter;
+pub mod locking;
 pub mod storage;
 pub mod types;
 pub mod workflow;

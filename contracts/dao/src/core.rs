@@ -2,13 +2,14 @@ use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
 use crate::event::{run_tick, Event, EventQueue};
 use crate::internal::utils::current_timestamp_sec;
 use crate::media::ResourceType;
+use crate::rewards::Reward;
 use crate::role::Role;
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::tags::{TagInput, Tags};
+use crate::treasury::TreasuryPartition;
+use crate::wallet::Wallet;
 use library::storage::StorageBucket;
-use library::types::activity_input::{ActivityInput, UserInput};
-use library::types::datatype::{Datatype, Value};
-use library::types::source::{DefaultSource, Source};
+use library::types::datatype::Value;
 use library::workflow::instance::{Instance, InstanceState};
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
@@ -23,7 +24,7 @@ use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, log, near_bindgen, serde_json, AccountId, Balance, BorshStorageKey, IntoStorageKey,
+    env, near_bindgen, serde_json, AccountId, Balance, BorshStorageKey, IntoStorageKey,
     PanicOnDefault, PromiseOrValue,
 };
 
@@ -67,6 +68,9 @@ pub enum StorageKeys {
     ActivityLog,
     WfInstance,
     DaoActionMetadata,
+    TreasuryPartition,
+    Wallet,
+    Rewards,
 }
 
 #[near_bindgen]
@@ -118,6 +122,13 @@ pub struct Contract {
     pub workflow_activity_log: LookupMap<ProposalId, Vec<ActivityLog>>, // Logs will be moved to indexer when its ready
     // TODO: Remove in production.
     pub debug_log: Vec<String>,
+    /// Id of last created treasury partition.
+    pub partition_last_id: u16,
+    pub treasury_partition: LookupMap<u16, TreasuryPartition>,
+    /// Id of last created reward.
+    pub reward_last_id: u16,
+    pub rewards: LookupMap<u16, Reward>,
+    pub wallet: LookupMap<AccountId, Wallet>,
 }
 
 #[near_bindgen]
@@ -178,6 +189,11 @@ impl Contract {
             proposed_workflow_settings: LookupMap::new(StorageKeys::ProposedWfTemplateSettings),
             workflow_activity_log: LookupMap::new(StorageKeys::ActivityLog),
             debug_log: Vec::default(),
+            partition_last_id: 0,
+            treasury_partition: LookupMap::new(StorageKeys::TreasuryPartition),
+            reward_last_id: 0,
+            rewards: LookupMap::new(StorageKeys::Rewards),
+            wallet: LookupMap::new(StorageKeys::Wallet),
         };
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
@@ -368,7 +384,7 @@ impl Contract {
     }
 
     /// Unlocks FT for provided `GroupId`s by internal logic.
-    pub fn ft_unlock(&mut self, group_ids: Vec<GroupId>) -> Vec<u32> {
+    /*     pub fn ft_unlock(&mut self, group_ids: Vec<GroupId>) -> Vec<u32> {
         let mut released = Vec::with_capacity(group_ids.len());
         for id in group_ids.into_iter() {
             if let Some(mut group) = self.groups.get(&id) {
@@ -377,7 +393,7 @@ impl Contract {
             }
         }
         released
-    }
+    } */
 
     /// Ticks and tries to process `count` of events in the last tick.
     /// Updates last_tick timestamp.

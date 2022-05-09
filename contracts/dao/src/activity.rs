@@ -22,7 +22,6 @@ use crate::internal::ActivityContext;
 use crate::proposal::ProposalState;
 use crate::settings::{assert_valid_dao_settings, DaoSettings};
 use crate::tags::Tags;
-use crate::token_lock::TokenLock;
 use crate::{core::*, GroupId, TagId};
 
 #[near_bindgen]
@@ -596,8 +595,8 @@ impl Contract {
     }
     pub fn group_remove(&mut self, id: GroupId) -> bool {
         if let Some(mut group) = self.groups.remove(&id) {
-            let token_lock: TokenLock = group.remove_storage_data();
-            self.ft_total_locked -= token_lock.amount - token_lock.distributed;
+            //let token_lock: TokenLock = group.remove_storage_data();
+            //self.ft_total_locked -= token_lock.amount - token_lock.distributed;
             self.total_members_count -= group.members.members_count() as u32;
             true
         } else {
@@ -671,26 +670,26 @@ impl Contract {
         }
     }
 
-    /// Internally sends `group_id`'s FT `amount` to the `account_ids`.
-    pub fn ft_distribute(
-        &mut self,
-        group_id: u16,
-        amount: u32,
-        account_ids: Vec<AccountId>,
-    ) -> bool {
-        if let Some(mut group) = self.groups.get(&group_id) {
-            if group.distribute_ft(amount) && !account_ids.is_empty() {
-                self.groups.insert(&group_id, &group);
-                self.distribute_ft(amount, &account_ids);
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    }
-
+    // /// Internally sends `group_id`'s FT `amount` to the `account_ids`.
+    /*     pub fn ft_distribute(
+           &mut self,
+           group_id: u16,
+           amount: u32,
+           account_ids: Vec<AccountId>,
+       ) -> bool {
+           if let Some(mut group) = self.groups.get(&group_id) {
+               if group.distribute_ft(amount) && !account_ids.is_empty() {
+                   self.groups.insert(&group_id, &group);
+                   self.distribute_ft(amount, &account_ids);
+                   true
+               } else {
+                   false
+               }
+           } else {
+               false
+           }
+       }
+    */
     // TODO: Refactoring
     /*     pub fn treasury_send_near(&mut self, receiver_id: AccountId, amount: u128) -> bool {
         Promise::new(receiver_id).transfer(amount);
