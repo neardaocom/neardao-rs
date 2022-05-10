@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use data::{
     object_metadata::standard_fn_calls::{standard_fn_call_metadatas, standard_fn_call_methods},
     workflow::basic::wf_add::WfAdd1,
@@ -125,6 +127,14 @@ fn dao_settings(provider_id: AccountId, admin_id: AccountId) -> DaoSettings {
 }
 fn default_group(members: Vec<&AccountId>) -> GroupInput {
     let leader = AccountId::try_from(members[0].to_string()).unwrap();
+    let mut member_roles = HashMap::new();
+    member_roles.insert(
+        "council".into(),
+        members
+            .iter()
+            .map(|m| m.to_string())
+            .collect::<Vec<String>>(),
+    );
     let members = members
         .into_iter()
         .map(|m| GroupMember {
@@ -139,7 +149,7 @@ fn default_group(members: Vec<&AccountId>) -> GroupInput {
             parent_group: 0,
         },
         members,
-        token_lock: None,
+        member_roles,
     }
 }
 

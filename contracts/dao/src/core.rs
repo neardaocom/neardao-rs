@@ -2,7 +2,7 @@ use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
 use crate::event::{run_tick, Event, EventQueue};
 use crate::internal::utils::current_timestamp_sec;
 use crate::media::ResourceType;
-use crate::rewards::Reward;
+use crate::reward::Reward;
 use crate::role::Role;
 use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
 use crate::tags::{TagInput, Tags};
@@ -88,11 +88,11 @@ pub struct Contract {
     pub events: LookupMap<TimestampSec, EventQueue<Event>>,
     /// Timestamp of the last fully processed tick queue.
     pub last_tick: TimestampSec,
-    /// Interval between ticks.
+    /// Time interval between two ticks.
     pub tick_interval: DurationSec,
-    /// User's roles.
+    /// User's roles in groups.
     pub user_roles: LookupMap<AccountId, Vec<(GroupId, RoleId)>>,
-    /// Group's roles.
+    /// Group's provided roles.
     pub group_roles: LookupMap<GroupId, Role>,
     /// Total amount of minted tokens.
     pub ft_total_supply: u32,
@@ -128,7 +128,7 @@ pub struct Contract {
     /// Id of last created reward.
     pub reward_last_id: u16,
     pub rewards: LookupMap<u16, Reward>,
-    pub wallet: LookupMap<AccountId, Wallet>,
+    pub wallets: LookupMap<AccountId, Wallet>,
 }
 
 #[near_bindgen]
@@ -193,7 +193,7 @@ impl Contract {
             treasury_partition: LookupMap::new(StorageKeys::TreasuryPartition),
             reward_last_id: 0,
             rewards: LookupMap::new(StorageKeys::Rewards),
-            wallet: LookupMap::new(StorageKeys::Wallet),
+            wallets: LookupMap::new(StorageKeys::Wallet),
         };
         contract.init_dao_settings(settings);
         contract.init_tags(tags);

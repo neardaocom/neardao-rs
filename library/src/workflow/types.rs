@@ -40,12 +40,9 @@ pub enum DaoActionIdent {
     TagEdit,
     TagRemove,
     FtDistribute,
-    TreasurySendFt,
-    TreasurySendFtContract,
-    TreasurySendNft,
-    TreasurySendNFtContract,
-    TreasurySendNear,
     WorkflowAdd,
+    TreasuryAddPartition,
+    RewardAdd,
 }
 
 // TODO: Remove Debug in production.

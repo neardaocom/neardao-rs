@@ -12,6 +12,7 @@ use crate::{
     },
     event::{Event, EventQueue},
     group::{Group, GroupInput},
+    helper::deserialize::{try_bind_partition, try_bind_reward},
     internal::utils::current_timestamp_sec,
     proposal::{Proposal, ProposalState, VoteResult},
     settings::DaoSettings,
@@ -331,49 +332,6 @@ impl Contract {
         );
     }
 
-    /// Adds new Group with TokenLock.
-    /// Updates DAO's `ft_total_locked` amount and `total_members_count` values.
-    pub fn add_group(&mut self, group: GroupInput) {
-        // Already counted members still counts as new.
-        self.total_members_count += group.members.len() as u32;
-
-        /*         let token_lock = if let Some(tl) = group.token_lock {
-            self.ft_total_locked += tl.amount;
-
-            // Check if dao has enough free tokens to distribute ft
-            if tl.init_distribution > 0 {
-                assert!(
-                    tl.init_distribution
-                        <= self.ft_total_supply - self.ft_total_locked - self.ft_total_distributed,
-                    "{}",
-                    ERR_DISTRIBUTION_NOT_ENOUGH_FT
-                );
-                self.distribute_ft(
-                    tl.init_distribution,
-                    &group
-                        .members
-                        .iter()
-                        .map(|member| member.account_id.clone())
-                        .collect::<Vec<AccountId>>(), //TODO optimalize
-                );
-            }
-
-            // TODO: Should return Err<T>
-            let tl: TokenLock = tl.try_into().expect("Failed to create TokenLock.");
-            Some(tl)
-        } else {
-            None
-        }; */
-
-        // Create StorageKey for nested structure
-        self.group_last_id += 1;
-
-        self.groups.insert(
-            &self.group_last_id,
-            &Group::new(group.settings, group.members),
-        );
-    }
-
     /// Internally transfers FT from contract account all accounts equally.
     /// Sets contract's ft_total_distributed property.
     /// Panics if account_ids is empty vector or distribution value is zero.
@@ -558,6 +516,14 @@ impl Contract {
         inputs: &mut dyn ActivityInput,
     ) -> Result<(), ActionError> {
         match action_ident {
+            DaoActionIdent::TreasuryAddPartition => {
+                let partition = try_bind_partition(inputs).expect("failed to bind partition");
+                self.add_partition(partition);
+            }
+            DaoActionIdent::RewardAdd => {
+                let reward = try_bind_reward(inputs).expect("failed to bind reward");
+                self.add_reward(&reward);
+            }
             /*             DaoActionIdent::GroupAdd => {
                 let group_input = deserialize_group_input(inputs)?;
                 self.group_add(group_input);

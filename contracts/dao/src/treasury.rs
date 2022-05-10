@@ -5,12 +5,12 @@ use near_sdk::{
     AccountId,
 };
 
-use crate::{core::Contract, TimestampSec};
+use crate::{core::Contract, ApprovalId, TimestampSec, TokenId};
 
 /// Container around unique assets.
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct TreasuryPartition {
-    assets: Vec<PartitionAsset>,
+    pub assets: Vec<PartitionAsset>,
 }
 
 impl Default for TreasuryPartition {
@@ -49,16 +49,18 @@ impl TreasuryPartition {
         }
     }
     /// Add amount to the asset and returns new amount.
-    pub fn add_amount(&mut self, asset_id: Asset, amount: u128) -> u128 {
+    pub fn add_amount(&mut self, asset_id: &Asset, amount: u128) -> u128 {
         if let Some(pos) = self.find_asset_pos(&asset_id) {
-            self.assets.get_mut(pos).unwrap().add_amount(amount)
+            let asset = self.assets.get_mut(pos).unwrap();
+            asset.add_amount(amount);
+            asset.amount
         } else {
             0
         }
     }
-    /// Removes max possible amount up to `amount` from the asset.
-    /// Returns remaining amount.
-    pub fn remove_amount(&mut self, asset_id: Asset, amount: u128) -> u128 {
+    /// Remove max possible amount up to `amount` of the asset.
+    /// Return actually removed amount.
+    pub fn remove_amount(&mut self, asset_id: &Asset, amount: u128) -> u128 {
         if let Some(pos) = self.find_asset_pos(&asset_id) {
             self.assets.get_mut(pos).unwrap().remove_amount(amount)
         } else {
@@ -107,19 +109,19 @@ impl PartitionAsset {
             lock,
         }
     }
-    /// Add amount and return new amount.
-    pub fn add_amount(&mut self, amount: u128) -> u128 {
+    /// Add amount.
+    pub fn add_amount(&mut self, amount: u128) {
         self.amount += amount;
-        self.amount
     }
-    /// Removes amount up to `amount` and returns new amount.
+    /// Remove amount up to `amount` and returns actually removed amount.
     pub fn remove_amount(&mut self, amount: u128) -> u128 {
         if self.amount >= amount {
             self.amount -= amount;
-            self.amount
+            amount
         } else {
+            let amount_removed = amount - self.amount;
             self.amount = 0;
-            0
+            amount_removed
         }
     }
     /// Unlock all possible tokens and returns new amount.
@@ -139,14 +141,16 @@ impl PartitionAsset {
         self.amount
     }
 }
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
+
+/// TODO: Refactor from tuples into structs.
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub enum Asset {
     Near,
     /// Account id and FT decimals.
     FT(AccountId, u8),
     /// TODO: Verify that only account_id is enough.
-    NFT(AccountId),
+    NFT(AccountId, TokenId, ApprovalId),
 }
 
 impl Asset {
@@ -156,8 +160,8 @@ impl Asset {
     pub fn new_ft(account_id: AccountId, decimals: u8) -> Self {
         Self::FT(account_id, decimals)
     }
-    pub fn new_nft(account_id: AccountId) -> Self {
-        Self::NFT(account_id)
+    pub fn new_nft(account_id: AccountId, token_id: String, approval_id: Option<u64>) -> Self {
+        Self::NFT(account_id, token_id, approval_id)
     }
     pub fn decimals(&self) -> u8 {
         match &self {
@@ -171,8 +175,8 @@ impl Asset {
 impl PartialEq for Asset {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::FT(l0, _), Self::FT(r0, _)) => l0 == r0,
-            (Self::NFT(l0), Self::NFT(r0)) => l0 == r0,
+            (Self::FT(l0, _), Self::FT(r0, _)) => *l0 == *r0,
+            (Self::NFT(l0, l1, _), Self::NFT(r0, r1, _)) => *l0 == *r0 && *l1 == *r1,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }

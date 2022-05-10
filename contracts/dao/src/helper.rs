@@ -3,42 +3,214 @@ use std::mem::take;
 use library::{types::datatype::Value, ObjectValues};
 
 use crate::error::ActionError;
-
-/// Helper method for fetching `DataType` from the object on index idx.
-/// Replaces the value with `DataType`s default value.
-pub fn get_datatype(object: &mut Vec<Value>, idx: usize) -> Result<Value, ActionError> {
-    Ok(take(object.get_mut(idx).ok_or(ActionError::Binding)?))
-}
-
-pub fn get_datatype_from_values(
-    object: &mut ObjectValues,
-    obj_idx: usize,
-    idx: usize,
-) -> Result<Value, ActionError> {
-    Ok(take(
-        object
-            .get_mut(obj_idx)
-            .ok_or(ActionError::Binding)?
-            .get_mut(idx)
-            .ok_or(ActionError::Binding)?,
-    ))
-}
-
+// TODO: Finish implementations.
+// TODO: Integration tests.
 /// Deserialize helpers for DAO's structs.
 pub mod deserialize {
     use std::convert::TryFrom;
 
-    use super::{get_datatype, get_datatype_from_values};
-    use library::types::datatype::Value;
+    use library::types::activity_input::ActivityInput;
     use near_sdk::AccountId;
 
     use crate::{
-        error::ActionError,
-        group::{GroupInput, GroupMember, GroupSettings, GroupTokenLockInput},
-        settings::DaoSettings,
-        token_lock::{UnlockMethod, UnlockPeriodInput},
+        internal::utils::current_timestamp_sec,
+        reward::{Reward, RewardType},
+        treasury::{Asset, PartitionAsset, TreasuryPartition},
     };
 
+    pub fn bind_asset(
+        asset_type: &str,
+        prefix: &str,
+        action_input: &mut dyn ActivityInput,
+    ) -> Asset {
+        match asset_type {
+            "ft" => {
+                let ft_account_key = format!("{}.ft_account_id", prefix);
+                let ft_account_string = action_input
+                    .get(&ft_account_key)
+                    .expect("binding - missing key: asset_ft")
+                    .to_owned()
+                    .try_into_string()
+                    .expect("invalid datatype: asset_ft");
+                let ft_account = AccountId::try_from(ft_account_string)
+                    .expect("binding - ft: failed to parse account id");
+                let decimals_key = format!("{}.decimals", prefix);
+                let decimals = action_input
+                    .get(&decimals_key)
+                    .expect("binding - missing key: asset_ft_decimals")
+                    .try_into_u64()
+                    .expect("invalid datatype: asset_decimals")
+                    as u8;
+                Asset::new_ft(ft_account, decimals)
+            }
+            "nft" => {
+                todo!()
+            }
+            "near" => Asset::Near,
+            _ => panic!("unsupported asset type"),
+        }
+    }
+
+    // TODO: Checks for unique assets.
+    pub fn try_bind_partition(action_input: &mut dyn ActivityInput) -> Option<TreasuryPartition> {
+        let asset_count = action_input
+            .get(&"asset_count")
+            .expect("binding - missing key: asset_count")
+            .try_into_u64()
+            .expect("invalid datatype: asset_count");
+
+        let mut assets = vec![];
+        let current_timestamp = current_timestamp_sec();
+        for i in 0..asset_count {
+            let asset_key = format!("assets.{}.type", i);
+            let asset_type = action_input
+                .get(&asset_key)
+                .expect("binding - missing key: assets.x.type")
+                .to_owned()
+                .try_into_string()
+                .expect("invalid datatype: assets.x.type");
+            let asset_amount_key = format!("assets.{}.amount", i);
+            let amount = action_input
+                .get(&asset_amount_key)
+                .expect("binding - missing key: assets.x.amount")
+                .try_into_u128()
+                .expect("invalid datatype: assets.x.amount");
+            let lock = None;
+            let prefix = format!("assets.{}", i);
+            let asset_id = bind_asset(asset_type.as_str(), prefix.as_str(), action_input);
+            assets.push(PartitionAsset::new(
+                asset_id,
+                amount,
+                lock,
+                current_timestamp,
+            ));
+        }
+
+        let partition = TreasuryPartition { assets };
+        Some(partition)
+    }
+
+    // TODO: Checks.
+    pub fn try_bind_reward(action_input: &mut dyn ActivityInput) -> Option<Reward> {
+        /*
+            pub group_id: u16,
+            /// Role id in the group.
+            pub role_id: u16,
+            /// Partition from which the assets are taken.
+            /// Partition must have all defined assets.
+            pub partition_id: u16,
+            /// Defines reward asset unit:
+            /// - for `RewardType::Wage(seconds)` the unit is time.
+            /// - for `RewardType::UserActivity(activity_ids)` the unit is activity done.
+            r#type: RewardType,
+            /// Defines unique asset per unit.
+            reward_amounts: Vec<(Asset, u128)>,
+            /// TODO: Unimplemented.
+            time_valid_from: u64,
+            /// TODO: Unimplemented.
+            time_valid_to: u64,
+        }
+        */
+        let group_id = action_input
+            .get(&"group_id")
+            .expect("binding - missing key: group_id")
+            .try_into_u64()
+            .expect("invalid datatype: group_id") as u16;
+
+        let role_id = action_input
+            .get(&"role_id")
+            .expect("binding - missing key: role_id")
+            .try_into_u64()
+            .expect("invalid datatype: role_id") as u16;
+
+        let partition_id = action_input
+            .get(&"partition_id")
+            .expect("binding - missing key: partition_id")
+            .try_into_u64()
+            .expect("invalid datatype: partition_id") as u16;
+
+        let reward_name = action_input
+            .get(&"reward_type.name")
+            .expect("binding - missing key: reward_type.name")
+            .to_owned()
+            .try_into_string()
+            .expect("invalid datatype: reward_type.name");
+
+        let reward_type = match reward_name.as_str() {
+            "wage" => {
+                let wage_unit = action_input
+                    .get(&"reward_type.name.unit")
+                    .expect("binding - missing key: reward_type.name.unit")
+                    .try_into_u64()
+                    .expect("invalid datatype: reward_type.name.unit")
+                    as u16;
+                RewardType::Wage(wage_unit)
+            }
+            "activity" => {
+                let activity_ids = action_input
+                    .get(&"reward_type.name.activity_ids")
+                    .expect("binding - missing key: reward_type.name.activity_ids")
+                    .to_owned()
+                    .try_into_vec_u64()
+                    .expect("invalid datatype: reward_type.name.activity_ids")
+                    .into_iter()
+                    .map(|e| e as u8)
+                    .collect();
+                RewardType::UserActivity(activity_ids)
+            }
+            _ => unimplemented!(),
+        };
+
+        let time_valid_from = action_input
+            .get(&"time_valid_from")
+            .expect("binding - missing key: time_valid_from")
+            .try_into_u64()
+            .expect("invalid datatype: time_valid_from") as u64;
+
+        let time_valid_to = action_input
+            .get(&"time_valid_to")
+            .expect("binding - missing key: time_valid_to")
+            .try_into_u64()
+            .expect("invalid datatype: time_valid_to") as u64;
+
+        let reward_count = action_input
+            .get(&"reward_count")
+            .expect("binding - missing key: reward_count")
+            .try_into_u64()
+            .expect("invalid datatype: reward_count") as usize;
+
+        let mut reward_amounts = vec![];
+        for i in 0..reward_count {
+            let asset_key = format!("reward_asset.{}.type", i);
+            let asset_type = action_input
+                .get(&asset_key)
+                .expect("binding - missing key: reward_asset.x.type")
+                .to_owned()
+                .try_into_string()
+                .expect("invalid datatype: reward_asset.x.type");
+            let reward_amount_key = format!("reward_asset.{}.amount", i);
+            let reward_amount = action_input
+                .get(&reward_amount_key)
+                .expect("binding - missing key: reward_asset.x.amount")
+                .try_into_u128()
+                .expect("invalid datatype: reward_asset.x.amount");
+            let prefix = format!("reward_asset.{}", i);
+            let asset_id = bind_asset(asset_type.as_str(), prefix.as_str(), action_input);
+            reward_amounts.push((asset_id, reward_amount));
+        }
+        let reward = Reward::new(
+            group_id,
+            role_id,
+            partition_id,
+            reward_type,
+            reward_amounts,
+            time_valid_from,
+            time_valid_to,
+        );
+        Some(reward)
+    }
+
+    /*
     pub fn deserialize_group_settings(
         user_inputs: &mut Vec<Vec<Value>>,
         obj_idx: usize,
@@ -162,4 +334,5 @@ pub mod deserialize {
 
         Ok(settings)
     }
+    */
 }

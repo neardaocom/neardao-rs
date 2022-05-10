@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use library::workflow::{settings::TemplateSettings, template::Template, types::ObjectMetadata};
 use serde::{Deserialize, Serialize};
 use workspaces::AccountId;
@@ -39,7 +41,7 @@ pub struct DaoSettings {
 pub struct GroupInput {
     pub settings: GroupSettings,
     pub members: Vec<GroupMember>,
-    pub token_lock: Option<GroupTokenLockInput>,
+    pub member_roles: HashMap<String, Vec<String>>,
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(crate = "near_sdk::serde")]

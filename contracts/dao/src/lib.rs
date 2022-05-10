@@ -7,11 +7,11 @@ use library::workflow::{
     template::Template,
 };
 use proposal::Proposal;
-mod unit_tests;
+//mod unit_tests;
 
 pub mod constants;
 pub mod error;
-//pub(crate) mod helper;
+pub(crate) mod helper;
 pub mod tags;
 
 pub mod activity;
@@ -26,7 +26,7 @@ pub mod role;
 pub mod settings;
 
 pub mod core;
-pub mod rewards;
+pub mod reward;
 pub mod treasury;
 pub mod view;
 pub mod wallet;
@@ -39,6 +39,7 @@ pub(crate) type ProposalId = u32;
 pub(crate) type TagId = u16;
 pub(crate) type StorageKey = String;
 pub(crate) type TagCategory = String;
+/// GroupId = 0 is reserved for "guest" role.
 pub(crate) type GroupId = u16;
 pub(crate) type GroupName = String;
 pub(crate) type VoteTotalPossible = u128;
@@ -50,6 +51,8 @@ pub(crate) type InstanceWf = (Instance, ProposeSettings);
 pub(crate) type RoleId = u16;
 /// Id of the resource on the resource provider.
 pub(crate) type ResourceId = u32;
+pub type TokenId = String;
+pub type ApprovalId = Option<u64>;
 
 /// Calculates votes as percents
 #[inline]

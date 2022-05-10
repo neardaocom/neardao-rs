@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},

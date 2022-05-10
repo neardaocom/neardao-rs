@@ -166,8 +166,6 @@ impl Contract {
         }
 
         // Check action input structure including optional actions.
-        //dbg!(actions_inputs.clone());
-        //assert!(
         assert!(
             self.check_activity_input(
                 ctx.actions.as_slice(),

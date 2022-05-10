@@ -8,6 +8,7 @@ use crate::utils::{parse_view_result, view_outcome_pretty};
 use super::types::{
     consts::{DAO_VIEW_INSTANCE, DAO_VIEW_TEMPLATES, DAO_VIEW_WORKFLOW_STORAGE},
     proposal::{Proposal, Votes},
+    reward::{Reward, Wallet},
     view::{StorageBalance, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
 };
 
@@ -101,8 +102,8 @@ where
     let outcome = ft_contract.view(&worker, "ft_balance_of", args).await?;
     let title = format!(
         "view ft_balance_of account: {} on contract: {}",
+        account_id.as_str(),
         ft_contract.id().as_str(),
-        account_id.as_str()
     );
     view_outcome_pretty::<U128>(&title, &outcome);
     let amount = parse_view_result::<U128>(&outcome).expect("failed to parse ft_balance_of amount");
@@ -162,6 +163,70 @@ where
     let outcome = dao.view(&worker, "promise_log", args).await?;
     let title = format!("view promise log on dao: {}", dao.id().as_str(),);
     view_outcome_pretty::<Vec<String>>(&title, &outcome);
-    let logs = parse_view_result::<Vec<String>>(&outcome).expect("failed to parse spromise log");
+    let logs = parse_view_result::<Vec<String>>(&outcome).expect("failed to parse promise log");
     Ok(logs)
+}
+
+pub(crate) async fn get_timestamp<T>(worker: &Worker<T>, dao: &Contract) -> anyhow::Result<u64>
+where
+    T: DevNetwork,
+{
+    let args = json!({}).to_string().into_bytes();
+    let outcome = dao.view(&worker, "current_timestamp", args).await?;
+    view_outcome_pretty::<u64>("view current_timestamp", &outcome);
+    let timestamp = parse_view_result::<u64>(&outcome).expect("failed to parse current_timestamp");
+    Ok(timestamp)
+}
+
+pub(crate) async fn view_reward<T>(
+    worker: &Worker<T>,
+    dao: &Contract,
+    reward_id: u16,
+) -> anyhow::Result<Reward>
+where
+    T: DevNetwork,
+{
+    let args = json!({ "reward_id": reward_id }).to_string().into_bytes();
+    let outcome = dao.view(&worker, "view_reward", args).await?;
+    view_outcome_pretty::<Reward>("view reward", &outcome);
+    let reward = parse_view_result::<Reward>(&outcome).expect("failed to parse reward_id");
+    Ok(reward)
+}
+
+pub(crate) async fn view_user_wallet<T>(
+    worker: &Worker<T>,
+    dao: &Contract,
+    account_id: &AccountId,
+) -> anyhow::Result<Wallet>
+where
+    T: DevNetwork,
+{
+    let args = json!({
+        "account_id": account_id.to_string()
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = dao.view(&worker, "view_wallet", args).await?;
+    view_outcome_pretty::<Wallet>("view user rewards", &outcome);
+    let wallet = parse_view_result::<Wallet>(&outcome).expect("failed to parse wallet");
+    Ok(wallet)
+}
+
+pub(crate) async fn view_user_roles<T>(
+    worker: &Worker<T>,
+    dao: &Contract,
+    account_id: &AccountId,
+) -> anyhow::Result<Vec<(u16, u16)>>
+where
+    T: DevNetwork,
+{
+    let args = json!({
+        "account_id": account_id.to_string()
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = dao.view(&worker, "view_user_roles", args).await?;
+    view_outcome_pretty::<Vec<(u16, u16)>>("view user roles", &outcome);
+    let roles = parse_view_result::<Vec<(u16, u16)>>(&outcome).expect("failed to parse user roles");
+    Ok(roles)
 }

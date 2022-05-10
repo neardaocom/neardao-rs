@@ -25,7 +25,6 @@ impl Contract {
     /// Unwrapping is OK as it's been checked before dispatching this promise.
     #[allow(clippy::too_many_arguments)]
     #[private]
-
     pub fn postprocess(
         &mut self,
         instance_id: u32,

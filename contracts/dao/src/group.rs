@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
-    AccountId, IntoStorageKey,
+    AccountId,
 };
 
-use crate::{GroupId, TagId};
+use crate::{core::Contract, role::Role, GroupId, TagId};
 
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(
@@ -79,6 +79,7 @@ pub struct GroupSettings {
 pub struct GroupInput {
     pub settings: GroupSettings,
     pub members: Vec<GroupMember>,
+    pub member_roles: HashMap<String, Vec<AccountId>>,
 }
 
 #[derive(Serialize)]
@@ -163,6 +164,7 @@ impl Group {
             .find(|m| m.account_id == *account_id)
     }
 
+    // TODO: This is not true, tags does not mean role.
     pub fn get_members_accounts_by_role(&self, role: TagId) -> Vec<AccountId> {
         self.members
             .get_members()
@@ -170,5 +172,54 @@ impl Group {
             .filter(|m| m.tags.iter().any(|r| *r == role))
             .map(|m| m.account_id)
             .collect()
+    }
+}
+
+impl Contract {
+    // TODO: Review.
+    // TODO: Add check to validate user roles.
+    /// Updates DAO's `ft_total_locked` amount and `total_members_count` values.
+    pub fn add_group(&mut self, group: GroupInput) {
+        self.total_members_count += group.members.len() as u32;
+        self.group_last_id += 1;
+        let mut group_roles = Role::new();
+        for (role_name, members) in group.member_roles {
+            if let Some(role_id) = group_roles.insert(role_name) {
+                for member in members {
+                    let mut user_roles = self.user_roles.get(&member).unwrap_or_default();
+                    user_roles.push((self.group_last_id, role_id));
+                    self.user_roles.insert(&member, &user_roles);
+                }
+            }
+        }
+        self.group_roles.insert(&self.group_last_id, &group_roles);
+        self.groups.insert(
+            &self.group_last_id,
+            &Group::new(group.settings, group.members),
+        );
+    }
+
+    /// TODO: Figure out better as its currently quite expensive solution.
+    pub fn get_group_members_with_role(
+        &self,
+        group_id: u16,
+        group: &Group,
+        role_id: u16,
+    ) -> Vec<AccountId> {
+        let mut result_members = vec![];
+        let group_members = group.get_members_accounts();
+        for member in group_members {
+            let member_roles = self.user_roles.get(&member);
+            if let Some(roles) = member_roles {
+                if roles
+                    .into_iter()
+                    .any(|(gid, rid)| gid == group_id && rid == role_id)
+                {
+                    result_members.push(member);
+                    break;
+                }
+            }
+        }
+        result_members
     }
 }

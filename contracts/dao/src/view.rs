@@ -8,9 +8,12 @@ use near_sdk::serde::Serialize;
 use near_sdk::{near_bindgen, AccountId, Balance};
 
 use crate::group::{GroupMember, GroupOutput};
+use crate::internal::utils::current_timestamp_sec;
 use crate::proposal::VProposal;
+use crate::reward::Reward;
 use crate::settings::DaoSettings;
 use crate::tags::Tags;
+use crate::wallet::Wallet;
 use crate::{core::*, GroupId, GroupName, StorageKey};
 use crate::{TagCategory, TimestampSec};
 
@@ -100,6 +103,20 @@ impl Contract {
     // For debugging purposes only.
     pub fn promise_log(self) -> Vec<String> {
         self.debug_log
+    }
+    // For integration tests.
+    pub fn current_timestamp(self) -> u64 {
+        current_timestamp_sec()
+    }
+
+    pub fn view_reward(self, reward_id: u16) -> Reward {
+        self.rewards.get(&reward_id).unwrap()
+    }
+    pub fn view_wallet(self, account_id: AccountId) -> Wallet {
+        self.wallets.get(&account_id).unwrap()
+    }
+    pub fn view_user_roles(self, account_id: AccountId) -> Vec<(u16, u16)> {
+        self.user_roles.get(&account_id).unwrap()
     }
 
     #[allow(unused_variables)]
