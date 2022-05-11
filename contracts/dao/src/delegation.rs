@@ -2,7 +2,7 @@
 //! Only staking contract is allowed to call methods in this module.
 //! Forked and modified code from https://github.com/near-daos/sputnik-dao-contract/blob/main/sputnikdao2/src/delegation.rs
 
-use crate::core::*;
+use crate::{core::*, reward::RewardActivity};
 use near_sdk::{env, json_types::U128, log, near_bindgen, require, AccountId, Balance};
 
 impl Contract {
@@ -32,6 +32,7 @@ impl Contract {
         let new_amount = prev_amount + amount.0;
         self.delegations.insert(&account_id, &new_amount);
         self.total_delegation_amount += amount.0;
+        self.register_executed_activity(&account_id, RewardActivity::Delegate.into());
         (
             U128(prev_amount),
             U128(new_amount),
@@ -89,6 +90,10 @@ impl Contract {
             amount.0,
             prev_account_id,
             new_account_id
+        );
+        self.register_executed_activity(
+            &prev_account_id,
+            RewardActivity::TransitiveDelegate.into(),
         );
         (amount, self.delegation_total_supply())
     }

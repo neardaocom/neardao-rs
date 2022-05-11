@@ -2,12 +2,22 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::Serialize;
 use near_sdk::AccountId;
 
-use crate::core::*;
 use crate::internal::utils::current_timestamp_sec;
+use crate::wallet::Wallet;
+use crate::{core::*, derive_from_versioned, derive_into_versioned};
 use crate::{
     treasury::{Asset, TreasuryPartition},
     TimestampSec,
 };
+
+derive_into_versioned!(Reward, VersionedReward);
+derive_from_versioned!(VersionedReward, Reward);
+
+#[derive(BorshDeserialize, BorshSerialize)]
+pub enum VersionedReward {
+    Current(Reward),
+}
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Reward {
@@ -63,9 +73,9 @@ impl Reward {
             return 0;
         };
         let amount = match self.r#type {
-            RewardType::Wage(seconds) => {
+            RewardType::Wage(ref wage) => {
                 let seconds_passed = current_timestamp - self.time_valid_from;
-                let units = seconds_passed / seconds as u64;
+                let units = seconds_passed / wage.unit_seconds as u64;
                 amount * units as u128
             }
             RewardType::UserActivity(_) => todo!(),
@@ -77,35 +87,49 @@ impl Reward {
 /// TODO: Refactor from tuples into structs.
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum RewardType {
     /// Unit is amount of provided seconds.
-    Wage(u16),
+    Wage(RewardWage),
     /// TODO: Implementation.
     /// Activity id of done activities: Eg. voting, staking ...
-    UserActivity(Vec<u8>),
+    UserActivity(RewardUserActivity),
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct RewardWage {
+    /// Amount of seconds define one unit.
+    pub unit_seconds: u16,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct RewardUserActivity {
+    pub activity_ids: Vec<u8>,
 }
 
 impl RewardType {
     pub fn new_wage(unit_seconds: u16) -> Self {
-        RewardType::Wage(unit_seconds)
+        RewardType::Wage(RewardWage { unit_seconds })
     }
     pub fn new_user_activity(activity_ids: Vec<u8>) -> Self {
-        RewardType::UserActivity(activity_ids)
+        RewardType::UserActivity(RewardUserActivity { activity_ids })
     }
 }
 
 impl Contract {
     /// TODO: Error handling and validations.
-    /// Adds new reward entry into DAO rewards.
-    /// Also adds this reward in affected user wallets.
-    pub fn add_reward(&mut self, reward: &Reward) -> u16 {
+    /// Add new reward entry into DAO rewards.
+    /// Also add this reward in affected user wallets.
+    pub fn add_reward(&mut self, reward: Reward) -> u16 {
         let partition = self
             .treasury_partition
             .get(&reward.partition_id)
             .expect("partition not found");
 
         assert!(
-            self.validate_reward_assets(reward, &partition),
+            self.validate_reward_assets(&reward, &partition),
             "partion does not have all required assets"
         );
 
@@ -116,11 +140,17 @@ impl Contract {
         self.reward_last_id += 1;
 
         // Add reward to role members wallets.
-        let reward_assets: Vec<Asset> = reward
+        let mut reward_assets: Vec<Asset> = reward
             .reward_amounts()
             .into_iter()
             .map(|(a, _)| a.to_owned())
             .collect();
+
+        // Check for duplicates.
+        reward_assets.sort();
+        let len_before = reward_assets.len();
+        reward_assets.dedup();
+        assert!(len_before == reward_assets.len(), "duplicate assets");
         let current_timestamp = current_timestamp_sec();
         for user in rewarded_users {
             assert!(
@@ -133,12 +163,13 @@ impl Contract {
                 "failed to added reward to user wallet"
             );
         }
-        self.rewards.insert(&self.reward_last_id, reward);
+        self.rewards.insert(&self.reward_last_id, &reward.into());
+        self.debug_log.push(format!("reward added!"));
         self.reward_last_id
     }
     /// TODO: Check it can be safely removed.
     pub fn remove_reward(&mut self, reward_id: u16) -> Option<Reward> {
-        self.rewards.remove(&reward_id)
+        self.rewards.remove(&reward_id).map(|reward| reward.into())
     }
 
     /// Validate that defined assets in rewards are defined in treasury partition.
@@ -165,7 +196,62 @@ impl Contract {
     ) -> bool {
         let mut wallet = self.get_wallet(account_id);
         let added = wallet.add_reward(reward_id, current_timestamp, assets);
-        self.wallets.insert(account_id, &wallet);
+        self.wallets.insert(account_id, &wallet.into());
         added
+    }
+
+    pub fn register_executed_activity(&mut self, account_id: &AccountId, activity_id: u8) {
+        if let Some(wallet) = self.wallets.get(account_id) {
+            let mut wallet: Wallet = wallet.into();
+            // TODO: Implement
+            self.wallets.insert(account_id, &wallet.into());
+        }
+    }
+}
+
+pub enum RewardActivity {
+    AcceptedProposal,
+    Vote,
+    Delegate,
+    TransitiveDelegate,
+    Activity,
+}
+
+impl TryFrom<u8> for RewardActivity {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::AcceptedProposal),
+            1 => Ok(Self::Vote),
+            2 => Ok(Self::Delegate),
+            3 => Ok(Self::TransitiveDelegate),
+            4 => Ok(Self::Activity),
+            _ => Err("invalid reward activity id"),
+        }
+    }
+}
+
+impl From<RewardActivity> for u8 {
+    fn from(r: RewardActivity) -> Self {
+        match r {
+            RewardActivity::AcceptedProposal => 0,
+            RewardActivity::Vote => 1,
+            RewardActivity::Delegate => 2,
+            RewardActivity::TransitiveDelegate => 3,
+            RewardActivity::Activity => 4,
+        }
+    }
+}
+
+impl PartialEq<u8> for RewardActivity {
+    fn eq(&self, other: &u8) -> bool {
+        match self {
+            RewardActivity::AcceptedProposal => *other == 0,
+            RewardActivity::Vote => *other == 1,
+            RewardActivity::Delegate => *other == 2,
+            RewardActivity::TransitiveDelegate => *other == 3,
+            RewardActivity::Activity => *other == 4,
+        }
     }
 }

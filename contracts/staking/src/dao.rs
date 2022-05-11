@@ -1,6 +1,6 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    collections::LookupMap,
+    collections::UnorderedMap,
     json_types::U128,
     require, AccountId, Balance,
 };
@@ -13,7 +13,7 @@ pub struct Dao {
     /// Vote token account.
     pub vote_token_id: AccountId,
     /// Recording user deposits.
-    pub users: LookupMap<AccountId, VersionedUser>,
+    pub users: UnorderedMap<AccountId, VersionedUser>,
     /// Total token amount deposited.
     pub total_amount: Balance,
 }
@@ -21,7 +21,7 @@ pub struct Dao {
 // Maybe v1.0 TODO: Cooldown period settings.
 impl Dao {
     fn save_user(&mut self, account_id: &AccountId, user: User) {
-        self.users.insert(account_id, &VersionedUser::Default(user));
+        self.users.insert(account_id, &VersionedUser::Current(user));
     }
 
     /// Delegate `amount` of votes from `sender_id` to `delegate_id` account.
@@ -102,7 +102,7 @@ impl Dao {
 
     /// Register user in dao.
     pub fn register_user(&mut self, sender_id: &AccountId) {
-        require!(!self.users.contains_key(sender_id), "already registered");
+        require!(self.users.get(sender_id).is_none(), "already registered");
         let user = User::new();
         self.save_user(sender_id, user);
     }
@@ -135,7 +135,7 @@ impl Dao {
         self.users
             .get(account_id)
             .map(|versioned_user| match versioned_user {
-                VersionedUser::Default(user) => user,
+                VersionedUser::Current(user) => user,
             })
             .expect("account not registered in dao")
     }

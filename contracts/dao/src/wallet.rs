@@ -8,14 +8,23 @@ use near_sdk::{
 };
 
 use crate::{
-    constants::TGAS, core::*, error::ERR_PROMISE_INVALID_RESULTS_COUNT,
-    internal::utils::current_timestamp_sec, treasury::Asset, TimestampSec,
+    constants::TGAS, core::*, derive_from_versioned, derive_into_versioned,
+    error::ERR_PROMISE_INVALID_RESULTS_COUNT, internal::utils::current_timestamp_sec,
+    reward::Reward, treasury::Asset, TimestampSec,
 };
 
 #[ext_contract(ext_self)]
 trait ExtWallet {
     /// Rollback if promise failed.
     fn withdraw_rollback(account_id: AccountId, asset: Asset, amount: u128);
+}
+
+derive_into_versioned!(Wallet, VersionedWallet);
+derive_from_versioned!(VersionedWallet, Wallet);
+
+#[derive(BorshDeserialize, BorshSerialize)]
+pub enum VersionedWallet {
+    Current(Wallet),
 }
 
 /// Wallet keep info about owner's rewards.
@@ -79,10 +88,16 @@ impl Wallet {
     }
     /// Update withdraw stat for `reward_id`'s `asset` with `amount` withdrawn.
     /// Panic if `reward_id` is not found.
-    pub fn withdraw_reward(&mut self, reward_id: u16, asset: &Asset, amount: u128) {
+    pub fn withdraw_reward(
+        &mut self,
+        reward_id: u16,
+        asset: &Asset,
+        amount: u128,
+        current_timestamp: TimestampSec,
+    ) {
         let pos = self.find_reward_pos(reward_id).expect("reward not found");
         let reward = self.rewards.get_mut(pos).unwrap();
-        reward.add_withdrawn_amount(asset, amount);
+        reward.add_withdrawn_amount(asset, amount, current_timestamp);
     }
     /// Adds rewards which failed to be withdraw.
     pub fn withdraw_reward_failed(&mut self, asset: Asset, amount: u128) {
@@ -133,9 +148,11 @@ impl WalletReward {
         let pos = self.find_asset_pos(asset).expect("asset stat not found");
         self.withdraw_stats.get(pos).unwrap()
     }
-    pub fn add_withdrawn_amount(&mut self, asset: &Asset, amount: u128) {
+    pub fn add_withdrawn_amount(&mut self, asset: &Asset, amount: u128, current_timestamp: u64) {
         let pos = self.find_asset_pos(asset).expect("asset stat not found");
-        self.withdraw_stats.get_mut(pos).unwrap().amount += amount;
+        let stats = self.withdraw_stats.get_mut(pos).unwrap();
+        stats.amount += amount;
+        stats.timestamp_last_withdraw += current_timestamp;
     }
 }
 
@@ -144,6 +161,7 @@ impl WalletReward {
 pub struct WithdrawStats {
     pub asset_id: Asset,
     pub amount: u128,
+    pub timestamp_last_withdraw: TimestampSec,
 }
 
 impl WithdrawStats {
@@ -151,6 +169,7 @@ impl WithdrawStats {
         Self {
             asset_id,
             amount: 0,
+            timestamp_last_withdraw: 0,
         }
     }
 }
@@ -171,10 +190,11 @@ impl Contract {
         let current_timestamp = current_timestamp_sec();
         let mut wallet = self.get_wallet(&caller);
         for reward_id in reward_ids {
-            let reward = self
+            let reward: Reward = self
                 .rewards
                 .get(&reward_id)
-                .expect("reward not found in the dao");
+                .expect("reward not found in the dao")
+                .into();
             // Reward available in rewards.
             let amount_available_reward = reward.available_asset_amount(&asset, current_timestamp);
             if amount_available_reward > 0 {
@@ -187,12 +207,17 @@ impl Contract {
                 let available_partition_amount = partition.remove_amount(&asset, claimable_reward);
                 self.treasury_partition
                     .insert(&reward.partition_id, &partition);
-                wallet.withdraw_reward(reward_id, &asset, available_partition_amount);
+                wallet.withdraw_reward(
+                    reward_id,
+                    &asset,
+                    available_partition_amount,
+                    current_timestamp,
+                );
                 total_withdrawn += amount_available_reward;
             }
         }
         total_withdrawn += wallet.take_failed_withdraw_amount(&asset);
-        self.wallets.insert(&caller, &wallet);
+        self.wallets.insert(&caller, &wallet.into());
         // Send reward to the caller.
         if total_withdrawn > 0 {
             self.send_reward(caller, asset, total_withdrawn);
@@ -229,7 +254,7 @@ impl Contract {
                 ));
                 let mut wallet = self.get_wallet(&account_id);
                 wallet.withdraw_reward_failed(asset, amount);
-                self.wallets.insert(&account_id, &wallet);
+                self.wallets.insert(&account_id, &wallet.into());
             }
         }
     }
@@ -237,44 +262,47 @@ impl Contract {
 
 impl Contract {
     pub fn get_wallet(&mut self, account_id: &AccountId) -> Wallet {
-        self.wallets.get(account_id).unwrap_or_else(Wallet::new)
+        self.wallets
+            .get(account_id)
+            .unwrap_or_else(|| VersionedWallet::Current(Wallet::new()))
+            .into()
     }
     pub fn send_reward(&mut self, account_id: AccountId, asset: Asset, amount: u128) {
         match asset {
             Asset::Near => {
                 Promise::new(account_id).transfer(amount);
             }
-            Asset::FT(ft_account_id, decimals) => {
+            Asset::FT(ft) => {
                 let args = format!(
                     "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":null}}",
                     account_id, amount
                 );
-                Promise::new(ft_account_id.clone())
+                Promise::new(ft.account_id.clone())
                     .function_call("ft_transfer".into(), args.into_bytes(), 1, TGAS * 10)
                     .then(ext_self::withdraw_rollback(
                         account_id,
-                        Asset::new_ft(ft_account_id, decimals),
+                        Asset::new_ft(ft.account_id, ft.decimals),
                         amount,
                         env::current_account_id(),
                         0,
                         TGAS * 10,
                     ));
             }
-            Asset::NFT(nft_account_id, token_id, approval_id) => {
-                let approval_id_string = if let Some(approval_id) = approval_id.clone() {
+            Asset::NFT(nft) => {
+                let approval_id_string = if let Some(approval_id) = nft.approval_id.clone() {
                     approval_id.to_string()
                 } else {
                     "null".to_string()
                 };
                 let args = format!(
                     "{{\"receiver_id\":\"{}\",\"token_id\":\"{}\",\"approval_id\":{},\"memo\":null}}",
-                    account_id, &token_id, approval_id_string
+                    account_id, &nft.token_id, approval_id_string
                 );
-                Promise::new(nft_account_id.clone())
+                Promise::new(nft.account_id.clone())
                     .function_call("nft_transfer".into(), args.into_bytes(), 1, TGAS * 10)
                     .then(ext_self::withdraw_rollback(
                         account_id,
-                        Asset::new_nft(nft_account_id, token_id, approval_id),
+                        Asset::new_nft(nft.account_id, nft.token_id, nft.approval_id),
                         amount,
                         env::current_account_id(),
                         0,

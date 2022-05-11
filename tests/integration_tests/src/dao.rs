@@ -54,13 +54,12 @@ const DAO_FT_TOTAL_SUPPLY: u128 = 1_000_000_000;
 async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
     let worker = workspaces::sandbox().await?;
     let member = worker.dev_create_account().await?;
-    let registrar = worker.dev_create_account().await?;
     let factory = worker.dev_create_account().await?;
 
     // Contracts init.
     let wnear = init_wnear(&worker).await?;
     let skyward = init_skyward(&worker, &wnear, None).await?;
-    let staking = init_staking(&worker, registrar.id()).await?;
+    let staking = init_staking(&worker).await?;
     let wf_provider = init_workflow_provider(&worker).await?;
     let dao = deploy_dao(&worker).await?;
     let token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY).await?;
@@ -354,11 +353,10 @@ async fn workflow_trade1_scenario() -> anyhow::Result<()> {
     let worker = workspaces::sandbox().await?;
     let member = worker.dev_create_account().await?;
     let token_holder = worker.dev_create_account().await?;
-    let registrar = worker.dev_create_account().await?;
     let factory = worker.dev_create_account().await?;
 
     // Contracts init.
-    let staking = init_staking(&worker, registrar.id()).await?;
+    let staking = init_staking(&worker).await?;
     let wf_provider = init_workflow_provider(&worker).await?;
     let dao = deploy_dao(&worker).await?;
     let vote_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY).await?;
@@ -496,11 +494,10 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
     let worker = workspaces::sandbox().await?;
     let member = worker.dev_create_account().await?;
     let token_holder = worker.dev_create_account().await?;
-    let registrar = worker.dev_create_account().await?;
     let factory = worker.dev_create_account().await?;
 
     // Contracts init.
-    let staking = init_staking(&worker, registrar.id()).await?;
+    let staking = init_staking(&worker).await?;
     let wf_provider = init_workflow_provider(&worker).await?;
     let dao = deploy_dao(&worker).await?;
     let vote_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY).await?;
@@ -648,11 +645,10 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
     let worker = workspaces::sandbox().await?;
     let member = worker.dev_create_account().await?;
     let bounty_hunter = worker.dev_create_account().await?;
-    let registrar = worker.dev_create_account().await?;
     let factory = worker.dev_create_account().await?;
 
     // Contracts init.
-    let staking = init_staking(&worker, registrar.id()).await?;
+    let staking = init_staking(&worker).await?;
     let wf_provider = init_workflow_provider(&worker).await?;
     let dao = deploy_dao(&worker).await?;
     let vote_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY).await?;
@@ -816,11 +812,10 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
 async fn workflow_reward1_scenario() -> anyhow::Result<()> {
     let worker = workspaces::sandbox().await?;
     let member = worker.dev_create_account().await?;
-    let registrar = worker.dev_create_account().await?;
     let factory = worker.dev_create_account().await?;
 
     // Contracts init.
-    let staking = init_staking(&worker, registrar.id()).await?;
+    let staking = init_staking(&worker).await?;
     let wf_provider = init_workflow_provider(&worker).await?;
     let dao = deploy_dao(&worker).await?;
     let vote_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY * ONE_NEAR).await?;
@@ -934,6 +929,7 @@ async fn workflow_reward1_scenario() -> anyhow::Result<()> {
     .await?;
     worker.wait(5).await?;
     check_instance(&worker, &dao, proposal_id, 2, InstanceState::Finished).await?;
+    debug_log(&worker, &dao).await?;
     view_user_roles(&worker, &dao, &member.id()).await?;
     view_user_wallet(&worker, &dao, &member.id()).await?;
     view_reward(&worker, &dao, 1).await?;
@@ -951,7 +947,7 @@ async fn workflow_reward1_scenario() -> anyhow::Result<()> {
         &member,
         &dao,
         vec![1],
-        Asset::new_ft(reward_token.id().to_string(), 24),
+        Asset::new_ft(reward_token.id().clone(), 24),
     )
     .await?;
     worker.wait(10).await?;

@@ -3,10 +3,7 @@ use workspaces::{network::DevAccountDeployer, AccountId, Contract, DevNetwork, W
 
 use crate::utils::{get_staking_wasm, outcome_pretty};
 
-pub(crate) async fn init_staking<T>(
-    worker: &Worker<T>,
-    registrar_id: &AccountId,
-) -> anyhow::Result<Contract>
+pub(crate) async fn init_staking<T>(worker: &Worker<T>) -> anyhow::Result<Contract>
 where
     T: DevNetwork,
 {
@@ -14,11 +11,7 @@ where
     let staking = worker
         .dev_deploy(&std::fs::read(staking_blob_path)?)
         .await?;
-    let args = json!({
-        "registrar_id" :registrar_id.as_str(),
-    })
-    .to_string()
-    .into_bytes();
+    let args = json!({}).to_string().into_bytes();
     let outcome = staking
         .call(&worker, "new")
         .args(args)

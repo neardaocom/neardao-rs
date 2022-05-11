@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use near_sdk::{ONE_NEAR, ONE_YOCTO};
+use near_sdk::{AccountId, ONE_NEAR, ONE_YOCTO};
 
 use library::{
-    types::{datatype::Value, source::SourceDataVariant},
+    types::{
+        datatype::{Datatype, Value},
+        source::SourceDataVariant,
+    },
     workflow::{
         action::{ActionType, FnCallData, FnCallIdType, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
@@ -11,10 +14,13 @@ use library::{
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
         template::Template,
         types::{
-            ActivityRight, ArgSrc, BindDefinition, Instruction, SrcOrExprOrValue, VoteScenario,
+            ActivityRight, ArgSrc, BindDefinition, Instruction, ObjectMetadata, SrcOrExprOrValue,
+            VoteScenario,
         },
     },
 };
+
+use crate::TemplateData;
 
 pub const DEFAULT_VOTING_DURATION: u32 = 10;
 
@@ -32,9 +38,10 @@ pub const WF_ADD1_SETTINGS_DEPOSIT_VOTE: u128 = ONE_YOCTO;
 /// Expects provider_id and id of template to download defined in global propose settings.
 pub struct WfAdd1;
 impl WfAdd1 {
-    pub fn template() -> Template {
+    pub fn template(provider_id: String) -> TemplateData {
+        let provider_id = AccountId::try_from(provider_id).expect("invalid account_id string");
         let map = HashMap::new();
-        Template {
+        let tpl = Template {
             code: "wf_add".into(),
             version: "1".into(),
             auto_exec: true,
@@ -82,7 +89,13 @@ impl WfAdd1 {
             }]],
             constants: SourceDataVariant::Map(map),
             end: vec![1],
-        }
+        };
+        let fn_calls = vec![(provider_id, "wf_template".to_string())];
+        let metadata = vec![vec![ObjectMetadata {
+            arg_names: vec!["id".into()],
+            arg_types: vec![Datatype::U64(false)],
+        }]];
+        (tpl, fn_calls, metadata)
     }
     pub fn propose_settings(options: Option<WfAdd1ProposeOptions>) -> ProposeSettings {
         let WfAdd1ProposeOptions {

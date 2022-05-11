@@ -4,10 +4,7 @@ use data::{
     object_metadata::standard_fn_calls::{standard_fn_call_metadatas, standard_fn_call_methods},
     workflow::basic::wf_add::WfAdd1,
 };
-use library::{
-    types::datatype::Datatype,
-    workflow::{settings::TemplateSettings, template::Template, types::ObjectMetadata},
-};
+use library::workflow::{settings::TemplateSettings, template::Template, types::ObjectMetadata};
 use workspaces::{network::DevAccountDeployer, Account, AccountId, Contract, DevNetwork, Worker};
 
 use crate::{
@@ -84,9 +81,9 @@ fn dao_init_args(
     let group = default_group(council_members);
     let standard_function_calls = standard_function_calls();
     let standard_function_call_metadata = standard_function_call_metadata();
-    let function_calls = function_calls(provider_id);
-    let function_call_metadata = function_call_metadata();
-    let workflow_templates = workflow_templates();
+    let function_calls = function_calls(provider_id.to_string());
+    let function_call_metadata = function_call_metadata(provider_id.to_string());
+    let workflow_templates = workflow_templates(provider_id.to_string());
     let workflow_template_settings = workflow_template_settings();
 
     let group_output = GroupOutput {
@@ -157,25 +154,20 @@ fn standard_function_calls() -> Vec<MethodName> {
     standard_fn_call_methods()
 }
 
-fn function_calls(provider_id: AccountId) -> Vec<FnCallId> {
-    let calls = vec![(provider_id, "wf_template".to_string())];
-    calls
+fn function_calls(provider_id: String) -> Vec<FnCallId> {
+    WfAdd1::template(provider_id.to_string()).1
 }
 
 fn standard_function_call_metadata() -> Vec<Vec<ObjectMetadata>> {
     standard_fn_call_metadatas()
 }
 
-fn function_call_metadata() -> Vec<Vec<ObjectMetadata>> {
-    let meta = vec![vec![ObjectMetadata {
-        arg_names: vec!["id".into()],
-        arg_types: vec![Datatype::U64(false)],
-    }]];
-    meta
+fn function_call_metadata(provider_id: String) -> Vec<Vec<ObjectMetadata>> {
+    WfAdd1::template(provider_id).2
 }
 
-fn workflow_templates() -> Vec<Template> {
-    let tpls = vec![WfAdd1::template()];
+fn workflow_templates(provider_id: String) -> Vec<Template> {
+    let tpls = vec![WfAdd1::template(provider_id).0];
     tpls
 }
 

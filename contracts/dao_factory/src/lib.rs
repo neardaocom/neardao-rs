@@ -131,9 +131,9 @@ impl DaoFactoryContract {
     }
 
     #[payable]
-    pub fn create(&mut self, acc_name: AccountId, dao_info: DaoInfo, args: Base64VecU8) -> Promise {
+    pub fn create(&mut self, dao_name: AccountId, dao_info: DaoInfo, args: Base64VecU8) -> Promise {
         assert!(env::attached_deposit() >= DEPOSIT_CREATE);
-        let account_id = format!("{}.{}", acc_name, env::current_account_id())
+        let account_id = format!("{}.{}", dao_name, env::current_account_id())
             .try_into()
             .expect("Account is not valid.");
         log!("Creating DAO account: {}", account_id);
@@ -157,7 +157,7 @@ impl DaoFactoryContract {
                 env::prepaid_gas() - CREATE_CALL_GAS - ON_CREATE_CALL_GAS,
             )
             .then(ext_self::on_create(
-                acc_name,
+                dao_name,
                 U128(env::attached_deposit()),
                 env::predecessor_account_id(),
                 dao_info,

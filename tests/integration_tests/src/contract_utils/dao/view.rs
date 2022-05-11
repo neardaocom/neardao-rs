@@ -207,7 +207,7 @@ where
     .to_string()
     .into_bytes();
     let outcome = dao.view(&worker, "view_wallet", args).await?;
-    view_outcome_pretty::<Wallet>("view user rewards", &outcome);
+    view_outcome_pretty::<Wallet>("view user wallet", &outcome);
     let wallet = parse_view_result::<Wallet>(&outcome).expect("failed to parse wallet");
     Ok(wallet)
 }

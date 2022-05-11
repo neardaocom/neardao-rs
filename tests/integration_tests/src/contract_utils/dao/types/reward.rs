@@ -10,33 +10,61 @@ pub type ApprovalId = Option<u64>;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum Asset {
     Near,
-    /// Account id and FT decimals.
-    FT(AccountId, u8),
-    /// TODO: Verify that only account_id is enough.
-    NFT(AccountId, TokenId, ApprovalId),
+    FT(AssetFT),
+    NFT(AssetNFT),
 }
 
 impl Asset {
     pub fn new_near() -> Self {
         Self::Near
     }
-    pub fn new_ft(account_id: String, decimals: u8) -> Self {
-        Self::FT(AccountId::try_from(account_id).unwrap(), decimals)
+    pub fn new_ft(account_id: AccountId, decimals: u8) -> Self {
+        Self::FT(AssetFT::new(account_id, decimals))
     }
-    pub fn new_nft(account_id: String, token_id: String, approval_id: Option<u64>) -> Self {
-        Self::NFT(
-            AccountId::try_from(account_id).unwrap(),
-            token_id,
-            approval_id,
-        )
+    pub fn new_nft(account_id: AccountId, token_id: String, approval_id: Option<u64>) -> Self {
+        Self::NFT(AssetNFT::new(account_id, token_id, approval_id))
     }
     pub fn decimals(&self) -> u8 {
         match &self {
             Self::Near => 24,
-            Self::FT(_, decimals) => *decimals,
+            Self::FT(a) => a.decimals,
             _ => 0,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct AssetFT {
+    pub account_id: AccountId,
+    pub decimals: u8,
+}
+impl AssetFT {
+    pub fn new(account_id: AccountId, decimals: u8) -> Self {
+        Self {
+            account_id,
+            decimals,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct AssetNFT {
+    pub account_id: AccountId,
+    pub token_id: TokenId,
+    pub approval_id: ApprovalId,
+}
+
+impl AssetNFT {
+    pub fn new(account_id: AccountId, token_id: TokenId, approval_id: ApprovalId) -> Self {
+        Self {
+            account_id,
+            token_id,
+            approval_id,
         }
     }
 }
@@ -78,12 +106,13 @@ pub struct Reward {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum RewardType {
     /// Unit is amount of provided seconds.
-    Wage(u16),
+    Wage(RewardWage),
     /// TODO: Implementation.
     /// Activity id of done activities: Eg. voting, staking ...
-    UserActivity(Vec<u8>),
+    UserActivity(RewardUserActivity),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -110,4 +139,18 @@ pub struct WalletReward {
 pub struct WithdrawStats {
     pub asset_id: Asset,
     pub amount: u128,
+    pub timestamp_last_withdraw: TimestampSec,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct RewardWage {
+    /// Amount of seconds define one unit.
+    pub unit_seconds: u16,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct RewardUserActivity {
+    pub activity_ids: Vec<u8>,
 }

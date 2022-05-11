@@ -2,14 +2,14 @@ use std::collections::HashMap;
 
 use data::{
     workflow::{
-        basic::{bounty::Bounty1, reward::Reward1, trade::Trade1},
+        basic::{bounty::Bounty1, reward::Reward1, trade::Trade1, wf_add::WfAdd1},
         integration::skyward::{Skyward1, Skyward1TemplateOptions},
     },
     TemplateData,
 };
 use library::{
     types::source::SourceDataVariant,
-    workflow::{help::TemplateHelp, template::Template, types::ObjectMetadata},
+    workflow::{help::TemplateHelp, template::Template},
     Version,
 };
 use serde::{Deserialize, Serialize};
@@ -41,7 +41,7 @@ pub(crate) async fn load_workflow_templates<T>(
 where
     T: DevNetwork,
 {
-    let tpls = wf_templates(wnear_id, skyward_id);
+    let tpls = wf_templates(provider.id().to_string(), wnear_id, skyward_id);
     let templates_len = tpls.len();
     for (name, tpl, help) in tpls {
         let (wf, fncalls, meta) = tpl;
@@ -76,11 +76,13 @@ where
 }
 
 fn wf_templates(
+    provider_id: String,
     wnear_id: Option<&AccountId>,
     skyward_id: Option<&AccountId>,
 ) -> Vec<(String, TemplateData, Option<TemplateHelp>)> {
     let mut templates = vec![];
-    // Skyward1 is always pos 0.
+    templates.push(("wf_add".into(), WfAdd1::template(provider_id), None));
+    // Skyward1 is always pos 1.
     if wnear_id.is_some() && skyward_id.is_some() {
         templates.push((
             "skyward".into(),

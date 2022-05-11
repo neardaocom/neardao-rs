@@ -20,7 +20,8 @@ use crate::group::{GroupInput, GroupMember, GroupSettings};
 use crate::internal::utils::current_timestamp_sec;
 use crate::internal::ActivityContext;
 use crate::proposal::ProposalState;
-use crate::settings::{assert_valid_dao_settings, DaoSettings};
+use crate::reward::RewardActivity;
+use crate::settings::{assert_valid_dao_settings, Settings};
 use crate::tags::Tags;
 use crate::{core::*, GroupId, TagId};
 
@@ -28,13 +29,12 @@ use crate::{core::*, GroupId, TagId};
 impl Contract {
     // TODO: Auto-finish WF then there is no other possible transition regardless terminality.
     #[payable]
-    #[handle_result]
     pub fn workflow_run_activity(
         &mut self,
         proposal_id: u32,
         activity_id: usize,
         actions_inputs: Vec<Option<ActionInput>>,
-    ) -> Result<(), ActivityError> {
+    ) -> Option<ActivityError> {
         let (proposal, wft, wfs) = self.get_workflow_and_proposal(proposal_id);
         let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
         let mut prop_settings = self.workflow_propose_settings.get(&proposal_id).unwrap();
@@ -225,16 +225,20 @@ impl Contract {
         }
 
         // Decide if is fatal error.
-        let result: Result<(), ActivityError> = if let Err(e) = result {
+        let result = if let Err(e) = result {
             let e = ActivityError::from(e);
 
             if e.is_fatal() {
                 wfi.set_fatal_error();
             }
-            Err(e)
+            Some(e)
         } else {
-            Ok(())
+            None
         };
+
+        if result.is_none() {
+            self.register_executed_activity(&ctx.caller, RewardActivity::Activity.into())
+        }
 
         // Save mutated instance state.
         self.workflow_instance.insert(&proposal_id, &wfi);
@@ -633,7 +637,7 @@ impl Contract {
         }
     }
 
-    pub fn settings_update(&mut self, settings: DaoSettings) {
+    pub fn settings_update(&mut self, settings: Settings) {
         assert_valid_dao_settings(&settings);
         self.settings.replace(&settings.into());
     }

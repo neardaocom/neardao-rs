@@ -15,7 +15,7 @@ use crate::{
     helper::deserialize::{try_bind_partition, try_bind_reward},
     internal::utils::current_timestamp_sec,
     proposal::{Proposal, ProposalState, VoteResult},
-    settings::DaoSettings,
+    settings::Settings,
     tags::{TagInput, Tags},
     CalculatedVoteResults, ProposalId, ProposalWf, TimestampSec, VoteTotalPossible, Votes,
 };
@@ -40,7 +40,7 @@ use library::{
 
 impl Contract {
     #[inline]
-    pub fn init_dao_settings(&mut self, settings: DaoSettings) {
+    pub fn init_dao_settings(&mut self, settings: Settings) {
         self.settings.set(&settings.into());
     }
 
@@ -522,7 +522,7 @@ impl Contract {
             }
             DaoActionIdent::RewardAdd => {
                 let reward = try_bind_reward(inputs).expect("failed to bind reward");
-                self.add_reward(&reward);
+                self.add_reward(reward);
             }
             /*             DaoActionIdent::GroupAdd => {
                 let group_input = deserialize_group_input(inputs)?;

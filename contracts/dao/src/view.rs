@@ -9,10 +9,11 @@ use near_sdk::{near_bindgen, AccountId, Balance};
 
 use crate::group::{GroupMember, GroupOutput};
 use crate::internal::utils::current_timestamp_sec;
-use crate::proposal::VProposal;
+use crate::proposal::VersionedProposal;
 use crate::reward::Reward;
-use crate::settings::DaoSettings;
+use crate::settings::Settings;
 use crate::tags::Tags;
+use crate::treasury::TreasuryPartition;
 use crate::wallet::Wallet;
 use crate::{core::*, GroupId, GroupName, StorageKey};
 use crate::{TagCategory, TimestampSec};
@@ -55,21 +56,21 @@ impl Contract {
         }
     }
 
-    pub fn proposal(&self, id: u32) -> Option<(VProposal, Option<Vec<TemplateSettings>>)> {
+    pub fn proposal(&self, id: u32) -> Option<(VersionedProposal, Option<Vec<TemplateSettings>>)> {
         self.proposals
             .get(&id)
             .map(|p| (p, self.proposed_workflow_settings.get(&id)))
     }
 
-    pub fn proposals(&self, from_index: u64, limit: u64) -> Vec<(u32, VProposal)> {
+    pub fn proposals(&self, from_id: u64, limit: u64) -> Vec<(u32, VersionedProposal)> {
         let keys = self.proposals.keys_as_vector();
         let values = self.proposals.values_as_vector();
-        (from_index..std::cmp::min(from_index + limit, self.proposals.len()))
+        (from_id..std::cmp::min(from_id + limit, self.proposals.len()))
             .map(|index| (keys.get(index).unwrap(), values.get(index).unwrap()))
             .collect()
     }
 
-    pub fn dao_settings(self) -> DaoSettings {
+    pub fn dao_settings(self) -> Settings {
         self.settings.get().unwrap().into()
     }
 
@@ -110,10 +111,29 @@ impl Contract {
     }
 
     pub fn view_reward(self, reward_id: u16) -> Reward {
-        self.rewards.get(&reward_id).unwrap()
+        self.rewards.get(&reward_id).unwrap().into()
     }
+    pub fn reward_list(self, from_id: u16, limit: u16) -> Vec<(u16, Reward)> {
+        let mut rewards = Vec::with_capacity(self.reward_last_id as usize);
+        for i in from_id..std::cmp::min(self.reward_last_id, limit) {
+            if let Some(reward) = self.rewards.get(&i) {
+                rewards.push((i, reward.into()));
+            }
+        }
+        rewards
+    }
+    pub fn partition_list(self, from_id: u16, limit: u16) -> Vec<(u16, TreasuryPartition)> {
+        let mut partitions = Vec::with_capacity(self.reward_last_id as usize);
+        for i in from_id..std::cmp::min(self.partition_last_id, limit) {
+            if let Some(partition) = self.treasury_partition.get(&i) {
+                partitions.push((i, partition));
+            }
+        }
+        partitions
+    }
+
     pub fn view_wallet(self, account_id: AccountId) -> Wallet {
-        self.wallets.get(&account_id).unwrap()
+        self.wallets.get(&account_id).unwrap().into()
     }
     pub fn view_user_roles(self, account_id: AccountId) -> Vec<(u16, u16)> {
         self.user_roles.get(&account_id).unwrap()

@@ -4,21 +4,22 @@ use near_sdk::AccountId;
 use std::collections::HashMap;
 
 use crate::media::Media;
-use crate::{ResourceId, StorageKey, TimestampSec};
+use crate::{ResourceId, TimestampSec};
 
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub enum VProposal {
-    Curr(Proposal),
+#[serde(rename_all = "snake_case")]
+pub enum VersionedProposal {
+    Current(Proposal),
 }
 
-impl From<VProposal> for Proposal {
-    fn from(fm: VProposal) -> Self {
+impl From<VersionedProposal> for Proposal {
+    fn from(fm: VersionedProposal) -> Self {
         match fm {
-            VProposal::Curr(p) => p,
+            VersionedProposal::Current(p) => p,
             _ => unimplemented!(),
         }
     }
@@ -27,6 +28,7 @@ impl From<VProposal> for Proposal {
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum ProposalState {
     InProgress,
     /// Below quorum limit.
@@ -41,6 +43,7 @@ pub enum ProposalState {
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum VoteResult {
     Ok,
     AlreadyVoted,

@@ -9,7 +9,7 @@ use library::{
 use near_sdk::json_types::U128;
 use serde::{Deserialize, Serialize};
 
-use super::proposal::VProposal;
+use super::proposal::VersionedProposal;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
@@ -29,5 +29,5 @@ impl Default for StorageBalance {
 
 pub(crate) type ViewInstance = Option<Instance>;
 pub(crate) type ViewTemplates = Vec<(u16, (Template, Vec<TemplateSettings>))>;
-pub(crate) type ViewProposal = Option<(VProposal, Option<Vec<TemplateSettings>>)>;
+pub(crate) type ViewProposal = Option<(VersionedProposal, Option<Vec<TemplateSettings>>)>;
 pub(crate) type ViewWorkflowStorage = Option<Vec<(String, Value)>>;

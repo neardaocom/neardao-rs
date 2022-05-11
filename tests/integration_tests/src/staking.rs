@@ -104,7 +104,6 @@ fn check_user_result(
 /// Check DAO's storage balance
 /// DAO storage_unregister itself
 #[tokio::test]
-#[ignore]
 async fn staking_full_scenario() -> Result<()> {
     let worker = workspaces::sandbox().await?;
     let staking_blob_path = &get_staking_wasm();
@@ -121,11 +120,7 @@ async fn staking_full_scenario() -> Result<()> {
     let delegate_2 = worker.dev_create_account().await?;
 
     // Staking init.
-    let args = json!({
-        "registrar_id" : registrar.id(),
-    })
-    .to_string()
-    .into_bytes();
+    let args = json!({}).to_string().into_bytes();
     let outcome = staking
         .call(&worker, "new")
         .args(args)

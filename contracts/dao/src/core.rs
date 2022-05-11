@@ -2,12 +2,12 @@ use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
 use crate::event::{run_tick, Event, EventQueue};
 use crate::internal::utils::current_timestamp_sec;
 use crate::media::ResourceType;
-use crate::reward::Reward;
+use crate::reward::{RewardActivity, VersionedReward};
 use crate::role::Role;
-use crate::settings::{assert_valid_dao_settings, DaoSettings, VDaoSettings};
+use crate::settings::{assert_valid_dao_settings, Settings, VersionedSettings};
 use crate::tags::{TagInput, Tags};
 use crate::treasury::TreasuryPartition;
-use crate::wallet::Wallet;
+use crate::wallet::VersionedWallet;
 use library::storage::StorageBucket;
 use library::types::datatype::Value;
 use library::workflow::instance::{Instance, InstanceState};
@@ -104,9 +104,9 @@ pub struct Contract {
     pub total_members_count: u32,
     pub group_last_id: GroupId,
     pub groups: UnorderedMap<GroupId, Group>,
-    pub settings: LazyOption<VDaoSettings>,
+    pub settings: LazyOption<VersionedSettings>,
     pub proposal_last_id: u32,
-    pub proposals: UnorderedMap<u32, VProposal>,
+    pub proposals: UnorderedMap<u32, VersionedProposal>,
     pub storage: UnorderedMap<StorageKey, StorageBucket>,
     pub tags: UnorderedMap<TagCategory, Tags>,
     /// Provides metadata for dao actions.
@@ -127,8 +127,8 @@ pub struct Contract {
     pub treasury_partition: LookupMap<u16, TreasuryPartition>,
     /// Id of last created reward.
     pub reward_last_id: u16,
-    pub rewards: LookupMap<u16, Reward>,
-    pub wallets: LookupMap<AccountId, Wallet>,
+    pub rewards: LookupMap<u16, VersionedReward>,
+    pub wallets: LookupMap<AccountId, VersionedWallet>,
 }
 
 #[near_bindgen]
@@ -140,7 +140,7 @@ impl Contract {
         staking_id: AccountId,
         total_supply: u32,
         decimals: u8,
-        settings: DaoSettings,
+        settings: Settings,
         groups: Vec<GroupInput>,
         tags: Vec<TagInput>,
         standard_function_calls: Vec<MethodName>,
@@ -224,7 +224,7 @@ impl Contract {
     #[payable]
     pub fn proposal_create(
         &mut self,
-        desc: ResourceType,
+        desc: ResourceType, // TODO: Optional
         template_id: u16,
         template_settings_id: u8,
         propose_settings: ProposeSettings,
@@ -274,8 +274,10 @@ impl Contract {
         //    propose_settings.binds.as_slice(),
         //    wft.activities.as_slice(),
         //);
-        self.proposals
-            .insert(&self.proposal_last_id, &VProposal::Curr(proposal));
+        self.proposals.insert(
+            &self.proposal_last_id,
+            &VersionedProposal::Current(proposal),
+        );
         self.workflow_propose_settings
             .insert(&self.proposal_last_id, &propose_settings);
         // TODO: Croncat registration to finish proposal
@@ -311,12 +313,15 @@ impl Contract {
         if vote_only_once && proposal.votes.contains_key(&caller) {
             return VoteResult::AlreadyVoted;
         }
+        self.register_executed_activity(&caller, RewardActivity::Vote.into());
         proposal.votes.insert(caller, vote);
-        self.proposals.insert(&id, &VProposal::Curr(proposal));
+        self.proposals
+            .insert(&id, &VersionedProposal::Current(proposal));
         VoteResult::Ok
     }
 
     pub fn proposal_finish(&mut self, id: u32) -> ProposalState {
+        let caller = env::predecessor_account_id();
         let (mut proposal, wft, wfs) = self.get_workflow_and_proposal(id);
         let mut instance =
             Instance::new(proposal.workflow_id, wft.activities.len(), wft.end.clone());
@@ -336,6 +341,10 @@ impl Contract {
                             self.storage_bucket_add(storage_key);
                         }
                     }
+                    self.register_executed_activity(
+                        &caller,
+                        RewardActivity::AcceptedProposal.into(),
+                    );
                     Some(vote_result)
                 }
             }
@@ -346,7 +355,8 @@ impl Contract {
             Some(state) => {
                 self.workflow_instance.insert(&id, &instance);
                 proposal.state = state.clone();
-                self.proposals.insert(&id, &VProposal::Curr(proposal));
+                self.proposals
+                    .insert(&id, &VersionedProposal::Current(proposal));
 
                 if wft.auto_exec {
                     //TODO: Dispatch wf execution with Croncat.
@@ -507,7 +517,7 @@ pub extern "C" fn download_new_version() {
 
     // We are not able to access council members any other way so we have deserialize SC
     let contract: Contract = env::state_read().unwrap();
-    let dao_settings: DaoSettings = contract.settings.get().unwrap().into();
+    let dao_settings: Settings = contract.settings.get().unwrap().into();
 
     //TODO download rights
     assert_eq!(
@@ -535,7 +545,7 @@ pub extern "C" fn store_new_version() {
     env::setup_panic_hook();
 
     let contract: Contract = env::state_read().unwrap();
-    let dao_settings: DaoSettings = contract.settings.get().unwrap().into();
+    let dao_settings: Settings = contract.settings.get().unwrap().into();
 
     assert_eq!(
         dao_settings.dao_admin_account_id,
@@ -557,7 +567,7 @@ pub extern "C" fn upgrade_self() {
 
     // We are not able to access council members any other way so we have deserialize SC
     let contract: Contract = env::state_read().unwrap();
-    let dao_settings: DaoSettings = contract.settings.get().unwrap().into();
+    let dao_settings: Settings = contract.settings.get().unwrap().into();
 
     assert_eq!(
         dao_settings.dao_admin_account_id,

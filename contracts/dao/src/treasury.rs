@@ -8,7 +8,8 @@ use near_sdk::{
 use crate::{core::Contract, ApprovalId, TimestampSec, TokenId};
 
 /// Container around unique assets.
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct TreasuryPartition {
     pub assets: Vec<PartitionAsset>,
 }
@@ -77,7 +78,8 @@ impl TreasuryPartition {
         self.assets.iter().position(|el| el.asset_id == *asset_id)
     }
 }
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct PartitionAsset {
     asset_id: Asset,
     /// Available amount of the asset with decimal zeroes.
@@ -142,15 +144,58 @@ impl PartitionAsset {
     }
 }
 
-/// TODO: Refactor from tuples into structs.
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Eq, PartialOrd, Ord)]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum Asset {
     Near,
-    /// Account id and FT decimals.
-    FT(AccountId, u8),
-    /// TODO: Verify that only account_id is enough.
-    NFT(AccountId, TokenId, ApprovalId),
+    FT(AssetFT),
+    NFT(AssetNFT),
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Eq, PartialOrd, Ord)]
+#[serde(crate = "near_sdk::serde")]
+pub struct AssetFT {
+    pub account_id: AccountId,
+    pub decimals: u8,
+}
+impl AssetFT {
+    pub fn new(account_id: AccountId, decimals: u8) -> Self {
+        Self {
+            account_id,
+            decimals,
+        }
+    }
+}
+
+impl PartialEq for AssetFT {
+    fn eq(&self, other: &Self) -> bool {
+        self.account_id == other.account_id
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Eq, PartialOrd, Ord)]
+#[serde(crate = "near_sdk::serde")]
+pub struct AssetNFT {
+    pub account_id: AccountId,
+    pub token_id: TokenId,
+    pub approval_id: ApprovalId,
+}
+
+impl PartialEq for AssetNFT {
+    fn eq(&self, other: &Self) -> bool {
+        self.account_id == other.account_id && self.token_id == other.token_id
+    }
+}
+
+impl AssetNFT {
+    pub fn new(account_id: AccountId, token_id: TokenId, approval_id: ApprovalId) -> Self {
+        Self {
+            account_id,
+            token_id,
+            approval_id,
+        }
+    }
 }
 
 impl Asset {
@@ -158,15 +203,15 @@ impl Asset {
         Self::Near
     }
     pub fn new_ft(account_id: AccountId, decimals: u8) -> Self {
-        Self::FT(account_id, decimals)
+        Self::FT(AssetFT::new(account_id, decimals))
     }
     pub fn new_nft(account_id: AccountId, token_id: String, approval_id: Option<u64>) -> Self {
-        Self::NFT(account_id, token_id, approval_id)
+        Self::NFT(AssetNFT::new(account_id, token_id, approval_id))
     }
     pub fn decimals(&self) -> u8 {
         match &self {
             Self::Near => 24,
-            Self::FT(_, decimals) => *decimals,
+            Self::FT(a) => a.decimals,
             _ => 0,
         }
     }
@@ -175,8 +220,8 @@ impl Asset {
 impl PartialEq for Asset {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::FT(l0, _), Self::FT(r0, _)) => *l0 == *r0,
-            (Self::NFT(l0, l1, _), Self::NFT(r0, r1, _)) => *l0 == *r0 && *l1 == *r1,
+            (Self::FT(l), Self::FT(r)) => l == r,
+            (Self::NFT(l), Self::NFT(r)) => l == r,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }

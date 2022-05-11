@@ -10,7 +10,7 @@ use near_contract_standards::fungible_token::core_impl::ext_fungible_token;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::LookupMap;
+use near_sdk::collections::{LookupMap, UnorderedMap};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
@@ -36,8 +36,6 @@ enum StorageKeys {
 #[near_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, PanicOnDefault)]
 pub struct Contract {
-    /// Registrar that can register new daos.
-    registrar_id: AccountId,
     /// Daos using this contract.
     daos: LookupMap<AccountId, Dao>,
     /// Storage deposit amount of staked NEARs and used storage in bytes.
@@ -53,9 +51,8 @@ impl Contract {
     }
 
     #[init]
-    pub fn new(registrar_id: AccountId) -> Self {
+    pub fn new() -> Self {
         Self {
-            registrar_id,
             daos: LookupMap::new(StorageKeys::Daos),
             dao_storage_balance: LookupMap::new(StorageKeys::StorageDeposit),
             last_dao_key_suffix: 0,
@@ -65,16 +62,12 @@ impl Contract {
     /// Registers new dao in contract.
     /// Dao must have done storage_deposit before this call.
     pub fn register_new_dao(&mut self, dao_id: AccountId, vote_token_id: AccountId) {
-        require!(
-            env::predecessor_account_id() == self.registrar_id,
-            "no rights"
-        );
         let storage_before = env::storage_usage();
         let mut account_stats = self.get_account_stats(&dao_id);
 
         self.last_dao_key_suffix += 1;
         let key = into_storage_key_wrapper_u16(DAO_KEY_PREFIX, self.last_dao_key_suffix);
-        let users = LookupMap::new(key);
+        let users = UnorderedMap::new(key);
         let total_amount = 0;
 
         let dao_struct = Dao {
@@ -272,6 +265,14 @@ impl Contract {
     pub fn dao_get_user(&self, dao_id: AccountId, account_id: AccountId) -> User {
         let dao = self.get_dao(&dao_id);
         dao.get_user(&account_id)
+    }
+    pub fn dao_user_list(&self, dao_id: AccountId) -> Vec<(AccountId, User)> {
+        let dao = self.get_dao(&dao_id);
+        dao.users
+            .to_vec()
+            .into_iter()
+            .map(|(account_id, versioned_user)| (account_id, versioned_user.into()))
+            .collect()
     }
 }
 

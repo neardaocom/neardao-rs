@@ -89,6 +89,7 @@ pub struct Proposal {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum ProposalState {
     InProgress,
     Invalid,
@@ -99,14 +100,15 @@ pub enum ProposalState {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
-pub enum VProposal {
-    Curr(Proposal),
+#[serde(rename_all = "snake_case")]
+pub enum VersionedProposal {
+    Current(Proposal),
 }
 
-impl From<VProposal> for Proposal {
-    fn from(v: VProposal) -> Self {
+impl From<VersionedProposal> for Proposal {
+    fn from(v: VersionedProposal) -> Self {
         match v {
-            VProposal::Curr(v) => v,
+            VersionedProposal::Current(v) => v,
         }
     }
 }

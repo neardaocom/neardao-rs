@@ -57,23 +57,23 @@ impl ActivityInputReward1 {
         map.insert("time_valid_to".into(), Value::U64(timestamp_to));
         map.insert("reward_type.name".into(), Value::String(reward_name));
         map.insert(
-            "reward_type.name.unit".into(),
+            "type.wage.unit_seconds".into(),
             Value::U64(wage_unit_seconds),
         );
         map.insert("reward_count".into(), Value::U64(2));
-        map.insert("reward_asset.0.type".into(), Value::String("ft".into()));
+        map.insert("reward_amounts.0.type".into(), Value::String("ft".into()));
         map.insert(
-            "reward_asset.0.amount".into(),
+            "reward_amounts.0.amount".into(),
             Value::U128(ft_amount.into()),
         );
         map.insert(
-            "reward_asset.0.ft_account_id".into(),
+            "reward_amounts.0.ft_account_id".into(),
             Value::String(ft_account_id),
         );
-        map.insert("reward_asset.0.decimals".into(), Value::U64(ft_decimals));
-        map.insert("reward_asset.1.type".into(), Value::String("near".into()));
+        map.insert("reward_amounts.0.decimals".into(), Value::U64(ft_decimals));
+        map.insert("reward_amounts.1.type".into(), Value::String("near".into()));
         map.insert(
-            "reward_asset.1.amount".into(),
+            "reward_amounts.1.amount".into(),
             Value::U128(near_amount.into()),
         );
         vec![Some(ActionInput {

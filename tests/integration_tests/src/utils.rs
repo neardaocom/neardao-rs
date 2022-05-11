@@ -16,7 +16,7 @@ pub(crate) type WrappedBalance = U128;
 pub(crate) type WrappedDuration = U64;
 pub(crate) type WrappedTimestamp = U64;
 pub(crate) type MethodName = String;
-pub(crate) type FnCallId = (AccountId, MethodName);
+pub(crate) type FnCallId = (near_sdk::AccountId, MethodName);
 
 pub(crate) const MAX_GAS: u64 = 300 * 10u64.pow(12);
 

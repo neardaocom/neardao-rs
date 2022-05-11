@@ -24,7 +24,15 @@ pub struct User {
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub enum VersionedUser {
-    Default(User),
+    Current(User),
+}
+
+impl From<VersionedUser> for User {
+    fn from(v: VersionedUser) -> Self {
+        match v {
+            VersionedUser::Current(u) => u,
+        }
+    }
 }
 
 impl User {

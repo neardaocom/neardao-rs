@@ -1,8 +1,3 @@
-use std::mem::take;
-
-use library::{types::datatype::Value, ObjectValues};
-
-use crate::error::ActionError;
 // TODO: Finish implementations.
 // TODO: Integration tests.
 /// Deserialize helpers for DAO's structs.
@@ -10,11 +5,11 @@ pub mod deserialize {
     use std::convert::TryFrom;
 
     use library::types::activity_input::ActivityInput;
-    use near_sdk::AccountId;
+    use near_sdk::{env, AccountId};
 
     use crate::{
         internal::utils::current_timestamp_sec,
-        reward::{Reward, RewardType},
+        reward::{Reward, RewardType, RewardUserActivity, RewardWage},
         treasury::{Asset, PartitionAsset, TreasuryPartition},
     };
 
@@ -47,7 +42,7 @@ pub mod deserialize {
                 todo!()
             }
             "near" => Asset::Near,
-            _ => panic!("unsupported asset type"),
+            _ => env::panic_str("unsupported asset type"),
         }
     }
 
@@ -59,6 +54,7 @@ pub mod deserialize {
             .try_into_u64()
             .expect("invalid datatype: asset_count");
 
+        // TODO: Refactor to match flattened structure.
         let mut assets = vec![];
         let current_timestamp = current_timestamp_sec();
         for i in 0..asset_count {
@@ -92,25 +88,6 @@ pub mod deserialize {
 
     // TODO: Checks.
     pub fn try_bind_reward(action_input: &mut dyn ActivityInput) -> Option<Reward> {
-        /*
-            pub group_id: u16,
-            /// Role id in the group.
-            pub role_id: u16,
-            /// Partition from which the assets are taken.
-            /// Partition must have all defined assets.
-            pub partition_id: u16,
-            /// Defines reward asset unit:
-            /// - for `RewardType::Wage(seconds)` the unit is time.
-            /// - for `RewardType::UserActivity(activity_ids)` the unit is activity done.
-            r#type: RewardType,
-            /// Defines unique asset per unit.
-            reward_amounts: Vec<(Asset, u128)>,
-            /// TODO: Unimplemented.
-            time_valid_from: u64,
-            /// TODO: Unimplemented.
-            time_valid_to: u64,
-        }
-        */
         let group_id = action_input
             .get(&"group_id")
             .expect("binding - missing key: group_id")
@@ -129,36 +106,23 @@ pub mod deserialize {
             .try_into_u64()
             .expect("invalid datatype: partition_id") as u16;
 
-        let reward_name = action_input
-            .get(&"reward_type.name")
-            .expect("binding - missing key: reward_type.name")
-            .to_owned()
-            .try_into_string()
-            .expect("invalid datatype: reward_type.name");
-
-        let reward_type = match reward_name.as_str() {
-            "wage" => {
-                let wage_unit = action_input
-                    .get(&"reward_type.name.unit")
-                    .expect("binding - missing key: reward_type.name.unit")
-                    .try_into_u64()
-                    .expect("invalid datatype: reward_type.name.unit")
-                    as u16;
-                RewardType::Wage(wage_unit)
-            }
-            "activity" => {
-                let activity_ids = action_input
-                    .get(&"reward_type.name.activity_ids")
-                    .expect("binding - missing key: reward_type.name.activity_ids")
-                    .to_owned()
-                    .try_into_vec_u64()
-                    .expect("invalid datatype: reward_type.name.activity_ids")
-                    .into_iter()
-                    .map(|e| e as u8)
-                    .collect();
-                RewardType::UserActivity(activity_ids)
-            }
-            _ => unimplemented!(),
+        // Parse reward type object.
+        let reward_object = if let Some(v) = action_input.get(&"type.wage.unit_seconds") {
+            let unit_seconds =
+                v.try_into_u64()
+                    .expect("invalid datatype: type.wage.unit_seconds") as u16;
+            RewardType::Wage(RewardWage { unit_seconds })
+        } else if let Some(v) = action_input.get(&"type.wage.user_activity") {
+            let activity_ids = v
+                .to_owned()
+                .try_into_vec_u64()
+                .expect("invalid datatype: type.name.activity_ids")
+                .into_iter()
+                .map(|e| e as u8)
+                .collect();
+            RewardType::UserActivity(RewardUserActivity { activity_ids })
+        } else {
+            env::panic_str("invalid reward type");
         };
 
         let time_valid_from = action_input
@@ -179,22 +143,23 @@ pub mod deserialize {
             .try_into_u64()
             .expect("invalid datatype: reward_count") as usize;
 
+        // TODO: Refactor to match flattened structure.
         let mut reward_amounts = vec![];
         for i in 0..reward_count {
-            let asset_key = format!("reward_asset.{}.type", i);
+            let asset_key = format!("reward_amounts.{}.type", i);
             let asset_type = action_input
                 .get(&asset_key)
-                .expect("binding - missing key: reward_asset.x.type")
+                .expect("binding - missing key: reward_amounts.x.type")
                 .to_owned()
                 .try_into_string()
-                .expect("invalid datatype: reward_asset.x.type");
-            let reward_amount_key = format!("reward_asset.{}.amount", i);
+                .expect("invalid datatype: reward_amounts.x.type");
+            let reward_amount_key = format!("reward_amounts.{}.amount", i);
             let reward_amount = action_input
                 .get(&reward_amount_key)
-                .expect("binding - missing key: reward_asset.x.amount")
+                .expect("binding - missing key: reward_amounts.x.amount")
                 .try_into_u128()
-                .expect("invalid datatype: reward_asset.x.amount");
-            let prefix = format!("reward_asset.{}", i);
+                .expect("invalid datatype: reward_amounts.x.amount");
+            let prefix = format!("reward_amounts.{}", i);
             let asset_id = bind_asset(asset_type.as_str(), prefix.as_str(), action_input);
             reward_amounts.push((asset_id, reward_amount));
         }
@@ -202,7 +167,7 @@ pub mod deserialize {
             group_id,
             role_id,
             partition_id,
-            reward_type,
+            reward_object,
             reward_amounts,
             time_valid_from,
             time_valid_to,

@@ -65,7 +65,7 @@ macro_rules! derive_into_versioned {
     ($from:ident, $for:ident) => {
         impl From<$from> for $for {
             fn from(input: $from) -> Self {
-                $for::Curr(input)
+                $for::Current(input)
             }
         }
     };
@@ -77,7 +77,7 @@ macro_rules! derive_from_versioned {
         impl From<$from> for $for {
             fn from(input: $from) -> Self {
                 match input {
-                    $from::Curr(c) => c,
+                    $from::Current(c) => c,
                     _ => unreachable!(),
                 }
             }
