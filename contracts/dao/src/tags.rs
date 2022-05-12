@@ -10,7 +10,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::TagId;
+use crate::{core::Contract, TagId};
 
 #[derive(Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Serialize))]
@@ -135,5 +135,36 @@ mod test {
 
         assert_eq!(tags, expected_tags);
         assert_eq!(tags.map.len(), expected_tags.map.len());
+    }
+}
+
+impl Contract {
+    pub fn tag_add(&mut self, category: String, tags: Vec<String>) -> Option<(TagId, TagId)> {
+        let mut t = self.tags.get(&category).unwrap_or_else(Tags::new);
+        let ids = t.insert(tags);
+        self.tags.insert(&category, &t);
+        ids
+    }
+
+    pub fn tag_edit(&mut self, category: String, id: u16, value: String) -> bool {
+        match self.tags.get(&category) {
+            Some(mut t) => {
+                t.rename(id, value);
+                self.tags.insert(&category, &t);
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub fn tag_remove(&mut self, category: String, id: u16) -> bool {
+        match self.tags.get(&category) {
+            Some(mut t) => {
+                t.remove(id);
+                self.tags.insert(&category, &t);
+                true
+            }
+            None => false,
+        }
     }
 }

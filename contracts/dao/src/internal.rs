@@ -1,42 +1,31 @@
-use std::collections::HashMap;
-
-use near_sdk::{env, log, require, AccountId, Balance, Promise};
+use near_sdk::{env, AccountId, Balance};
 
 use crate::{
-    calc_percent_u128_unchecked,
-    constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, C_PREDECESSOR, GLOBAL_BUCKET_IDENT, TGAS},
+    constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, C_PREDECESSOR},
     core::{ActivityLog, Contract},
-    error::{
-        ActionError, ERR_DISTRIBUTION_NOT_ENOUGH_FT, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
-        ERR_LOCK_AMOUNT_OVERFLOW, ERR_STORAGE_BUCKET_EXISTS,
-    },
-    event::{Event, EventQueue},
-    group::{Group, GroupInput},
-    helper::deserialize::{try_bind_partition, try_bind_reward},
+    error::{ERR_LOCK_AMOUNT_OVERFLOW, ERR_STORAGE_BUCKET_EXISTS},
+    group::GroupInput,
     internal::utils::current_timestamp_sec,
-    proposal::{Proposal, ProposalState, VoteResult},
+    proposal::Proposal,
     settings::Settings,
     tags::{TagInput, Tags},
-    CalculatedVoteResults, ProposalId, ProposalWf, TimestampSec, VoteTotalPossible, Votes,
+    ProposalId, ProposalWf,
 };
 use library::{
-    functions::utils::get_value_from_source,
     storage::StorageBucket,
-    types::{
-        activity_input::ActivityInput, consts::Consts, datatype::Value, error::ProcessingError,
-        source::Source,
-    },
+    types::{consts::Consts, datatype::Value},
     workflow::{
-        action::{ActionInput, FnCallIdType, TemplateAction},
-        activity::{Activity, Terminality, Transition},
-        instance::InstanceState,
+        action::TemplateAction,
+        activity::Terminality,
         postprocessing::Postprocessing,
-        settings::{ActivityBind, ProposeSettings, TemplateSettings},
+        settings::{ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, DaoActionIdent, ObjectMetadata, VoteScenario},
+        types::ObjectMetadata,
     },
     FnCallId, MethodName,
 };
+
+// TODO: Refactoring.
 
 impl Contract {
     #[inline]
@@ -134,193 +123,6 @@ impl Contract {
         (proposal, wft, settings)
     }
 
-    // TODO: Unit tests
-    pub fn check_rights(&self, rights: &[ActivityRight], account_id: &AccountId) -> bool {
-        if rights.is_empty() {
-            return true;
-        }
-
-        for right in rights.iter() {
-            match right {
-                ActivityRight::Anyone => {
-                    return true;
-                }
-                ActivityRight::Group(g) => match self.groups.get(g) {
-                    Some(group) => match group.get_member_by_account(account_id) {
-                        Some(_m) => return true,
-                        None => continue,
-                    },
-                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
-                },
-                ActivityRight::GroupMember(g, name) => {
-                    if *name != *account_id {
-                        continue;
-                    }
-
-                    match self.groups.get(g) {
-                        Some(group) => match group.get_member_by_account(account_id) {
-                            Some(_m) => return true,
-                            None => continue,
-                        },
-                        _ => panic!("{}", ERR_GROUP_NOT_FOUND),
-                    }
-                }
-                ActivityRight::TokenHolder => unimplemented!(),
-                ActivityRight::GroupRole(g, r) => match self.groups.get(g) {
-                    Some(group) => match group.get_member_by_account(account_id) {
-                        Some(m) => match m.tags.into_iter().any(|t| t == *r) {
-                            true => return true,
-                            false => continue,
-                        },
-                        None => continue,
-                    },
-                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
-                },
-                ActivityRight::GroupLeader(g) => match self.groups.get(g) {
-                    Some(group) => {
-                        if let Some(leader) = group.settings.leader {
-                            match leader == *account_id {
-                                true => return true,
-                                false => continue,
-                            }
-                        } else {
-                            panic!("{}", ERR_GROUP_HAS_NO_LEADER);
-                        }
-                    }
-                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
-                },
-                //TODO only group members
-                ActivityRight::Member => unimplemented!(),
-                ActivityRight::Account(a) => match a == account_id {
-                    true => return true,
-                    false => continue,
-                },
-            }
-        }
-        false
-    }
-
-    /// Evaluates vote results by scenario and type of voters.
-    /// Returns tuple (max_possible_amount,vote_results)
-    #[allow(unused)]
-    pub fn calculate_votes(
-        &self,
-        votes: &HashMap<AccountId, u8>,
-        scenario: &VoteScenario,
-        vote_target: &ActivityRight,
-    ) -> CalculatedVoteResults {
-        let mut vote_result: Votes = [0_u128; 3];
-        let mut max_possible_amount: VoteTotalPossible = 0;
-        match scenario {
-            VoteScenario::Democratic => {
-                match vote_target {
-                    ActivityRight::Anyone => {
-                        max_possible_amount = votes.len() as u128;
-                    }
-                    ActivityRight::Group(g) => match self.groups.get(g) {
-                        Some(group) => {
-                            max_possible_amount = group.members.members_count() as u128;
-                        }
-                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
-                    },
-                    ActivityRight::GroupMember(_, _)
-                    | ActivityRight::Account(_)
-                    | ActivityRight::GroupLeader(_) => {
-                        max_possible_amount = 1;
-                    }
-                    ActivityRight::TokenHolder => {
-                        unimplemented!()
-                    }
-                    // If member exists in 2 groups, then he is accounted twice.
-                    ActivityRight::Member => {
-                        max_possible_amount = self.total_members_count as u128;
-                    }
-                    ActivityRight::GroupRole(g, r) => match self.groups.get(g) {
-                        Some(group) => {
-                            max_possible_amount =
-                                group.get_members_accounts_by_role(*r).len() as u128;
-                        }
-                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
-                    },
-                }
-
-                for vote_value in votes.values() {
-                    vote_result[*vote_value as usize] += 1;
-                }
-            }
-            VoteScenario::TokenWeighted => match vote_target {
-                ActivityRight::Anyone | ActivityRight::TokenHolder => unimplemented!(),
-                // This is expensive scenario
-                ActivityRight::Member => unimplemented!(),
-                ActivityRight::Group(gid) => unimplemented!(),
-                ActivityRight::GroupRole(gid, rid) => unimplemented!(),
-                ActivityRight::GroupMember(_, _)
-                | ActivityRight::Account(_)
-                | ActivityRight::GroupLeader(_) => {
-                    max_possible_amount = 1;
-                    for vote_value in votes.values() {
-                        vote_result[*vote_value as usize] += 1;
-                    }
-                }
-            },
-        }
-
-        (max_possible_amount, vote_result)
-    }
-
-    /// TODO: cross unit tests.
-    /// Evaluates proposal voting according to vote settings.
-    pub fn eval_votes(
-        &self,
-        proposal_votes: &HashMap<AccountId, u8>,
-        settings: &TemplateSettings,
-    ) -> ProposalState {
-        let (max_possible_amount, vote_results) =
-            self.calculate_votes(proposal_votes, &settings.scenario, &settings.allowed_voters);
-        log!("Votes: {}, {:?}", max_possible_amount, vote_results);
-        let decimals = if matches!(settings.scenario, VoteScenario::Democratic) {
-            1
-        } else {
-            10u128.pow(self.decimals as u32)
-        };
-        if calc_percent_u128_unchecked(vote_results[0], max_possible_amount, decimals)
-            >= settings.spam_threshold
-        {
-            log!(
-                "spam th: {}, max_possible: {}, current: {}",
-                settings.spam_threshold,
-                max_possible_amount,
-                vote_results[0],
-            );
-            ProposalState::Spam
-        } else if calc_percent_u128_unchecked(
-            vote_results.iter().sum(),
-            max_possible_amount,
-            decimals,
-        ) < settings.quorum
-        {
-            log!(
-                "quorum th: {}, max_possible: {}, current: {}",
-                settings.quorum,
-                max_possible_amount,
-                vote_results.iter().sum::<u128>(),
-            );
-            ProposalState::Invalid
-        } else if calc_percent_u128_unchecked(vote_results[1], vote_results.iter().sum(), decimals)
-            < settings.approve_threshold
-        {
-            log!(
-                "appprove th: {}, max_possible: {}, current: {}",
-                settings.approve_threshold,
-                vote_results.iter().sum::<u128>(),
-                vote_results[1],
-            );
-            ProposalState::Rejected
-        } else {
-            ProposalState::Accepted
-        }
-    }
-
     pub fn storage_bucket_add(&mut self, bucket_id: &str) {
         let bucket = StorageBucket::new(utils::get_bucket_id(bucket_id));
         assert!(
@@ -358,93 +160,6 @@ impl Contract {
         } */
     }
 
-    // TODO: Review process.
-    /// Error callback.
-    /// If promise did not have to succeed, then instance is still updated.
-    pub fn postprocessing_failed(&mut self, proposal_id: u32, must_succeed: bool) {
-        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
-        if must_succeed {
-            wfi.promise_failed();
-        } else {
-            let timestamp = current_timestamp_sec();
-            wfi.promise_success();
-            //wfi.try_to_advance_activity();
-            wfi.new_actions_done(1, timestamp);
-        }
-        self.workflow_instance.insert(&proposal_id, &wfi);
-    }
-
-    // TODO: Review process.
-    /// Success callback.
-    /// Modifies workflow's instance.
-    /// If `postprocessing` is included, then also postprocessing script is executed.
-    /// Only successful postprocessing updates action as sucessfully executed.
-    pub fn postprocessing_success(
-        &mut self,
-        proposal_id: u32,
-        action_id: u8,
-        storage_key: Option<String>,
-        postprocessing: Option<Postprocessing>,
-        promise_call_result: Vec<u8>,
-    ) {
-        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
-        // Action transaction check if previous action succesfully finished.
-        if wfi.check_invalid_action(action_id) {
-            self.workflow_instance.insert(&proposal_id, &wfi);
-            return;
-        }
-        // Check if its first action done in the activity
-        wfi.promise_success();
-        //wfi.try_to_advance_activity();
-        wfi.new_actions_done(1, current_timestamp_sec());
-        log!("wfi after update: {:?}", wfi);
-
-        // Execute postprocessing script which must always succeed.
-        if let Some(pp) = postprocessing {
-            let mut global_storage = self.storage.get(&GLOBAL_BUCKET_IDENT.into()).unwrap();
-            let mut storage = if let Some(ref storage_key) = storage_key {
-                self.storage.get(storage_key)
-            } else {
-                None
-            };
-            let mut new_template = None;
-            if pp
-                .execute(
-                    promise_call_result,
-                    storage.as_mut(),
-                    &mut global_storage,
-                    &mut new_template,
-                )
-                .is_err()
-            {
-                wfi.set_fatal_error();
-            } else {
-                // Only in case its workflow Add.
-                if let Some((workflow, fncalls, fncall_metadata)) = new_template {
-                    // Unwraping is ok as settings are inserted when this proposal is accepted.
-                    let settings = self
-                        .proposed_workflow_settings
-                        .remove(&proposal_id)
-                        .unwrap();
-
-                    self.workflow_last_id += 1;
-                    self.workflow_template
-                        .insert(&self.workflow_last_id, &(workflow, settings));
-                    self.init_function_calls(fncalls, fncall_metadata);
-                }
-
-                // Save updated storages.
-                if let Some(storage) = storage {
-                    self.storage.insert(&storage_key.unwrap(), &storage);
-                }
-                self.storage
-                    .insert(&GLOBAL_BUCKET_IDENT.into(), &global_storage);
-            }
-        };
-        log!("wfi before save: {:?}", wfi);
-        self.workflow_instance.insert(&proposal_id, &wfi);
-    }
-
     /// Closure which might be required in workflow.
     /// Returns DAO's specific values which cannot be known ahead of time.
     pub fn dao_consts(&self) -> impl Consts {
@@ -476,236 +191,6 @@ impl Contract {
 
         self.workflow_activity_log.insert(&proposal_id, &logs);
     }
-
-    /// Checks if inputs structure is same as activity definition.
-    /// First action input must belong to next action to be done.
-    /// Same order as activity's actions is required.
-    pub fn check_activity_input(
-        &self,
-        actions: &[TemplateAction],
-        inputs: &[Option<ActionInput>],
-        actions_done: usize,
-    ) -> bool {
-        for (idx, action) in actions.iter().enumerate().skip(actions_done) {
-            match (
-                action.optional,
-                inputs
-                    .get(idx - actions_done)
-                    .expect("Missing action input"),
-            ) {
-                (_, Some(a)) => {
-                    if !a.action.eq(&action.action_data) {
-                        return false;
-                    }
-                }
-                (false, None) => return false,
-                _ => continue,
-            }
-        }
-
-        true
-    }
-
-    // TODO: refactor
-    /// Executes DAO's native action.
-    /// Inner methods panic when provided malformed inputs - structure/datatype.
-    pub fn execute_dao_action(
-        &mut self,
-        _proposal_id: u32,
-        action_ident: DaoActionIdent,
-        inputs: &mut dyn ActivityInput,
-    ) -> Result<(), ActionError> {
-        match action_ident {
-            DaoActionIdent::TreasuryAddPartition => {
-                let partition = try_bind_partition(inputs).expect("failed to bind partition");
-                self.add_partition(partition);
-            }
-            DaoActionIdent::RewardAdd => {
-                let reward = try_bind_reward(inputs).expect("failed to bind reward");
-                self.add_reward(reward);
-            }
-            /*             DaoActionIdent::GroupAdd => {
-                let group_input = deserialize_group_input(inputs)?;
-                self.group_add(group_input);
-            }
-            DaoActionIdent::GroupRemove => {
-                self.group_remove(get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16);
-            }
-            DaoActionIdent::GroupUpdate => {
-                let group_id = get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16;
-                let group_settings = deserialize_group_settings(inputs, 1)?;
-                self.group_update(group_id, group_settings);
-            }
-            DaoActionIdent::GroupAddMembers => {
-                let group_id = get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16;
-                let group_members = deserialize_group_members(inputs, 1)?;
-                self.group_add_members(group_id, group_members);
-            }
-            DaoActionIdent::GroupRemoveMember => {
-                let member = get_datatype_from_values(inputs, 0, 1)?
-                    .try_into_string()?
-                    .try_into()
-                    .map_err(|_| ActionError::Binding)?;
-
-                self.group_remove_member(
-                    get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16,
-                    member,
-                );
-            }
-            DaoActionIdent::SettingsUpdate => {
-                let settings_input = deserialize_dao_settings(inputs)?;
-                self.settings_update(settings_input);
-            }
-            DaoActionIdent::TagAdd => unimplemented!(),
-            DaoActionIdent::TagEdit => unimplemented!(),
-            DaoActionIdent::TagRemove => unimplemented!(),
-            DaoActionIdent::FtDistribute => {
-                let (group_id, amount, account_ids) = (
-                    get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16,
-                    get_datatype_from_values(inputs, 0, 1)?.try_into_u64()? as u32,
-                    get_datatype_from_values(inputs, 0, 2)?.try_into_vec_string()?,
-                );
-
-                let mut accounts = Vec::with_capacity(account_ids.len());
-                for acc in account_ids.into_iter() {
-                    accounts.push(acc.try_into().map_err(|_| ActionError::Binding)?);
-                }
-
-                self.ft_distribute(group_id, amount, accounts);
-            } */
-            _ => unreachable!(),
-        }
-
-        Ok(())
-    }
-
-    pub fn execute_fn_call_action(
-        &mut self,
-        mut receiver: AccountId,
-        method: String,
-        inputs: &[Vec<Value>],
-        deposit: u128,
-        tgas: u16,
-        metadata: &[ObjectMetadata],
-    ) -> Promise {
-        if receiver.as_str() == "self" {
-            receiver = env::current_account_id();
-        }
-
-        //let args = serialize_to_json(inputs, metadata, 0);
-        let args = "".to_string();
-
-        Promise::new(receiver).function_call(method, args.into_bytes(), deposit, TGAS * tgas as u64)
-    }
-
-    /// Proposal binds structure check.
-    /// This does NOT check all.
-    /// Eg. does not check if binds for activity are not missing in some actions where WF needs them.
-    pub fn assert_valid_proposal_binds_structure(
-        &self,
-        binds: &[Option<ActivityBind>],
-        activities: &[Activity],
-    ) {
-        todo!();
-        /*
-         assert_eq!(
-            binds.len(),
-            activities.len() - 1,
-            "Binds must be same length as activities."
-        );
-        // Skip init activity.
-        for (idx, act) in activities.iter().skip(1).enumerate() {
-            match act {
-                Activity::Init => panic!("Invalid WF. Init activity defined at > 0 index."),
-                Activity::DaoActivity(a) | Activity::FnCallActivity(a) => {
-                    let act_binds = &binds[idx];
-
-                    // Skip binds with activity which does not have filled
-                    if act_binds.is_none() {
-                        continue;
-                    } else {
-                        assert_eq!(
-                            act_binds.as_ref().unwrap().values.len(),
-                            a.actions.as_slice().len(),
-                            "Activity action binds does not have same len."
-                        );
-                    }
-                }
-            }
-        }
-        */
-    }
-
-    // TODO: Tests.
-    /// Binds dao FnCall
-    pub fn get_fncall_id_with_metadata(
-        &self,
-        id: FnCallIdType,
-        sources: &dyn Source,
-    ) -> Result<(AccountId, MethodName, Vec<ObjectMetadata>), ActionError> {
-        let data = match id {
-            FnCallIdType::Static(account, method) => (
-                account.clone(),
-                method.clone(),
-                self.function_call_metadata
-                    .get(&(account, method.clone()))
-                    .ok_or(ActionError::MissingFnCallMetadata(method))?,
-            ),
-            FnCallIdType::Dynamic(arg_src, method) => {
-                let name = get_value_from_source(sources, &arg_src)
-                    .map_err(ProcessingError::Source)?
-                    .try_into_string()?;
-                (
-                    AccountId::try_from(name.to_string())
-                        .map_err(|_| ActionError::InvalidDataType)?,
-                    method.clone(),
-                    self.function_call_metadata
-                        .get(&(
-                            AccountId::try_from(name.to_string())
-                                .map_err(|_| ActionError::InvalidDataType)?,
-                            method.clone(),
-                        ))
-                        .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                )
-            }
-            FnCallIdType::StandardStatic(account, method) => (
-                account.clone(),
-                method.clone(),
-                self.standard_function_call_metadata
-                    .get(&method.clone())
-                    .ok_or(ActionError::MissingFnCallMetadata(method))?,
-            ),
-            FnCallIdType::StandardDynamic(arg_src, method) => {
-                let name = get_value_from_source(sources, &arg_src)
-                    .map_err(ProcessingError::Source)?
-                    .try_into_string()?;
-                (
-                    AccountId::try_from(name.to_string())
-                        .map_err(|_| ActionError::InvalidDataType)?,
-                    method.clone(),
-                    self.standard_function_call_metadata
-                        .get(&method)
-                        .ok_or(ActionError::MissingFnCallMetadata(method))?,
-                )
-            }
-        };
-        Ok(data)
-    }
-
-    /// Adds `event` to event queue at `tick`.
-    /// Requires `tick` to be >= current_timestamp and exact tick timestamp.
-    pub fn dispatch_tick_event(&mut self, event: Event, tick: TimestampSec) {
-        let current_timestamp = current_timestamp_sec();
-        require!(tick >= current_timestamp, "tick time cannot be in past");
-        require!(
-            tick % self.tick_interval == 0,
-            "tick must be exact tick timestamp"
-        );
-
-        let mut queue = self.events.get(&tick).unwrap_or_else(EventQueue::new);
-        queue.add_event(event);
-        self.events.insert(&tick, &queue);
-    }
 }
 
 pub mod utils {
@@ -734,7 +219,6 @@ pub mod utils {
 
 #[derive(Default)]
 pub struct DaoConsts;
-
 impl Consts for DaoConsts {
     fn get(&self, key: u8) -> Option<Value> {
         match key {

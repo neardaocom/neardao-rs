@@ -2,28 +2,47 @@ use library::functions::serialization::serialize_to_json;
 use library::functions::validation::validate;
 use library::functions::{binding::bind_input, utils::get_value_from_source};
 use library::interpreter::expression::EExpr;
+use library::MethodName;
 
 use library::storage::StorageBucket;
+use library::types::activity_input::ActivityInput;
+use library::types::datatype::Value;
+use library::types::error::ProcessingError;
 use library::types::source::{DefaultSource, Source};
-use library::workflow::action::{ActionInput, ActionType};
-use library::workflow::activity::{TemplateActivity, Terminality};
+use library::workflow::action::{ActionInput, ActionType, FnCallIdType, TemplateAction};
+use library::workflow::activity::{Activity, TemplateActivity, Terminality};
 use library::workflow::instance::InstanceState;
-use library::workflow::settings::TemplateSettings;
+use library::workflow::postprocessing::Postprocessing;
+use library::workflow::settings::{ActivityBind, TemplateSettings};
 use library::workflow::template::Template;
 use library::workflow::types::ArgSrc::User;
-use near_sdk::{env, log, near_bindgen, AccountId, Gas, Promise};
+use library::workflow::types::{ActivityRight, DaoActionIdent, ObjectMetadata};
+use near_sdk::{env, ext_contract, log, near_bindgen, AccountId, Gas, Promise, PromiseResult};
 
-use crate::callback::ext_self;
-use crate::constants::GLOBAL_BUCKET_IDENT;
-use crate::error::{ActionError, ActivityError};
-use crate::group::{GroupInput, GroupMember, GroupSettings};
+use crate::constants::{GLOBAL_BUCKET_IDENT, TGAS};
+use crate::core::*;
+use crate::error::{
+    ActionError, ActivityError, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
+    ERR_PROMISE_INVALID_RESULTS_COUNT,
+};
+use crate::helper::deserialize::{try_bind_partition, try_bind_reward};
 use crate::internal::utils::current_timestamp_sec;
 use crate::internal::ActivityContext;
 use crate::proposal::ProposalState;
 use crate::reward::RewardActivity;
-use crate::settings::{assert_valid_dao_settings, Settings};
-use crate::tags::Tags;
-use crate::{core::*, GroupId, TagId};
+
+#[ext_contract(ext_self)]
+trait ExtActivity {
+    #[allow(clippy::too_many_arguments)]
+    fn postprocess(
+        &mut self,
+        instance_id: u32,
+        action_id: u8,
+        must_succeed: bool,
+        storage_key: Option<String>,
+        postprocessing: Option<Postprocessing>,
+    ) -> ActivityResult;
+}
 
 #[near_bindgen]
 impl Contract {
@@ -245,6 +264,77 @@ impl Contract {
 
         result
     }
+
+    // TODO finish error handling
+    /// Private callback to check Promise result.
+    /// If there's postprocessing, then it's executed.
+    /// Postprocessing always requires storage.
+    /// Unwrapping is OK as it's been checked before dispatching this promise.
+    #[allow(clippy::too_many_arguments)]
+    #[private]
+    pub fn postprocess(
+        &mut self,
+        instance_id: u32,
+        action_id: u8,
+        must_succeed: bool,
+        storage_key: Option<String>,
+        postprocessing: Option<Postprocessing>,
+    ) {
+        assert_eq!(
+            env::promise_results_count(),
+            1,
+            "{}",
+            ERR_PROMISE_INVALID_RESULTS_COUNT
+        );
+        match env::promise_result(0) {
+            PromiseResult::NotReady => unreachable!(),
+            PromiseResult::Successful(val) => {
+                self.debug_log.push(format!(
+                    "promise log: SUCCESS instance_id: {}, action_id: {}; ",
+                    instance_id, action_id
+                ));
+                self.postprocessing_success(
+                    instance_id,
+                    action_id,
+                    storage_key,
+                    postprocessing,
+                    val,
+                )
+            }
+            PromiseResult::Failed => {
+                self.debug_log.push(format!(
+                    "promise log: ERROR instance_id: {}, action_id: {}; ",
+                    instance_id, action_id
+                ));
+                self.postprocessing_failed(instance_id, must_succeed)
+            }
+        }
+    }
+
+    // TODO: Implement autofinish on FatalError.
+    /// Changes workflow instance state to finish.
+    /// Rights to close are same as the "end" activity rights.
+    pub fn workflow_finish(&mut self, proposal_id: u32) -> bool {
+        let caller = env::predecessor_account_id();
+        let (proposal, _, wfs) = self.get_workflow_and_proposal(proposal_id);
+
+        assert!(proposal.state == ProposalState::Accepted);
+
+        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
+
+        // TODO: Transition timestamp should not be included in this case.
+        if wfi.get_state() == InstanceState::FatalError
+            || self.check_rights(
+                wfs.activity_rights[wfi.get_current_activity_id() as usize - 1].as_slice(),
+                &caller,
+            ) && wfi.new_actions_done(0, current_timestamp_sec())
+        {
+            self.workflow_instance.insert(&proposal_id, &wfi);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 // Internal action methods.
@@ -401,7 +491,7 @@ impl Contract {
 
         Ok(())
     }
-    /// FnCall version of `run_dao_activity` function.
+    /// Async version of `run_sync_activity` function.
     pub fn run_async_activity(
         &mut self,
         ctx: &mut ActivityContext,
@@ -590,199 +680,371 @@ impl Contract {
         Ok(())
     }
 
-    pub fn group_add(&mut self, group: GroupInput) -> bool {
-        self.add_group(group);
-
-        true
-    }
-    pub fn group_remove(&mut self, id: GroupId) -> bool {
-        if let Some(mut group) = self.groups.remove(&id) {
-            //let token_lock: TokenLock = group.remove_storage_data();
-            //self.ft_total_locked -= token_lock.amount - token_lock.distributed;
-            self.total_members_count -= group.members.members_count() as u32;
-            true
+    // TODO: Review process.
+    /// Error callback.
+    /// If promise did not have to succeed, then instance is still updated.
+    pub fn postprocessing_failed(&mut self, proposal_id: u32, must_succeed: bool) {
+        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
+        if must_succeed {
+            wfi.promise_failed();
         } else {
-            false
+            let timestamp = current_timestamp_sec();
+            wfi.promise_success();
+            //wfi.try_to_advance_activity();
+            wfi.new_actions_done(1, timestamp);
         }
+        self.workflow_instance.insert(&proposal_id, &wfi);
     }
 
-    pub fn group_update(&mut self, id: GroupId, settings: GroupSettings) -> bool {
-        if let Some(mut group) = self.groups.get(&id) {
-            group.settings = settings;
-            self.groups.insert(&id, &group);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn group_add_members(&mut self, id: GroupId, members: Vec<GroupMember>) -> bool {
-        if let Some(mut group) = self.groups.get(&id) {
-            self.total_members_count += group.add_members(members);
-            self.groups.insert(&id, &group);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn group_remove_member(&mut self, id: GroupId, member: AccountId) -> bool {
-        if let Some(mut group) = self.groups.get(&id) {
-            group.remove_member(member);
-            self.total_members_count -= 1;
-            self.groups.insert(&id, &group);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn settings_update(&mut self, settings: Settings) {
-        assert_valid_dao_settings(&settings);
-        self.settings.replace(&settings.into());
-    }
-
-    /// Returns tuple of start, end index for the new tags
-    pub fn tag_add(&mut self, category: String, tags: Vec<String>) -> Option<(TagId, TagId)> {
-        let mut t = self.tags.get(&category).unwrap_or_else(Tags::new);
-        let ids = t.insert(tags);
-        self.tags.insert(&category, &t);
-        ids
-    }
-
-    pub fn tag_edit(&mut self, category: String, id: u16, value: String) -> bool {
-        match self.tags.get(&category) {
-            Some(mut t) => {
-                t.rename(id, value);
-                self.tags.insert(&category, &t);
-                true
-            }
-            None => false,
-        }
-    }
-
-    pub fn tag_remove(&mut self, category: String, id: u16) -> bool {
-        match self.tags.get(&category) {
-            Some(mut t) => {
-                t.remove(id);
-                self.tags.insert(&category, &t);
-                true
-            }
-            None => false,
-        }
-    }
-
-    // /// Internally sends `group_id`'s FT `amount` to the `account_ids`.
-    /*     pub fn ft_distribute(
-           &mut self,
-           group_id: u16,
-           amount: u32,
-           account_ids: Vec<AccountId>,
-       ) -> bool {
-           if let Some(mut group) = self.groups.get(&group_id) {
-               if group.distribute_ft(amount) && !account_ids.is_empty() {
-                   self.groups.insert(&group_id, &group);
-                   self.distribute_ft(amount, &account_ids);
-                   true
-               } else {
-                   false
-               }
-           } else {
-               false
-           }
-       }
-    */
-    // TODO: Refactoring
-    /*     pub fn treasury_send_near(&mut self, receiver_id: AccountId, amount: u128) -> bool {
-        Promise::new(receiver_id).transfer(amount);
-        true
-    }
-
-    pub fn treasury_send_ft(
+    // TODO: Review process.
+    /// Success callback.
+    /// Modifies workflow's instance.
+    /// If `postprocessing` is included, then also postprocessing script is executed.
+    /// Only successful postprocessing updates action as sucessfully executed.
+    pub fn postprocessing_success(
         &mut self,
-        ft_account_id: AccountId,
-        receiver_id: AccountId,
-        amount: u128,
-        memo: Option<String>,
-        msg: Option<String>,
-        is_contract: bool,
+        proposal_id: u32,
+        action_id: u8,
+        storage_key: Option<String>,
+        postprocessing: Option<Postprocessing>,
+        promise_call_result: Vec<u8>,
+    ) {
+        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
+        // Action transaction check if previous action succesfully finished.
+        if wfi.check_invalid_action(action_id) {
+            self.workflow_instance.insert(&proposal_id, &wfi);
+            return;
+        }
+        // Check if its first action done in the activity
+        wfi.promise_success();
+        //wfi.try_to_advance_activity();
+        wfi.new_actions_done(1, current_timestamp_sec());
+        log!("wfi after update: {:?}", wfi);
+
+        // Execute postprocessing script which must always succeed.
+        if let Some(pp) = postprocessing {
+            let mut global_storage = self.storage.get(&GLOBAL_BUCKET_IDENT.into()).unwrap();
+            let mut storage = if let Some(ref storage_key) = storage_key {
+                self.storage.get(storage_key)
+            } else {
+                None
+            };
+            let mut new_template = None;
+            if pp
+                .execute(
+                    promise_call_result,
+                    storage.as_mut(),
+                    &mut global_storage,
+                    &mut new_template,
+                )
+                .is_err()
+            {
+                wfi.set_fatal_error();
+            } else {
+                // Only in case its workflow Add.
+                if let Some((workflow, fncalls, fncall_metadata)) = new_template {
+                    // Unwraping is ok as settings are inserted when this proposal is accepted.
+                    let settings = self
+                        .proposed_workflow_settings
+                        .remove(&proposal_id)
+                        .unwrap();
+
+                    self.workflow_last_id += 1;
+                    self.workflow_template
+                        .insert(&self.workflow_last_id, &(workflow, settings));
+                    self.init_function_calls(fncalls, fncall_metadata);
+                }
+
+                // Save updated storages.
+                if let Some(storage) = storage {
+                    self.storage.insert(&storage_key.unwrap(), &storage);
+                }
+                self.storage
+                    .insert(&GLOBAL_BUCKET_IDENT.into(), &global_storage);
+            }
+        };
+        log!("wfi before save: {:?}", wfi);
+        self.workflow_instance.insert(&proposal_id, &wfi);
+    }
+
+    // TODO: Unit tests
+    pub fn check_rights(&self, rights: &[ActivityRight], account_id: &AccountId) -> bool {
+        if rights.is_empty() {
+            return true;
+        }
+
+        for right in rights.iter() {
+            match right {
+                ActivityRight::Anyone => {
+                    return true;
+                }
+                ActivityRight::Group(g) => match self.groups.get(g) {
+                    Some(group) => match group.get_member_by_account(account_id) {
+                        Some(_m) => return true,
+                        None => continue,
+                    },
+                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
+                },
+                ActivityRight::GroupMember(g, name) => {
+                    if *name != *account_id {
+                        continue;
+                    }
+
+                    match self.groups.get(g) {
+                        Some(group) => match group.get_member_by_account(account_id) {
+                            Some(_m) => return true,
+                            None => continue,
+                        },
+                        _ => panic!("{}", ERR_GROUP_NOT_FOUND),
+                    }
+                }
+                ActivityRight::TokenHolder => unimplemented!(),
+                ActivityRight::GroupRole(g, r) => match self.groups.get(g) {
+                    Some(group) => match group.get_member_by_account(account_id) {
+                        Some(m) => match m.tags.into_iter().any(|t| t == *r) {
+                            true => return true,
+                            false => continue,
+                        },
+                        None => continue,
+                    },
+                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
+                },
+                ActivityRight::GroupLeader(g) => match self.groups.get(g) {
+                    Some(group) => {
+                        if let Some(leader) = group.settings.leader {
+                            match leader == *account_id {
+                                true => return true,
+                                false => continue,
+                            }
+                        } else {
+                            panic!("{}", ERR_GROUP_HAS_NO_LEADER);
+                        }
+                    }
+                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
+                },
+                //TODO only group members
+                ActivityRight::Member => unimplemented!(),
+                ActivityRight::Account(a) => match a == account_id {
+                    true => return true,
+                    false => continue,
+                },
+            }
+        }
+        false
+    }
+
+    /// Checks if inputs structure is same as activity definition.
+    /// First action input must belong to next action to be done.
+    /// Same order as activity's actions is required.
+    pub fn check_activity_input(
+        &self,
+        actions: &[TemplateAction],
+        inputs: &[Option<ActionInput>],
+        actions_done: usize,
     ) -> bool {
-        if is_contract {
-            Promise::new(ft_account_id).function_call(
-                b"ft_transfer_call".to_vec(),
-                format!(
-                    "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":\"{}\",\"msg\":\"{}\"}}",
-                    receiver_id,
-                    amount,
-                    memo.unwrap_or_else(|| "null".into()),
-                    msg.unwrap_or_default(),
-                )
-                .as_bytes()
-                .to_vec(),
-                1,
-                Gas(30 * TGAS),
-            );
-        } else {
-            Promise::new(ft_account_id).function_call(
-                b"ft_transfer".to_vec(),
-                format!(
-                    "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":\"{}\"}}",
-                    receiver_id,
-                    amount,
-                    memo.unwrap_or_else(|| "null".into()),
-                )
-                .as_bytes()
-                .to_vec(),
-                1,
-                Gas(15 * TGAS),
-            );
+        for (idx, action) in actions.iter().enumerate().skip(actions_done) {
+            match (
+                action.optional,
+                inputs
+                    .get(idx - actions_done)
+                    .expect("Missing action input"),
+            ) {
+                (_, Some(a)) => {
+                    if !a.action.eq(&action.action_data) {
+                        return false;
+                    }
+                }
+                (false, None) => return false,
+                _ => continue,
+            }
         }
 
         true
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn treasury_send_nft(
+    // TODO: refactor
+    /// Executes DAO's native action.
+    /// Inner methods panic when provided malformed inputs - structure/datatype.
+    pub fn execute_dao_action(
         &mut self,
-        nft_account_id: AccountId,
-        receiver_id: String,
-        nft_id: String,
-        memo: Option<String>,
-        approval_id: u32,
-        msg: Option<String>,
-        is_contract: bool,
-    ) -> bool {
-        if is_contract {
-            Promise::new(nft_account_id).function_call(b"nft_transfer_call".to_vec(),
-    format!(
-                "{{\"receiver_id\":\"{}\",\"token_id\":\"{}\",\"approval_id\":{},\"memo\":\"{}\",\"msg\":\"{}\"}}",
-                receiver_id,
-                nft_id,
-                approval_id,
-                memo.unwrap_or_else(|| "null".into()),
-                msg.unwrap_or_default(),
-                )
-                .as_bytes()
-                .to_vec(),
-                1,
-                Gas(40 * TGAS)
-            );
-        } else {
-            Promise::new(nft_account_id).function_call(b"nft_transfer_call".to_vec(),
-        format!(
-                    "{{\"receiver_id\":\"{}\",\"token_id\":\"{}\",\"approval_id\":{},\"memo\":\"{}\"}}",
-                    receiver_id,
-                    nft_id,
-                    approval_id,
-                    memo.unwrap_or_else(|| "null".into()),
-                    )
-                    .as_bytes()
-                    .to_vec(),
-                    1,
-                    Gas(20 * TGAS)
+        _proposal_id: u32,
+        action_ident: DaoActionIdent,
+        inputs: &mut dyn ActivityInput,
+    ) -> Result<(), ActionError> {
+        match action_ident {
+            DaoActionIdent::TreasuryAddPartition => {
+                let partition = try_bind_partition(inputs).expect("failed to bind partition");
+                self.add_partition(partition);
+            }
+            DaoActionIdent::RewardAdd => {
+                let reward = try_bind_reward(inputs).expect("failed to bind reward");
+                self.add_reward(reward);
+            }
+            /*             DaoActionIdent::GroupAdd => {
+                let group_input = deserialize_group_input(inputs)?;
+                self.group_add(group_input);
+            }
+            DaoActionIdent::GroupRemove => {
+                self.group_remove(get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16);
+            }
+            DaoActionIdent::GroupUpdate => {
+                let group_id = get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16;
+                let group_settings = deserialize_group_settings(inputs, 1)?;
+                self.group_update(group_id, group_settings);
+            }
+            DaoActionIdent::GroupAddMembers => {
+                let group_id = get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16;
+                let group_members = deserialize_group_members(inputs, 1)?;
+                self.group_add_members(group_id, group_members);
+            }
+            DaoActionIdent::GroupRemoveMember => {
+                let member = get_datatype_from_values(inputs, 0, 1)?
+                    .try_into_string()?
+                    .try_into()
+                    .map_err(|_| ActionError::Binding)?;
+
+                self.group_remove_member(
+                    get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16,
+                    member,
                 );
+            }
+            DaoActionIdent::SettingsUpdate => {
+                let settings_input = deserialize_dao_settings(inputs)?;
+                self.settings_update(settings_input);
+            }
+            DaoActionIdent::TagAdd => unimplemented!(),
+            DaoActionIdent::TagEdit => unimplemented!(),
+            DaoActionIdent::TagRemove => unimplemented!(),
+            DaoActionIdent::FtDistribute => {
+                let (group_id, amount, account_ids) = (
+                    get_datatype_from_values(inputs, 0, 0)?.try_into_u64()? as u16,
+                    get_datatype_from_values(inputs, 0, 1)?.try_into_u64()? as u32,
+                    get_datatype_from_values(inputs, 0, 2)?.try_into_vec_string()?,
+                );
+
+                let mut accounts = Vec::with_capacity(account_ids.len());
+                for acc in account_ids.into_iter() {
+                    accounts.push(acc.try_into().map_err(|_| ActionError::Binding)?);
+                }
+
+                self.ft_distribute(group_id, amount, accounts);
+            } */
+            _ => unreachable!(),
         }
 
-        true
-    } */
+        Ok(())
+    }
+
+    pub fn execute_fn_call_action(
+        &mut self,
+        mut receiver: AccountId,
+        method: String,
+        inputs: &[Vec<Value>],
+        deposit: u128,
+        tgas: u16,
+        metadata: &[ObjectMetadata],
+    ) -> Promise {
+        if receiver.as_str() == "self" {
+            receiver = env::current_account_id();
+        }
+
+        //let args = serialize_to_json(inputs, metadata, 0);
+        let args = "".to_string();
+
+        Promise::new(receiver).function_call(method, args.into_bytes(), deposit, TGAS * tgas as u64)
+    }
+
+    /// Proposal binds structure check.
+    /// This does NOT check all.
+    /// Eg. does not check if binds for activity are not missing in some actions where WF needs them.
+    pub fn assert_valid_proposal_binds_structure(
+        &self,
+        binds: &[Option<ActivityBind>],
+        activities: &[Activity],
+    ) {
+        todo!();
+        /*
+         assert_eq!(
+            binds.len(),
+            activities.len() - 1,
+            "Binds must be same length as activities."
+        );
+        // Skip init activity.
+        for (idx, act) in activities.iter().skip(1).enumerate() {
+            match act {
+                Activity::Init => panic!("Invalid WF. Init activity defined at > 0 index."),
+                Activity::DaoActivity(a) | Activity::FnCallActivity(a) => {
+                    let act_binds = &binds[idx];
+
+                    // Skip binds with activity which does not have filled
+                    if act_binds.is_none() {
+                        continue;
+                    } else {
+                        assert_eq!(
+                            act_binds.as_ref().unwrap().values.len(),
+                            a.actions.as_slice().len(),
+                            "Activity action binds does not have same len."
+                        );
+                    }
+                }
+            }
+        }
+        */
+    }
+
+    // TODO: Tests.
+    /// Binds dao FnCall
+    pub fn get_fncall_id_with_metadata(
+        &self,
+        id: FnCallIdType,
+        sources: &dyn Source,
+    ) -> Result<(AccountId, MethodName, Vec<ObjectMetadata>), ActionError> {
+        let data = match id {
+            FnCallIdType::Static(account, method) => (
+                account.clone(),
+                method.clone(),
+                self.function_call_metadata
+                    .get(&(account, method.clone()))
+                    .ok_or(ActionError::MissingFnCallMetadata(method))?,
+            ),
+            FnCallIdType::Dynamic(arg_src, method) => {
+                let name = get_value_from_source(sources, &arg_src)
+                    .map_err(ProcessingError::Source)?
+                    .try_into_string()?;
+                (
+                    AccountId::try_from(name.to_string())
+                        .map_err(|_| ActionError::InvalidDataType)?,
+                    method.clone(),
+                    self.function_call_metadata
+                        .get(&(
+                            AccountId::try_from(name.to_string())
+                                .map_err(|_| ActionError::InvalidDataType)?,
+                            method.clone(),
+                        ))
+                        .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                )
+            }
+            FnCallIdType::StandardStatic(account, method) => (
+                account.clone(),
+                method.clone(),
+                self.standard_function_call_metadata
+                    .get(&method.clone())
+                    .ok_or(ActionError::MissingFnCallMetadata(method))?,
+            ),
+            FnCallIdType::StandardDynamic(arg_src, method) => {
+                let name = get_value_from_source(sources, &arg_src)
+                    .map_err(ProcessingError::Source)?
+                    .try_into_string()?;
+                (
+                    AccountId::try_from(name.to_string())
+                        .map_err(|_| ActionError::InvalidDataType)?,
+                    method.clone(),
+                    self.standard_function_call_metadata
+                        .get(&method)
+                        .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                )
+            }
+        };
+        Ok(data)
+    }
 }

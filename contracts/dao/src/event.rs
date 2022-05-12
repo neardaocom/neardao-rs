@@ -1,9 +1,9 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    require,
+    near_bindgen, require,
 };
 
-use crate::{core::Contract, TimestampSec};
+use crate::{core::*, internal::utils::current_timestamp_sec, TimestampSec};
 
 pub trait TickEvent: Clone {}
 
@@ -150,6 +150,35 @@ impl<T> Iterator for EventQueue<T> {
         } else {
             None
         }
+    }
+}
+
+#[near_bindgen]
+impl Contract {
+    /// Ticks and tries to process `count` of events in the last tick.
+    /// Updates last_tick timestamp.
+    /// Returns number of remaining events in last processed queue.
+    /// DAO is supposed to tick when whenever possible.
+    pub fn tick(&mut self, count: usize) -> usize {
+        let current_timestamp = current_timestamp_sec();
+        run_tick(self, count, current_timestamp)
+    }
+}
+
+impl Contract {
+    /// Adds `event` to event queue at `tick`.
+    /// Requires `tick` to be >= current_timestamp and exact tick timestamp.
+    pub fn dispatch_tick_event(&mut self, event: Event, tick: TimestampSec) {
+        let current_timestamp = current_timestamp_sec();
+        require!(tick >= current_timestamp, "tick time cannot be in past");
+        require!(
+            tick % self.tick_interval == 0,
+            "tick must be exact tick timestamp"
+        );
+
+        let mut queue = self.events.get(&tick).unwrap_or_else(EventQueue::new);
+        queue.add_event(event);
+        self.events.insert(&tick, &queue);
     }
 }
 

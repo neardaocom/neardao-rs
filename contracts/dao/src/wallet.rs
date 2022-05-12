@@ -107,6 +107,7 @@ impl Wallet {
             self.failed_withdraws.push((asset, amount));
         }
     }
+
     #[inline]
     fn find_reward_pos(&self, reward_id: u16) -> Option<usize> {
         self.rewards.iter().position(|r| r.reward_id == reward_id)

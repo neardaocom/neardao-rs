@@ -15,7 +15,6 @@ pub(crate) mod helper;
 pub mod tags;
 
 pub mod activity;
-pub mod callback;
 pub mod delegation;
 pub mod event;
 pub mod group;
@@ -26,6 +25,7 @@ pub mod role;
 pub mod settings;
 
 pub mod core;
+pub mod receiver;
 pub mod reward;
 pub mod treasury;
 pub mod view;

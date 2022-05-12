@@ -1,8 +1,6 @@
 use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
-use crate::event::{run_tick, Event, EventQueue};
-use crate::internal::utils::current_timestamp_sec;
-use crate::media::ResourceType;
-use crate::reward::{RewardActivity, VersionedReward};
+use crate::event::{Event, EventQueue};
+use crate::reward::VersionedReward;
 use crate::role::Role;
 use crate::settings::{assert_valid_dao_settings, Settings, VersionedSettings};
 use crate::tags::{TagInput, Tags};
@@ -10,22 +8,17 @@ use crate::treasury::TreasuryPartition;
 use crate::wallet::VersionedWallet;
 use library::storage::StorageBucket;
 use library::types::datatype::Value;
-use library::workflow::instance::{Instance, InstanceState};
+use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
 use library::workflow::types::{DaoActionIdent, ObjectMetadata};
 use library::{FnCallId, MethodName};
 
-use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
-use near_contract_standards::non_fungible_token::approval::NonFungibleTokenApprovalReceiver;
-use near_contract_standards::non_fungible_token::core::NonFungibleTokenReceiver;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
-use near_sdk::json_types::U128;
-use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::serde::Serialize;
 use near_sdk::{
-    env, near_bindgen, serde_json, AccountId, Balance, BorshStorageKey, IntoStorageKey,
-    PanicOnDefault, PromiseOrValue,
+    env, near_bindgen, AccountId, Balance, BorshStorageKey, IntoStorageKey, PanicOnDefault,
 };
 
 use crate::group::{Group, GroupInput};
@@ -221,199 +214,6 @@ impl Contract {
         _dao
     }
 
-    #[payable]
-    pub fn proposal_create(
-        &mut self,
-        desc: ResourceType, // TODO: Optional
-        template_id: u16,
-        template_settings_id: u8,
-        propose_settings: ProposeSettings,
-        template_settings: Option<Vec<TemplateSettings>>,
-    ) -> u32 {
-        let caller = env::predecessor_account_id();
-        let (wft, wfs) = self.workflow_template.get(&template_id).unwrap();
-        let settings = wfs
-            .get(template_settings_id as usize)
-            .expect("Undefined settings id");
-        assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or_else(|| 0.into()).0);
-        if !self.check_rights(&settings.allowed_proposers, &caller) {
-            panic!("You have no rights to propose this");
-        }
-        self.proposal_last_id += 1;
-        //Assuming template_id for WorkflowAdd is always first wf added during dao init
-        if template_id == 1 {
-            assert!(
-                template_settings.is_some(),
-                "{}",
-                "Expected template settings for 'WorkflowAdd' proposal"
-            );
-            self.proposed_workflow_settings
-                .insert(&self.proposal_last_id, &template_settings.unwrap());
-        }
-        // TODO: Implement resource provider.
-        let proposal = Proposal::new(
-            0,
-            env::block_timestamp() / 10u64.pow(9) / 60 * 60 + 60, // Rounded up to minutes
-            caller,
-            template_id,
-            template_settings_id,
-        );
-        if wft.need_storage {
-            if let Some(ref key) = propose_settings.storage_key {
-                assert!(
-                    self.storage.get(key).is_none(),
-                    "Storage key already exists."
-                );
-            } else {
-                panic!("Template requires storage, but no key was provided.");
-            }
-        }
-        // TODO: Refactor.
-        // Check that proposal binds have valid structure.
-        //self.assert_valid_proposal_binds_structure(
-        //    propose_settings.binds.as_slice(),
-        //    wft.activities.as_slice(),
-        //);
-        self.proposals.insert(
-            &self.proposal_last_id,
-            &VersionedProposal::Current(proposal),
-        );
-        self.workflow_propose_settings
-            .insert(&self.proposal_last_id, &propose_settings);
-        // TODO: Croncat registration to finish proposal
-        self.proposal_last_id
-    }
-
-    #[payable]
-    pub fn proposal_vote(&mut self, id: u32, vote: u8) -> VoteResult {
-        if vote > 2 {
-            return VoteResult::InvalidVote;
-        }
-        let caller = env::predecessor_account_id();
-        let (mut proposal, _, wfs) = self.get_workflow_and_proposal(id);
-        assert!(
-            env::attached_deposit() >= wfs.deposit_vote.unwrap_or_else(|| 0.into()).0,
-            "{}",
-            "Not enough deposit."
-        );
-        let TemplateSettings {
-            allowed_voters,
-            duration,
-            vote_only_once,
-            ..
-        } = wfs;
-        if !self.check_rights(&[allowed_voters], &caller) {
-            return VoteResult::NoRights;
-        }
-        if proposal.state != ProposalState::InProgress
-            || proposal.created + (duration as u64) < env::block_timestamp() / 10u64.pow(9)
-        {
-            return VoteResult::VoteEnded;
-        }
-        if vote_only_once && proposal.votes.contains_key(&caller) {
-            return VoteResult::AlreadyVoted;
-        }
-        self.register_executed_activity(&caller, RewardActivity::Vote.into());
-        proposal.votes.insert(caller, vote);
-        self.proposals
-            .insert(&id, &VersionedProposal::Current(proposal));
-        VoteResult::Ok
-    }
-
-    pub fn proposal_finish(&mut self, id: u32) -> ProposalState {
-        let caller = env::predecessor_account_id();
-        let (mut proposal, wft, wfs) = self.get_workflow_and_proposal(id);
-        let mut instance =
-            Instance::new(proposal.workflow_id, wft.activities.len(), wft.end.clone());
-        let propose_settings = self.workflow_propose_settings.get(&id).unwrap();
-        let new_state = match proposal.state {
-            ProposalState::InProgress => {
-                if proposal.created + wfs.duration as u64 > env::block_timestamp() / 10u64.pow(9) {
-                    None
-                } else {
-                    let vote_result = self.eval_votes(&proposal.votes, &wfs);
-                    if matches!(vote_result, ProposalState::Accepted) {
-                        instance.init_running(
-                            wft.transitions.as_slice(),
-                            wfs.transition_limits.as_slice(),
-                        );
-                        if let Some(ref storage_key) = propose_settings.storage_key {
-                            self.storage_bucket_add(storage_key);
-                        }
-                    }
-                    self.register_executed_activity(
-                        &caller,
-                        RewardActivity::AcceptedProposal.into(),
-                    );
-                    Some(vote_result)
-                }
-            }
-            _ => None,
-        };
-
-        match new_state {
-            Some(state) => {
-                self.workflow_instance.insert(&id, &instance);
-                proposal.state = state.clone();
-                self.proposals
-                    .insert(&id, &VersionedProposal::Current(proposal));
-
-                if wft.auto_exec {
-                    //TODO: Dispatch wf execution with Croncat.
-                }
-
-                state
-            }
-            None => proposal.state,
-        }
-    }
-
-    // TODO: Implement autofinish on FatalError.
-    /// Changes workflow instance state to finish.
-    /// Rights to close are same as the "end" activity rights.
-    pub fn wf_finish(&mut self, proposal_id: u32) -> bool {
-        let caller = env::predecessor_account_id();
-        let (proposal, wft, wfs) = self.get_workflow_and_proposal(proposal_id);
-
-        assert!(proposal.state == ProposalState::Accepted);
-
-        let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
-
-        // TODO: Transition timestamp should not be included in this case.
-        if wfi.get_state() == InstanceState::FatalError
-            || self.check_rights(
-                wfs.activity_rights[wfi.get_current_activity_id() as usize - 1].as_slice(),
-                &caller,
-            ) && wfi.new_actions_done(0, current_timestamp_sec())
-        {
-            self.workflow_instance.insert(&proposal_id, &wfi);
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Unlocks FT for provided `GroupId`s by internal logic.
-    /*     pub fn ft_unlock(&mut self, group_ids: Vec<GroupId>) -> Vec<u32> {
-        let mut released = Vec::with_capacity(group_ids.len());
-        for id in group_ids.into_iter() {
-            if let Some(mut group) = self.groups.get(&id) {
-                released.push(group.unlock_ft(env::block_timestamp() / 10u64.pow(9)));
-                self.groups.insert(&id, &group);
-            }
-        }
-        released
-    } */
-
-    /// Ticks and tries to process `count` of events in the last tick.
-    /// Updates last_tick timestamp.
-    /// Returns number of remaining events in last processed queue.
-    /// DAO is supposed to tick when whenever possible.
-    pub fn tick(&mut self, count: usize) -> usize {
-        let current_timestamp = current_timestamp_sec();
-        run_tick(self, count, current_timestamp)
-    }
-
     /// For dev/testing purposes only
     #[cfg(feature = "testnet")]
     #[private]
@@ -438,72 +238,6 @@ impl Contract {
     #[private]
     pub fn delete_self(&mut self) -> Promise {
         Promise::new(env::current_account_id()).delete_account("neardao.testnet".into())
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct ReceiverMessage {
-    pub proposal_id: u32,
-}
-
-#[near_bindgen]
-impl FungibleTokenReceiver for Contract {
-    /// TODO: Implement.
-    /// TODO: Figure out how to assign storage keys.
-    /// Required for some workflow scenarios.
-    fn ft_on_transfer(
-        &mut self,
-        sender_id: AccountId,
-        amount: U128,
-        msg: String,
-    ) -> PromiseOrValue<U128> {
-        let msg: ReceiverMessage = serde_json::from_str(&msg).expect("invalid receiver msg");
-        let prop_settings = self
-            .workflow_propose_settings
-            .get(&msg.proposal_id)
-            .expect("proposal id does not exist");
-        let storage_key = prop_settings
-            .storage_key
-            .expect("workflow does not have storage");
-        let mut storage = self.storage.get(&storage_key).unwrap();
-        storage.add_data(
-            &"sender_id".to_string(),
-            &Value::String(sender_id.to_string()),
-        );
-        storage.add_data(
-            &"token_id".to_string(),
-            &Value::String(env::predecessor_account_id().to_string()),
-        );
-        storage.add_data(&"amount".to_string(), &Value::U128(amount));
-        self.storage.insert(&storage_key, &storage);
-        PromiseOrValue::Value(U128(0))
-    }
-}
-
-#[near_bindgen]
-impl NonFungibleTokenReceiver for Contract {
-    fn nft_on_transfer(
-        &mut self,
-        sender_id: AccountId,
-        previous_owner_id: AccountId,
-        token_id: near_contract_standards::non_fungible_token::TokenId,
-        msg: String,
-    ) -> PromiseOrValue<bool> {
-        todo!()
-    }
-}
-
-#[near_bindgen]
-impl NonFungibleTokenApprovalReceiver for Contract {
-    fn nft_on_approve(
-        &mut self,
-        token_id: near_contract_standards::non_fungible_token::TokenId,
-        owner_id: AccountId,
-        approval_id: u64,
-        msg: String,
-    ) -> near_sdk::PromiseOrValue<String> {
-        todo!()
     }
 }
 

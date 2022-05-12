@@ -4,7 +4,7 @@ use near_sdk::{
     AccountId,
 };
 
-use crate::{derive_from_versioned, derive_into_versioned, TagId};
+use crate::{core::Contract, derive_from_versioned, derive_into_versioned, TagId};
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub enum VersionedSettings {
@@ -32,10 +32,9 @@ pub(crate) fn assert_valid_dao_settings(settings: &Settings) {
     assert!(!settings.name.is_empty());
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub struct TokenSettings {
-    mint_allowed: bool,
-    burning_allowed: bool,
+impl Contract {
+    pub fn settings_update(&mut self, settings: Settings) {
+        assert_valid_dao_settings(&settings);
+        self.settings.replace(&settings.into());
+    }
 }

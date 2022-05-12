@@ -222,4 +222,46 @@ impl Contract {
         }
         result_members
     }
+
+    pub fn group_remove(&mut self, id: GroupId) -> bool {
+        if let Some(mut group) = self.groups.remove(&id) {
+            //let token_lock: TokenLock = group.remove_storage_data();
+            //self.ft_total_locked -= token_lock.amount - token_lock.distributed;
+            self.total_members_count -= group.members.members_count() as u32;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn group_update(&mut self, id: GroupId, settings: GroupSettings) -> bool {
+        if let Some(mut group) = self.groups.get(&id) {
+            group.settings = settings;
+            self.groups.insert(&id, &group);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn group_add_members(&mut self, id: GroupId, members: Vec<GroupMember>) -> bool {
+        if let Some(mut group) = self.groups.get(&id) {
+            self.total_members_count += group.add_members(members);
+            self.groups.insert(&id, &group);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn group_remove_member(&mut self, id: GroupId, member: AccountId) -> bool {
+        if let Some(mut group) = self.groups.get(&id) {
+            group.remove_member(member);
+            self.total_members_count -= 1;
+            self.groups.insert(&id, &group);
+            true
+        } else {
+            false
+        }
+    }
 }
