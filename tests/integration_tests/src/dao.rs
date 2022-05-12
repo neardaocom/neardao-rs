@@ -15,7 +15,7 @@ use workspaces::network::DevAccountDeployer;
 use crate::{
     contract_utils::{
         dao::{
-            activity::{
+            activity_input::{
                 bounty::ActivityInputBounty1, reward::ActivityInputReward1, run_activity,
                 trade::ActivityInputTrade1, ActivityInputSkyward1, ActivityInputWfAdd1,
             },
@@ -29,7 +29,7 @@ use crate::{
                     PROVIDER_TPL_ID_REWARD1, PROVIDER_TPL_ID_SKYWARD1, PROVIDER_TPL_ID_TRADE1,
                 },
                 proposal::ProposalState,
-                reward::{Asset, RewardTypeIdent},
+                reward::{Asset, RewardActivity, RewardTypeIdent},
             },
             view::{
                 debug_log, ft_balance_of, get_timestamp, view_reward, view_user_roles,
@@ -807,9 +807,9 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// DAO member adds new partition, new reward and then is able to withdraw his reward.
+/// DAO member adds new partition, new wage reward and then is able to withdraw his reward.
 #[tokio::test]
-async fn workflow_reward1_scenario() -> anyhow::Result<()> {
+async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
     let worker = workspaces::sandbox().await?;
     let member = worker.dev_create_account().await?;
     let factory = worker.dev_create_account().await?;
@@ -912,7 +912,6 @@ async fn workflow_reward1_scenario() -> anyhow::Result<()> {
         proposal_id,
         2,
         ActivityInputReward1::activity_2(
-            RewardTypeIdent::Wage,
             60,
             1,
             1,
@@ -938,7 +937,7 @@ async fn workflow_reward1_scenario() -> anyhow::Result<()> {
     storage_deposit(&worker, &member, &reward_token, &member.id(), ONE_NEAR).await?;
     worker.wait(3600).await?;
     ft_balance_of(&worker, &reward_token, &dao.id()).await?;
-    ft_balance_of(&worker, &reward_token, &member.id()).await?;
+    assert!(ft_balance_of(&worker, &reward_token, &member.id()).await?.0 == 0);
     let dao_account_balance_before = dao.view_account(&worker).await?.balance / 10u128.pow(24);
 
     // Withdraw FT reward.
@@ -951,18 +950,221 @@ async fn workflow_reward1_scenario() -> anyhow::Result<()> {
     )
     .await?;
     worker.wait(10).await?;
-    ft_balance_of(&worker, &reward_token, &member.id()).await?;
+    assert!(ft_balance_of(&worker, &reward_token, &member.id()).await?.0 > 0);
     view_user_wallet(&worker, &dao, &member.id()).await?;
     debug_log(&worker, &dao).await?;
 
-    // Withdraw FT reward.
+    // Withdraw NEAR reward.
     withdraw_rewards(&worker, &member, &dao, vec![1], Asset::new_near()).await?;
     let dao_account_balance_after = dao.view_account(&worker).await?.balance / 10u128.pow(24);
-    println!(
-        "Dao balance before: {}, after: {}",
-        dao_account_balance_before, dao_account_balance_after
-    );
+    assert!(dao_account_balance_before > dao_account_balance_after);
     view_user_wallet(&worker, &dao, &member.id()).await?;
     debug_log(&worker, &dao).await?;
+    Ok(())
+}
+
+/// DAO member adds new partition, new wage reward and then is able to withdraw his reward.
+#[tokio::test]
+async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
+    let worker = workspaces::sandbox().await?;
+    let member = worker.dev_create_account().await?;
+    let factory = worker.dev_create_account().await?;
+
+    // Contracts init.
+    let staking = init_staking(&worker).await?;
+    let wf_provider = init_workflow_provider(&worker).await?;
+    let dao = deploy_dao(&worker).await?;
+    let vote_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY * ONE_NEAR).await?;
+    let reward_token =
+        init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY * ONE_NEAR).await?;
+
+    // Inits dao and does essential checks.
+    init_dao(
+        &worker,
+        &factory,
+        &dao,
+        vote_token.id(),
+        DAO_FT_TOTAL_SUPPLY as u32,
+        24,
+        staking.id(),
+        wf_provider.id(),
+        factory.id(),
+        vec![member.id()],
+    )
+    .await?;
+
+    // Storage deposit staking in fungible_token.
+    storage_deposit(&worker, &factory, &vote_token, staking.id(), ONE_NEAR).await?;
+
+    // Load workflows to provider.
+    load_workflow_templates(&worker, &wf_provider, None, None).await?;
+
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao,
+        DAO_TPL_ID_WF_ADD,
+        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+            template_id: PROVIDER_TPL_ID_REWARD1,
+            provider_id: wf_provider.id().to_string(),
+        })),
+        Some(vec![Reward1::template_settings(Some(20))]),
+        vec![(&member, 1)],
+        100,
+        WfAdd1::deposit_propose(),
+        WfAdd1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
+
+    // Execute AddWorkflow by DAO member to add Reward1 template.
+    run_activity(
+        &worker,
+        &member,
+        &dao,
+        proposal_id,
+        1,
+        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_REWARD1),
+        true,
+    )
+    .await?;
+    worker.wait(10).await?;
+    check_wf_templates(&worker, &dao, 2).await?;
+    check_instance(&worker, &dao, proposal_id, 1, InstanceState::Finished).await?;
+
+    // Propose Reward1.
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao,
+        DAO_TPL_ID_OF_FIRST_ADDED,
+        Reward1::propose_settings(Some("wf_reward1")),
+        None,
+        vec![(&member, 1)],
+        100,
+        Reward1::deposit_propose(),
+        Reward1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
+
+    // Execute Workflow Reward1.
+    run_activity(
+        &worker,
+        &member,
+        &dao,
+        proposal_id,
+        1,
+        ActivityInputReward1::activity_1(reward_token.id().to_string(), 1000, 24, 1000),
+        true,
+    )
+    .await?;
+    worker.wait(5).await?;
+    let timestamp = get_timestamp(&worker, &dao).await?;
+    run_activity(
+        &worker,
+        &member,
+        &dao,
+        proposal_id,
+        3,
+        ActivityInputReward1::activity_3(
+            vec![RewardActivity::AcceptedProposal, RewardActivity::Vote],
+            1,
+            1,
+            1,
+            timestamp,
+            timestamp + 7200 + 10,
+            reward_token.id().to_string(),
+            1 * ONE_NEAR,
+            24,
+            1 * ONE_NEAR,
+        ),
+        true,
+    )
+    .await?;
+    worker.wait(5).await?;
+    check_instance(&worker, &dao, proposal_id, 3, InstanceState::Finished).await?;
+    debug_log(&worker, &dao).await?;
+    view_user_roles(&worker, &dao, &member.id()).await?;
+    view_user_wallet(&worker, &dao, &member.id()).await?;
+    view_reward(&worker, &dao, 1).await?;
+
+    // Storage deposit dao in reward token contract so member can withdraw token rewards.
+    storage_deposit(&worker, &member, &reward_token, &member.id(), ONE_NEAR).await?;
+    worker.wait(3600).await?;
+    ft_balance_of(&worker, &reward_token, &dao.id()).await?;
+    assert!(ft_balance_of(&worker, &reward_token, &member.id()).await?.0 == 0);
+    let dao_account_balance_before = dao.view_account(&worker).await?.balance / 10u128.pow(24);
+
+    // Withdraw FT reward.
+    withdraw_rewards(
+        &worker,
+        &member,
+        &dao,
+        vec![1],
+        Asset::new_ft(reward_token.id().clone(), 24),
+    )
+    .await?;
+    worker.wait(10).await?;
+    debug_log(&worker, &dao).await?;
+    view_user_wallet(&worker, &dao, &member.id()).await?;
+    assert!(ft_balance_of(&worker, &reward_token, &member.id()).await?.0 == 0);
+
+    // Withdraw NEAR reward.
+    withdraw_rewards(&worker, &member, &dao, vec![1], Asset::new_near()).await?;
+    let dao_account_balance_after = dao.view_account(&worker).await?.balance / 10u128.pow(24);
+    debug_log(&worker, &dao).await?;
+    view_user_wallet(&worker, &dao, &member.id()).await?;
+    assert!(dao_account_balance_before == dao_account_balance_after);
+
+    // Propose any proposal to test activity rewarding.
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao,
+        DAO_TPL_ID_OF_FIRST_ADDED,
+        Reward1::propose_settings(Some("wf_reward2")),
+        None,
+        vec![(&member, 1)],
+        100,
+        Reward1::deposit_propose(),
+        Reward1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
+    worker.wait(5).await?;
+
+    // Check generated rewards for user's activity.
+    check_instance(&worker, &dao, proposal_id, 0, InstanceState::Running).await?;
+    debug_log(&worker, &dao).await?;
+    view_user_wallet(&worker, &dao, &member.id()).await?;
+    view_reward(&worker, &dao, 1).await?;
+    ft_balance_of(&worker, &reward_token, &dao.id()).await?;
+    assert!(ft_balance_of(&worker, &reward_token, &member.id()).await?.0 == 0);
+    let dao_account_balance_before = dao.view_account(&worker).await?.balance / 10u128.pow(24);
+
+    // Withdraw FT reward.
+    withdraw_rewards(
+        &worker,
+        &member,
+        &dao,
+        vec![1],
+        Asset::new_ft(reward_token.id().clone(), 24),
+    )
+    .await?;
+    worker.wait(10).await?;
+    debug_log(&worker, &dao).await?;
+    view_user_wallet(&worker, &dao, &member.id()).await?;
+    assert_eq!(
+        ft_balance_of(&worker, &reward_token, &member.id()).await?.0,
+        2 * ONE_NEAR
+    );
+
+    // Withdraw NEAR reward.
+    withdraw_rewards(&worker, &member, &dao, vec![1], Asset::new_near()).await?;
+    let dao_account_balance_after = dao.view_account(&worker).await?.balance / 10u128.pow(24);
+    debug_log(&worker, &dao).await?;
+    view_user_wallet(&worker, &dao, &member.id()).await?;
+    assert_eq!(dao_account_balance_before, dao_account_balance_after + 2);
     Ok(())
 }

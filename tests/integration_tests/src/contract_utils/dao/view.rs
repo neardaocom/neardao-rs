@@ -160,10 +160,10 @@ where
     T: DevNetwork,
 {
     let args = json!({}).to_string().into_bytes();
-    let outcome = dao.view(&worker, "promise_log", args).await?;
-    let title = format!("view promise log on dao: {}", dao.id().as_str(),);
+    let outcome = dao.view(&worker, "debug_log", args).await?;
+    let title = format!("view debug log on dao: {}", dao.id().as_str(),);
     view_outcome_pretty::<Vec<String>>(&title, &outcome);
-    let logs = parse_view_result::<Vec<String>>(&outcome).expect("failed to parse promise log");
+    let logs = parse_view_result::<Vec<String>>(&outcome).expect("failed to parse debug log");
     Ok(logs)
 }
 
@@ -230,3 +230,22 @@ where
     let roles = parse_view_result::<Vec<(u16, u16)>>(&outcome).expect("failed to parse user roles");
     Ok(roles)
 }
+
+/* pub(crate) async fn view_partition_list<T>(
+    worker: &Worker<T>,
+    dao: &Contract,
+    account_id: &AccountId,
+) -> anyhow::Result<Vec<(u16, TreasuryPartition)>>
+where
+    T: DevNetwork,
+{
+    let args = json!({
+        "account_id": account_id.to_string()
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = dao.view(&worker, "view_partition_list", args).await?;
+    view_outcome_pretty::<Vec<(u16, u16)>>("view partition list", &outcome);
+    let roles = parse_view_result::<Vec<(u16, u16)>>(&outcome).expect("failed to parse partition list");
+    Ok(roles)
+} */

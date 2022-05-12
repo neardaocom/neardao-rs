@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use library::locking::Lock;
 use serde::{Deserialize, Serialize};
 use workspaces::AccountId;
 
@@ -136,10 +137,10 @@ pub struct WalletReward {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct WithdrawStats {
-    pub asset_id: Asset,
-    pub amount: u128,
-    pub timestamp_last_withdraw: TimestampSec,
+#[serde(rename_all = "snake_case")]
+pub enum WithdrawStats {
+    Wage(WageStats),
+    Activity(ActivityStats),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -154,3 +155,53 @@ pub struct RewardWage {
 pub struct RewardUserActivity {
     pub activity_ids: Vec<u8>,
 }
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct ActivityStats {
+    pub asset_id: Asset,
+    /// Count of all executions that have not been withdrawn yet.
+    pub executed_count: u16,
+    /// Total count of withdrawn executions.
+    pub total_withdrawn_count: u16,
+    pub timestamp_last_withdraw: TimestampSec,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct WageStats {
+    pub asset_id: Asset,
+    pub amount: u128,
+    pub timestamp_last_withdraw: TimestampSec,
+}
+
+pub enum RewardActivity {
+    AcceptedProposal,
+    Vote,
+    Delegate,
+    TransitiveDelegate,
+    Activity,
+}
+
+impl From<RewardActivity> for u64 {
+    fn from(r: RewardActivity) -> Self {
+        match r {
+            RewardActivity::AcceptedProposal => 0,
+            RewardActivity::Vote => 1,
+            RewardActivity::Delegate => 2,
+            RewardActivity::TransitiveDelegate => 3,
+            RewardActivity::Activity => 4,
+        }
+    }
+}
+
+/* #[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct TreasuryPartition {
+    pub assets: Vec<PartitionAsset>,
+}
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct PartitionAsset {
+    asset_id: Asset,
+    /// Available amount of the asset with decimal zeroes.
+    amount: u128,
+    lock: Option<Lock>,
+}
+ */

@@ -1,4 +1,4 @@
-pub mod activity;
+pub mod activity_input;
 pub mod check;
 pub mod init;
 pub mod proposal;

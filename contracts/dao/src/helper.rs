@@ -112,17 +112,17 @@ pub mod deserialize {
                 v.try_into_u64()
                     .expect("invalid datatype: type.wage.unit_seconds") as u16;
             RewardType::Wage(RewardWage { unit_seconds })
-        } else if let Some(v) = action_input.get(&"type.wage.user_activity") {
+        } else if let Some(v) = action_input.get(&"type.user_activity.activity_ids") {
             let activity_ids = v
                 .to_owned()
                 .try_into_vec_u64()
-                .expect("invalid datatype: type.name.activity_ids")
+                .expect("invalid datatype: type.user_activity.activity_ids")
                 .into_iter()
                 .map(|e| e as u8)
                 .collect();
             RewardType::UserActivity(RewardUserActivity { activity_ids })
         } else {
-            env::panic_str("invalid reward type");
+            env::panic_str("try_bind_reward - invalid reward type");
         };
 
         let time_valid_from = action_input

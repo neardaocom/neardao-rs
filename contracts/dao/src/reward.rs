@@ -1,6 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::env::panic_str;
 use near_sdk::serde::Serialize;
-use near_sdk::AccountId;
+use near_sdk::{require, AccountId};
 
 use crate::internal::utils::current_timestamp_sec;
 use crate::wallet::Wallet;
@@ -30,6 +31,7 @@ pub struct Reward {
     /// Defines reward asset unit:
     /// - for `RewardType::Wage(seconds)` the unit is time.
     /// - for `RewardType::UserActivity(activity_ids)` the unit is activity done.
+    /// Currently type: `RewardType::UserActivity(_)` is active for anyone regardless role and group.
     r#type: RewardType,
     /// Defines unique asset per unit.
     reward_amounts: Vec<(Asset, u128)>,
@@ -64,8 +66,9 @@ impl Reward {
         self.reward_amounts.as_slice()
     }
     /// TODO: Check edge cases in wasm to know max/min amounts.
-    /// Return amount of total available asset reward.
-    pub fn available_asset_amount(&self, asset: &Asset, current_timestamp: TimestampSec) -> u128 {
+    /// Return amount of total available wage asset reward at the current timestamp.
+    /// Panics if reward type is not Wage.
+    pub fn available_wage_amount(&self, asset: &Asset, current_timestamp: TimestampSec) -> u128 {
         let amount = if let Some((_, amount)) = self.reward_amounts.iter().find(|(r, _)| r == asset)
         {
             amount
@@ -78,9 +81,40 @@ impl Reward {
                 let units = seconds_passed / wage.unit_seconds as u64;
                 amount * units as u128
             }
-            RewardType::UserActivity(_) => todo!(),
+            RewardType::UserActivity(_) => panic_str("fatal - invalid reward type"),
         };
         amount.into()
+    }
+    pub fn is_valid(&self, current_timestamp: TimestampSec) -> bool {
+        self.time_valid_from <= current_timestamp && current_timestamp <= self.time_valid_to
+    }
+    pub fn is_defined_for_activity(&self, activity_id: u8) -> bool {
+        match &self.r#type {
+            RewardType::UserActivity(reward) => reward.activity_ids.contains(&activity_id),
+            _ => false,
+        }
+    }
+    pub fn get_reward_type(&self) -> RewardTypeIdent {
+        self.r#type.get_ident()
+    }
+    /// Return amount of asset per executed activity.
+    ///
+    /// Panics if:
+    /// - reward type is not `RewardType::UserActivity`
+    /// - `asset` is not defined in reward
+    pub fn reward_per_one_execution(&self, asset: &Asset) -> u128 {
+        let amount = match self.r#type {
+            RewardType::Wage(_) => panic_str("fatal - invalid reward type"),
+            RewardType::UserActivity(_) => {
+                let asset = self
+                    .reward_amounts
+                    .iter()
+                    .find(|(r, _)| r == asset)
+                    .expect("fatal - asset not found");
+                asset.1
+            }
+        };
+        amount
     }
 }
 
@@ -116,6 +150,18 @@ impl RewardType {
     pub fn new_user_activity(activity_ids: Vec<u8>) -> Self {
         RewardType::UserActivity(RewardUserActivity { activity_ids })
     }
+    pub fn get_ident(&self) -> RewardTypeIdent {
+        match self {
+            RewardType::Wage(_) => RewardTypeIdent::Wage,
+            RewardType::UserActivity(_) => RewardTypeIdent::UserActivity,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum RewardTypeIdent {
+    Wage,
+    UserActivity,
 }
 
 impl Contract {
@@ -156,6 +202,7 @@ impl Contract {
             assert!(
                 self.add_reward_to_user_wallet(
                     self.reward_last_id,
+                    reward.get_reward_type(),
                     &user,
                     reward_assets.clone(),
                     current_timestamp
@@ -164,7 +211,6 @@ impl Contract {
             );
         }
         self.rewards.insert(&self.reward_last_id, &reward.into());
-        self.debug_log.push(format!("reward added!"));
         self.reward_last_id
     }
     /// TODO: Check it can be safely removed.
@@ -190,12 +236,13 @@ impl Contract {
     pub fn add_reward_to_user_wallet(
         &mut self,
         reward_id: u16,
+        reward_type: RewardTypeIdent,
         account_id: &AccountId,
         assets: Vec<Asset>,
         current_timestamp: TimestampSec,
     ) -> bool {
         let mut wallet = self.get_wallet(account_id);
-        let added = wallet.add_reward(reward_id, current_timestamp, assets);
+        let added = wallet.add_reward(reward_id, reward_type, current_timestamp, assets);
         self.wallets.insert(account_id, &wallet.into());
         added
     }
@@ -203,9 +250,28 @@ impl Contract {
     pub fn register_executed_activity(&mut self, account_id: &AccountId, activity_id: u8) {
         if let Some(wallet) = self.wallets.get(account_id) {
             let mut wallet: Wallet = wallet.into();
-            // TODO: Implement
+            let valid_rewards = self.valid_reward_list_for_activity(activity_id);
+            for reward_id in valid_rewards {
+                wallet.add_executed_activity(reward_id);
+            }
             self.wallets.insert(account_id, &wallet.into());
         }
+    }
+
+    /// Return list of valid reward ids that reward `activity_id`.
+    pub fn valid_reward_list_for_activity(&self, activity_id: u8) -> Vec<u16> {
+        let mut rewards = Vec::with_capacity(self.reward_last_id as usize / 2);
+        let current_timestamp = current_timestamp_sec();
+        for i in 1..=self.reward_last_id {
+            if let Some(reward) = self.rewards.get(&i) {
+                let reward: Reward = reward.into();
+                if reward.is_valid(current_timestamp) && reward.is_defined_for_activity(activity_id)
+                {
+                    rewards.push(i);
+                }
+            }
+        }
+        rewards
     }
 }
 

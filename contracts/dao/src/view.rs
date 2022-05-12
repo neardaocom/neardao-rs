@@ -102,7 +102,7 @@ impl Contract {
     }
 
     // For debugging purposes only.
-    pub fn promise_log(self) -> Vec<String> {
+    pub fn debug_log(self) -> Vec<String> {
         self.debug_log
     }
     // For integration tests.

@@ -58,7 +58,26 @@ impl Reward1 {
                     is_sync: true,
                 }),
                 Activity::Activity(TemplateActivity {
-                    code: "reward_add".into(),
+                    code: "reward_add_wage".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionType::Action(DaoActionData {
+                            name: DaoActionIdent::RewardAdd,
+                            required_deposit: None,
+                            binds: vec![],
+                        }),
+                        must_succeed: true,
+                        optional: false,
+                        postprocessing: None,
+                    }],
+                    automatic: false,
+                    terminal: Terminality::Automatic,
+                    is_sync: true,
+                }),
+                Activity::Activity(TemplateActivity {
+                    code: "reward_add_user_activity".into(),
                     postprocessing: None,
                     actions: vec![TemplateAction {
                         exec_condition: None,
@@ -85,15 +104,23 @@ impl Reward1 {
                     time_from_cond: None,
                     time_to_cond: None,
                 }],
-                vec![Transition {
-                    activity_id: 2,
-                    cond: None,
-                    time_from_cond: None,
-                    time_to_cond: None,
-                }],
+                vec![
+                    Transition {
+                        activity_id: 2,
+                        cond: None,
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
+                    Transition {
+                        activity_id: 3,
+                        cond: None,
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
+                ],
             ],
             constants: SourceDataVariant::Map(HashMap::new()),
-            end: vec![2],
+            end: vec![2, 3],
         };
 
         (template, vec![], vec![])
@@ -102,7 +129,7 @@ impl Reward1 {
         // User proposed settings type
         let settings = ProposeSettings {
             global: None,
-            binds: vec![None, None, None],
+            binds: vec![None, None, None, None],
             storage_key: Some(storage_key.unwrap_or(REWARD1_STORAGE_KEY).into()),
         };
         settings
@@ -117,10 +144,14 @@ impl Reward1 {
                 vec![],
                 vec![ActivityRight::Group(1)],
                 vec![ActivityRight::Group(1)],
+                vec![ActivityRight::Group(1)],
             ],
             transition_limits: vec![
                 vec![TransitionLimit { to: 1, limit: 1 }],
-                vec![TransitionLimit { to: 2, limit: 1 }],
+                vec![
+                    TransitionLimit { to: 2, limit: 1 },
+                    TransitionLimit { to: 3, limit: 1 },
+                ],
             ],
             scenario: VoteScenario::Democratic,
             duration: duration.unwrap_or(DEFAULT_VOTING_DURATION),

@@ -52,18 +52,25 @@ impl TreasuryPartition {
     /// Add amount to the asset and returns new amount.
     pub fn add_amount(&mut self, asset_id: &Asset, amount: u128) -> u128 {
         if let Some(pos) = self.find_asset_pos(&asset_id) {
-            let asset = self.assets.get_mut(pos).unwrap();
+            let asset = &mut self.assets[pos];
             asset.add_amount(amount);
             asset.amount
         } else {
             0
         }
     }
-    /// Remove max possible amount up to `amount` of the asset.
+    /// Remove max possible `multiple` amount up to `amount` of the asset.
+    /// If multiple is 0, up to `amount` is removed.
     /// Return actually removed amount.
-    pub fn remove_amount(&mut self, asset_id: &Asset, amount: u128) -> u128 {
+    pub fn remove_amount(&mut self, asset_id: &Asset, multiple: u128, max_amount: u128) -> u128 {
         if let Some(pos) = self.find_asset_pos(&asset_id) {
-            self.assets.get_mut(pos).unwrap().remove_amount(amount)
+            let asset = &mut self.assets[pos];
+            if multiple > 0 {
+                let count = std::cmp::min(asset.available_amount(), max_amount) / multiple;
+                asset.remove_amount(count * multiple)
+            } else {
+                asset.remove_amount(max_amount)
+            }
         } else {
             0
         }
@@ -90,6 +97,7 @@ pub struct PartitionAsset {
 impl PartitionAsset {
     /// Creates new self.
     /// Available amount is sum of `amount` and result of immediately called unlock `lock`.
+    /// `amount` is supposed to be integer amount of the asset.
     pub fn new(
         asset_id: Asset,
         amount: u128,
@@ -99,11 +107,12 @@ impl PartitionAsset {
         let (amount, lock) = if let Some(mut lock) = lock {
             let unlocked_amount = lock.unlock(current_timestamp) as u128;
             (
-                amount + unlocked_amount * 10u128.pow(asset_id.decimals() as u32),
+                amount * 10u128.pow(asset_id.decimals() as u32)
+                    + unlocked_amount * 10u128.pow(asset_id.decimals() as u32),
                 Some(lock),
             )
         } else {
-            (amount, lock)
+            (amount * 10u128.pow(asset_id.decimals() as u32), lock)
         };
         Self {
             asset_id,
