@@ -14,10 +14,9 @@ where
 {
     let token_blob_path = get_fungible_token_wasm();
     let token = worker.dev_deploy(&std::fs::read(token_blob_path)?).await?;
-
     let args = json!({
         "owner_id" :owner_id,
-        "total_supply" : U128(total_supply),
+        "total_supply" : U128(total_supply * 10u128.pow(24)),
     })
     .to_string()
     .into_bytes();

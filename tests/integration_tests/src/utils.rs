@@ -104,6 +104,13 @@ where
     )
 }
 
+pub(crate) fn parse_call_outcome<T>(outcome: &CallExecutionDetails) -> Option<T>
+where
+    T: for<'de> serde::Deserialize<'de> + std::fmt::Debug,
+{
+    outcome.json().unwrap_or_default()
+}
+
 pub(crate) fn parse_view_result<T>(outcome: &ViewResultDetails) -> Option<T>
 where
     T: for<'de> serde::Deserialize<'de> + std::fmt::Debug,

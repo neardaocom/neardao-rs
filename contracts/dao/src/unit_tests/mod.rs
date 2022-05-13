@@ -20,7 +20,6 @@ use crate::{
 //mod dao; // Require refactoring to match new structure
 mod group;
 mod tick;
-// mod unlocking; // TODO: Refactoring
 mod voting;
 
 pub const DURATION_1Y_S: u32 = 31_536_000;

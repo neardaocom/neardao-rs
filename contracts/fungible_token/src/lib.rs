@@ -98,8 +98,9 @@ impl Contract {
         todo!()
     }
 
-    /// Initializes the contract with the given total supply owned by the given `owner_id` with
-    /// the given fungible token metadata.
+    /// Initializes the contract with the given total supply owned by the given `owner_id`
+    /// with the given fungible token metadata and settings.
+    /// Requires `total_supply` makes at least one integer token given metadata decimals.
     #[init]
     pub fn new(
         owner_id: AccountId,
@@ -108,6 +109,10 @@ impl Contract {
         settings: Option<Settings>,
     ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
+        assert!(
+            total_supply.0 / 10u128.pow(metadata.decimals as u32) >= 1,
+            "Invalid total_supply/decimals ratio"
+        );
         metadata.assert_valid();
         let settings = settings.unwrap_or_else(|| Settings {
             owner_id: owner_id.clone(),
@@ -150,23 +155,19 @@ impl Contract {
         self.settings.set(&settings);
     }
 
-    pub fn mint_new_ft(&mut self, amount: Balance, reason: Option<String>) {
-        let settings = self.settings.get().unwrap();
+    pub fn mint_new_ft(&mut self, amount: Balance, msg: Option<String>) {
+        let settings = self.settings.get().expect("no settings");
         require!(
             settings.owner_id == env::predecessor_account_id(),
             "no rights"
         );
         require!(settings.mint_allowed, "minting new tokens is not allowed");
         self.token.internal_deposit(&settings.owner_id, amount);
-        let reason = format!(
-            "Minted {} new tokens. Purpose: {}",
-            amount,
-            reason.unwrap_or_else(|| "Unspecified.".into())
-        );
+        let msg = format!("Minted {} new tokens. {}", amount, msg.unwrap_or_default());
         FtMint {
             owner_id: &settings.owner_id,
             amount: &U128(amount),
-            memo: Some(reason.as_str()),
+            memo: Some(msg.as_str()),
         }
         .emit();
     }
@@ -175,7 +176,7 @@ impl Contract {
         self.settings.get()
     }
 
-    // Returns balances of provided accounts in same order.
+    /// Returns balances of provided accounts in same order.
     pub fn ft_balances_of(&self, account_ids: Vec<AccountId>) -> Vec<(AccountId, U128)> {
         let mut result = Vec::with_capacity(account_ids.len());
         for acc in account_ids {
@@ -359,7 +360,7 @@ mod tests {
 
     use super::*;
 
-    const TOTAL_SUPPLY: Balance = 1_000_000_000_000_000;
+    const TOTAL_SUPPLY: Balance = 1_000_000_000 * 10u128.pow(24);
 
     fn get_context(predecessor_account_id: AccountId) -> VMContextBuilder {
         let mut builder = VMContextBuilder::new();

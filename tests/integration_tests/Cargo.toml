@@ -19,5 +19,6 @@ simple_dao = {path = "./../mocks/simple_dao" }
 rand = "0.8.5"
 claim = "0.5.0"
 async-trait = "0.1.53"
+types = { path = "./../mocks/types"}
 
 

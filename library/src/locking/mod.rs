@@ -1,3 +1,3 @@
 mod lock;
 
-pub use lock::Lock;
+pub use lock::UnlockingDB;

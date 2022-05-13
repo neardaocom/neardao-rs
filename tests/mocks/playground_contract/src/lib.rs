@@ -4,12 +4,13 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::{unimplemented, vec::Vec};
 
+use library::functions::math::calculate_percent_u128;
 use library::functions::utils::into_storage_key_wrapper_u16;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{env, log, near_bindgen, BorshStorageKey, PanicOnDefault};
-use types::SourceMock;
+use types::{PercentInput, PercentResult, SourceMock};
 
 const NESTED_PREFIX: &[u8; 3] = b"grp";
 
@@ -111,5 +112,21 @@ impl Contract {
     }
     pub fn view_hm(&self) -> Vec<(String, u8)> {
         self.hm_max_size_test.get().unwrap().into_iter().collect()
+    }
+    pub fn calc_votes(&mut self, values: Vec<PercentInput>) -> Vec<PercentResult> {
+        let mut results = vec![];
+        for value in values {
+            let result = calculate_percent_u128(
+                value.actual.0 * 10u128.pow(value.decimals as u32),
+                value.total_possible.0 * 10u128.pow(value.decimals as u32),
+            );
+            results.push(PercentResult {
+                total_possible: value.total_possible.into(),
+                actual: value.actual.into(),
+                decimals: value.decimals,
+                result,
+            })
+        }
+        results
     }
 }

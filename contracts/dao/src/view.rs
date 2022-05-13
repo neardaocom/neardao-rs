@@ -131,6 +131,9 @@ impl Contract {
         }
         partitions
     }
+    pub fn partition(&self, id: u16) -> Option<TreasuryPartition> {
+        self.treasury_partition.get(&id)
+    }
 
     pub fn view_wallet(self, account_id: AccountId) -> Wallet {
         self.wallets.get(&account_id).unwrap().into()

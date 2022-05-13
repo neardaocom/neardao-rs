@@ -1,3 +1,4 @@
+use library::functions::math::calculate_percent_u128;
 use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::types::{ActivityRight, VoteScenario};
@@ -335,37 +336,38 @@ impl Contract {
         } else {
             10u128.pow(self.decimals as u32)
         };
-        if calc_percent_u128_unchecked(vote_results[0], max_possible_amount, decimals)
+        if calculate_percent_u128(vote_results[0] * decimals, max_possible_amount * decimals)
             >= settings.spam_threshold
         {
             log!(
                 "spam th: {}, max_possible: {}, current: {}",
                 settings.spam_threshold,
-                max_possible_amount,
-                vote_results[0],
+                max_possible_amount * decimals,
+                vote_results[0] * decimals,
             );
             ProposalState::Spam
-        } else if calc_percent_u128_unchecked(
-            vote_results.iter().sum(),
-            max_possible_amount,
-            decimals,
+        } else if calculate_percent_u128(
+            vote_results.iter().sum::<u128>() * decimals,
+            max_possible_amount * decimals,
         ) < settings.quorum
         {
             log!(
                 "quorum th: {}, max_possible: {}, current: {}",
                 settings.quorum,
-                max_possible_amount,
-                vote_results.iter().sum::<u128>(),
+                max_possible_amount * decimals,
+                vote_results.iter().sum::<u128>() * decimals,
             );
             ProposalState::Invalid
-        } else if calc_percent_u128_unchecked(vote_results[1], vote_results.iter().sum(), decimals)
-            < settings.approve_threshold
+        } else if calculate_percent_u128(
+            vote_results[1] * decimals,
+            vote_results.iter().sum::<u128>() * decimals,
+        ) < settings.approve_threshold
         {
             log!(
                 "appprove th: {}, max_possible: {}, current: {}",
                 settings.approve_threshold,
-                vote_results.iter().sum::<u128>(),
-                vote_results[1],
+                vote_results.iter().sum::<u128>() * decimals,
+                vote_results[1] * decimals,
             );
             ProposalState::Rejected
         } else {

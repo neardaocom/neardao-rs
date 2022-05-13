@@ -1,11 +1,12 @@
-use library::locking::Lock;
+use library::locking::UnlockingDB;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    near_bindgen,
     serde::{Deserialize, Serialize},
     AccountId,
 };
 
-use crate::{core::Contract, ApprovalId, TimestampSec, TokenId};
+use crate::{core::*, internal::utils::current_timestamp_sec, ApprovalId, TimestampSec, TokenId};
 
 /// Container around unique assets.
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
@@ -91,7 +92,7 @@ pub struct PartitionAsset {
     asset_id: Asset,
     /// Available amount of the asset with decimal zeroes.
     amount: u128,
-    lock: Option<Lock>,
+    lock: Option<UnlockingDB>,
 }
 
 impl PartitionAsset {
@@ -101,14 +102,14 @@ impl PartitionAsset {
     pub fn new(
         asset_id: Asset,
         amount: u128,
-        lock: Option<Lock>,
+        lock: Option<UnlockingDB>,
         current_timestamp: TimestampSec,
     ) -> Self {
         let (amount, lock) = if let Some(mut lock) = lock {
-            let unlocked_amount = lock.unlock(current_timestamp) as u128;
+            lock.unlock(current_timestamp);
             (
                 amount * 10u128.pow(asset_id.decimals() as u32)
-                    + unlocked_amount * 10u128.pow(asset_id.decimals() as u32),
+                    + lock.available() as u128 * 10u128.pow(asset_id.decimals() as u32),
                 Some(lock),
             )
         } else {
@@ -236,10 +237,20 @@ impl PartialEq for Asset {
     }
 }
 
+#[near_bindgen]
 impl Contract {
-    pub fn partition(&self, partition_id: u16) -> Option<TreasuryPartition> {
-        self.treasury_partition.get(&partition_id)
+    pub fn unlock_partition_assets(&mut self, id: u16) {
+        let mut partition = self
+            .treasury_partition
+            .get(&id)
+            .expect("partition not found");
+        let current_timestamp = current_timestamp_sec();
+        partition.unlock_all(current_timestamp);
+        self.treasury_partition.insert(&id, &partition);
     }
+}
+
+impl Contract {
     pub fn add_partition(&mut self, partition: TreasuryPartition) -> u16 {
         self.partition_last_id += 1;
         self.treasury_partition

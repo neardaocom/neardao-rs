@@ -29,7 +29,7 @@ use crate::{
                     PROVIDER_TPL_ID_REWARD1, PROVIDER_TPL_ID_SKYWARD1, PROVIDER_TPL_ID_TRADE1,
                 },
                 proposal::ProposalState,
-                reward::{Asset, RewardActivity, RewardTypeIdent},
+                reward::{Asset, RewardActivity},
             },
             view::{
                 debug_log, ft_balance_of, get_timestamp, view_reward, view_user_roles,
@@ -47,6 +47,7 @@ use crate::{
 };
 
 const DAO_FT_TOTAL_SUPPLY: u128 = 1_000_000_000;
+const DEFAULT_DECIMALS: u128 = 10u128.pow(24);
 
 /// Test sale create on skyward scenario as DAO with production binaries.
 /// TODO: Involve factory account in the process.
@@ -359,7 +360,7 @@ async fn workflow_trade1_scenario() -> anyhow::Result<()> {
     let staking = init_staking(&worker).await?;
     let wf_provider = init_workflow_provider(&worker).await?;
     let dao = deploy_dao(&worker).await?;
-    let vote_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY).await?;
+    let vote_token = init_fungible_token(&worker, dao.id(), 1_000_000_000).await?;
     let required_token = init_fungible_token(&worker, token_holder.id(), 1_000).await?;
 
     // Inits dao and does essential checks.
@@ -471,11 +472,11 @@ async fn workflow_trade1_scenario() -> anyhow::Result<()> {
     worker.wait(5).await?;
     assert_eq!(
         ft_balance_of(&worker, &required_token, &token_holder.id()).await?,
-        0.into()
+        (1_000 * DEFAULT_DECIMALS - 1_000).into()
     );
     assert_eq!(
         ft_balance_of(&worker, &required_token, &dao.id()).await?,
-        1_000.into()
+        (1_000).into()
     );
     let dao_account_balance_after = dao.view_account(&worker).await?.balance / 10u128.pow(24);
     println!(
@@ -590,7 +591,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
         &token_holder,
         &other_token,
         &dao.id(),
-        1_000,
+        1_000 * DEFAULT_DECIMALS,
         None,
         serialized_dao_ft_receiver_msg(proposal_id),
     )
@@ -613,7 +614,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
     worker.wait(5).await?;
     assert_eq!(
         ft_balance_of(&worker, &required_token, &token_holder.id()).await?,
-        1_000.into()
+        (1_000 * DEFAULT_DECIMALS).into()
     );
     assert_eq!(
         ft_balance_of(&worker, &required_token, &dao.id()).await?,
@@ -625,7 +626,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
     );
     assert_eq!(
         ft_balance_of(&worker, &other_token, &dao.id()).await?,
-        1_000.into()
+        (1_000 * DEFAULT_DECIMALS).into()
     );
     let dao_account_balance_after = dao.view_account(&worker).await?.balance / 10u128.pow(24);
     println!(
@@ -818,9 +819,8 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
     let staking = init_staking(&worker).await?;
     let wf_provider = init_workflow_provider(&worker).await?;
     let dao = deploy_dao(&worker).await?;
-    let vote_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY * ONE_NEAR).await?;
-    let reward_token =
-        init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY * ONE_NEAR).await?;
+    let vote_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY).await?;
+    let reward_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY).await?;
 
     // Inits dao and does essential checks.
     init_dao(
@@ -974,9 +974,8 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
     let staking = init_staking(&worker).await?;
     let wf_provider = init_workflow_provider(&worker).await?;
     let dao = deploy_dao(&worker).await?;
-    let vote_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY * ONE_NEAR).await?;
-    let reward_token =
-        init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY * ONE_NEAR).await?;
+    let vote_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY).await?;
+    let reward_token = init_fungible_token(&worker, dao.id(), DAO_FT_TOTAL_SUPPLY).await?;
 
     // Inits dao and does essential checks.
     init_dao(

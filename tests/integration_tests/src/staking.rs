@@ -17,6 +17,7 @@ const MIN_STORAGE: u128 = 945;
 
 const MIN_STORAGE_DEPOSIT: Balance = 2 * 10u128.pow(23);
 pub const MIN_REGISTER_DEPOSIT: Balance = 155 * 10u128.pow(21);
+pub const DECIMALS: u128 = 10u128.pow(24);
 
 /// Staking user structure
 #[derive(Serialize, Deserialize, Debug)]
@@ -148,7 +149,7 @@ async fn staking_full_scenario() -> Result<()> {
     // FT init.
     let args = json!({
         "owner_id" : token_holder.id(),
-        "total_supply": U128::from(1_000_000_000)
+        "total_supply": U128::from(1_000_000_000 * DECIMALS)
     })
     .to_string()
     .into_bytes();
@@ -170,7 +171,7 @@ async fn staking_full_scenario() -> Result<()> {
     .into_bytes();
     let outcome = token.view(&worker, "ft_balance_of", args).await?;
     view_outcome_pretty::<String>("ft_balance_of token_holder check", &outcome);
-    check_ft_balance_of(token_holder.id(), &outcome, 1_000_000_000);
+    check_ft_balance_of(token_holder.id(), &outcome, 1_000_000_000 * DECIMALS);
 
     // Storage deposit for DAO in staking.
     let args = json!({
@@ -327,7 +328,11 @@ async fn staking_full_scenario() -> Result<()> {
     .into_bytes();
     let outcome = token.view(&worker, "ft_balance_of", args).await?;
     view_outcome_pretty::<String>("ft_balance_of token_holder check", &outcome);
-    check_ft_balance_of(token_holder.id(), &outcome, 1_000_000_000 - 3_000);
+    check_ft_balance_of(
+        token_holder.id(),
+        &outcome,
+        1_000_000_000 * DECIMALS - 3_000,
+    );
 
     // View token_holder weight
     let args = json!({
@@ -619,7 +624,11 @@ async fn staking_full_scenario() -> Result<()> {
     .into_bytes();
     let outcome = token.view(&worker, "ft_balance_of", args).await?;
     view_outcome_pretty::<String>("ft_balance_of token_holder check", &outcome);
-    check_ft_balance_of(token_holder.id(), &outcome, 1_000_000_000 - 2_000);
+    check_ft_balance_of(
+        token_holder.id(),
+        &outcome,
+        1_000_000_000 * DECIMALS - 2_000,
+    );
 
     // Undelegate rest - 1500 ft.
     let args = json!({
@@ -715,7 +724,7 @@ async fn staking_full_scenario() -> Result<()> {
     .into_bytes();
     let outcome = token.view(&worker, "ft_balance_of", args).await?;
     view_outcome_pretty::<String>("ft_balance_of token_holder check", &outcome);
-    check_ft_balance_of(token_holder.id(), &outcome, 1_000_000_000);
+    check_ft_balance_of(token_holder.id(), &outcome, 1_000_000_000 * DECIMALS);
 
     // Unregister token_holder in dao.
     let args = json!({
@@ -896,7 +905,7 @@ async fn staking_withdraw_panic() {
     // FT init.
     let args = json!({
         "owner_id" : token_holder.id(),
-        "total_supply": U128::from(1_000_000_000)
+        "total_supply": U128::from(1_000_000_000 * DECIMALS)
     })
     .to_string()
     .into_bytes();

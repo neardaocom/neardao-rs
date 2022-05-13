@@ -4,6 +4,8 @@ use library::storage::StorageBucket;
 use library::types::consts::Consts;
 use library::types::datatype::Value;
 use library::types::source::{MutableSource, Source, SourceDataVariant, SourceProvider};
+use near_sdk::json_types::U128;
+use near_sdk::serde::{Deserialize, Serialize};
 
 pub struct SourceMock {
     pub tpls: Vec<(String, Value)>,
@@ -86,3 +88,41 @@ impl MutableSource for SourceMock {
 }
 
 impl Source for SourceMock {}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PercentInput {
+    pub total_possible: U128,
+    pub actual: U128,
+    pub decimals: u8,
+}
+
+impl PercentInput {
+    pub fn new(total_possible: U128, actual: U128, decimals: u8) -> Self {
+        Self {
+            total_possible,
+            actual,
+            decimals,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PercentResult {
+    pub total_possible: U128,
+    pub actual: U128,
+    pub decimals: u8,
+    pub result: u8,
+}
+
+impl PercentResult {
+    pub fn from_input(input: &PercentInput, expected_result_u8: u8) -> Self {
+        Self {
+            total_possible: input.total_possible,
+            actual: input.actual,
+            decimals: input.decimals,
+            result: expected_result_u8,
+        }
+    }
+}

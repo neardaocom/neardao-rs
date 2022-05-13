@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use library::locking::Lock;
 use serde::{Deserialize, Serialize};
 use workspaces::AccountId;
 
