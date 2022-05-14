@@ -954,44 +954,6 @@ impl Contract {
         Promise::new(receiver).function_call(method, args.into_bytes(), deposit, TGAS * tgas as u64)
     }
 
-    /// Proposal binds structure check.
-    /// This does NOT check all.
-    /// Eg. does not check if binds for activity are not missing in some actions where WF needs them.
-    pub fn assert_valid_proposal_binds_structure(
-        &self,
-        binds: &[Option<ActivityBind>],
-        activities: &[Activity],
-    ) {
-        todo!();
-        /*
-         assert_eq!(
-            binds.len(),
-            activities.len() - 1,
-            "Binds must be same length as activities."
-        );
-        // Skip init activity.
-        for (idx, act) in activities.iter().skip(1).enumerate() {
-            match act {
-                Activity::Init => panic!("Invalid WF. Init activity defined at > 0 index."),
-                Activity::DaoActivity(a) | Activity::FnCallActivity(a) => {
-                    let act_binds = &binds[idx];
-
-                    // Skip binds with activity which does not have filled
-                    if act_binds.is_none() {
-                        continue;
-                    } else {
-                        assert_eq!(
-                            act_binds.as_ref().unwrap().values.len(),
-                            a.actions.as_slice().len(),
-                            "Activity action binds does not have same len."
-                        );
-                    }
-                }
-            }
-        }
-        */
-    }
-
     // TODO: Tests.
     /// Binds dao FnCall
     pub fn get_fncall_id_with_metadata(

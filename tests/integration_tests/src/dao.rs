@@ -917,7 +917,7 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
             1,
             1,
             timestamp,
-            timestamp + 3600 + 10,
+            timestamp + 7200 + 10,
             reward_token.id().to_string(),
             3 * ONE_NEAR,
             24,

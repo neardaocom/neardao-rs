@@ -24,6 +24,7 @@ impl Role {
     }
 
     /// Inserts new role and returns assigned `RoleId`
+    /// Return `None` if `new_role` is empty string.
     pub fn insert(&mut self, new_role: String) -> Option<RoleId> {
         if new_role.is_empty() {
             return None;

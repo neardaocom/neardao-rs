@@ -178,7 +178,6 @@ impl Group {
 impl Contract {
     // TODO: Review.
     // TODO: Add check to validate user roles.
-    /// Updates DAO's `ft_total_locked` amount and `total_members_count` values.
     pub fn add_group(&mut self, group: GroupInput) {
         self.total_members_count += group.members.len() as u32;
         self.group_last_id += 1;
@@ -223,6 +222,7 @@ impl Contract {
         result_members
     }
 
+    /// TODO: Refactor.
     pub fn group_remove(&mut self, id: GroupId) -> bool {
         if let Some(mut group) = self.groups.remove(&id) {
             //let token_lock: TokenLock = group.remove_storage_data();

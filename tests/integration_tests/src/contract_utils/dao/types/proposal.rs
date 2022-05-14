@@ -29,6 +29,7 @@ pub struct ProposalCreateInput {
     template_settings_id: u8,
     propose_settings: ProposeSettings,
     template_settings: Option<Vec<TemplateSettings>>,
+    scheduler_msg: Option<String>,
 }
 
 impl ProposalCreateInput {
@@ -45,6 +46,7 @@ impl ProposalCreateInput {
             template_settings_id,
             propose_settings,
             template_settings,
+            scheduler_msg: None,
         }
     }
 
@@ -59,6 +61,7 @@ impl ProposalCreateInput {
             template_settings_id: 0,
             propose_settings,
             template_settings,
+            scheduler_msg: None,
         }
     }
 }
@@ -81,6 +84,7 @@ pub struct Proposal {
     pub desc: u32,
     pub created: TimestampSec,
     pub created_by: AccountId,
+    pub end: TimestampSec,
     pub votes: HashMap<AccountId, u8>,
     pub state: ProposalState,
     pub workflow_id: u16,

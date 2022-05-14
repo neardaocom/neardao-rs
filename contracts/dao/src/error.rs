@@ -6,8 +6,6 @@ use std::{
 use library::types::error::{ProcessingError, TypeError};
 use near_sdk::{serde::Serialize, serde_json::Error as SerdeError};
 
-pub const ERR_INVALID_AMOUNT: &str = "Invalid amount";
-pub const ERR_NO_ACCESS: &str = "You have no rights for this action";
 pub const ERR_GROUP_NOT_FOUND: &str = "Group does not exist";
 pub const ERR_GROUP_HAS_NO_LEADER: &str = "Group has no leader";
 pub const ERR_UNKNOWN_FNCALL: &str = "Undefined fn call";

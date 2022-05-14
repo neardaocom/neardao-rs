@@ -3,11 +3,13 @@ use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::types::{ActivityRight, VoteScenario};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::env::panic_str;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{env, log, near_bindgen, AccountId};
 use std::collections::HashMap;
 
 use crate::error::ERR_GROUP_NOT_FOUND;
+use crate::internal::utils::current_timestamp_sec;
 use crate::media::{Media, ResourceType};
 use crate::reward::RewardActivity;
 use crate::{
@@ -68,6 +70,7 @@ pub struct Proposal {
     pub desc: ResourceId,
     pub created: TimestampSec,
     pub created_by: AccountId,
+    pub end: TimestampSec,
     pub votes: HashMap<AccountId, u8>,
     pub state: ProposalState,
     pub workflow_id: u16,
@@ -78,8 +81,9 @@ impl Proposal {
     #[inline]
     pub fn new(
         desc: ResourceId,
-        created: u64,
+        created: TimestampSec,
         created_by: AccountId,
+        end: TimestampSec,
         workflow_id: u16,
         workflow_settings_id: u8,
     ) -> Self {
@@ -87,6 +91,7 @@ impl Proposal {
             desc,
             created,
             created_by,
+            end,
             votes: HashMap::new(),
             state: ProposalState::InProgress,
             workflow_id,
@@ -104,40 +109,64 @@ pub enum ProposalContent {
 
 #[near_bindgen]
 impl Contract {
+    /// Create proposal that allow to execute workflow once accepted.
+    /// If proposing workflow for adding new workflow aka "wf_add"
+    /// then `template_settings` must contain at least one `template_settings`
+    /// that will be added to the workflow when downloaded from workflow provider.
+    /// "wf_add" workflow is is supposed to have template_id 1.
+    /// Function also:
+    /// - (TODO) if `desc` is provided then schedules promise `desc` to the Resource Provider to store its description.
+    /// - (TODO) if `scheduler_msg` is provided then schedules promise to the scheduler (actually Croncat) to automatically finish this proposal.
+    /// Panics if:
+    /// - `template_id` does not refer to existing Template
+    /// - `template_settings_id` does not refer to valid TemplateSetting for `template_id`
+    /// - `template_settings_id` refer to valid TemplateSettings
+    ///  but caller do not have rights to propose them
+    /// - `template_id` == 1 (aka "wf_add") but `template_settings` is None
+    /// - `propose_settings` contain no storage key but Template requires it or the storage_key already exists
+    /// Caller is responsible to provide valid `propose_settings`.
     #[payable]
     pub fn proposal_create(
         &mut self,
-        desc: ResourceType, // TODO: Optional
+        description: Option<ResourceType>, // TODO: Optional
         template_id: u16,
         template_settings_id: u8,
         propose_settings: ProposeSettings,
         template_settings: Option<Vec<TemplateSettings>>,
+        scheduler_msg: Option<String>,
     ) -> u32 {
         let caller = env::predecessor_account_id();
-        let (wft, wfs) = self.workflow_template.get(&template_id).unwrap();
+        let (wft, wfs) = self
+            .workflow_template
+            .get(&template_id)
+            .expect("Template not found.");
         let settings = wfs
             .get(template_settings_id as usize)
-            .expect("Undefined settings id");
+            .expect("Settings for template_settings_id not found.");
         assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or_else(|| 0.into()).0);
         if !self.check_rights(&settings.allowed_proposers, &caller) {
-            panic!("You have no rights to propose this");
+            panic_str("No right to propose with the provided template_settings_id.");
         }
         self.proposal_last_id += 1;
-        //Assuming template_id for WorkflowAdd is always first wf added during dao init
         if template_id == 1 {
             assert!(
-                template_settings.is_some(),
+                !template_settings
+                    .as_ref()
+                    .expect("Expected template settings for 'WorkflowAdd' proposal.")
+                    .is_empty(),
                 "{}",
-                "Expected template settings for 'WorkflowAdd' proposal"
+                "Provided `template_settings` do not contain TemplateSettings."
             );
             self.proposed_workflow_settings
                 .insert(&self.proposal_last_id, &template_settings.unwrap());
         }
-        // TODO: Implement resource provider.
+        // Rounded up to minutes
+        let created = env::block_timestamp() / 10u64.pow(9) / 60 * 60 + 60;
         let proposal = Proposal::new(
             0,
-            env::block_timestamp() / 10u64.pow(9) / 60 * 60 + 60, // Rounded up to minutes
+            created,
             caller,
+            created + settings.duration as u64,
             template_id,
             template_settings_id,
         );
@@ -148,21 +177,16 @@ impl Contract {
                     "Storage key already exists."
                 );
             } else {
-                panic!("Template requires storage, but no key was provided.");
+                panic_str("Template requires storage, but no key was provided.");
             }
         }
-        // TODO: Refactor.
-        // Check that proposal binds have valid structure.
-        //self.assert_valid_proposal_binds_structure(
-        //    propose_settings.binds.as_slice(),
-        //    wft.activities.as_slice(),
-        //);
         self.proposals.insert(
             &self.proposal_last_id,
             &VersionedProposal::Current(proposal),
         );
         self.workflow_propose_settings
             .insert(&self.proposal_last_id, &propose_settings);
+        // TODO: Implement resource provider.
         // TODO: Croncat registration to finish proposal
         self.proposal_last_id
     }
@@ -204,14 +228,13 @@ impl Contract {
     }
 
     pub fn proposal_finish(&mut self, id: u32) -> ProposalState {
-        let caller = env::predecessor_account_id();
         let (mut proposal, wft, wfs) = self.get_workflow_and_proposal(id);
         let mut instance =
             Instance::new(proposal.workflow_id, wft.activities.len(), wft.end.clone());
         let propose_settings = self.workflow_propose_settings.get(&id).unwrap();
         let new_state = match proposal.state {
             ProposalState::InProgress => {
-                if proposal.created + wfs.duration as u64 > env::block_timestamp() / 10u64.pow(9) {
+                if proposal.created + wfs.duration as u64 > current_timestamp_sec() {
                     None
                 } else {
                     let vote_result = self.eval_votes(&proposal.votes, &wfs);
@@ -225,7 +248,7 @@ impl Contract {
                         }
                     }
                     self.register_executed_activity(
-                        &caller,
+                        &proposal.created_by,
                         RewardActivity::AcceptedProposal.into(),
                     );
                     Some(vote_result)

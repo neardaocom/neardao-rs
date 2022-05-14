@@ -43,8 +43,8 @@ impl TreasuryPartition {
         }
     }
     /// Return reference to the asset if exists.
-    pub fn asset(&self, asset_id: Asset) -> Option<&PartitionAsset> {
-        if let Some(pos) = self.find_asset_pos(&asset_id) {
+    pub fn asset(&self, asset_id: &Asset) -> Option<&PartitionAsset> {
+        if let Some(pos) = self.find_asset_pos(asset_id) {
             self.assets.get(pos)
         } else {
             None
@@ -96,9 +96,10 @@ pub struct PartitionAsset {
 }
 
 impl PartitionAsset {
-    /// Creates new self.
-    /// Available amount is sum of `amount` and result of immediately called unlock `lock`.
+    /// Create new self.
+    /// Available amount is sum of `amount` and result of immediately called unlock on `lock`.
     /// `amount` is supposed to be integer amount of the asset.
+    /// Eg. amount = 2 for asset_id Asset::Near is actually stored as 2 * 10^24.
     pub fn new(
         asset_id: Asset,
         amount: u128,

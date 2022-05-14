@@ -7,7 +7,7 @@ use library::workflow::{
     template::Template,
 };
 use proposal::Proposal;
-//mod unit_tests;
+mod unit_tests;
 
 pub mod constants;
 pub mod error;

@@ -62,6 +62,7 @@ fn add_group() {
             parent_group: 0,
         },
         members: new_group_members.clone(),
+        member_roles: HashMap::default(),
     });
 
     assert_eq!(contract.total_members_count, 5);

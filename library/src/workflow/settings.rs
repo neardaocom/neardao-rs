@@ -26,9 +26,11 @@ pub struct TemplateSettings {
     pub approve_threshold: u8,
     pub spam_threshold: u8,
     pub vote_only_once: bool,
+    /// Deposit required to be able to propose.
     pub deposit_propose: Option<U128>,
+    /// Deposit required to be able to vote in the proposal.
     pub deposit_vote: Option<U128>,
-    /// Percents of proposal deposit to be returned.
+    /// Percents of `deposit_propose` to be returned when proposal is Accepted.
     pub deposit_propose_return: u8,
     pub constants: Option<SourceDataVariant>,
 }

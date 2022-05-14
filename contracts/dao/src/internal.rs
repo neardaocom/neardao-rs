@@ -1,9 +1,9 @@
-use near_sdk::{env, AccountId, Balance};
+use near_sdk::{env, require, AccountId, Balance};
 
 use crate::{
     constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, C_PREDECESSOR},
     core::{ActivityLog, Contract},
-    error::{ERR_LOCK_AMOUNT_OVERFLOW, ERR_STORAGE_BUCKET_EXISTS},
+    error::ERR_LOCK_AMOUNT_OVERFLOW,
     group::GroupInput,
     internal::utils::current_timestamp_sec,
     proposal::Proposal,
@@ -36,7 +36,6 @@ impl Contract {
     #[inline]
     pub fn init_tags(&mut self, tags: Vec<TagInput>) {
         self.tags.insert(&"group".into(), &Tags::new());
-        self.tags.insert(&"media".into(), &Tags::new());
 
         for i in tags.into_iter() {
             let mut tags = Tags::new();
@@ -58,7 +57,8 @@ impl Contract {
         );
     }
 
-    /// Registers fncalls and their metadata.
+    /// Register fncalls and their metadata
+    /// when dao is being created.
     /// Existing are overwriten.
     /// No checks included.
     pub fn init_function_calls(
@@ -82,24 +82,20 @@ impl Contract {
         }
     }
 
-    // Each workflow must have at least one setting
+    /// Add provided workflow templates with its template settings
+    /// when dao is being created.
     #[inline]
     pub fn init_workflows(
         &mut self,
         mut workflows: Vec<Template>,
         mut workflow_template_settings: Vec<Vec<TemplateSettings>>,
     ) {
-        //assert!(workflows.len() > 0);
-        //assert!(
-        //    workflows[0]
-        //        .get_activity_as_ref(1)
-        //        .unwrap()
-        //        .get_dao_action_type(0)
-        //        .unwrap()
-        //        == DaoActionIdent::WorkflowAdd,
-        //    "{}",
-        //    "First Workflow must be WorkflowAdd"
-        //);
+        assert!(workflows.len() > 0);
+        assert!(
+            workflows.get(0).unwrap().code == "wf_add",
+            "{}",
+            "First workflow must be WfAdd (code: wf_add)"
+        );
 
         let len = workflows.len();
         for i in 0..len {
@@ -123,41 +119,16 @@ impl Contract {
         (proposal, wft, settings)
     }
 
+    /// Add new storage bucket to the storage.
+    /// Panic if storage bucket already exists.
     pub fn storage_bucket_add(&mut self, bucket_id: &str) {
         let bucket = StorageBucket::new(utils::get_bucket_id(bucket_id));
-        assert!(
+        require!(
             self.storage
                 .insert(&bucket_id.to_owned(), &bucket)
                 .is_none(),
-            "{}",
-            ERR_STORAGE_BUCKET_EXISTS
+            "Storage bucket already exists.",
         );
-    }
-
-    /// Internally transfers FT from contract account all accounts equally.
-    /// Sets contract's ft_total_distributed property.
-    /// Panics if account_ids is empty vector or distribution value is zero.
-    #[allow(unused)]
-    pub fn distribute_ft(&mut self, amount: u32, account_ids: &[AccountId]) {
-        unimplemented!("Requires new FT SC implemented.");
-        /*         assert!(!account_ids.is_empty(), "{}", ERR_DISTRIBUTION_ACC_EMPTY);
-        assert!(
-            amount / account_ids.len() as u32 > 0,
-            "{}",
-            ERR_DISTRIBUTION_MIN_VALUE
-        );
-        let amount_per_acc = (amount / account_ids.len() as u32) as u128 * self.decimal_const;
-        self.ft_total_distributed += amount - (amount % account_ids.len() as u32);
-        let contract_account_id = env::current_account_id();
-        for acc in account_ids {
-            // If not registered when distributing ft, we register them, assuming storage deposit payment is solved by other mechanisms
-            if !self.ft.accounts.contains_key(acc) {
-                self.ft.accounts.insert(acc, &0);
-            }
-
-            self.ft
-                .internal_transfer(&contract_account_id, acc, amount_per_acc, None);
-        } */
     }
 
     /// Closure which might be required in workflow.
@@ -231,7 +202,7 @@ impl Consts for DaoConsts {
 }
 
 // TODO: Remove Debug in production.
-/// Helper data struct during activity execution.
+/// Helper struct used during activity execution.
 #[derive(Debug)]
 pub struct ActivityContext {
     pub caller: AccountId,
