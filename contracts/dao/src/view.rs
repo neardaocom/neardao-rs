@@ -5,12 +5,13 @@ use library::workflow::template::Template;
 use library::MethodName;
 use near_sdk::json_types::U128;
 use near_sdk::serde::Serialize;
-use near_sdk::{near_bindgen, AccountId, Balance};
+use near_sdk::{env, near_bindgen, AccountId, Balance};
 
 use crate::group::{GroupMember, GroupOutput};
 use crate::internal::utils::current_timestamp_sec;
 use crate::proposal::VersionedProposal;
 use crate::reward::Reward;
+use crate::role::UserRoles;
 use crate::settings::Settings;
 use crate::tags::Tags;
 use crate::treasury::TreasuryPartition;
@@ -44,15 +45,19 @@ impl Contract {
         next_tick
     }
 
-    /// Returns information about token, staking and members.
-    pub fn stats(self) -> Stats {
-        Stats {
+    /// Return general statitstics about DAO.
+    pub fn statistics(self) -> Statistics {
+        Statistics {
             staking_id: self.staking_id,
             token_id: self.token_id,
-            ft_total_supply: self.ft_total_supply,
             total_delegation_amount: self.total_delegation_amount,
+            total_delegators_count: self.total_delegators_count,
+            ft_total_supply: self.ft_total_supply,
             decimals: self.decimals,
             total_members_count: self.total_members_count,
+            total_account_balance: env::account_balance(),
+            free_account_balance: env::account_balance()
+                - env::storage_usage() as u128 * env::storage_byte_cost(),
         }
     }
 
@@ -126,19 +131,18 @@ impl Contract {
         let mut partitions = Vec::with_capacity(self.reward_last_id as usize);
         for i in from_id..std::cmp::min(self.partition_last_id, limit) {
             if let Some(partition) = self.treasury_partition.get(&i) {
-                partitions.push((i, partition));
+                partitions.push((i, partition.into()));
             }
         }
         partitions
     }
     pub fn partition(&self, id: u16) -> Option<TreasuryPartition> {
-        self.treasury_partition.get(&id)
+        self.treasury_partition.get(&id).map(|p| p.into())
     }
-
     pub fn view_wallet(self, account_id: AccountId) -> Wallet {
         self.wallets.get(&account_id).unwrap().into()
     }
-    pub fn view_user_roles(self, account_id: AccountId) -> Vec<(u16, u16)> {
+    pub fn view_user_roles(self, account_id: AccountId) -> UserRoles {
         self.user_roles.get(&account_id).unwrap()
     }
 
@@ -211,11 +215,14 @@ impl Contract {
 #[derive(Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct Stats {
+pub struct Statistics {
     pub staking_id: AccountId,
     pub token_id: AccountId,
-    pub ft_total_supply: u32,
     pub total_delegation_amount: Balance,
+    pub total_delegators_count: u32,
+    pub ft_total_supply: u32,
     pub decimals: u8,
     pub total_members_count: u32,
+    pub total_account_balance: u128,
+    pub free_account_balance: u128,
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use data::{
     object_metadata::standard_fn_calls::{standard_fn_call_metadatas, standard_fn_call_methods},
@@ -12,9 +12,7 @@ use crate::{
     utils::{get_dao_wasm, outcome_pretty, FnCallId, MethodName},
 };
 
-use super::types::init::{
-    DaoInit, DaoSettings, GroupInput, GroupMember, GroupOutput, GroupSettings,
-};
+use super::types::init::{DaoInit, GroupInput, GroupMember, GroupOutput, GroupSettings, Settings};
 
 pub(crate) async fn init_dao<T>(
     worker: &Worker<T>,
@@ -112,14 +110,16 @@ fn dao_init_args(
     )
 }
 
-fn dao_settings(provider_id: AccountId, admin_id: AccountId) -> DaoSettings {
-    DaoSettings {
+fn dao_settings(provider_id: AccountId, admin_id: AccountId) -> Settings {
+    Settings {
         name: "Test dao".into(),
         purpose: "testing".into(),
         tags: vec![],
         dao_admin_account_id: admin_id,
         dao_admin_rights: vec!["all".into()],
         workflow_provider: provider_id,
+        resource_provider: AccountId::from_str("resource-provider.neardao.testnet").unwrap(),
+        scheduler: AccountId::from_str("scheduler.neardao.testnet").unwrap(),
     }
 }
 fn default_group(members: Vec<&AccountId>) -> GroupInput {

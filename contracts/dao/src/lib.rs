@@ -1,5 +1,4 @@
 #![allow(unreachable_patterns)]
-#![allow(clippy::too_many_arguments)] // TODO: Solve.
 
 use library::workflow::{
     instance::Instance,
@@ -53,12 +52,6 @@ pub(crate) type RoleId = u16;
 pub(crate) type ResourceId = u32;
 pub type TokenId = String;
 pub type ApprovalId = Option<u64>;
-
-/// Calculates votes as percents
-#[inline]
-pub(crate) fn calc_percent_u128_unchecked(value: u128, total: u128, decimals: u128) -> u8 {
-    ((value / decimals) as f64 / (total / decimals) as f64 * 100.0).round() as u8
-}
 
 #[macro_export]
 macro_rules! derive_into_versioned {

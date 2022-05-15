@@ -10,11 +10,9 @@ use std::collections::HashMap;
 
 use crate::error::ERR_GROUP_NOT_FOUND;
 use crate::internal::utils::current_timestamp_sec;
-use crate::media::{Media, ResourceType};
+use crate::media::ResourceType;
 use crate::reward::RewardActivity;
-use crate::{
-    calc_percent_u128_unchecked, core::*, CalculatedVoteResults, VoteTotalPossible, Votes,
-};
+use crate::{core::*, CalculatedVoteResults, VoteTotalPossible, Votes};
 use crate::{ResourceId, TimestampSec};
 
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
@@ -100,13 +98,6 @@ impl Proposal {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-pub enum ProposalContent {
-    Media(Media),
-}
-
 #[near_bindgen]
 impl Contract {
     /// Create proposal that allow to execute workflow once accepted.
@@ -147,6 +138,13 @@ impl Contract {
         if !self.check_rights(&settings.allowed_proposers, &caller) {
             panic_str("No right to propose with the provided template_settings_id.");
         }
+        if matches!(settings.allowed_voters, ActivityRight::Member)
+            && matches!(settings.scenario, VoteScenario::TokenWeighted)
+        {
+            panic_str(
+                "scenario: `TokenWeighted` + allowed_voters: `Members` is not supported yet.",
+            );
+        }
         self.proposal_last_id += 1;
         if template_id == 1 {
             assert!(
@@ -186,8 +184,14 @@ impl Contract {
         );
         self.workflow_propose_settings
             .insert(&self.proposal_last_id, &propose_settings);
-        // TODO: Implement resource provider.
-        // TODO: Croncat registration to finish proposal
+        if let Some(resource) = description {
+            // TODO: Implement resource provider.
+            todo!();
+        }
+        if let Some(msg) = scheduler_msg {
+            // TODO: Croncat registration to finish proposal
+            todo!();
+        }
         self.proposal_last_id
     }
 
@@ -276,9 +280,10 @@ impl Contract {
 }
 
 impl Contract {
-    /// Evaluates vote results by scenario and type of voters.
-    /// Returns tuple (max_possible_amount,vote_results)
-    #[allow(unused)]
+    // TODO: Error handling.
+    /// Evaluate vote results by scenario and type of voters.
+    /// Return tuple CalculatedVoteResults.
+    /// Scenario: TokenWeighted + Voters: Members is currently implemented!
     pub fn calculate_votes(
         &self,
         votes: &HashMap<AccountId, u8>,
@@ -305,13 +310,14 @@ impl Contract {
                         max_possible_amount = 1;
                     }
                     ActivityRight::TokenHolder => {
-                        unimplemented!()
+                        max_possible_amount = self.total_delegators_count as u128;
                     }
-                    // If member exists in 2 groups, then he is accounted twice.
+                    // TODO: Fix - If a member exists in 2 groups, then he is accounted twice.
                     ActivityRight::Member => {
                         max_possible_amount = self.total_members_count as u128;
                     }
                     ActivityRight::GroupRole(g, r) => match self.groups.get(g) {
+                        // TODO: Fix
                         Some(group) => {
                             max_possible_amount =
                                 group.get_members_accounts_by_role(*r).len() as u128;
@@ -320,23 +326,100 @@ impl Contract {
                     },
                 }
 
-                for vote_value in votes.values() {
-                    vote_result[*vote_value as usize] += 1;
-                }
-            }
-            VoteScenario::TokenWeighted => match vote_target {
-                ActivityRight::Anyone | ActivityRight::TokenHolder => unimplemented!(),
-                // This is expensive scenario
-                ActivityRight::Member => unimplemented!(),
-                ActivityRight::Group(gid) => unimplemented!(),
-                ActivityRight::GroupRole(gid, rid) => unimplemented!(),
-                ActivityRight::GroupMember(_, _)
-                | ActivityRight::Account(_)
-                | ActivityRight::GroupLeader(_) => {
-                    max_possible_amount = 1;
+                if matches!(vote_target, ActivityRight::Member) {
+                    for (voter, vote_value) in votes.iter() {
+                        if self.user_roles.get(voter).is_some() {
+                            vote_result[*vote_value as usize] += 1;
+                        }
+                    }
+                } else {
                     for vote_value in votes.values() {
                         vote_result[*vote_value as usize] += 1;
                     }
+                }
+            }
+            VoteScenario::TokenWeighted => match vote_target {
+                ActivityRight::Anyone | ActivityRight::TokenHolder => {
+                    max_possible_amount = self.total_delegation_amount;
+                    for (voter, vote_value) in votes.iter() {
+                        vote_result[*vote_value as usize] +=
+                            self.delegations.get(&voter).unwrap_or(0);
+                    }
+                }
+                ActivityRight::Member => {
+                    todo!()
+                }
+                ActivityRight::Group(g) => {
+                    match self.groups.get(g) {
+                        Some(group) => {
+                            let members = group.get_members_accounts();
+                            for member in members {
+                                let member_vote_weight = self.delegations.get(&member).unwrap_or(0);
+                                max_possible_amount += member_vote_weight;
+                                if let Some(vote_value) = votes.get(&member) {
+                                    vote_result[*vote_value as usize] += member_vote_weight;
+                                }
+                            }
+                        }
+                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                    };
+                }
+                // Expensive scenario.
+                ActivityRight::GroupRole(g, r) => {
+                    match self.groups.get(g) {
+                        Some(group) => {
+                            let members = group.get_members_accounts();
+                            for member in members {
+                                let member_vote_weight = self.delegations.get(&member).unwrap_or(0);
+                                // Group member always has role record, therefore unwraping is ok.
+                                let member_roles = self.user_roles.get(&member).unwrap();
+                                if member_roles.has_group_role(*g, *r) {
+                                    max_possible_amount += member_vote_weight;
+                                    if let Some(vote_value) = votes.get(&member) {
+                                        vote_result[*vote_value as usize] += member_vote_weight;
+                                    }
+                                }
+                            }
+                        }
+                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                    };
+                }
+                ActivityRight::GroupMember(g, account_id) => {
+                    match self.groups.get(g) {
+                        Some(group) => {
+                            let member = group.get_member_by_account(account_id);
+                            if member.is_some() {
+                                let member_vote_weight =
+                                    self.delegations.get(&account_id).unwrap_or(0);
+                                max_possible_amount += member_vote_weight;
+                                if let Some(vote_value) = votes.get(&account_id) {
+                                    vote_result[*vote_value as usize] += member_vote_weight;
+                                }
+                            }
+                        }
+                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                    };
+                }
+                ActivityRight::Account(account_id) => {
+                    let member_vote_weight = self.delegations.get(&account_id).unwrap_or(0);
+                    max_possible_amount += member_vote_weight;
+                    if let Some(vote_value) = votes.get(&account_id) {
+                        vote_result[*vote_value as usize] += member_vote_weight;
+                    }
+                }
+                ActivityRight::GroupLeader(g) => {
+                    match self.groups.get(g) {
+                        Some(group) => {
+                            if let Some(leader) = group.group_leader() {
+                                let member_vote_weight = self.delegations.get(leader).unwrap_or(0);
+                                max_possible_amount += member_vote_weight;
+                                if let Some(vote_value) = votes.get(&leader) {
+                                    vote_result[*vote_value as usize] += member_vote_weight;
+                                }
+                            }
+                        }
+                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                    };
                 }
             },
         }
@@ -344,7 +427,6 @@ impl Contract {
         (max_possible_amount, vote_result)
     }
 
-    /// TODO: cross unit tests.
     /// Evaluates proposal voting according to vote settings.
     pub fn eval_votes(
         &self,

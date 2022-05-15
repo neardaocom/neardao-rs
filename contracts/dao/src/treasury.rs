@@ -6,7 +6,18 @@ use near_sdk::{
     AccountId,
 };
 
-use crate::{core::*, internal::utils::current_timestamp_sec, ApprovalId, TimestampSec, TokenId};
+use crate::{
+    core::*, derive_from_versioned, derive_into_versioned, internal::utils::current_timestamp_sec,
+    ApprovalId, TimestampSec, TokenId,
+};
+
+derive_into_versioned!(TreasuryPartition, VersionedTreasuryPartition);
+derive_from_versioned!(VersionedTreasuryPartition, TreasuryPartition);
+
+#[derive(BorshDeserialize, BorshSerialize)]
+pub enum VersionedTreasuryPartition {
+    Current(TreasuryPartition),
+}
 
 /// Container around unique assets.
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
@@ -241,13 +252,14 @@ impl PartialEq for Asset {
 #[near_bindgen]
 impl Contract {
     pub fn unlock_partition_assets(&mut self, id: u16) {
-        let mut partition = self
+        let mut partition: TreasuryPartition = self
             .treasury_partition
             .get(&id)
-            .expect("partition not found");
+            .expect("partition not found")
+            .into();
         let current_timestamp = current_timestamp_sec();
         partition.unlock_all(current_timestamp);
-        self.treasury_partition.insert(&id, &partition);
+        self.treasury_partition.insert(&id, &partition.into());
     }
 }
 
@@ -255,10 +267,10 @@ impl Contract {
     pub fn add_partition(&mut self, partition: TreasuryPartition) -> u16 {
         self.partition_last_id += 1;
         self.treasury_partition
-            .insert(&self.partition_last_id, &partition);
+            .insert(&self.partition_last_id, &partition.into());
         self.partition_last_id
     }
-    pub fn remove_partition(&mut self, partition_id: u16) -> Option<TreasuryPartition> {
+    pub fn remove_partition(&mut self, partition_id: u16) -> Option<VersionedTreasuryPartition> {
         self.treasury_partition.remove(&partition_id)
     }
 }

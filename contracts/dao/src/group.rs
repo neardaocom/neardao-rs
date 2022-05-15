@@ -6,7 +6,11 @@ use near_sdk::{
     AccountId,
 };
 
-use crate::{core::Contract, role::Role, GroupId, TagId};
+use crate::{
+    core::Contract,
+    role::{Role, UserRoles},
+    GroupId, TagId,
+};
 
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(
@@ -24,7 +28,6 @@ pub struct GroupMember {
 #[serde(crate = "near_sdk::serde")]
 #[repr(transparent)]
 pub struct GroupMembers(HashMap<AccountId, Vec<TagId>>);
-
 impl GroupMembers {
     /// Adds members to group.
     /// Overrides existing.
@@ -32,17 +35,14 @@ impl GroupMembers {
     pub fn add_member(&mut self, member: GroupMember) -> bool {
         self.0.insert(member.account_id, member.tags).is_some()
     }
-
     pub fn remove_member(&mut self, account_id: AccountId) -> Option<GroupMember> {
         self.0
             .remove(&account_id)
             .map(|tags| GroupMember { account_id, tags })
     }
-
     pub fn members_count(&self) -> usize {
         self.0.len()
     }
-
     pub fn get_members(&self) -> Vec<GroupMember> {
         self.0
             .iter()
@@ -68,8 +68,14 @@ impl From<Vec<GroupMember>> for GroupMembers {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct GroupSettings {
+    /// Name of the group.
     pub name: String,
+    /// Leader of the group.
+    /// Must be included among provided group members.
     pub leader: Option<AccountId>,
+    /// Reference to parent group.
+    /// ATM its only evidence value.
+    /// GroupId = 0 means no parent group.
     pub parent_group: GroupId,
 }
 
@@ -77,8 +83,13 @@ pub struct GroupSettings {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Serialize))]
 #[serde(crate = "near_sdk::serde")]
 pub struct GroupInput {
+    /// Group settings.
     pub settings: GroupSettings,
+    /// Collection of group member account and its tag ids.
+    /// Each member get default group role.
     pub members: Vec<GroupMember>,
+    /// Map of additional roles and for provided accounts.
+    /// All accounts must be included in `members`.
     pub member_roles: HashMap<String, Vec<AccountId>>,
 }
 
@@ -115,7 +126,7 @@ impl Group {
             );
             assert!(
                 members.iter().any(|m| *leader == m.account_id),
-                "Leader must be contained in group members"
+                "Leader must be contained in group members."
             );
         }
         Group {
@@ -145,7 +156,6 @@ impl Group {
                 self.settings.leader = None;
             }
         }
-
         self.members.remove_member(account_id)
     }
 
@@ -173,23 +183,47 @@ impl Group {
             .map(|m| m.account_id)
             .collect()
     }
+    pub fn is_account_id_leader(&self, account_id: &AccountId) -> bool {
+        if let Some(ref leader) = self.settings.leader {
+            *leader == *account_id
+        } else {
+            false
+        }
+    }
+    pub fn group_leader(&self) -> Option<&AccountId> {
+        self.settings.leader.as_ref()
+    }
 }
 
 impl Contract {
-    // TODO: Review.
-    // TODO: Add check to validate user roles.
+    /// Add `group` to the contract.
+    /// Also add defined roles to all group users.
+    /// Update internal statistics.
+    /// TODO: Refactoring maybe.
     pub fn add_group(&mut self, group: GroupInput) {
-        self.total_members_count += group.members.len() as u32;
         self.group_last_id += 1;
+        let mut cache = HashMap::with_capacity(group.members.len());
+        for member in group.members.iter() {
+            let mut user_roles = if let Some(roles) = self.user_roles.get(&member.account_id) {
+                roles
+            } else {
+                self.total_members_count += 1;
+                UserRoles::default()
+            };
+            user_roles.add_new_group(self.group_last_id);
+            cache.insert(&member.account_id, user_roles);
+        }
         let mut group_roles = Role::new();
         for (role_name, members) in group.member_roles {
             if let Some(role_id) = group_roles.insert(role_name) {
                 for member in members {
-                    let mut user_roles = self.user_roles.get(&member).unwrap_or_default();
-                    user_roles.push((self.group_last_id, role_id));
-                    self.user_roles.insert(&member, &user_roles);
+                    let user_roles = cache.get_mut(&member).expect("User roles do not match.");
+                    user_roles.add_group_role(self.group_last_id, role_id);
                 }
             }
+        }
+        for (account, roles) in cache.into_iter() {
+            self.user_roles.insert(account, &roles);
         }
         self.group_roles.insert(&self.group_last_id, &group_roles);
         self.groups.insert(
@@ -210,10 +244,7 @@ impl Contract {
         for member in group_members {
             let member_roles = self.user_roles.get(&member);
             if let Some(roles) = member_roles {
-                if roles
-                    .into_iter()
-                    .any(|(gid, rid)| gid == group_id && rid == role_id)
-                {
+                if roles.has_group_role(group_id, role_id) {
                     result_members.push(member);
                     break;
                 }

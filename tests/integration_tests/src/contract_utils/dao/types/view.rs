@@ -1,10 +1,8 @@
+use std::collections::HashMap;
+
 use library::{
     types::datatype::Value,
-    workflow::{
-        instance::Instance,
-        settings::{ProposeSettings, TemplateSettings},
-        template::Template,
-    },
+    workflow::{instance::Instance, settings::TemplateSettings, template::Template},
 };
 use near_sdk::json_types::U128;
 use serde::{Deserialize, Serialize};
@@ -31,3 +29,7 @@ pub(crate) type ViewInstance = Option<Instance>;
 pub(crate) type ViewTemplates = Vec<(u16, (Template, Vec<TemplateSettings>))>;
 pub(crate) type ViewProposal = Option<(VersionedProposal, Option<Vec<TemplateSettings>>)>;
 pub(crate) type ViewWorkflowStorage = Option<Vec<(String, Value)>>;
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct UserRoles(HashMap<u16, Vec<u16>>);

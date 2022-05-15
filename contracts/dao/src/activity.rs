@@ -10,10 +10,10 @@ use library::types::datatype::Value;
 use library::types::error::ProcessingError;
 use library::types::source::{DefaultSource, Source};
 use library::workflow::action::{ActionInput, ActionType, FnCallIdType, TemplateAction};
-use library::workflow::activity::{Activity, TemplateActivity, Terminality};
+use library::workflow::activity::{TemplateActivity, Terminality};
 use library::workflow::instance::InstanceState;
 use library::workflow::postprocessing::Postprocessing;
-use library::workflow::settings::{ActivityBind, TemplateSettings};
+use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
 use library::workflow::types::ArgSrc::User;
 use library::workflow::types::{ActivityRight, DaoActionIdent, ObjectMetadata};
@@ -33,7 +33,6 @@ use crate::reward::RewardActivity;
 
 #[ext_contract(ext_self)]
 trait ExtActivity {
-    #[allow(clippy::too_many_arguments)]
     fn postprocess(
         &mut self,
         instance_id: u32,
@@ -96,7 +95,7 @@ impl Contract {
         );
         assert!(activities.get(activity_id).is_some(), "activity not found");
 
-        // Finds activity.
+        // Find activity.
         let TemplateActivity {
             is_sync,
             automatic,
@@ -111,18 +110,18 @@ impl Contract {
 
         // Loop / other activity case
         if wfi.is_new_transition(activity_id) {
-            // Find transition
+            // Find transition.
             let transition = wfi
                 .find_transition(transitions.as_slice(), activity_id)
                 .expect("Transition is not possible.");
 
-            // Check transition counter
+            // Check transition counter.
             assert!(
                 wfi.update_transition_counter(activity_id as usize),
                 "Reached transition limit."
             );
 
-            // Check transition condition
+            // Check transition condition.
             assert!(
                 transition
                     .cond
@@ -261,7 +260,6 @@ impl Contract {
 
         // Save mutated instance state.
         self.workflow_instance.insert(&proposal_id, &wfi);
-
         result
     }
 
@@ -270,7 +268,6 @@ impl Contract {
     /// If there's postprocessing, then it's executed.
     /// Postprocessing always requires storage.
     /// Unwrapping is OK as it's been checked before dispatching this promise.
-    #[allow(clippy::too_many_arguments)]
     #[private]
     pub fn postprocess(
         &mut self,
@@ -311,23 +308,23 @@ impl Contract {
         }
     }
 
-    // TODO: Implement autofinish on FatalError.
     /// Changes workflow instance state to finish.
     /// Rights to close are same as the "end" activity rights.
+    /// Panic if try to close not accepted proposal.
     pub fn workflow_finish(&mut self, proposal_id: u32) -> bool {
         let caller = env::predecessor_account_id();
         let (proposal, _, wfs) = self.get_workflow_and_proposal(proposal_id);
-
-        assert!(proposal.state == ProposalState::Accepted);
-
+        assert!(
+            proposal.state == ProposalState::Accepted,
+            "proposal is not accepted"
+        );
         let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
-
         // TODO: Transition timestamp should not be included in this case.
         if wfi.get_state() == InstanceState::FatalError
             || self.check_rights(
                 wfs.activity_rights[wfi.get_current_activity_id() as usize - 1].as_slice(),
                 &caller,
-            ) && wfi.new_actions_done(0, current_timestamp_sec())
+            ) && wfi.try_to_finish()
         {
             self.workflow_instance.insert(&proposal_id, &wfi);
             true
@@ -392,75 +389,43 @@ impl Contract {
             }
 
             // TODO: Refactor.
-            if tpl_action.action_data.is_action() {
-                let action_data = std::mem::replace(&mut tpl_action.action_data, ActionType::None)
-                    .try_into_action_data()
-                    .ok_or(ActionError::InvalidWfStructure(
-                        "missing action data".into(),
-                    ))?;
+            let action_data = std::mem::replace(&mut tpl_action.action_data, ActionType::None)
+                .try_into_action_data()
+                .ok_or(ActionError::InvalidWfStructure(
+                    "missing action data".into(),
+                ))?;
 
-                // Need metadata coz validations and bindings. Metadata are always included in DAO.
-                let binds = action_data.binds.as_slice();
+            // Need metadata coz validations and bindings. Metadata are always included in DAO.
+            let binds = action_data.binds.as_slice();
 
-                // Check input validators.
-                if !validate(
-                    sources,
-                    tpl_action.validators.as_slice(),
-                    expressions,
-                    action_input.as_ref(),
-                )? {
-                    return Err(ActionError::Validation(idx as u8));
-                }
+            // Check input validators.
+            if !validate(
+                sources,
+                tpl_action.validators.as_slice(),
+                expressions,
+                action_input.as_ref(),
+            )? {
+                return Err(ActionError::Validation(idx as u8));
+            }
 
-                // Bind user inputs.
-                bind_input(sources, binds, expressions, action_input.as_mut())?;
+            // Bind user inputs.
+            bind_input(sources, binds, expressions, action_input.as_mut())?;
 
-                let deposit = match &action_data.required_deposit {
-                    Some(arg_src) => get_value_from_source(sources, arg_src)
-                        .map_err(|_| ActionError::InvalidSource)?
-                        .try_into_u128()?,
-                    _ => 0,
-                };
-
-                ctx.attached_deposit = ctx
-                    .attached_deposit
-                    .checked_sub(deposit)
-                    .ok_or(ActionError::NotEnoughDeposit)?;
-
-                self.execute_dao_action(ctx.proposal_id, action_data.name, action_input.as_mut())?;
-            } else {
-                let action_data = std::mem::replace(&mut tpl_action.action_data, ActionType::None)
-                    .try_into_event_data()
-                    .ok_or(ActionError::InvalidWfStructure("missing event data".into()))?;
-
-                // Need metadata coz validations and bindings. Metadata are always included in DAO.
-                let binds = action_data.binds.as_slice();
-
-                // Check input validators.
-                if !validate(
-                    sources,
-                    tpl_action.validators.as_slice(),
-                    expressions,
-                    action_input.as_ref(),
-                )? {
-                    return Err(ActionError::Validation(idx as u8));
-                }
-
-                // Bind user inputs.
-                bind_input(sources, binds, expressions, action_input.as_mut())?;
-
-                let deposit = match &action_data.required_deposit {
-                    Some(arg_src) => get_value_from_source(sources, arg_src)
-                        .map_err(|_| ActionError::InvalidSource)?
-                        .try_into_u128()?,
-                    _ => 0,
-                };
-
-                ctx.attached_deposit = ctx
-                    .attached_deposit
-                    .checked_sub(deposit)
-                    .ok_or(ActionError::NotEnoughDeposit)?;
+            let deposit = match &action_data.required_deposit {
+                Some(arg_src) => get_value_from_source(sources, arg_src)
+                    .map_err(|_| ActionError::InvalidSource)?
+                    .try_into_u128()?,
+                _ => 0,
             };
+
+            ctx.attached_deposit = ctx
+                .attached_deposit
+                .checked_sub(deposit)
+                .ok_or(ActionError::NotEnoughDeposit)?;
+
+            if action_data.name != DaoActionIdent::Event {
+                self.execute_dao_action(ctx.proposal_id, action_data.name, action_input.as_mut())?;
+            }
 
             // TODO: Handle error so we do only part of the batch.
             if let Some(mut pp) = tpl_action.postprocessing.take() {
@@ -717,7 +682,6 @@ impl Contract {
         }
         // Check if its first action done in the activity
         wfi.promise_success();
-        //wfi.try_to_advance_activity();
         wfi.new_actions_done(1, current_timestamp_sec());
         log!("wfi after update: {:?}", wfi);
 
@@ -754,7 +718,6 @@ impl Contract {
                         .insert(&self.workflow_last_id, &(workflow, settings));
                     self.init_function_calls(fncalls, fncall_metadata);
                 }
-
                 // Save updated storages.
                 if let Some(storage) = storage {
                     self.storage.insert(&storage_key.unwrap(), &storage);
@@ -767,64 +730,72 @@ impl Contract {
         self.workflow_instance.insert(&proposal_id, &wfi);
     }
 
-    // TODO: Unit tests
     pub fn check_rights(&self, rights: &[ActivityRight], account_id: &AccountId) -> bool {
         if rights.is_empty() {
             return true;
         }
-
         for right in rights.iter() {
             match right {
                 ActivityRight::Anyone => {
                     return true;
                 }
                 ActivityRight::Group(g) => match self.groups.get(g) {
-                    Some(group) => match group.get_member_by_account(account_id) {
-                        Some(_m) => return true,
-                        None => continue,
-                    },
-                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
+                    Some(group) => {
+                        if group.get_member_by_account(account_id).is_some() {
+                            return true;
+                        } else {
+                            continue;
+                        }
+                    }
+                    _ => continue,
                 },
                 ActivityRight::GroupMember(g, name) => {
                     if *name != *account_id {
                         continue;
                     }
-
                     match self.groups.get(g) {
                         Some(group) => match group.get_member_by_account(account_id) {
-                            Some(_m) => return true,
+                            Some(_) => return true,
                             None => continue,
                         },
-                        _ => panic!("{}", ERR_GROUP_NOT_FOUND),
+                        _ => continue,
                     }
                 }
-                ActivityRight::TokenHolder => unimplemented!(),
-                ActivityRight::GroupRole(g, r) => match self.groups.get(g) {
-                    Some(group) => match group.get_member_by_account(account_id) {
-                        Some(m) => match m.tags.into_iter().any(|t| t == *r) {
-                            true => return true,
-                            false => continue,
-                        },
-                        None => continue,
-                    },
-                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
+                ActivityRight::TokenHolder => {
+                    if self.delegations.get(account_id).unwrap_or(0) > 0 {
+                        return true;
+                    } else {
+                        continue;
+                    }
+                }
+                ActivityRight::GroupRole(g, r) => match self.user_roles.get(account_id) {
+                    Some(roles) => {
+                        if roles.has_group_role(*g, *r) {
+                            return true;
+                        } else {
+                            continue;
+                        }
+                    }
+                    _ => continue,
                 },
                 ActivityRight::GroupLeader(g) => match self.groups.get(g) {
                     Some(group) => {
-                        if let Some(leader) = group.settings.leader {
-                            match leader == *account_id {
-                                true => return true,
-                                false => continue,
-                            }
+                        if group.is_account_id_leader(account_id) {
+                            return true;
                         } else {
-                            panic!("{}", ERR_GROUP_HAS_NO_LEADER);
+                            continue;
                         }
                     }
-                    _ => panic!("{}", ERR_GROUP_NOT_FOUND),
+                    _ => continue,
                 },
-                //TODO only group members
-                ActivityRight::Member => unimplemented!(),
-                ActivityRight::Account(a) => match a == account_id {
+                ActivityRight::Member => {
+                    if self.user_roles.get(&account_id).is_some() {
+                        return true;
+                    } else {
+                        continue;
+                    }
+                }
+                ActivityRight::Account(a) => match *a == *account_id {
                     true => return true,
                     false => continue,
                 },
@@ -858,7 +829,6 @@ impl Contract {
                 _ => continue,
             }
         }
-
         true
     }
 

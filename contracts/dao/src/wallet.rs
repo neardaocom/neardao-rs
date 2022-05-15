@@ -14,7 +14,7 @@ use crate::{
     error::ERR_PROMISE_INVALID_RESULTS_COUNT,
     internal::utils::current_timestamp_sec,
     reward::{Reward, RewardTypeIdent},
-    treasury::Asset,
+    treasury::{Asset, TreasuryPartition},
     TimestampSec,
 };
 
@@ -435,11 +435,15 @@ impl Contract {
                 continue;
             }
             // Get maximal claimable amount from treasury.
-            let mut partition = self.treasury_partition.get(&reward.partition_id).unwrap();
+            let mut partition: TreasuryPartition = self
+                .treasury_partition
+                .get(&reward.partition_id)
+                .unwrap()
+                .into();
             let currently_available_amount =
                 partition.remove_amount(&asset, amount_per_activity, claimable_reward);
             self.treasury_partition
-                .insert(&reward.partition_id, &partition);
+                .insert(&reward.partition_id, &partition.into());
             // Update caller's wallet with actually withdrawn amounts.
             if is_wage {
                 wallet.withdraw_wage(

@@ -9,6 +9,13 @@ impl Contract {
     pub fn get_user_weight(&self, account_id: &AccountId) -> Balance {
         self.delegations.get(account_id).unwrap_or_default()
     }
+    pub fn update_token_holders_count(&mut self, previous_amount: u128, new_amount: u128) {
+        if previous_amount > 0 && new_amount == 0 {
+            self.total_delegators_count -= 1;
+        } else if previous_amount == 0 && new_amount > 0 {
+            self.total_delegators_count += 1;
+        }
+    }
 }
 
 const ERR_NOT_REGISTERED: &str = "account not registered";
@@ -22,7 +29,6 @@ impl Contract {
         require!(env::predecessor_account_id() == staking_id, ERR_CALLER);
         self.delegations.insert(&account_id, &0);
     }
-
     /// Adds given amount to given account as delegated weight.
     /// Returns previous amount, new amount and total delegated amount.
     pub fn delegate_owned(&mut self, account_id: AccountId, amount: U128) -> (U128, U128, U128) {
@@ -31,6 +37,7 @@ impl Contract {
         let prev_amount = self.delegations.get(&account_id).expect(ERR_NOT_REGISTERED);
         let new_amount = prev_amount + amount.0;
         self.delegations.insert(&account_id, &new_amount);
+        self.update_token_holders_count(prev_amount, new_amount);
         self.total_delegation_amount += amount.0;
         self.register_executed_activity(&account_id, RewardActivity::Delegate.into());
         (
@@ -39,7 +46,6 @@ impl Contract {
             self.delegation_total_supply(),
         )
     }
-
     /// Removes given amount from given account's delegations.
     /// Returns previous, new amount of this account and total delegated amount.
     pub fn undelegate(&mut self, account_id: AccountId, amount: U128) -> (U128, U128, U128) {
@@ -48,6 +54,7 @@ impl Contract {
         let prev_amount = self.delegations.get(&account_id).unwrap_or_default();
         require!(prev_amount >= amount.0, ERR_STAKING_INTERNAL);
         let new_amount = prev_amount - amount.0;
+        self.update_token_holders_count(prev_amount, new_amount);
         self.delegations.insert(&account_id, &new_amount);
         self.total_delegation_amount -= amount.0;
         (
@@ -56,7 +63,6 @@ impl Contract {
             self.delegation_total_supply(),
         )
     }
-
     /// Transfers amount from previous account to new account.
     /// Returns amount of transfered and total delegated amount.
     pub fn transfer_amount(
@@ -67,24 +73,28 @@ impl Contract {
     ) -> (U128, U128) {
         let staking_id = self.staking_id.clone();
         require!(env::predecessor_account_id() == staking_id, ERR_CALLER);
-
-        let prev_amount = self
+        let prev_account_prev_amount = self
             .delegations
             .get(&prev_account_id)
             .expect(ERR_NOT_REGISTERED);
-
-        let mut new_amount = self
+        let new_account_prev_amount = self
             .delegations
             .get(&new_account_id)
             .expect(ERR_NOT_REGISTERED);
-
-        let prev_amount = prev_amount
+        let prev_account_new_amount = prev_account_prev_amount
             .checked_sub(amount.0)
             .expect(ERR_STAKING_INTERNAL);
-        new_amount += amount.0;
-
-        self.delegations.insert(&prev_account_id, &prev_amount);
-        self.delegations.insert(&new_account_id, &new_amount);
+        let new_account_new_amount = new_account_prev_amount + amount.0;
+        if new_account_prev_amount == 0 && new_account_new_amount > 0 {
+            self.total_delegators_count += 1;
+        }
+        if prev_account_prev_amount > 0 && prev_account_new_amount == 0 {
+            self.total_delegators_count -= 1;
+        }
+        self.delegations
+            .insert(&prev_account_id, &prev_account_new_amount);
+        self.delegations
+            .insert(&new_account_id, &new_account_new_amount);
         log!(
             "EVENT: Transitioned amount of {} delegated tokens by {} to {}.",
             amount.0,

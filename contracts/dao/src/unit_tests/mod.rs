@@ -42,6 +42,8 @@ const TOKEN_ACC: &str = "some.token.neardao.testnet";
 const DAO_ADMIN_ACC: &str = "admin.neardao.testnet";
 const STAKING_ACC: &str = "staking.neardao.testnet";
 const WF_PROVIDER_ACC: &str = "wf-provider.neardao.testnet";
+const RESOURCE_PROVIDER_ACC: &str = "resource.neardao.testnet";
+const SCHEDULER_ACC: &str = "scheduler.neardao.testnet";
 const FACTORY_ACC: &str = "neardao.testnet";
 const DAO_ACC: &str = "dao_instance.neardao.testnet";
 const OWNER_ACC_FULLNAME: &str = "dao_instance.dao_factory.testnet";
@@ -54,6 +56,16 @@ const FOUNDER_2: &str = "founder_2.testnet";
 const FOUNDER_3: &str = "founder_3.testnet";
 const FOUNDER_4: &str = "founder_4.testnet";
 const FOUNDER_5: &str = "founder_5.testnet";
+
+const ACC_1: &str = "some_account_1.testnet";
+const ACC_2: &str = "some_account_2.testnet";
+const ACC_3: &str = "some_account_3.testnet";
+
+const GROUP_1_NAME: &str = "council";
+const GROUP_2_NAME: &str = "holy_men";
+
+const GROUP_1_ROLE_1: &str = "leader";
+const GROUP_1_ROLE_2: &str = "other";
 
 /// Max possible FT supply.
 const TOKEN_TOTAL_SUPPLY: u32 = 1_000_000_000;
@@ -114,7 +126,7 @@ pub(crate) fn get_contract(
 }
 
 pub(crate) fn get_default_contract() -> Contract {
-    get_contract(
+    let contract = get_contract(
         as_account_id(TOKEN_ACC),
         as_account_id(STAKING_ACC),
         TOKEN_TOTAL_SUPPLY,
@@ -128,7 +140,21 @@ pub(crate) fn get_default_contract() -> Contract {
         get_default_templates(),
         get_default_template_settings(),
         0,
-    )
+    );
+    let founder_1_roles = contract.user_roles.get(&as_account_id(FOUNDER_1));
+    let founder_2_roles = contract.user_roles.get(&as_account_id(FOUNDER_2));
+    let founder_3_roles = contract.user_roles.get(&as_account_id(FOUNDER_3));
+    println!(
+        "roles: founder_1: {:?}; founder_2: {:?}; founder_3: {:?};",
+        founder_1_roles, founder_2_roles, founder_3_roles
+    );
+    let members = contract.group_members(1).unwrap();
+    println!("group 1 members: {:?}", members);
+    assert_eq!(
+        contract.total_members_count, 6,
+        "invalid total unique members count"
+    );
+    contract
 }
 
 pub(crate) fn decimal_const() -> u128 {
@@ -143,11 +169,14 @@ pub(crate) fn get_default_dao_config() -> Settings {
         dao_admin_account_id: as_account_id(DAO_ADMIN_ACC),
         dao_admin_rights: vec!["all".into()],
         workflow_provider: as_account_id(WF_PROVIDER_ACC),
+        resource_provider: as_account_id(RESOURCE_PROVIDER_ACC),
+        scheduler: as_account_id(SCHEDULER_ACC),
     }
 }
 
 pub(crate) fn get_default_groups() -> Vec<GroupInput> {
-    let mut members = vec![
+    let mut groups = Vec::with_capacity(2);
+    let mut group_1_members = vec![
         GroupMember {
             account_id: as_account_id(FOUNDER_1),
             tags: vec![0],
@@ -161,23 +190,50 @@ pub(crate) fn get_default_groups() -> Vec<GroupInput> {
             tags: vec![2],
         },
     ];
-    let mut groups = Vec::with_capacity(1);
-    let mut member_roles = HashMap::new();
-    member_roles.insert("leader".into(), vec![as_account_id(FOUNDER_1)]);
-    member_roles.insert(
-        "other".into(),
-        vec![as_account_id(FOUNDER_2), as_account_id(FOUNDER_3)],
-    );
+    let mut group_1_roles = HashMap::new();
+    group_1_roles.insert(GROUP_1_ROLE_1.into(), vec![as_account_id(FOUNDER_1)]);
     groups.push(GroupInput {
         settings: GroupSettings {
-            name: "council".into(),
+            name: GROUP_1_NAME.into(),
             leader: Some(as_account_id(FOUNDER_1)),
             parent_group: 0,
         },
-        members,
-        member_roles,
+        members: group_1_members,
+        member_roles: group_1_roles,
     });
 
+    let mut group_2_members = vec![
+        GroupMember {
+            account_id: as_account_id(ACC_1),
+            tags: vec![],
+        },
+        GroupMember {
+            account_id: as_account_id(ACC_2),
+            tags: vec![],
+        },
+        GroupMember {
+            account_id: as_account_id(ACC_3),
+            tags: vec![],
+        },
+        GroupMember {
+            account_id: as_account_id(FOUNDER_2),
+            tags: vec![],
+        },
+        GroupMember {
+            account_id: as_account_id(FOUNDER_3),
+            tags: vec![],
+        },
+    ];
+    let mut group_2_roles = HashMap::new();
+    groups.push(GroupInput {
+        settings: GroupSettings {
+            name: GROUP_2_NAME.into(),
+            leader: Some(as_account_id(ACC_1)),
+            parent_group: 1,
+        },
+        members: group_2_members,
+        member_roles: group_2_roles,
+    });
     groups
 }
 
@@ -234,4 +290,32 @@ pub(crate) fn dummy_template_settings() -> TemplateSettings {
         deposit_propose_return: 0,
         constants: None,
     }
+}
+
+pub(crate) fn update_template_settings_vote_rights(
+    contract: &mut Contract,
+    template_id: u16,
+    settings_id: u16,
+    allowed_voters: ActivityRight,
+) {
+    let (template, mut settings) = contract.workflow_template.get(&template_id).unwrap();
+    settings
+        .get_mut(settings_id as usize)
+        .unwrap()
+        .allowed_voters = allowed_voters;
+    contract
+        .workflow_template
+        .insert(&template_id, &(template, settings));
+}
+
+pub(crate) fn get_role_id(contract: &Contract, group_id: u16, role_name: &str) -> u16 {
+    let group_roles = contract
+        .group_roles
+        .get(&group_id)
+        .expect("group not found");
+    let role_id = group_roles
+        .iter()
+        .find(|(key, name)| name.as_str() == role_name)
+        .expect("role not found");
+    *role_id.0
 }

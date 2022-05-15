@@ -13,7 +13,7 @@ pub struct DaoInit {
     pub staking_id: AccountId,
     pub total_supply: u32,
     pub decimals: u8,
-    pub settings: DaoSettings,
+    pub settings: Settings,
     pub groups: Vec<GroupInput>,
     pub tags: Vec<u16>,
     pub standard_function_calls: Vec<MethodName>,
@@ -27,15 +27,16 @@ pub struct DaoInit {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(crate = "near_sdk::serde")]
-pub struct DaoSettings {
+pub struct Settings {
     pub name: String,
     pub purpose: String,
     pub tags: Vec<u16>,
     pub dao_admin_account_id: AccountId,
     pub dao_admin_rights: Vec<String>, //TODO should be rights
     pub workflow_provider: AccountId,
+    pub resource_provider: AccountId,
+    pub scheduler: AccountId,
 }
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct GroupInput {

@@ -218,7 +218,6 @@ pub struct ActivityContext {
     pub optional_actions: u8,
 }
 
-#[allow(clippy::too_many_arguments)]
 impl ActivityContext {
     pub fn new(
         proposal_id: u32,

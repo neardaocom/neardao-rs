@@ -8,7 +8,7 @@ use crate::{
     treasury::{Asset, PartitionAsset, TreasuryPartition},
     unit_tests::{
         as_account_id, dummy_propose_settings, dummy_template_settings, get_context_builder,
-        get_default_contract, FOUNDER_1, FOUNDER_2, FOUNDER_3,
+        get_default_contract, get_role_id, FOUNDER_1, FOUNDER_2, FOUNDER_3,
     },
     wallet::{Wallet, WithdrawStats},
 };
@@ -17,18 +17,6 @@ use crate::{
 /// Contract internally works with seconds.
 fn tm(v: u64) -> u64 {
     v * 10u64.pow(9)
-}
-
-fn get_role_id(contract: &Contract, group_id: u16, role_name: &str) -> u16 {
-    let group_roles = contract
-        .group_roles
-        .get(&group_id)
-        .expect("group not found");
-    let role_id = group_roles
-        .iter()
-        .find(|(key, name)| name.as_str() == role_name)
-        .expect("role not found");
-    *role_id.0
 }
 
 fn get_wallet(contract: &Contract, account_id: &AccountId) -> Wallet {
@@ -67,10 +55,11 @@ fn reward_wage_one_asset() {
     };
     let role_id = get_role_id(&contract, 1, "leader");
     let partition_id = contract.add_partition(partition);
-    let partition = contract
+    let partition: TreasuryPartition = contract
         .treasury_partition
         .get(&partition_id)
-        .expect("partition not found");
+        .expect("partition not found")
+        .into();
     let partition_asset = partition
         .asset(&reward_asset)
         .expect("partition asset not found");
@@ -117,10 +106,11 @@ fn reward_wage_one_asset() {
     let wage_stats = withdraw_stats.wage_as_ref().expect("reward is not wage");
     assert_eq!(wage_stats.timestamp_last_withdraw, 1000);
     assert_eq!(wage_stats.amount, 500);
-    let partition = contract
+    let partition: TreasuryPartition = contract
         .treasury_partition
         .get(&partition_id)
-        .expect("partition not found");
+        .expect("partition not found")
+        .into();
     let partition_asset = partition
         .asset(&reward_asset)
         .expect("partition asset not found");
@@ -143,10 +133,11 @@ fn reward_activity_one_asset() {
     };
     let role_id = get_role_id(&contract, 1, "leader");
     let partition_id = contract.add_partition(partition);
-    let partition = contract
+    let partition: TreasuryPartition = contract
         .treasury_partition
         .get(&partition_id)
-        .expect("partition not found");
+        .expect("partition not found")
+        .into();
     let partition_asset = partition
         .asset(&reward_asset)
         .expect("partition asset not found");
@@ -202,10 +193,11 @@ fn reward_activity_one_asset() {
     assert_eq!(activity_stats.timestamp_last_withdraw, 0);
     assert_eq!(activity_stats.executed_count, 0);
     assert_eq!(activity_stats.total_withdrawn_count, 0);
-    let partition = contract
+    let partition: TreasuryPartition = contract
         .treasury_partition
         .get(&partition_id)
-        .expect("partition not found");
+        .expect("partition not found")
+        .into();
     let partition_asset = partition
         .asset(&reward_asset)
         .expect("partition asset not found");
@@ -275,10 +267,11 @@ fn reward_activity_one_asset() {
     assert_eq!(activity_stats.timestamp_last_withdraw, 3000);
     assert_eq!(activity_stats.executed_count, 0);
     assert_eq!(activity_stats.total_withdrawn_count, 2);
-    let partition = contract
+    let partition: TreasuryPartition = contract
         .treasury_partition
         .get(&partition_id)
-        .expect("partition not found");
+        .expect("partition not found")
+        .into();
     let partition_asset = partition
         .asset(&reward_asset)
         .expect("partition asset not found");

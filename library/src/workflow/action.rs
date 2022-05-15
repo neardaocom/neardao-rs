@@ -90,6 +90,10 @@ impl ActionType {
 #[serde(crate = "near_sdk::serde")]
 pub struct DaoActionData {
     pub name: DaoActionIdent,
+    /// Code in case of `DaoActionIdent::Event`.
+    pub code: Option<String>,
+    /// Map of expected keys and values in case of `DaoActionIdent::Event`.
+    pub expected_input: Option<Vec<(String, Datatype)>>,
     /// Deposit needed from caller.
     /// Binded dynamically.
     pub required_deposit: Option<ArgSrc>,
@@ -129,9 +133,13 @@ pub struct FnCallData {
 /// Variants with prefix "Standard" define function calls for standart implementation methods, eg. FT NEP-141.
 /// Reason is that we do not have to store same metadata multiple times but only once.
 pub enum FnCallIdType {
+    /// Receiver account_id is defined by workflow.
     Static(AccountId, MethodName),
+    /// Receiver account_id is defined by dynamically.
     Dynamic(ArgSrc, MethodName),
+    /// Standard call version of `Static`.
     StandardStatic(AccountId, MethodName),
+    /// Standard call version of `Dynamic`.
     StandardDynamic(ArgSrc, MethodName),
 }
 
@@ -171,7 +179,9 @@ impl PartialEq<ActionType> for ActionInputType {
             },
             (Self::FnCall(_, _), ActionType::Action(_)) => false,
             (Self::SendNear, ActionType::SendNear(_, _)) => true,
-            (Self::Event(code), ActionType::Event(d)) => *code == d.code,
+            (Self::Event(code), ActionType::Action(d)) => {
+                d.name == DaoActionIdent::Event && code == d.code.as_ref().expect("undefined code")
+            }
             _ => false,
         }
     }

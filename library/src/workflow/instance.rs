@@ -193,6 +193,21 @@ impl Instance {
             false
         }
     }
+    /// Try to update self state to `Finished`.
+    /// In case of `FatalError` state instance is closed immediately.
+    /// Return true if successful.
+    pub fn try_to_finish(&mut self) -> bool {
+        if self.state == InstanceState::FatalError
+            || self.dispatched_promises_count == 0
+                && self.actions_done == self.actions_total
+                && self.end_activities.contains(&self.current_activity_id)
+        {
+            self.state = InstanceState::Finished;
+            true
+        } else {
+            false
+        }
+    }
     pub fn get_state(&self) -> InstanceState {
         self.state
     }
@@ -258,5 +273,8 @@ impl Instance {
     }
     pub fn actions_remaining(&self) -> u8 {
         self.actions_total - self.actions_done
+    }
+    pub fn last_transition_timestamp(&self) -> u64 {
+        self.last_transition_done_at
     }
 }

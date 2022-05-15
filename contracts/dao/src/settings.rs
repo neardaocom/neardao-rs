@@ -11,7 +11,6 @@ pub enum VersionedSettings {
     Current(Settings),
 }
 
-// TODO: Resource provider.
 // TODO: Tick settings.
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
@@ -23,6 +22,8 @@ pub struct Settings {
     pub dao_admin_account_id: AccountId,
     pub dao_admin_rights: Vec<String>, //TODO should be rights
     pub workflow_provider: AccountId,
+    pub resource_provider: AccountId,
+    pub scheduler: AccountId,
 }
 
 derive_from_versioned!(VersionedSettings, Settings);

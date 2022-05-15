@@ -9,7 +9,9 @@ use super::types::{
     consts::{DAO_VIEW_INSTANCE, DAO_VIEW_TEMPLATES, DAO_VIEW_WORKFLOW_STORAGE},
     proposal::{Proposal, Votes},
     reward::{Reward, Wallet},
-    view::{StorageBalance, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
+    view::{
+        StorageBalance, UserRoles, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage,
+    },
 };
 
 pub(crate) async fn proposal<T>(
@@ -216,7 +218,7 @@ pub(crate) async fn view_user_roles<T>(
     worker: &Worker<T>,
     dao: &Contract,
     account_id: &AccountId,
-) -> anyhow::Result<Vec<(u16, u16)>>
+) -> anyhow::Result<UserRoles>
 where
     T: DevNetwork,
 {
@@ -226,8 +228,8 @@ where
     .to_string()
     .into_bytes();
     let outcome = dao.view(&worker, "view_user_roles", args).await?;
-    view_outcome_pretty::<Vec<(u16, u16)>>("view user roles", &outcome);
-    let roles = parse_view_result::<Vec<(u16, u16)>>(&outcome).expect("failed to parse user roles");
+    view_outcome_pretty::<UserRoles>("view user roles", &outcome);
+    let roles = parse_view_result::<UserRoles>(&outcome).expect("failed to parse user roles");
     Ok(roles)
 }
 

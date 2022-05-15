@@ -1,10 +1,14 @@
+#![allow(clippy::too_many_arguments)]
+
+use std::collections::HashMap;
+
 use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
 use crate::event::{Event, EventQueue};
 use crate::reward::VersionedReward;
-use crate::role::Role;
+use crate::role::{Role, UserRoles};
 use crate::settings::{assert_valid_dao_settings, Settings, VersionedSettings};
 use crate::tags::{TagInput, Tags};
-use crate::treasury::TreasuryPartition;
+use crate::treasury::VersionedTreasuryPartition;
 use crate::wallet::VersionedWallet;
 use library::storage::StorageBucket;
 use library::types::datatype::Value;
@@ -29,7 +33,7 @@ use crate::{GroupId, ProposalId};
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-// TODO: remove
+// TODO: Remove.
 pub struct ActivityLog {
     pub caller: AccountId,
     pub action_id: u8,
@@ -75,6 +79,8 @@ pub struct Contract {
     pub staking_id: AccountId,
     /// Delegations per user.
     pub delegations: LookupMap<AccountId, Balance>,
+    /// Total count of unique delegators.
+    pub total_delegators_count: u32,
     /// Delegated token total amount.
     pub total_delegation_amount: Balance,
     /// Event queues for ticks.
@@ -84,7 +90,7 @@ pub struct Contract {
     /// Time interval between two ticks.
     pub tick_interval: DurationSec,
     /// User's roles in groups.
-    pub user_roles: LookupMap<AccountId, Vec<(GroupId, RoleId)>>,
+    pub user_roles: LookupMap<AccountId, UserRoles>,
     /// Group's provided roles.
     pub group_roles: LookupMap<GroupId, Role>,
     /// Total amount of minted tokens.
@@ -93,7 +99,7 @@ pub struct Contract {
     pub decimals: u8,
     pub ft_total_locked: u32,
     pub ft_total_distributed: u32,
-    /// Count of all members in groups - that does not mean unique members.
+    /// Sum all unique members in groups.
     pub total_members_count: u32,
     pub group_last_id: GroupId,
     pub groups: UnorderedMap<GroupId, Group>,
@@ -113,20 +119,19 @@ pub struct Contract {
     /// Proposed workflow template settings for WorkflowAdd.
     pub proposed_workflow_settings: LookupMap<ProposalId, Vec<TemplateSettings>>,
     pub workflow_activity_log: LookupMap<ProposalId, Vec<ActivityLog>>, // Logs will be moved to indexer when its ready
-    // TODO: Remove in production.
-    pub debug_log: Vec<String>,
     /// Id of last created treasury partition.
     pub partition_last_id: u16,
-    pub treasury_partition: LookupMap<u16, TreasuryPartition>,
+    pub treasury_partition: LookupMap<u16, VersionedTreasuryPartition>,
     /// Id of last created reward.
     pub reward_last_id: u16,
     pub rewards: LookupMap<u16, VersionedReward>,
     pub wallets: LookupMap<AccountId, VersionedWallet>,
+    // TODO: Remove in production.
+    pub debug_log: Vec<String>,
 }
 
 #[near_bindgen]
 impl Contract {
-    #[allow(clippy::too_many_arguments)]
     #[init]
     pub fn new(
         token_id: AccountId,
@@ -161,6 +166,7 @@ impl Contract {
             ft_total_locked: 0,
             ft_total_distributed: 0,
             total_members_count: 0,
+            total_delegators_count: 0,
             decimals,
             settings: LazyOption::new(StorageKeys::DaoSettings, None),
             group_last_id: 0,
@@ -191,7 +197,6 @@ impl Contract {
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
         contract.init_groups(groups);
-
         contract.init_function_calls(function_calls, function_call_metadata);
         contract
             .init_standard_function_calls(standard_function_calls, standard_function_call_metadata);

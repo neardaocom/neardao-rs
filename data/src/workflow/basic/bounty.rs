@@ -8,13 +8,13 @@ use library::{
         source::SourceDataVariant,
     },
     workflow::{
-        action::{ActionType, EventData, TemplateAction},
+        action::{ActionType, DaoActionData, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         postprocessing::Postprocessing,
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, ArgSrc, Instruction, VoteScenario},
+        types::{ActivityRight, ArgSrc, DaoActionIdent, Instruction, VoteScenario},
         validator::{ObjectValidator, Validator},
     },
 };
@@ -59,11 +59,12 @@ impl Bounty1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Event(EventData {
-                            code: "event_checkin".into(),
+                        action_data: ActionType::Action(DaoActionData {
+                            code: Some("event_checkin".into()),
                             expected_input: None,
                             required_deposit: None,
                             binds: vec![],
+                            name: DaoActionIdent::Event,
                         }),
                         postprocessing: Some(Postprocessing {
                             instructions: vec![Instruction::StoreDynValue(
@@ -84,11 +85,12 @@ impl Bounty1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Event(EventData {
-                            code: "event_unrealized".into(),
+                        action_data: ActionType::Action(DaoActionData {
+                            code: Some("event_unrealized".into()),
                             expected_input: None,
                             required_deposit: None,
                             binds: vec![],
+                            name: DaoActionIdent::Event,
                         }),
                         postprocessing: Some(Postprocessing {
                             instructions: vec![Instruction::DeleteKey("account_id_applied".into())],
@@ -106,11 +108,12 @@ impl Bounty1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Event(EventData {
-                            code: "event_approve".into(),
+                        action_data: ActionType::Action(DaoActionData {
+                            code: Some("event_approve".into()),
                             expected_input: None,
                             required_deposit: None,
                             binds: vec![],
+                            name: DaoActionIdent::Event,
                         }),
                         postprocessing: Some(Postprocessing {
                             instructions: vec![
@@ -134,11 +137,12 @@ impl Bounty1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Event(EventData {
-                            code: "event_done".into(),
+                        action_data: ActionType::Action(DaoActionData {
+                            code: Some("event_done".into()),
                             expected_input: Some(vec![("result".into(), Datatype::String(false))]),
                             required_deposit: None,
                             binds: vec![],
+                            name: DaoActionIdent::Event,
                         }),
                         postprocessing: Some(Postprocessing {
                             instructions: vec![Instruction::StoreDynValue(
@@ -159,14 +163,15 @@ impl Bounty1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Event(EventData {
-                            code: "event_done_approve".into(),
+                        action_data: ActionType::Action(DaoActionData {
+                            code: Some("event_done_approve".into()),
                             expected_input: Some(vec![(
                                 "result_evaluation".into(),
                                 Datatype::String(false),
                             )]),
                             required_deposit: None,
                             binds: vec![],
+                            name: DaoActionIdent::Event,
                         }),
                         postprocessing: Some(Postprocessing {
                             instructions: vec![

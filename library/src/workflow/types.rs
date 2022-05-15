@@ -12,18 +12,6 @@ use crate::{
 
 use super::expression::Expression;
 
-// TODO: replace with Source trait
-/*
-pub struct ValueContainer<'a, T: AsRef<[Value]>> {
-    pub dao_consts: &'a Consts,
-    pub tpl_consts: &'a T,
-    pub settings_consts: &'a T,
-    pub activity_shared_consts: Option<&'a T>,
-    pub action_proposal_consts: Option<&'a T>,
-    pub storage: Option<&'a mut StorageBucket>,
-    pub global_storage: &'a mut StorageBucket,
-} */
-
 #[derive(
     BorshDeserialize, BorshSerialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq,
 )]
@@ -43,6 +31,7 @@ pub enum DaoActionIdent {
     WorkflowAdd,
     TreasuryAddPartition,
     RewardAdd,
+    Event,
 }
 
 // TODO: Remove Debug in production.
@@ -59,16 +48,25 @@ pub enum VoteScenario {
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub enum ActivityRight {
+    /// Anyone has the right.
     Anyone,
+    /// Only group members.
     Group(u16),
+    /// Only member in the group.
     GroupMember(u16, AccountId),
+    /// Defined account.
     Account(AccountId),
+    /// Any account_id with > 0 tokens.
     TokenHolder,
+    /// Member in any group.
     Member,
+    /// Members in the group with the role id.
     GroupRole(u16, u16),
+    /// Only the group leader.
     GroupLeader(u16),
 }
 
+// TODO: Refactor.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug))]
 #[serde(crate = "near_sdk::serde")]
@@ -107,8 +105,6 @@ pub enum ArgSrc {
     ConstAction(String),
     Storage(String),
     GlobalStorage(String),
-    // Special case where expression result is used as source value.
-    //Expression(ExpressionId),
     /// Dao specific value known at runtime, eg. 0 means dao's account name.
     Const(u8),
 }

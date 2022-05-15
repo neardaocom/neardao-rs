@@ -1,7 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::env::panic_str;
 use near_sdk::serde::Serialize;
-use near_sdk::{require, AccountId};
+use near_sdk::AccountId;
 
 use crate::internal::utils::current_timestamp_sec;
 use crate::wallet::Wallet;
@@ -172,7 +172,8 @@ impl Contract {
         let partition = self
             .treasury_partition
             .get(&reward.partition_id)
-            .expect("partition not found");
+            .expect("partition not found")
+            .into();
 
         assert!(
             self.validate_reward_assets(&reward, &partition),
