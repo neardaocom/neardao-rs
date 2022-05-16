@@ -7,6 +7,7 @@ pub mod functions;
 pub mod interpreter;
 pub mod locking;
 pub mod storage;
+pub mod tick;
 pub mod types;
 pub mod workflow;
 
@@ -23,6 +24,9 @@ pub type ExpressionId = u8;
 pub type TransitionId = u8;
 pub type FnCallResultDatatype = Option<Datatype>;
 pub type ProviderTemplateData = (Template, Vec<FnCallId>, Vec<Vec<ObjectMetadata>>);
+
+/// Timestamp in seconds.
+pub type TimestampSec = u64;
 
 /// Flatten object's values type for action input.
 pub type ObjectValues = Vec<Vec<Value>>;

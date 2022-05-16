@@ -15,7 +15,6 @@ pub mod tags;
 
 pub mod activity;
 pub mod delegation;
-pub mod event;
 pub mod group;
 pub mod internal;
 pub mod media;

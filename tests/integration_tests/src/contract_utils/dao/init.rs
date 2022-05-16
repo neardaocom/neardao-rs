@@ -104,7 +104,6 @@ pub fn dao_init_args(
             function_call_metadata,
             workflow_templates,
             workflow_template_settings,
-            tick_interval: 3600,
         },
         group_output,
     )

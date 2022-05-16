@@ -25,7 +25,6 @@ use crate::{
 //mod dao; // Require refactoring to match new structure
 mod group;
 mod reward;
-mod tick;
 mod voting;
 
 pub const DURATION_1Y_S: u32 = 31_536_000;
@@ -105,7 +104,6 @@ pub(crate) fn get_contract(
     function_call_metadata: Vec<Vec<ObjectMetadata>>,
     workflow_templates: Vec<Template>,
     workflow_template_settings: Vec<Vec<TemplateSettings>>,
-    tick_interval: DurationSec,
 ) -> Contract {
     Contract::new(
         token_id,
@@ -121,7 +119,6 @@ pub(crate) fn get_contract(
         function_call_metadata,
         workflow_templates,
         workflow_template_settings,
-        tick_interval,
     )
 }
 
@@ -139,7 +136,6 @@ pub(crate) fn get_default_contract() -> Contract {
         get_default_fncall_metadata(),
         get_default_templates(),
         get_default_template_settings(),
-        0,
     );
     let founder_1_roles = contract.user_roles.get(&as_account_id(FOUNDER_1));
     let founder_2_roles = contract.user_roles.get(&as_account_id(FOUNDER_2));

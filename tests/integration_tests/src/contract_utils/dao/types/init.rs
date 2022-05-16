@@ -22,7 +22,6 @@ pub struct DaoInit {
     pub function_call_metadata: Vec<Vec<ObjectMetadata>>,
     pub workflow_templates: Vec<Template>,
     pub workflow_template_settings: Vec<Vec<TemplateSettings>>,
-    pub tick_interval: DurationSec,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

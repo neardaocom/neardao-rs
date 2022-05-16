@@ -1,9 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
-use std::collections::HashMap;
-
 use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
-use crate::event::{Event, EventQueue};
 use crate::reward::VersionedReward;
 use crate::role::{Role, UserRoles};
 use crate::settings::{assert_valid_dao_settings, Settings, VersionedSettings};
@@ -27,7 +24,7 @@ use near_sdk::{
 
 use crate::group::{Group, GroupInput};
 
-use crate::{proposal::*, DurationSec, StorageKey, TagCategory, TimestampSec};
+use crate::{proposal::*, StorageKey, TagCategory};
 use crate::{GroupId, ProposalId};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
@@ -83,12 +80,6 @@ pub struct Contract {
     pub total_delegators_count: u32,
     /// Delegated token total amount.
     pub total_delegation_amount: Balance,
-    /// Event queues for ticks.
-    pub events: LookupMap<TimestampSec, EventQueue<Event>>,
-    /// Timestamp of the last fully processed tick queue.
-    pub last_tick: TimestampSec,
-    /// Time interval between two ticks.
-    pub tick_interval: DurationSec,
     /// User's roles in groups.
     pub user_roles: LookupMap<AccountId, UserRoles>,
     /// Group's provided roles.
@@ -147,7 +138,6 @@ impl Contract {
         function_call_metadata: Vec<Vec<ObjectMetadata>>,
         workflow_templates: Vec<Template>,
         workflow_template_settings: Vec<Vec<TemplateSettings>>,
-        tick_interval: DurationSec,
     ) -> Self {
         assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
         assert_valid_dao_settings(&settings);
@@ -157,9 +147,6 @@ impl Contract {
             staking_id,
             delegations: LookupMap::new(StorageKeys::Delegations),
             total_delegation_amount: 0,
-            events: LookupMap::new(StorageKeys::Events),
-            last_tick: 0,
-            tick_interval,
             user_roles: LookupMap::new(StorageKeys::UserRoles),
             group_roles: LookupMap::new(StorageKeys::GroupRoles),
             ft_total_supply: total_supply,
