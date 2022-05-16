@@ -41,7 +41,7 @@ pub struct TemplateSettings {
 pub struct ProposeSettings {
     /// Top level binds. Shared across all activities.
     pub global: Option<SourceDataVariant>,
-    /// Bind per activity. Init activity's binds must be 0th.
+    /// Bind per activity. Init activity's binds must be 0th and always `None`.
     pub binds: Vec<Option<ActivityBind>>,
     /// Storage key under which is the workflow data storage created.
     pub storage_key: Option<String>,

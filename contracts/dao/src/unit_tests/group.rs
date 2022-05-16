@@ -22,8 +22,8 @@ fn add_group() {
 
     assert_eq!(contract.total_members_count, 3);
 
-    let expected_group_names: Vec<String> = vec!["council".into()];
-    assert_eq!(contract.group_names(), expected_group_names);
+    //let expected_group_names: Vec<String> = vec!["council".into()];
+    //assert_eq!(contract.group_names(), expected_group_names);
 
     let expect_group_members = vec![
         GroupMember {
@@ -67,11 +67,11 @@ fn add_group() {
 
     assert_eq!(contract.total_members_count, 5);
 
-    let expected_group_names: Vec<String> = vec!["council".into(), "council_rest".into()];
-
-    let mut actual_group_names = contract.group_names();
-    actual_group_names.sort();
-    assert_eq!(actual_group_names, expected_group_names);
+    //let expected_group_names: Vec<String> = vec!["council".into(), "council_rest".into()];
+    //
+    //let mut actual_group_names = contract.group_names();
+    //actual_group_names.sort();
+    //assert_eq!(actual_group_names, expected_group_names);
 
     let mut actual_group_members = contract.group_members(2).unwrap();
     actual_group_members.sort();

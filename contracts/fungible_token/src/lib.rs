@@ -67,7 +67,9 @@ pub struct Contract {
 pub struct Settings {
     /// Account allowed to change these settings.
     owner_id: AccountId,
+    /// Minting new FT is allowed.
     mint_allowed: bool,
+    /// Burning FT is allowed.
     burn_allowed: bool,
     /// Account of contract allowed to provide new version.
     /// If not set then upgrade is not allowed.
@@ -148,18 +150,22 @@ impl Contract {
         self.settings.set(&settings);
     }
 
-    pub fn mint_new_ft(&mut self, amount: Balance, msg: Option<String>) {
+    pub fn mint_new_ft(&mut self, amount: U128, msg: Option<String>) {
         let settings = self.settings.get().expect("No settings.");
         require!(
             settings.owner_id == env::predecessor_account_id(),
             "No rights."
         );
         require!(settings.mint_allowed, "Minting new tokens is not allowed.");
-        self.token.internal_deposit(&settings.owner_id, amount);
-        let msg = format!("Minted {} new tokens. {}", amount, msg.unwrap_or_default());
+        self.token.internal_deposit(&settings.owner_id, amount.0);
+        let msg = format!(
+            "Minted {} new tokens. {}",
+            amount.0,
+            msg.unwrap_or_default()
+        );
         FtMint {
             owner_id: &settings.owner_id,
-            amount: &U128(amount),
+            amount: &amount,
             memo: Some(msg.as_str()),
         }
         .emit();

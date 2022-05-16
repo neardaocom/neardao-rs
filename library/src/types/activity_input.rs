@@ -20,6 +20,7 @@ pub trait ActivityInput {
 #[derive(Deserialize, Debug, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Serialize))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum UserInput {
     Map(HashMap<String, Value>),
 }

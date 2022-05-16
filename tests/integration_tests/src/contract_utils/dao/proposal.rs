@@ -196,3 +196,32 @@ pub(crate) async fn proposal_to_finish(
     finish_proposal(&worker, proposer, &dao, proposal_id, expected_state).await?;
     Ok(proposal_id)
 }
+
+pub(crate) async fn proposal_to_finish_testnet(
+    worker: &Worker<Testnet>,
+    proposer: &Account,
+    dao: &AccountId,
+    dao_template_id: u16,
+    propose_settings: ProposeSettings,
+    template_settings: Option<Vec<TemplateSettings>>,
+    voters: Vec<(&Account, u8)>,
+    voting_duration: u64,
+    deposit_proposal: u128,
+    deposit_vote: u128,
+    expected_state: ProposalState,
+) -> anyhow::Result<u32> {
+    let proposal_id = create_proposal(
+        worker,
+        proposer,
+        dao,
+        dao_template_id,
+        propose_settings,
+        template_settings,
+        deposit_proposal,
+    )
+    .await?;
+    vote_proposal(worker, voters, dao, proposal_id, deposit_vote).await?;
+    worker.wait(voting_duration + 10).await?;
+    finish_proposal(&worker, proposer, &dao, proposal_id, expected_state).await?;
+    Ok(proposal_id)
+}

@@ -1,7 +1,7 @@
 //! Workflow provider contract
 //! Providers workflow templates with necessary object metadata for them to work.
 
-#![allow(unused_imports)]
+#![allow(unused_imports, unused_mut)]
 use library::workflow::help::TemplateHelp;
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
@@ -41,7 +41,6 @@ pub struct Contract {
 #[near_bindgen]
 impl Contract {
     #[private]
-    #[allow(unused_mut)]
     pub fn workflow_add(
         &mut self,
         workflow: Template,
@@ -71,7 +70,6 @@ impl Contract {
 
     /// Adds fncalls for standard interfaces. Eg. FT Standard NEP-148.
     #[private]
-    #[allow(unused_mut)]
     pub fn standard_fncalls_add(
         &mut self,
         fncalls: Vec<MethodName>,

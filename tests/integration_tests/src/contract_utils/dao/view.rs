@@ -186,8 +186,8 @@ pub(crate) async fn view_reward<T>(
 where
     T: DevNetwork,
 {
-    let args = json!({ "reward_id": reward_id }).to_string().into_bytes();
-    let outcome = worker.view(&dao, "view_reward", args).await?;
+    let args = json!({ "id": reward_id }).to_string().into_bytes();
+    let outcome = worker.view(&dao, "reward", args).await?;
     view_outcome_pretty::<Reward>("view reward", &outcome);
     let reward = parse_view_result::<Reward>(&outcome).expect("failed to parse reward_id");
     Ok(reward)
@@ -206,7 +206,7 @@ where
     })
     .to_string()
     .into_bytes();
-    let outcome = worker.view(&dao, "view_wallet", args).await?;
+    let outcome = worker.view(&dao, "wallet", args).await?;
     view_outcome_pretty::<Wallet>("view user wallet", &outcome);
     let wallet = parse_view_result::<Wallet>(&outcome).expect("failed to parse wallet");
     Ok(wallet)
@@ -225,27 +225,8 @@ where
     })
     .to_string()
     .into_bytes();
-    let outcome = worker.view(&dao, "view_user_roles", args).await?;
+    let outcome = worker.view(&dao, "user_roles", args).await?;
     view_outcome_pretty::<UserRoles>("view user roles", &outcome);
     let roles = parse_view_result::<UserRoles>(&outcome).expect("failed to parse user roles");
     Ok(roles)
 }
-
-/* pub(crate) async fn view_partition_list<T>(
-    worker: &Worker<T>,
-    dao: &Contract,
-    account_id: &AccountId,
-) -> anyhow::Result<Vec<(u16, TreasuryPartition)>>
-where
-    T: DevNetwork,
-{
-    let args = json!({
-        "account_id": account_id.to_string()
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = dao.view(&worker, "view_partition_list", args).await?;
-    view_outcome_pretty::<Vec<(u16, u16)>>("view partition list", &outcome);
-    let roles = parse_view_result::<Vec<(u16, u16)>>(&outcome).expect("failed to parse partition list");
-    Ok(roles)
-} */

@@ -20,7 +20,7 @@ use crate::{
                 trade::ActivityInputTrade1, ActivityInputSkyward1, ActivityInputWfAdd1,
             },
             check::{check_instance, check_wf_storage_values, check_wf_templates},
-            proposal::proposal_to_finish,
+            proposal::{proposal_to_finish, proposal_to_finish_testnet},
             reward::withdraw_rewards,
             types::{
                 consts::{
@@ -839,7 +839,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
 async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
     let ft_name = "dao_token";
     let dao_name = "test_dao";
-    let worker = workspaces::sandbox().await?;
+    let worker = workspaces::testnet().await?;
     let member = worker.dev_create_account().await?;
     let bounty_hunter = worker.dev_create_account().await?;
 
@@ -891,7 +891,7 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
     // Load workflows to provider.
     load_workflow_templates(&worker, &wf_provider, None, None).await?;
 
-    let proposal_id = proposal_to_finish(
+    let proposal_id = proposal_to_finish_testnet(
         &worker,
         &member,
         &dao_account_id,
@@ -932,7 +932,7 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
     .await?;
 
     // Propose Bounty1.
-    let proposal_id = proposal_to_finish(
+    let proposal_id = proposal_to_finish_testnet(
         &worker,
         &member,
         &dao_account_id,

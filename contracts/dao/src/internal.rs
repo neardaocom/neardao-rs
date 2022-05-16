@@ -36,6 +36,7 @@ impl Contract {
     #[inline]
     pub fn init_tags(&mut self, tags: Vec<TagInput>) {
         self.tags.insert(&"group".into(), &Tags::new());
+        self.tags.insert(&"global".into(), &Tags::new());
 
         for i in tags.into_iter() {
             let mut tags = Tags::new();

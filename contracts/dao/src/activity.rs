@@ -21,10 +21,7 @@ use near_sdk::{env, ext_contract, log, near_bindgen, AccountId, Gas, Promise, Pr
 
 use crate::constants::{GLOBAL_BUCKET_IDENT, TGAS};
 use crate::core::*;
-use crate::error::{
-    ActionError, ActivityError, ERR_GROUP_HAS_NO_LEADER, ERR_GROUP_NOT_FOUND,
-    ERR_PROMISE_INVALID_RESULTS_COUNT,
-};
+use crate::error::{ActionError, ActivityError, ERR_PROMISE_INVALID_RESULTS_COUNT};
 use crate::helper::deserialize::{try_bind_partition, try_bind_reward};
 use crate::internal::utils::current_timestamp_sec;
 use crate::internal::ActivityContext;

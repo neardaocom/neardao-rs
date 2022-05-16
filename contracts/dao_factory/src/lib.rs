@@ -129,9 +129,9 @@ impl Contract {
     }
 
     #[payable]
-    pub fn create(&mut self, dao_name: AccountId, dao_info: DaoInfo, args: Base64VecU8) -> Promise {
+    pub fn create(&mut self, name: String, mut info: DaoInfo, args: Base64VecU8) -> Promise {
         assert!(env::attached_deposit() >= DEPOSIT_CREATE);
-        let account_id: AccountId = format!("{}.{}", dao_name, env::current_account_id())
+        let account_id: AccountId = format!("{}.{}", name, env::current_account_id())
             .try_into()
             .expect("Account is not valid.");
         assert!(
@@ -139,7 +139,7 @@ impl Contract {
             "{}",
             "Dao already exists"
         );
-
+        info.name = account_id.to_string();
         let promise = Promise::new(account_id.clone())
             .create_account()
             .deploy_contract(NEWEST_DAO_VERSION.to_vec())
@@ -156,7 +156,7 @@ impl Contract {
                 account_id,
                 U128(env::attached_deposit()),
                 env::predecessor_account_id(),
-                dao_info,
+                info,
                 env::current_account_id(),
                 0,
                 ON_CREATE_CALL_GAS,

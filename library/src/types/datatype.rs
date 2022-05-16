@@ -16,13 +16,11 @@ use super::error::TypeError;
 pub enum Value {
     Bool(bool),
     U64(u64),
-    #[serde(rename = "str_int")]
     U128(U128),
     Null,
     String(String),
     VecBool(Vec<bool>),
     VecU64(Vec<u64>),
-    #[serde(rename = "vec_str_int")]
     VecU128(Vec<U128>),
     VecString(Vec<String>),
 }

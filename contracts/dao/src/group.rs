@@ -93,25 +93,8 @@ pub struct GroupInput {
     pub member_roles: HashMap<String, Vec<AccountId>>,
 }
 
-#[derive(Serialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct GroupOutput {
-    pub id: GroupId,
-    pub settings: GroupSettings,
-    pub members: Vec<GroupMember>,
-}
-
-impl GroupOutput {
-    pub fn from_group(id: GroupId, group: Group) -> Self {
-        GroupOutput {
-            id,
-            settings: group.settings,
-            members: group.members.get_members(),
-        }
-    }
-}
-
-#[derive(BorshDeserialize, BorshSerialize)]
 pub struct Group {
     pub settings: GroupSettings,
     pub members: GroupMembers,

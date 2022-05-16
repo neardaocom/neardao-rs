@@ -94,4 +94,7 @@ impl Contract {
             false
         }
     }
+    pub fn accounts(&self) -> Vec<AccountId> {
+        self.accounts.to_vec()
+    }
 }

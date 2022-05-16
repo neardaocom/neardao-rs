@@ -89,7 +89,7 @@ impl TryFrom<LockInput> for UnlockingDB {
         for period_input in input.periods.into_iter() {
             end_at += period_input.duration;
             periods.push(UnlockPeriod {
-                kind: period_input.kind,
+                r#type: period_input.r#type,
                 amount: period_input.amount,
                 end_at,
             })
@@ -151,7 +151,7 @@ impl Lock {
         // Check if are still in the same period
         if current_period.end_at >= current_time {
             if current_period.amount > self.current_period_unlocked {
-                let total_released = match current_period.kind {
+                let total_released = match current_period.r#type {
                     UnlockMethod::None => current_period.amount,
                     UnlockMethod::Linear => {
                         let start_time = if pos > 0 {
@@ -192,7 +192,7 @@ impl Lock {
             self.current_period_unlocked = 0;
 
             if current_period.amount > self.current_period_unlocked {
-                let total_released = match current_period.kind {
+                let total_released = match current_period.r#type {
                     UnlockMethod::None => current_period.amount,
                     UnlockMethod::Linear => {
                         let start_time = if pos != 0 {
@@ -263,7 +263,7 @@ impl TryFrom<LockInput> for Lock {
         for period_input in input.periods.into_iter() {
             end_at += period_input.duration;
             periods.push(UnlockPeriod {
-                kind: period_input.kind,
+                r#type: period_input.r#type,
                 amount: period_input.amount,
                 end_at,
             })
@@ -302,7 +302,7 @@ pub fn check_duration_and_amount(
 /// Defines `amount` FT to be release at `end_at` timestamp.
 /// Kind defines type of releasing. "None" releases `amount` immediately. "Linear" lineary over the time period.
 pub struct UnlockPeriod {
-    pub kind: UnlockMethod,
+    pub r#type: UnlockMethod,
     pub end_at: u64,
     pub amount: u32,
 }
@@ -315,7 +315,7 @@ pub struct UnlockPeriod {
 #[serde(crate = "near_sdk::serde")]
 /// Input version of `UnlockPeriod`.
 pub struct UnlockPeriodInput {
-    pub kind: UnlockMethod,
+    pub r#type: UnlockMethod,
     pub duration: u64,
     pub amount: u32,
 }
@@ -334,32 +334,32 @@ mod test {
             1000,
             vec![
                 UnlockPeriodInput {
-                    kind: UnlockMethod::Linear,
+                    r#type: UnlockMethod::Linear,
                     duration: 100,
                     amount: TOTAL_AMOUNT / 8,
                 },
                 UnlockPeriodInput {
-                    kind: UnlockMethod::Linear,
+                    r#type: UnlockMethod::Linear,
                     duration: 300,
                     amount: 0,
                 },
                 UnlockPeriodInput {
-                    kind: UnlockMethod::None,
+                    r#type: UnlockMethod::None,
                     duration: 300,
                     amount: TOTAL_AMOUNT / 2,
                 },
                 UnlockPeriodInput {
-                    kind: UnlockMethod::Linear,
+                    r#type: UnlockMethod::Linear,
                     duration: 100,
                     amount: TOTAL_AMOUNT / 16,
                 },
                 UnlockPeriodInput {
-                    kind: UnlockMethod::Linear,
+                    r#type: UnlockMethod::Linear,
                     duration: 100,
                     amount: TOTAL_AMOUNT / 16,
                 },
                 UnlockPeriodInput {
-                    kind: UnlockMethod::Linear,
+                    r#type: UnlockMethod::Linear,
                     duration: 100,
                     amount: TOTAL_AMOUNT / 8,
                 },

@@ -7,7 +7,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::Serialize;
 use near_sdk::{env, near_bindgen, AccountId, Balance};
 
-use crate::group::{GroupMember, GroupOutput};
+use crate::group::{Group, GroupMember};
 use crate::internal::utils::current_timestamp_sec;
 use crate::proposal::VersionedProposal;
 use crate::reward::Reward;
@@ -84,6 +84,12 @@ impl Contract {
     pub fn wf_propose_settings(self, proposal_id: u32) -> Option<ProposeSettings> {
         self.workflow_propose_settings.get(&proposal_id)
     }
+    pub fn wf_add_proposed_template_settings(
+        self,
+        proposal_id: u32,
+    ) -> Option<Vec<TemplateSettings>> {
+        self.proposed_workflow_settings.get(&proposal_id)
+    }
 
     pub fn wf_instances(self) -> Vec<Option<Instance>> {
         (1..=self.proposal_last_id)
@@ -101,8 +107,8 @@ impl Contract {
         current_timestamp_sec()
     }
 
-    pub fn view_reward(self, reward_id: u16) -> Reward {
-        self.rewards.get(&reward_id).unwrap().into()
+    pub fn reward(self, id: u16) -> Option<Reward> {
+        self.rewards.get(&id).map(|r| r.into())
     }
     pub fn reward_list(self, from_id: u16, limit: u16) -> Vec<(u16, Reward)> {
         let mut rewards = Vec::with_capacity(self.reward_last_id as usize);
@@ -125,11 +131,11 @@ impl Contract {
     pub fn partition(&self, id: u16) -> Option<TreasuryPartition> {
         self.treasury_partition.get(&id).map(|p| p.into())
     }
-    pub fn view_wallet(self, account_id: AccountId) -> Wallet {
-        self.wallets.get(&account_id).unwrap().into()
+    pub fn wallet(self, account_id: AccountId) -> Option<Wallet> {
+        self.wallets.get(&account_id).map(|w| w.into())
     }
-    pub fn view_user_roles(self, account_id: AccountId) -> UserRoles {
-        self.user_roles.get(&account_id).unwrap()
+    pub fn user_roles(self, account_id: AccountId) -> Option<UserRoles> {
+        self.user_roles.get(&account_id)
     }
 
     #[allow(unused_variables)]
@@ -143,29 +149,15 @@ impl Contract {
         unimplemented!()
     }
 
-    pub fn groups(self) -> Vec<GroupOutput> {
-        self.groups
-            .to_vec()
-            .into_iter()
-            .map(|(id, group)| GroupOutput::from_group(id, group))
-            .collect()
+    pub fn groups(self) -> Vec<(u16, Group)> {
+        self.groups.to_vec()
     }
 
-    pub fn group(self, id: u16) -> Option<GroupOutput> {
-        self.groups
-            .get(&id)
-            .map(|group| GroupOutput::from_group(id, group))
+    pub fn group(self, id: u16) -> Option<Group> {
+        self.groups.get(&id)
     }
 
-    pub fn group_names(&self) -> Vec<GroupName> {
-        self.groups
-            .values_as_vector()
-            .to_vec()
-            .into_iter()
-            .map(|g| g.settings.name)
-            .collect()
-    }
-
+    // TODO: Maybe remove
     pub fn group_members(&self, id: GroupId) -> Option<Vec<GroupMember>> {
         self.groups
             .get(&id)

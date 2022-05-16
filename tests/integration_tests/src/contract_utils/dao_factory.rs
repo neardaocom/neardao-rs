@@ -70,8 +70,8 @@ where
         tags: vec![],
     };
     let args = json!({
-        "dao_name": dao_name,
-        "dao_info": dao_info,
+        "name": dao_name,
+        "info": dao_info,
         "args": args
     })
     .to_string()

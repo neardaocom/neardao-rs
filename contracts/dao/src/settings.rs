@@ -10,8 +10,6 @@ use crate::{core::Contract, derive_from_versioned, derive_into_versioned, TagId}
 pub enum VersionedSettings {
     Current(Settings),
 }
-
-// TODO: Tick settings.
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -20,7 +18,7 @@ pub struct Settings {
     pub purpose: String,
     pub tags: Vec<TagId>,
     pub dao_admin_account_id: AccountId,
-    pub dao_admin_rights: Vec<String>, //TODO should be rights
+    pub dao_admin_rights: Vec<String>, // TODO: Fix - should be rights.
     pub workflow_provider: AccountId,
     pub resource_provider: AccountId,
     pub scheduler: AccountId,
