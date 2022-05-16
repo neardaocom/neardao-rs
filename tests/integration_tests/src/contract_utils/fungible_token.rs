@@ -6,7 +6,7 @@ use crate::utils::{get_fungible_token_wasm, outcome_pretty};
 
 pub(crate) async fn init_fungible_token<T>(
     worker: &Worker<T>,
-    owner_id: &AccountId,
+    owner_id: &str,
     total_supply: u128,
 ) -> anyhow::Result<Contract>
 where

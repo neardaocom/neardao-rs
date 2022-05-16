@@ -66,7 +66,7 @@ where
     Ok(dao)
 }
 
-fn dao_init_args(
+pub fn dao_init_args(
     token_id: AccountId,
     total_supply: u32,
     decimals: u8,

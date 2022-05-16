@@ -6,7 +6,7 @@ mod wf_add;
 
 use library::workflow::action::ActionInput;
 use serde_json::json;
-use workspaces::{Account, Contract, DevNetwork, Worker};
+use workspaces::{Account, AccountId, Contract, DevNetwork, Worker};
 
 use crate::utils::outcome_pretty;
 
@@ -16,7 +16,7 @@ pub use wf_add::*;
 pub(crate) async fn run_activity<T>(
     worker: &Worker<T>,
     caller: &Account,
-    dao: &Contract,
+    dao: &AccountId,
     proposal_id: u32,
     activity_id: u8,
     actions_inputs: Vec<Option<ActionInput>>,
@@ -33,7 +33,7 @@ where
     .to_string()
     .into_bytes();
     let outcome = caller
-        .call(&worker, dao.id(), "workflow_run_activity")
+        .call(&worker, dao, "workflow_run_activity")
         .args(args)
         .max_gas()
         .transact()

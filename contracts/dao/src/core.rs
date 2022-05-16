@@ -27,7 +27,7 @@ use near_sdk::{
 
 use crate::group::{Group, GroupInput};
 
-use crate::{proposal::*, DurationSec, RoleId, StorageKey, TagCategory, TimestampSec};
+use crate::{proposal::*, DurationSec, StorageKey, TagCategory, TimestampSec};
 use crate::{GroupId, ProposalId};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]

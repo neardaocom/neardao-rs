@@ -1,14 +1,17 @@
 use data::workflow::integration::skyward::{Skyward1, Skyward1ProposeOptions};
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use serde_json::json;
-use workspaces::{network::Sandbox, Account, AccountId, Contract, DevNetwork, Worker};
+use workspaces::{
+    network::{Sandbox, Testnet},
+    Account, AccountId, DevNetwork, Worker,
+};
 
 use crate::{
     contract_utils::dao::{
         types::proposal::{ProposalCreateInput, ProposalState},
         view::{proposal, votes},
     },
-    utils::outcome_pretty,
+    utils::{outcome_pretty, Wait},
 };
 
 use super::types::proposal::Proposal;
@@ -16,7 +19,7 @@ use super::types::proposal::Proposal;
 pub(crate) async fn create_proposal<T>(
     worker: &Worker<T>,
     caller: &Account,
-    dao: &Contract,
+    dao: &AccountId,
     used_template_id: u16,
     proposal_settings: ProposeSettings,
     template_settings: Option<Vec<TemplateSettings>>,
@@ -31,7 +34,7 @@ where
         .expect("failed to serialize propose settings object")
         .into_bytes();
     let outcome = caller
-        .call(&worker, dao.id(), "proposal_create")
+        .call(&worker, dao, "proposal_create")
         .args(args)
         .max_gas()
         .deposit(deposit)
@@ -49,7 +52,7 @@ where
 pub(crate) async fn vote_proposal<T>(
     worker: &Worker<T>,
     mut voters: Vec<(&Account, u8)>,
-    dao: &Contract,
+    dao: &AccountId,
     proposal_id: u32,
     deposit: u128,
 ) -> anyhow::Result<()>
@@ -67,7 +70,7 @@ where
         .to_string()
         .into_bytes();
         let outcome = voter
-            .call(&worker, dao.id(), "proposal_vote")
+            .call(&worker, dao, "proposal_vote")
             .args(args)
             .max_gas()
             .deposit(deposit)
@@ -85,7 +88,7 @@ where
 pub(crate) async fn finish_proposal<T>(
     worker: &Worker<T>,
     caller: &Account,
-    dao: &Contract,
+    dao: &AccountId,
     id: u32,
     expected_state: ProposalState,
 ) -> anyhow::Result<()>
@@ -98,14 +101,13 @@ where
     .to_string()
     .into_bytes();
     let outcome = caller
-        .call(&worker, dao.id(), "proposal_finish")
+        .call(&worker, dao, "proposal_finish")
         .args(args)
         .max_gas()
         .transact()
         .await?;
     outcome_pretty::<u32>("dao finish_proposal", &outcome);
     assert!(outcome.is_success(), "dao finish_proposal failed");
-
     let proposal = proposal(worker, dao, id)
         .await?
         .expect("failed to get proposal");
@@ -135,12 +137,12 @@ pub(crate) fn ps_skyward(
         storage_key,
     )
 }
-
+/*
 /// Wrapper around create propose, vote and finish proposal.
 pub(crate) async fn proposal_to_finish(
     worker: &Worker<Sandbox>,
     proposer: &Account,
-    dao: &Contract,
+    dao: &AccountId,
     dao_template_id: u16,
     propose_settings: ProposeSettings,
     template_settings: Option<Vec<TemplateSettings>>,
@@ -160,11 +162,37 @@ pub(crate) async fn proposal_to_finish(
         deposit_proposal,
     )
     .await?;
-
     vote_proposal(worker, voters, dao, proposal_id, deposit_vote).await?;
-
-    worker.fast_forward(voting_duration + 10).await?;
-
+    worker.wait(voting_duration + 10).await?;
+    finish_proposal(&worker, proposer, &dao, proposal_id, expected_state).await?;
+    Ok(proposal_id)
+}
+ */
+pub(crate) async fn proposal_to_finish(
+    worker: &Worker<Sandbox>,
+    proposer: &Account,
+    dao: &AccountId,
+    dao_template_id: u16,
+    propose_settings: ProposeSettings,
+    template_settings: Option<Vec<TemplateSettings>>,
+    voters: Vec<(&Account, u8)>,
+    voting_duration: u64,
+    deposit_proposal: u128,
+    deposit_vote: u128,
+    expected_state: ProposalState,
+) -> anyhow::Result<u32> {
+    let proposal_id = create_proposal(
+        worker,
+        proposer,
+        dao,
+        dao_template_id,
+        propose_settings,
+        template_settings,
+        deposit_proposal,
+    )
+    .await?;
+    vote_proposal(worker, voters, dao, proposal_id, deposit_vote).await?;
+    worker.wait(voting_duration + 10).await?;
     finish_proposal(&worker, proposer, &dao, proposal_id, expected_state).await?;
     Ok(proposal_id)
 }

@@ -9,27 +9,25 @@ use super::types::{
     consts::{DAO_VIEW_INSTANCE, DAO_VIEW_TEMPLATES, DAO_VIEW_WORKFLOW_STORAGE},
     proposal::{Proposal, Votes},
     reward::{Reward, Wallet},
-    view::{
-        StorageBalance, UserRoles, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage,
-    },
+    view::{UserRoles, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
 };
 
 pub(crate) async fn proposal<T>(
     worker: &Worker<T>,
-    dao: &Contract,
+    dao: &AccountId,
     id: u32,
 ) -> anyhow::Result<ViewProposal>
 where
     T: DevNetwork,
 {
     let args = json!({ "id": id }).to_string().into_bytes();
-    let outcome = dao.view(&worker, "proposal", args).await?;
+    let outcome = worker.view(dao, "proposal", args).await?;
     view_outcome_pretty::<ViewProposal>("dao view proposal", &outcome);
     let proposal = parse_view_result::<ViewProposal>(&outcome).unwrap_or_default();
     Ok(proposal)
 }
 
-pub(crate) async fn votes<T>(worker: &Worker<T>, dao: &Contract, id: u32) -> anyhow::Result<Votes>
+pub(crate) async fn votes<T>(worker: &Worker<T>, dao: &AccountId, id: u32) -> anyhow::Result<Votes>
 where
     T: DevNetwork,
 {
@@ -42,7 +40,7 @@ where
 
 pub(crate) async fn workflow_instance<T>(
     worker: &Worker<T>,
-    dao: &Contract,
+    dao: &AccountId,
     proposal_id: u32,
 ) -> anyhow::Result<Option<Instance>>
 where
@@ -51,7 +49,7 @@ where
     let args = json!({ "proposal_id": proposal_id })
         .to_string()
         .into_bytes();
-    let outcome = dao.view(&worker, DAO_VIEW_INSTANCE, args).await?;
+    let outcome = worker.view(dao, DAO_VIEW_INSTANCE, args).await?;
     view_outcome_pretty::<ViewInstance>("dao view instance", &outcome);
     let instance = parse_view_result::<ViewInstance>(&outcome).flatten();
     Ok(instance)
@@ -59,13 +57,13 @@ where
 
 pub(crate) async fn workflow_templates<T>(
     worker: &Worker<T>,
-    dao: &Contract,
+    dao: &AccountId,
 ) -> anyhow::Result<ViewTemplates>
 where
     T: DevNetwork,
 {
     let args = json!({}).to_string().into_bytes();
-    let outcome = dao.view(&worker, DAO_VIEW_TEMPLATES, args).await?;
+    let outcome = worker.view(dao, DAO_VIEW_TEMPLATES, args).await?;
     view_outcome_pretty::<ViewTemplates>("dao view templates", &outcome);
     let instance =
         parse_view_result::<ViewTemplates>(&outcome).expect("failed to parse workflow templates");
@@ -74,7 +72,7 @@ where
 
 pub(crate) async fn workflow_storage<T>(
     worker: &Worker<T>,
-    dao: &Contract,
+    dao: &AccountId,
     workflow_storage_key: String,
 ) -> anyhow::Result<ViewWorkflowStorage>
 where
@@ -83,7 +81,7 @@ where
     let args = json!({ "bucket_id": workflow_storage_key })
         .to_string()
         .into_bytes();
-    let outcome = dao.view(&worker, DAO_VIEW_WORKFLOW_STORAGE, args).await?;
+    let outcome = worker.view(dao, DAO_VIEW_WORKFLOW_STORAGE, args).await?;
     view_outcome_pretty::<ViewWorkflowStorage>("dao view workflow storage", &outcome);
     let storage = parse_view_result::<ViewWorkflowStorage>(&outcome)
         .expect("failed to parse workflow storage");
@@ -157,24 +155,24 @@ where
     Ok(amount)
 }
 
-pub(crate) async fn debug_log<T>(worker: &Worker<T>, dao: &Contract) -> anyhow::Result<Vec<String>>
+pub(crate) async fn debug_log<T>(worker: &Worker<T>, dao: &AccountId) -> anyhow::Result<Vec<String>>
 where
     T: DevNetwork,
 {
     let args = json!({}).to_string().into_bytes();
-    let outcome = dao.view(&worker, "debug_log", args).await?;
-    let title = format!("view debug log on dao: {}", dao.id().as_str(),);
+    let outcome = worker.view(&dao, "debug_log", args).await?;
+    let title = format!("view debug log on dao: {}", dao.as_str(),);
     view_outcome_pretty::<Vec<String>>(&title, &outcome);
     let logs = parse_view_result::<Vec<String>>(&outcome).expect("failed to parse debug log");
     Ok(logs)
 }
 
-pub(crate) async fn get_timestamp<T>(worker: &Worker<T>, dao: &Contract) -> anyhow::Result<u64>
+pub(crate) async fn get_timestamp<T>(worker: &Worker<T>, dao: &AccountId) -> anyhow::Result<u64>
 where
     T: DevNetwork,
 {
     let args = json!({}).to_string().into_bytes();
-    let outcome = dao.view(&worker, "current_timestamp", args).await?;
+    let outcome = worker.view(&dao, "current_timestamp", args).await?;
     view_outcome_pretty::<u64>("view current_timestamp", &outcome);
     let timestamp = parse_view_result::<u64>(&outcome).expect("failed to parse current_timestamp");
     Ok(timestamp)
@@ -182,14 +180,14 @@ where
 
 pub(crate) async fn view_reward<T>(
     worker: &Worker<T>,
-    dao: &Contract,
+    dao: &AccountId,
     reward_id: u16,
 ) -> anyhow::Result<Reward>
 where
     T: DevNetwork,
 {
     let args = json!({ "reward_id": reward_id }).to_string().into_bytes();
-    let outcome = dao.view(&worker, "view_reward", args).await?;
+    let outcome = worker.view(&dao, "view_reward", args).await?;
     view_outcome_pretty::<Reward>("view reward", &outcome);
     let reward = parse_view_result::<Reward>(&outcome).expect("failed to parse reward_id");
     Ok(reward)
@@ -197,7 +195,7 @@ where
 
 pub(crate) async fn view_user_wallet<T>(
     worker: &Worker<T>,
-    dao: &Contract,
+    dao: &AccountId,
     account_id: &AccountId,
 ) -> anyhow::Result<Wallet>
 where
@@ -208,7 +206,7 @@ where
     })
     .to_string()
     .into_bytes();
-    let outcome = dao.view(&worker, "view_wallet", args).await?;
+    let outcome = worker.view(&dao, "view_wallet", args).await?;
     view_outcome_pretty::<Wallet>("view user wallet", &outcome);
     let wallet = parse_view_result::<Wallet>(&outcome).expect("failed to parse wallet");
     Ok(wallet)
@@ -216,7 +214,7 @@ where
 
 pub(crate) async fn view_user_roles<T>(
     worker: &Worker<T>,
-    dao: &Contract,
+    dao: &AccountId,
     account_id: &AccountId,
 ) -> anyhow::Result<UserRoles>
 where
@@ -227,7 +225,7 @@ where
     })
     .to_string()
     .into_bytes();
-    let outcome = dao.view(&worker, "view_user_roles", args).await?;
+    let outcome = worker.view(&dao, "view_user_roles", args).await?;
     view_outcome_pretty::<UserRoles>("view user roles", &outcome);
     let roles = parse_view_result::<UserRoles>(&outcome).expect("failed to parse user roles");
     Ok(roles)

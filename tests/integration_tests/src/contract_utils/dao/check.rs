@@ -53,7 +53,7 @@ where
 
 pub(crate) async fn check_instance<T>(
     worker: &Worker<T>,
-    dao: &Contract,
+    dao: &AccountId,
     proposal_id: u32,
     expected_activity_id: u8,
     expected_state: InstanceState,
@@ -80,7 +80,7 @@ where
 
 pub(crate) async fn check_wf_templates<T>(
     worker: &Worker<T>,
-    dao: &Contract,
+    dao: &AccountId,
     expected_count: usize,
 ) -> anyhow::Result<()>
 where
@@ -97,7 +97,7 @@ where
 
 pub(crate) async fn check_wf_storage_values<T>(
     worker: &Worker<T>,
-    dao: &Contract,
+    dao: &AccountId,
     workflow_storage_key: String,
     expected_values: Vec<(String, Value)>,
 ) -> anyhow::Result<()>

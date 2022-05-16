@@ -11,12 +11,12 @@ use near_sdk::{Gas, IntoStorageKey};
 const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../../res/dao.wasm");
 
 /// Gas spent on the call & account creation.
-const CREATE_CALL_GAS: Gas = Gas(75_000_000_000_000);
+const CREATE_CALL_GAS: Gas = Gas(150_000_000_000_000);
 
 /// Gas allocated on the callback.
-const ON_CREATE_CALL_GAS: Gas = Gas(10_000_000_000_000);
+const ON_CREATE_CALL_GAS: Gas = Gas(30_000_000_000_000);
 
-const DEPOSIT_CREATE: u128 = 5_000_000_000_000_000_000_000_000;
+const DEPOSIT_CREATE: u128 = 10_000_000_000_000_000_000_000_000;
 const MAX_DAO_VERSIONS: u8 = 5;
 
 #[ext_contract(ext_self)]
@@ -44,7 +44,7 @@ pub enum StorageKeys {
 }
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-pub struct DaoFactoryContract {
+pub struct Contract {
     pub daos: UnorderedMap<AccountId, DaoInfo>,
     pub tags: Vec<String>,
     pub latest_dao_version_idx: u8,
@@ -52,11 +52,10 @@ pub struct DaoFactoryContract {
 }
 
 #[near_bindgen]
-impl DaoFactoryContract {
+impl Contract {
     #[init]
     pub fn new(tags: Vec<String>) -> Self {
         env::storage_write(&StorageKeys::V1.into_storage_key(), NEWEST_DAO_VERSION);
-
         Self {
             daos: UnorderedMap::new(StorageKeys::Daos),
             latest_dao_version_idx: 1,
@@ -68,7 +67,7 @@ impl DaoFactoryContract {
     #[private]
     #[init(ignore_state)]
     pub fn migrate(dao_version_update: bool) -> Self {
-        let mut factory: DaoFactoryContract = env::state_read().expect("Failed to migrate");
+        let mut factory: Contract = env::state_read().expect("Failed to migrate");
 
         if dao_version_update {
             // Check if we dont upload same version
@@ -203,8 +202,7 @@ impl DaoFactoryContract {
     }
 }
 
-impl DaoFactoryContract {
-    #[inline]
+impl Contract {
     pub fn update_version_and_get_slot(&mut self) -> StorageKeys {
         // Inc version counter and rotate storage slots
         if self.latest_dao_version_idx == MAX_DAO_VERSIONS {
@@ -290,7 +288,7 @@ mod tests {
         let context = VMContextBuilder::new();
         testing_env!(context.build());
 
-        let mut factory = DaoFactoryContract::new(vec![]);
+        let mut factory = Contract::new(vec![]);
 
         assert_eq!(factory.version_count, 1);
 

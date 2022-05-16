@@ -17,7 +17,7 @@ use super::types::reward::Asset;
 pub(crate) async fn withdraw_rewards<T>(
     worker: &Worker<T>,
     caller: &Account,
-    dao: &Contract,
+    dao: &AccountId,
     rewards: Vec<u16>,
     asset: Asset,
 ) -> anyhow::Result<()>
@@ -31,7 +31,7 @@ where
     .to_string()
     .into_bytes();
     let outcome = caller
-        .call(&worker, dao.id(), "withdraw_rewards")
+        .call(&worker, dao, "withdraw_rewards")
         .args(args)
         .max_gas()
         .transact()
