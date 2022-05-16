@@ -91,7 +91,7 @@ impl Contract {
     /// Requires some deposit to protect dao from malicious users.
     /// This deposit is returned on unregister.
     #[payable]
-    pub fn register_in_dao(&mut self, dao_id: AccountId) {
+    pub fn register_in_dao(&mut self, dao_id: AccountId) -> Promise {
         require!(
             env::attached_deposit() == MIN_REGISTER_DEPOSIT,
             "not enough deposit"
@@ -114,7 +114,7 @@ impl Contract {
                 * MIN_STORAGE_FOR_DAO as Balance
                 * env::storage_byte_cost(),
             GAS_FOR_REGISTER,
-        );
+        )
     }
 
     /// Unregisters caller from dao.

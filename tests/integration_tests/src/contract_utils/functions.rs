@@ -9,7 +9,7 @@ use super::dao::types::activity::ReceiverMessage;
 pub(crate) async fn storage_deposit<T>(
     worker: &Worker<T>,
     caller: &Account,
-    contract: &Contract,
+    contract: &AccountId,
     account_id: &AccountId,
     deposit: u128,
 ) -> anyhow::Result<()>
@@ -18,7 +18,7 @@ where
 {
     let args = json!({ "account_id": account_id }).to_string().into_bytes();
     let outcome = caller
-        .call(&worker, contract.id(), "storage_deposit")
+        .call(&worker, contract, "storage_deposit")
         .args(args)
         .max_gas()
         .deposit(deposit)
@@ -28,7 +28,7 @@ where
     let msg = format!(
         "{} calls storage deposit in {} for account {}",
         caller.id(),
-        contract.id(),
+        contract.as_str(),
         account_id
     );
     outcome_pretty::<StorageBalance>(&msg, &outcome);
@@ -38,7 +38,7 @@ where
 pub(crate) async fn ft_transfer_call<T>(
     worker: &Worker<T>,
     caller: &Account,
-    contract: &Contract,
+    contract: &AccountId,
     receiver_id: &AccountId,
     amount: u128,
     memo: Option<String>,
@@ -56,7 +56,7 @@ where
     .to_string()
     .into_bytes();
     let outcome = caller
-        .call(&worker, contract.id(), "ft_transfer_call")
+        .call(&worker, contract, "ft_transfer_call")
         .args(args)
         .max_gas()
         .deposit(1)
@@ -66,7 +66,7 @@ where
     let msg = format!(
         "{} calls ft_transfer_call in {} for account {}",
         caller.id(),
-        contract.id(),
+        contract,
         receiver_id
     );
     outcome_pretty::<StorageBalance>(&msg, &outcome);
@@ -76,7 +76,7 @@ where
 pub(crate) async fn ft_transfer<T>(
     worker: &Worker<T>,
     caller: &Account,
-    contract: &Contract,
+    contract: &AccountId,
     receiver_id: &AccountId,
     amount: u128,
 ) -> anyhow::Result<()>
@@ -89,7 +89,7 @@ where
     )
     .into_bytes();
     let outcome = caller
-        .call(&worker, contract.id(), "ft_transfer")
+        .call(&worker, contract, "ft_transfer")
         .args(args)
         .max_gas()
         .deposit(1)
@@ -99,7 +99,7 @@ where
     let msg = format!(
         "{} calls ft_transfer in {} for account {}",
         caller.id(),
-        contract.id(),
+        contract,
         receiver_id
     );
     Ok(())

@@ -1,12 +1,19 @@
 use anyhow::Result;
-use near_sdk::{json_types::U128, Balance, ONE_NEAR, ONE_YOCTO};
+use near_sdk::{json_types::U128, Balance, Gas, ONE_NEAR, ONE_YOCTO};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use workspaces::{network::DevAccountDeployer, result::ViewResultDetails};
+use workspaces::{network::DevAccountDeployer, result::ViewResultDetails, AccountId};
 
-use crate::utils::{
-    get_fungible_token_wasm, get_staking_wasm, outcome_pretty, parse_view_result,
-    view_outcome_pretty,
+use crate::{
+    contract_utils::{
+        dao::view::{ft_balance_of, storage_balance_of},
+        dao_factory::{create_dao_via_factory, init_dao_factory},
+        ft_factory::{create_ft_via_factory, init_ft_factory, InitDistribution},
+        functions::{ft_transfer_call, storage_deposit},
+        staking::init_staking,
+        workflow_provider::init_workflow_provider,
+    },
+    utils::{outcome_pretty, parse_view_result, view_outcome_pretty, DAO_FT_TOTAL_SUPPLY, MAX_GAS},
 };
 
 const VIEW_METHOD_GET_USER: &str = "dao_get_user";
@@ -106,102 +113,77 @@ fn check_user_result(
 /// DAO storage_unregister itself
 #[tokio::test]
 async fn staking_full_scenario() -> Result<()> {
+    let dao_name = "test_dao";
+    let ft_name = "dao_token";
     let worker = workspaces::sandbox().await?;
-    let staking_blob_path = &get_staking_wasm();
-    let staking = worker
-        .dev_deploy(&std::fs::read(staking_blob_path)?)
-        .await?;
-    let wasm_blob_dao = workspaces::compile_project("./../mocks/staking_dao").await?;
-    let dao = worker.dev_deploy(&wasm_blob_dao).await?;
-    let token_blob_path = &get_fungible_token_wasm();
-    let token = worker.dev_deploy(&std::fs::read(token_blob_path)?).await?;
     let registrar = worker.dev_create_account().await?;
     let token_holder = worker.dev_create_account().await?;
     let delegate_1 = worker.dev_create_account().await?;
     let delegate_2 = worker.dev_create_account().await?;
-
-    // Staking init.
-    let args = json!({}).to_string().into_bytes();
-    let outcome = staking
-        .call(&worker, "new")
-        .args(args)
-        .max_gas()
-        .transact()
-        .await?;
-    outcome_pretty::<()>("staking init", &outcome);
-
-    // Dao init.
-    let args = json!({
-        "staking_id" : staking.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = dao
-        .call(&worker, "new")
-        .args(args)
-        .max_gas()
-        .transact()
-        .await?;
-
-    assert!(outcome.is_success());
-    outcome_pretty::<()>("dao init", &outcome);
-
-    // FT init.
-    let args = json!({
-        "owner_id" : token_holder.id(),
-        "total_supply": U128::from(1_000_000_000 * DECIMALS)
-    })
-    .to_string()
-    .into_bytes();
-
-    let outcome = token
-        .call(&worker, "new_default_meta")
-        .args(args)
-        .max_gas()
-        .transact()
-        .await?;
-    assert!(outcome.is_success());
-    outcome_pretty::<()>("fungible token init", &outcome);
+    let ft_factory = init_ft_factory(&worker).await?;
+    let factory = init_dao_factory(&worker).await?;
+    let dao_account_id = AccountId::try_from(format!("{}.{}", dao_name, factory.id()))
+        .expect("invalid dao account id");
+    let token_account_id = AccountId::try_from(format!("{}.{}", ft_name, ft_factory.id()))
+        .expect("invalid ft account id");
+    create_ft_via_factory(
+        &worker,
+        &ft_factory,
+        ft_name,
+        dao_account_id.as_str(),
+        DAO_FT_TOTAL_SUPPLY,
+        24,
+        None,
+        None,
+        vec![InitDistribution {
+            account_id: token_holder.id().clone(),
+            amount: U128(DAO_FT_TOTAL_SUPPLY * DECIMALS),
+        }],
+    )
+    .await?;
+    let staking = init_staking(&worker).await?;
+    let wf_provider = init_workflow_provider(&worker).await?;
+    create_dao_via_factory(
+        &worker,
+        &factory,
+        &dao_name,
+        &token_account_id,
+        DAO_FT_TOTAL_SUPPLY as u32,
+        24,
+        staking.id(),
+        wf_provider.id(),
+        factory.id(),
+        vec![token_holder.id()],
+    )
+    .await?;
 
     // Check on FT.
-    let args = json!({
-        "account_id": token_holder.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = token.view(&worker, "ft_balance_of", args).await?;
-    view_outcome_pretty::<String>("ft_balance_of token_holder check", &outcome);
-    check_ft_balance_of(token_holder.id(), &outcome, 1_000_000_000 * DECIMALS);
+    let balance = ft_balance_of(&worker, &token_account_id, &token_holder.id())
+        .await?
+        .0;
+    assert_eq!(
+        balance,
+        DAO_FT_TOTAL_SUPPLY * DECIMALS,
+        "ft balance does not match"
+    );
 
     // Storage deposit for DAO in staking.
-    let args = json!({
-        "account_id":dao.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = registrar
-        .call(&worker, staking.id(), "storage_deposit")
-        .args(args)
-        .max_gas()
-        .deposit(MIN_STORAGE_DEPOSIT)
-        .transact()
-        .await?;
-    assert!(outcome.is_success());
-    outcome_pretty::<StorageBalance>("storage deposit DAO in staking", &outcome);
+    storage_deposit(
+        &worker,
+        &registrar,
+        staking.id(),
+        &dao_account_id,
+        MIN_STORAGE_DEPOSIT,
+    )
+    .await?;
 
     // Check storage balance of DAO before register.
-    let args = json!({
-        "account_id": dao.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("dao storage balance check before register", &outcome);
+    storage_balance_of::<_, StorageBalance>(&worker, &staking, &dao_account_id).await?;
 
     // Register new dao by registrar.
     let args = json!({
-        "dao_id" : dao.id(),
-        "vote_token_id": token.id(),
+        "dao_id" :  &dao_account_id,
+        "vote_token_id": &token_account_id
     })
     .to_string()
     .into_bytes();
@@ -215,34 +197,22 @@ async fn staking_full_scenario() -> Result<()> {
     outcome_pretty::<()>("register new dao by registrar", &outcome);
 
     // Check storage balance of DAO before register.
-    let args = json!({
-        "account_id": dao.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("dao storage balance check after register", &outcome);
-    let storage_balance_before = parse_view_result::<StorageBalance>(&outcome).unwrap();
+    let storage_balance_before =
+        storage_balance_of::<_, StorageBalance>(&worker, &staking, &dao_account_id).await?;
 
     // Storage deposit staking in fungible_token.
-    let args = json!({
-        "account_id": staking.id()
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = token_holder
-        .call(&worker, token.id(), "storage_deposit")
-        .args(args)
-        .max_gas()
-        .deposit(ONE_NEAR)
-        .transact()
-        .await?;
-    assert!(outcome.is_success());
-    outcome_pretty::<StorageBalance>("storage deposit staking in fungible_token", &outcome);
+    storage_deposit(
+        &worker,
+        &registrar,
+        &token_account_id,
+        staking.id(),
+        MIN_STORAGE_DEPOSIT,
+    )
+    .await?;
 
     // Register token_holder in dao.
     let args = json!({
-        "dao_id" : dao.id(),
+        "dao_id" : &dao_account_id,
     })
     .to_string()
     .into_bytes();
@@ -258,7 +228,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Register delegate_1 in dao.
     let args = json!({
-        "dao_id" : dao.id(),
+        "dao_id" : &dao_account_id,
     })
     .to_string()
     .into_bytes();
@@ -274,7 +244,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Register delegate_2 in dao.
     let args = json!({
-        "dao_id" : dao.id(),
+        "dao_id" : &dao_account_id,
     })
     .to_string()
     .into_bytes();
@@ -289,29 +259,21 @@ async fn staking_full_scenario() -> Result<()> {
     outcome_pretty::<()>("register delegate_2 in dao", &outcome);
 
     // Transfer token to staking.
-    let transfer_info = format!("{{\"dao_id\":\"{}\"}}", dao.id());
-    let amount = 2_000 + 1_000;
-    let args = json!({
-        "receiver_id": staking.id(),
-        "amount": U128::from(amount),
-        "memo": null,
-        "msg": transfer_info,
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = token_holder
-        .call(&worker, token.id(), "ft_transfer_call")
-        .args(args)
-        .max_gas()
-        .deposit(ONE_YOCTO)
-        .transact()
-        .await?;
-    assert!(outcome.is_success());
-    outcome_pretty::<()>("transfer token to staking", &outcome);
+    let transfer_info = format!("{{\"dao_id\":\"{}\"}}", &dao_account_id);
+    ft_transfer_call(
+        &worker,
+        &token_holder,
+        &token_account_id,
+        staking.id(),
+        2_000 + 1_000,
+        None,
+        transfer_info,
+    )
+    .await?;
 
     // Check transfer.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": token_holder.id(),
     })
     .to_string()
@@ -321,17 +283,13 @@ async fn staking_full_scenario() -> Result<()> {
     check_user_result(token_holder.id(), &outcome, 3000, 0, vec![], vec![]);
 
     // Check on FT
-    let args = json!({
-        "account_id": token_holder.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = token.view(&worker, "ft_balance_of", args).await?;
-    view_outcome_pretty::<String>("ft_balance_of token_holder check", &outcome);
-    check_ft_balance_of(
-        token_holder.id(),
-        &outcome,
-        1_000_000_000 * DECIMALS - 3_000,
+    let balance = ft_balance_of(&worker, &token_account_id, &token_holder.id())
+        .await?
+        .0;
+    assert_eq!(
+        balance,
+        DAO_FT_TOTAL_SUPPLY * DECIMALS - 3_000,
+        "ft balance does not match"
     );
 
     // View token_holder weight
@@ -340,14 +298,16 @@ async fn staking_full_scenario() -> Result<()> {
     })
     .to_string()
     .into_bytes();
-    let outcome = dao.view(&worker, "get_user_weight", args).await?;
+    let outcome = worker
+        .view(&dao_account_id, "get_user_weight", args)
+        .await?;
     view_outcome_pretty::<String>("view token_holder weight", &outcome);
-    let result = parse_view_result::<U128>(&outcome).unwrap().0;
-    assert_eq!(result, 0);
+    let result = parse_view_result::<U128>(&outcome);
+    assert!(result.is_none());
 
     // Delegate 1000 ft owned to delegate_1.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "delegate_id": delegate_1.id(),
         "amount": U128::from(1_000),
     })
@@ -364,7 +324,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // delegate_1 check
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": delegate_1.id(),
     })
     .to_string()
@@ -381,17 +341,11 @@ async fn staking_full_scenario() -> Result<()> {
     );
 
     // Check storage balance.
-    let args = json!({
-        "account_id": dao.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("dao storage balance check", &outcome);
+    storage_balance_of::<_, StorageBalance>(&worker, &staking, &dao_account_id).await?;
 
     // Delegate 1000 ft owned to delegate_2.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "delegate_id": delegate_2.id(),
         "amount": U128::from(1_000),
     })
@@ -408,7 +362,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // delegate_2 check
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": delegate_2.id(),
     })
     .to_string()
@@ -424,18 +378,11 @@ async fn staking_full_scenario() -> Result<()> {
         vec![token_holder.id().to_owned()],
     );
 
-    // Check storage balance.
-    let args = json!({
-        "account_id": dao.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("dao storage balance check", &outcome);
+    storage_balance_of::<_, StorageBalance>(&worker, &staking, &dao_account_id).await?;
 
     // Check token_holder.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": token_holder.id(),
     })
     .to_string()
@@ -456,7 +403,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Delegate delegated by delegate_1 to delegate_2.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "delegate_id": delegate_2.id(),
     })
     .to_string()
@@ -475,7 +422,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // delegate_1 check
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": delegate_1.id(),
     })
     .to_string()
@@ -486,7 +433,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // delegate_2 check
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": delegate_2.id(),
     })
     .to_string()
@@ -503,17 +450,11 @@ async fn staking_full_scenario() -> Result<()> {
     );
 
     // Check storage balance.
-    let args = json!({
-        "account_id": dao.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("storage balance check", &outcome);
+    storage_balance_of::<_, StorageBalance>(&worker, &staking, &dao_account_id).await?;
 
     // Check delegation delegated.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": token_holder.id(),
     })
     .to_string()
@@ -531,7 +472,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Undelegate 500 ft from delegate_2.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "delegate_id": delegate_2.id(),
         "amount": U128::from(500),
     })
@@ -548,7 +489,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // delegate_2 check
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": delegate_2.id(),
     })
     .to_string()
@@ -566,7 +507,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Check token_holder.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": token_holder.id(),
     })
     .to_string()
@@ -584,7 +525,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Withdraw 1000 ft.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "amount": U128::from(1_000),
     })
     .to_string()
@@ -600,7 +541,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Withdraw check.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": token_holder.id(),
     })
     .to_string()
@@ -617,22 +558,18 @@ async fn staking_full_scenario() -> Result<()> {
     );
 
     // Check on FT
-    let args = json!({
-        "account_id": token_holder.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = token.view(&worker, "ft_balance_of", args).await?;
-    view_outcome_pretty::<String>("ft_balance_of token_holder check", &outcome);
-    check_ft_balance_of(
-        token_holder.id(),
-        &outcome,
-        1_000_000_000 * DECIMALS - 2_000,
+    let balance = ft_balance_of(&worker, &token_account_id, &token_holder.id())
+        .await?
+        .0;
+    assert_eq!(
+        balance,
+        DAO_FT_TOTAL_SUPPLY * DECIMALS - 2_000,
+        "ft balance does not match"
     );
 
     // Undelegate rest - 1500 ft.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "delegate_id": delegate_2.id(),
         "amount": U128::from(1_500),
     })
@@ -649,7 +586,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // delegate_2 check
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": delegate_2.id(),
     })
     .to_string()
@@ -660,7 +597,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Check undelegation.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": token_holder.id(),
     })
     .to_string()
@@ -675,23 +612,19 @@ async fn staking_full_scenario() -> Result<()> {
     })
     .to_string()
     .into_bytes();
-    let outcome = dao.view(&worker, "get_user_weight", args).await?;
+    let outcome = worker
+        .view(&dao_account_id, "get_user_weight", args)
+        .await?;
     view_outcome_pretty::<String>("token_holder weight check", &outcome);
-    let result = parse_view_result::<U128>(&outcome).unwrap().0;
-    assert_eq!(result, 0);
+    let result = parse_view_result::<U128>(&outcome);
+    assert!(result.is_none());
 
     // Check storage balance.
-    let args = json!({
-        "account_id": dao.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>("dao storage balance check", &outcome);
+    storage_balance_of::<_, StorageBalance>(&worker, &staking, &dao_account_id).await?;
 
     // Withdraw rest - 1500 + 500 ft.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "amount": U128::from(1_500 + 500),
     })
     .to_string()
@@ -707,7 +640,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Withdraw check.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": token_holder.id(),
     })
     .to_string()
@@ -717,18 +650,18 @@ async fn staking_full_scenario() -> Result<()> {
     check_user_result(token_holder.id(), &outcome, 0, 0, vec![], vec![]);
 
     // Check on FT
-    let args = json!({
-        "account_id": token_holder.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = token.view(&worker, "ft_balance_of", args).await?;
-    view_outcome_pretty::<String>("ft_balance_of token_holder check", &outcome);
-    check_ft_balance_of(token_holder.id(), &outcome, 1_000_000_000 * DECIMALS);
+    let balance = ft_balance_of(&worker, &token_account_id, &token_holder.id())
+        .await?
+        .0;
+    assert_eq!(
+        balance,
+        DAO_FT_TOTAL_SUPPLY * DECIMALS,
+        "ft balance does not match"
+    );
 
     // Unregister token_holder in dao.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
     })
     .to_string()
     .into_bytes();
@@ -742,7 +675,7 @@ async fn staking_full_scenario() -> Result<()> {
     outcome_pretty::<()>("unregister token_holder in dao", &outcome);
 
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": token_holder.id(),
     })
     .to_string()
@@ -754,7 +687,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Unregister delegate_1 in dao.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
     })
     .to_string()
     .into_bytes();
@@ -768,7 +701,7 @@ async fn staking_full_scenario() -> Result<()> {
     outcome_pretty::<()>("unregister delegate_1 in dao", &outcome);
 
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": delegate_1.id(),
     })
     .to_string()
@@ -780,7 +713,7 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Unregister delegate_2 in dao.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
     })
     .to_string()
     .into_bytes();
@@ -794,7 +727,7 @@ async fn staking_full_scenario() -> Result<()> {
     outcome_pretty::<()>("unregister delegate_2 in dao", &outcome);
 
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "account_id": delegate_2.id(),
     })
     .to_string()
@@ -805,17 +738,8 @@ async fn staking_full_scenario() -> Result<()> {
         .is_err());
 
     // Check storage balance after unregistering all 3 users.
-    let args = json!({
-        "account_id": dao.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking.view(&worker, "storage_balance_of", args).await?;
-    view_outcome_pretty::<StorageBalance>(
-        "dao storage balance check after unregister all",
-        &outcome,
-    );
-    let storage_balance_after = parse_view_result::<StorageBalance>(&outcome).unwrap();
+    let storage_balance_after =
+        storage_balance_of::<_, StorageBalance>(&worker, &staking, &dao_account_id).await?;
     assert_eq!(
         storage_balance_before, storage_balance_after,
         "{}",
@@ -824,121 +748,102 @@ async fn staking_full_scenario() -> Result<()> {
 
     // Storage unregister DAO.
     let args = json!({}).to_string().into_bytes();
-    let outcome = dao
-        .as_account()
-        .call(&worker, staking.id(), "storage_unregister")
-        .args(args)
-        .max_gas()
-        .deposit(ONE_YOCTO)
-        .transact()
+    let outcome = worker
+        .call(
+            &staking,
+            "storage_unregister",
+            args,
+            Some(MAX_GAS),
+            Some(ONE_YOCTO),
+        )
         .await?;
     assert!(outcome.is_success());
-    outcome_pretty::<()>("storage unregister dao", &outcome);
-
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
     })
     .to_string()
     .into_bytes();
     assert!(staking
         .view(&worker, VIEW_METHOD_FT_TOTAL_SUPPLY, args)
         .await
-        .is_err());
-
+        .is_ok());
     Ok(())
 }
 
 #[tokio::test]
 /// Withdraw amount (1500) > vote_amount (3000) - delegated amount (2000).
-async fn staking_withdraw_panic() {
-    let worker = workspaces::sandbox().await.unwrap();
-    let staking_blob_path = &get_staking_wasm();
-    let staking = worker
-        .dev_deploy(&std::fs::read(staking_blob_path).unwrap())
-        .await
-        .unwrap();
-    let wasm_blob_dao = workspaces::compile_project("./../mocks/staking_dao")
-        .await
-        .unwrap();
-    let dao = worker.dev_deploy(&wasm_blob_dao).await.unwrap();
-    let token_blob_path = &get_fungible_token_wasm();
-    let token = worker
-        .dev_deploy(&std::fs::read(token_blob_path).unwrap())
-        .await
-        .unwrap();
-    let registrar = worker.dev_create_account().await.unwrap();
-    let token_holder = worker.dev_create_account().await.unwrap();
-    let delegate_1 = worker.dev_create_account().await.unwrap();
-    let delegate_2 = worker.dev_create_account().await.unwrap();
+async fn staking_withdraw_invalid_amount() -> anyhow::Result<()> {
+    let dao_name = "test_dao";
+    let ft_name = "dao_token";
+    let worker = workspaces::sandbox().await?;
+    let registrar = worker.dev_create_account().await?;
+    let token_holder = worker.dev_create_account().await?;
+    let delegate_1 = worker.dev_create_account().await?;
+    let delegate_2 = worker.dev_create_account().await?;
+    let ft_factory = init_ft_factory(&worker).await?;
+    let factory = init_dao_factory(&worker).await?;
+    let dao_account_id = AccountId::try_from(format!("{}.{}", dao_name, factory.id()))
+        .expect("invalid dao account id");
+    let token_account_id = AccountId::try_from(format!("{}.{}", ft_name, ft_factory.id()))
+        .expect("invalid ft account id");
+    create_ft_via_factory(
+        &worker,
+        &ft_factory,
+        ft_name,
+        dao_account_id.as_str(),
+        DAO_FT_TOTAL_SUPPLY,
+        24,
+        None,
+        None,
+        vec![InitDistribution {
+            account_id: token_holder.id().clone(),
+            amount: U128(DAO_FT_TOTAL_SUPPLY * DECIMALS),
+        }],
+    )
+    .await?;
+    let staking = init_staking(&worker).await?;
+    let wf_provider = init_workflow_provider(&worker).await?;
+    create_dao_via_factory(
+        &worker,
+        &factory,
+        &dao_name,
+        &token_account_id,
+        DAO_FT_TOTAL_SUPPLY as u32,
+        24,
+        staking.id(),
+        wf_provider.id(),
+        factory.id(),
+        vec![token_holder.id()],
+    )
+    .await?;
 
-    // Staking init.
-    let args = json!({
-        "registrar_id" : registrar.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = staking
-        .call(&worker, "new")
-        .args(args)
-        .max_gas()
-        .transact()
-        .await
-        .unwrap();
-    assert!(outcome.is_success());
-
-    // Dao init.
-    let args = json!({
-        "staking_id" : staking.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = dao
-        .call(&worker, "new")
-        .args(args)
-        .max_gas()
-        .transact()
-        .await
-        .unwrap();
-
-    assert!(outcome.is_success());
-
-    // FT init.
-    let args = json!({
-        "owner_id" : token_holder.id(),
-        "total_supply": U128::from(1_000_000_000 * DECIMALS)
-    })
-    .to_string()
-    .into_bytes();
-
-    let outcome = token
-        .call(&worker, "new_default_meta")
-        .args(args)
-        .max_gas()
-        .transact()
-        .await
-        .unwrap();
-    assert!(outcome.is_success());
+    // Check on FT.
+    let balance = ft_balance_of(&worker, &token_account_id, &token_holder.id())
+        .await?
+        .0;
+    assert_eq!(
+        balance,
+        DAO_FT_TOTAL_SUPPLY * DECIMALS,
+        "ft balance does not match"
+    );
 
     // Storage deposit for DAO in staking.
-    let args = json!({
-        "account_id":dao.id(),
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = registrar
-        .call(&worker, staking.id(), "storage_deposit")
-        .args(args)
-        .max_gas()
-        .deposit(MIN_STORAGE_DEPOSIT)
-        .transact()
-        .await
-        .unwrap();
-    assert!(outcome.is_success());
+    storage_deposit(
+        &worker,
+        &registrar,
+        staking.id(),
+        &dao_account_id,
+        MIN_STORAGE_DEPOSIT,
+    )
+    .await?;
+
+    // Check storage balance of DAO before register.
+    storage_balance_of::<_, StorageBalance>(&worker, &staking, &dao_account_id).await?;
 
     // Register new dao by registrar.
     let args = json!({
-        "dao_id" : dao.id(),
-        "vote_token_id": token.id(),
+        "dao_id" :  &dao_account_id,
+        "vote_token_id": &token_account_id
     })
     .to_string()
     .into_bytes();
@@ -947,29 +852,23 @@ async fn staking_withdraw_panic() {
         .args(args)
         .max_gas()
         .transact()
-        .await
-        .unwrap();
+        .await?;
     assert!(outcome.is_success());
+    outcome_pretty::<()>("register new dao by registrar", &outcome);
 
     // Storage deposit staking in fungible_token.
-    let args = json!({
-        "account_id": staking.id()
-    })
-    .to_string()
-    .into_bytes();
-    let outcome = token_holder
-        .call(&worker, token.id(), "storage_deposit")
-        .args(args)
-        .max_gas()
-        .deposit(ONE_NEAR)
-        .transact()
-        .await
-        .unwrap();
-    assert!(outcome.is_success());
+    storage_deposit(
+        &worker,
+        &registrar,
+        &token_account_id,
+        staking.id(),
+        MIN_STORAGE_DEPOSIT,
+    )
+    .await?;
 
     // Register token_holder in dao.
     let args = json!({
-        "dao_id" : dao.id(),
+        "dao_id" : &dao_account_id,
     })
     .to_string()
     .into_bytes();
@@ -979,13 +878,13 @@ async fn staking_withdraw_panic() {
         .max_gas()
         .deposit(MIN_REGISTER_DEPOSIT)
         .transact()
-        .await
-        .unwrap();
+        .await?;
     assert!(outcome.is_success());
+    outcome_pretty::<()>("register token_holder in dao", &outcome);
 
     // Register delegate_1 in dao.
     let args = json!({
-        "dao_id" : dao.id(),
+        "dao_id" : &dao_account_id,
     })
     .to_string()
     .into_bytes();
@@ -995,13 +894,13 @@ async fn staking_withdraw_panic() {
         .max_gas()
         .deposit(MIN_REGISTER_DEPOSIT)
         .transact()
-        .await
-        .unwrap();
+        .await?;
     assert!(outcome.is_success());
+    outcome_pretty::<()>("register delegate_1 in dao", &outcome);
 
     // Register delegate_2 in dao.
     let args = json!({
-        "dao_id" : dao.id(),
+        "dao_id" : &dao_account_id,
     })
     .to_string()
     .into_bytes();
@@ -1011,34 +910,60 @@ async fn staking_withdraw_panic() {
         .max_gas()
         .deposit(MIN_REGISTER_DEPOSIT)
         .transact()
-        .await
-        .unwrap();
+        .await?;
     assert!(outcome.is_success());
+    outcome_pretty::<()>("register delegate_2 in dao", &outcome);
 
     // Transfer token to staking.
-    let transfer_info = format!("{{\"dao_id\":\"{}\"}}", dao.id());
-    let amount = 2_000 + 1_000;
+    let transfer_info = format!("{{\"dao_id\":\"{}\"}}", &dao_account_id);
+    ft_transfer_call(
+        &worker,
+        &token_holder,
+        &token_account_id,
+        staking.id(),
+        2_000 + 1_000,
+        None,
+        transfer_info,
+    )
+    .await?;
+
+    // Check transfer.
     let args = json!({
-        "receiver_id": staking.id(),
-        "amount": U128::from(amount),
-        "memo": null,
-        "msg": transfer_info,
+        "dao_id": &dao_account_id,
+        "account_id": token_holder.id(),
     })
     .to_string()
     .into_bytes();
-    let outcome = token_holder
-        .call(&worker, token.id(), "ft_transfer_call")
-        .args(args)
-        .max_gas()
-        .deposit(ONE_YOCTO)
-        .transact()
-        .await
-        .unwrap();
-    assert!(outcome.is_success());
+    let outcome = staking.view(&worker, VIEW_METHOD_GET_USER, args).await?;
+    view_outcome_pretty::<User>("transfer check", &outcome);
+    check_user_result(token_holder.id(), &outcome, 3000, 0, vec![], vec![]);
+
+    // Check on FT
+    let balance = ft_balance_of(&worker, &token_account_id, &token_holder.id())
+        .await?
+        .0;
+    assert_eq!(
+        balance,
+        DAO_FT_TOTAL_SUPPLY * DECIMALS - 3_000,
+        "ft balance does not match"
+    );
+
+    // View token_holder weight
+    let args = json!({
+        "account_id": token_holder.id(),
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = worker
+        .view(&dao_account_id, "get_user_weight", args)
+        .await?;
+    view_outcome_pretty::<String>("view token_holder weight", &outcome);
+    let result = parse_view_result::<U128>(&outcome);
+    assert!(result.is_none());
 
     // Delegate 1000 ft owned to delegate_1.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "delegate_id": delegate_1.id(),
         "amount": U128::from(1_000),
     })
@@ -1049,13 +974,13 @@ async fn staking_withdraw_panic() {
         .args(args)
         .max_gas()
         .transact()
-        .await
-        .unwrap();
+        .await?;
     assert!(outcome.is_success());
+    outcome_pretty::<()>("delegate 1000 ft owned to delegate_1", &outcome);
 
     // Delegate 1000 ft owned to delegate_2.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "delegate_id": delegate_2.id(),
         "amount": U128::from(1_000),
     })
@@ -1070,9 +995,9 @@ async fn staking_withdraw_panic() {
         .unwrap();
     assert!(outcome.is_success());
 
-    // Withdraw 1500 when 3000 is deposited and 2000 is delegated
+    // Withdraw 1500 when 3000 is deposited and 2000 is delegated.
     let args = json!({
-        "dao_id": dao.id(),
+        "dao_id": &dao_account_id,
         "amount": U128::from(1500),
     })
     .to_string()
@@ -1084,4 +1009,5 @@ async fn staking_withdraw_panic() {
         .transact()
         .await
         .is_err());
+    Ok(())
 }

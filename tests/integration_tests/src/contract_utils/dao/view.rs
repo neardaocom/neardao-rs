@@ -90,7 +90,7 @@ where
 
 pub(crate) async fn ft_balance_of<T>(
     worker: &Worker<T>,
-    ft_contract: &Contract,
+    ft_contract: &AccountId,
     account_id: &AccountId,
 ) -> anyhow::Result<U128>
 where
@@ -99,11 +99,11 @@ where
     let args = json!({ "account_id": account_id.to_string() })
         .to_string()
         .into_bytes();
-    let outcome = ft_contract.view(&worker, "ft_balance_of", args).await?;
+    let outcome = worker.view(&ft_contract, "ft_balance_of", args).await?;
     let title = format!(
         "view ft_balance_of account: {} on contract: {}",
         account_id.as_str(),
-        ft_contract.id().as_str(),
+        ft_contract.as_str(),
     );
     view_outcome_pretty::<U128>(&title, &outcome);
     let amount = parse_view_result::<U128>(&outcome).expect("failed to parse ft_balance_of amount");

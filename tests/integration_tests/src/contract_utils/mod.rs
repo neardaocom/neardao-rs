@@ -1,5 +1,6 @@
 pub mod dao;
 pub mod dao_factory;
+pub mod ft_factory;
 pub mod functions;
 pub mod fungible_token;
 pub mod skyward;

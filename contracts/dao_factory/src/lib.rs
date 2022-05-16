@@ -12,7 +12,6 @@ const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../../res/dao.wasm");
 
 /// Gas spent on the call & account creation.
 const CREATE_CALL_GAS: Gas = Gas(150_000_000_000_000);
-
 /// Gas allocated on the callback.
 const ON_CREATE_CALL_GAS: Gas = Gas(30_000_000_000_000);
 
@@ -132,18 +131,16 @@ impl Contract {
     #[payable]
     pub fn create(&mut self, dao_name: AccountId, dao_info: DaoInfo, args: Base64VecU8) -> Promise {
         assert!(env::attached_deposit() >= DEPOSIT_CREATE);
-        let account_id = format!("{}.{}", dao_name, env::current_account_id())
+        let account_id: AccountId = format!("{}.{}", dao_name, env::current_account_id())
             .try_into()
             .expect("Account is not valid.");
-        log!("Creating DAO account: {}", account_id);
-
         assert!(
             self.get_dao_info(&account_id).is_none(),
             "{}",
             "Dao already exists"
         );
 
-        let promise = Promise::new(account_id)
+        let promise = Promise::new(account_id.clone())
             .create_account()
             .deploy_contract(NEWEST_DAO_VERSION.to_vec())
             .transfer(env::attached_deposit());
@@ -156,7 +153,7 @@ impl Contract {
                 env::prepaid_gas() - CREATE_CALL_GAS - ON_CREATE_CALL_GAS,
             )
             .then(ext_self::on_create(
-                dao_name,
+                account_id,
                 U128(env::attached_deposit()),
                 env::predecessor_account_id(),
                 dao_info,
@@ -175,6 +172,7 @@ impl Contract {
     ) -> bool {
         if near_sdk::is_promise_success() {
             self.daos.insert(&account_id, &dao_info);
+            log!("Created DAO account: {}", account_id);
             true
         } else {
             Promise::new(predecessor_account_id).transfer(attached_deposit.0);

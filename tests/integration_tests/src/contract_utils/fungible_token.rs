@@ -1,6 +1,6 @@
 use near_sdk::json_types::U128;
 use serde_json::json;
-use workspaces::{network::DevAccountDeployer, AccountId, Contract, DevNetwork, Worker};
+use workspaces::{network::DevAccountDeployer, Contract, DevNetwork, Worker};
 
 use crate::utils::{get_fungible_token_wasm, outcome_pretty};
 

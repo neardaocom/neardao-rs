@@ -7,8 +7,11 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use workspaces::{
     network::{Sandbox, Testnet},
     result::{CallExecutionDetails, ViewResultDetails},
-    AccountId, Worker,
+    Worker,
 };
+
+pub const DAO_FT_TOTAL_SUPPLY: u128 = 1_000_000_000;
+pub const DEFAULT_DECIMALS: u128 = 10u128.pow(24);
 
 pub(crate) type DurationSec = u64;
 pub(crate) type TimestampSec = u64;
@@ -26,6 +29,7 @@ pub(crate) const DAO_FACTORY: &str = "dao_factory.wasm";
 pub(crate) const WF_PROVIDER: &str = "workflow_provider.wasm";
 pub(crate) const STAKING: &str = "staking.wasm";
 pub(crate) const TOKEN: &str = "fungible_token.wasm";
+pub(crate) const FT_FACTORY: &str = "ft_factory.wasm";
 
 // 3rd party contracts.
 pub(crate) const SKYWARD: &str = "05022022_skyward.wasm";
@@ -56,6 +60,7 @@ wasm_bin_getters!(
     get_wf_provider_wasm => WF_PROVIDER
     get_staking_wasm => STAKING
     get_fungible_token_wasm => TOKEN
+    get_ft_factory_wasm => FT_FACTORY
 );
 
 wasm_bin_getters!(

@@ -30,9 +30,7 @@ use near_sdk::{
     PromiseOrValue,
 };
 
-use standard_impl::impl_ft_metadata::{
-    FungibleTokenMetadata, FungibleTokenMetadataProvider, FT_METADATA_SPEC,
-};
+use standard_impl::impl_ft_metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
 use standard_impl::impl_fungible_token::FungibleToken;
 
 mod standard_impl;
@@ -49,6 +47,13 @@ pub enum StorageKeys {
     Settings,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct InitDistribution {
+    pub account_id: AccountId,
+    pub amount: U128,
+}
+
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
@@ -60,58 +65,34 @@ pub struct Contract {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Settings {
-    /// Account id allowed to change these settings
+    /// Account allowed to change these settings.
     owner_id: AccountId,
     mint_allowed: bool,
     burn_allowed: bool,
-    /// Account id of contract allowed to provide new version.
+    /// Account of contract allowed to provide new version.
     /// If not set then upgrade is not allowed.
+    /// TODO: Implement.
     upgrade_provider: Option<AccountId>,
 }
 
-const DATA_IMAGE_SVG_NEAR_ICON: &str = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 288 288'%3E%3Cg id='l' data-name='l'%3E%3Cpath d='M187.58,79.81l-30.1,44.69a3.2,3.2,0,0,0,4.75,4.2L191.86,103a1.2,1.2,0,0,1,2,.91v80.46a1.2,1.2,0,0,1-2.12.77L102.18,77.93A15.35,15.35,0,0,0,90.47,72.5H87.34A15.34,15.34,0,0,0,72,87.84V201.16A15.34,15.34,0,0,0,87.34,216.5h0a15.35,15.35,0,0,0,13.08-7.31l30.1-44.69a3.2,3.2,0,0,0-4.75-4.2L96.14,186a1.2,1.2,0,0,1-2-.91V104.61a1.2,1.2,0,0,1,2.12-.77l89.55,107.23a15.35,15.35,0,0,0,11.71,5.43h3.13A15.34,15.34,0,0,0,216,201.16V87.84A15.34,15.34,0,0,0,200.66,72.5h0A15.35,15.35,0,0,0,187.58,79.81Z'/%3E%3C/g%3E%3C/svg%3E";
-
 #[near_bindgen]
 impl Contract {
-    /// Initializes the contract with the given total supply owned by the given `owner_id` with
-    /// default metadata (for example purposes only).
-    #[init]
-    pub fn new_default_meta(owner_id: AccountId, total_supply: U128) -> Self {
-        Self::new(
-            owner_id,
-            total_supply,
-            FungibleTokenMetadata {
-                spec: FT_METADATA_SPEC.to_string(),
-                name: "Example NEAR fungible token".to_string(),
-                symbol: "EXAMPLE".to_string(),
-                icon: Some(DATA_IMAGE_SVG_NEAR_ICON.to_string()),
-                reference: None,
-                reference_hash: None,
-                decimals: 24,
-            },
-            None,
-        )
-    }
-
-    #[init(ignore_state)]
-    pub fn upgrade() -> Self {
-        todo!()
-    }
-
     /// Initializes the contract with the given total supply owned by the given `owner_id`
     /// with the given fungible token metadata and settings.
     /// Requires `total_supply` makes at least one integer token given metadata decimals.
+    /// Distributes amount to account_id in provided via `init_distribution`.
     #[init]
     pub fn new(
         owner_id: AccountId,
         total_supply: U128,
         metadata: FungibleTokenMetadata,
         settings: Option<Settings>,
+        init_distribution: Vec<InitDistribution>,
     ) -> Self {
-        assert!(!env::state_exists(), "Already initialized");
+        assert!(!env::state_exists(), "Already initialized.");
         assert!(
             total_supply.0 / 10u128.pow(metadata.decimals as u32) >= 1,
-            "Invalid total_supply/decimals ratio"
+            "Invalid total_supply/decimals ratio."
         );
         metadata.assert_valid();
         let settings = settings.unwrap_or_else(|| Settings {
@@ -127,10 +108,22 @@ impl Contract {
         };
         this.token.internal_register_account(&owner_id);
         this.token.internal_deposit(&owner_id, total_supply.into());
+        if !init_distribution.is_empty() {
+            let memo = "init distribution".to_string();
+            for d in init_distribution {
+                this.token.internal_register_account(&d.account_id);
+                this.token.internal_transfer(
+                    &owner_id,
+                    &d.account_id,
+                    d.amount.0,
+                    Some(memo.clone()),
+                );
+            }
+        }
         FtMint {
             owner_id: &owner_id,
             amount: &total_supply,
-            memo: Some("Initial tokens supply is minted"),
+            memo: Some("Initial tokens supply is minted."),
         }
         .emit();
         this
@@ -147,21 +140,21 @@ impl Contract {
     /// Changes current settings to `settings` provided.
     /// Only owner is allowed to call this function.
     pub fn change_settings(&mut self, settings: Settings) {
-        let prev_settings = self.settings.get().unwrap();
+        let prev_settings = self.settings.get().expect("No settings.");
         require!(
             prev_settings.owner_id == env::predecessor_account_id(),
-            "no rights"
+            "No rights."
         );
         self.settings.set(&settings);
     }
 
     pub fn mint_new_ft(&mut self, amount: Balance, msg: Option<String>) {
-        let settings = self.settings.get().expect("no settings");
+        let settings = self.settings.get().expect("No settings.");
         require!(
             settings.owner_id == env::predecessor_account_id(),
-            "no rights"
+            "No rights."
         );
-        require!(settings.mint_allowed, "minting new tokens is not allowed");
+        require!(settings.mint_allowed, "Minting new tokens is not allowed.");
         self.token.internal_deposit(&settings.owner_id, amount);
         let msg = format!("Minted {} new tokens. {}", amount, msg.unwrap_or_default());
         FtMint {
@@ -351,6 +344,7 @@ pub extern "C" fn upgrade_self() {
     env::promise_batch_action_function_call(promise, method_name, &[], 0, GAS_UPGRADE);
 }
 
+// TODO: Add more tests.
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use near_sdk::test_utils::{accounts, VMContextBuilder};
@@ -359,6 +353,21 @@ mod tests {
     use near_sdk::{testing_env, Balance};
 
     use super::*;
+
+    const DATA_IMAGE_SVG_NEAR_ICON: &str = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 288 288'%3E%3Cg id='l' data-name='l'%3E%3Cpath d='M187.58,79.81l-30.1,44.69a3.2,3.2,0,0,0,4.75,4.2L191.86,103a1.2,1.2,0,0,1,2,.91v80.46a1.2,1.2,0,0,1-2.12.77L102.18,77.93A15.35,15.35,0,0,0,90.47,72.5H87.34A15.34,15.34,0,0,0,72,87.84V201.16A15.34,15.34,0,0,0,87.34,216.5h0a15.35,15.35,0,0,0,13.08-7.31l30.1-44.69a3.2,3.2,0,0,0-4.75-4.2L96.14,186a1.2,1.2,0,0,1-2-.91V104.61a1.2,1.2,0,0,1,2.12-.77l89.55,107.23a15.35,15.35,0,0,0,11.71,5.43h3.13A15.34,15.34,0,0,0,216,201.16V87.84A15.34,15.34,0,0,0,200.66,72.5h0A15.35,15.35,0,0,0,187.58,79.81Z'/%3E%3C/g%3E%3C/svg%3E";
+    pub const FT_METADATA_SPEC: &str = "ft-1.0.0";
+
+    fn default_ft_metadata() -> FungibleTokenMetadata {
+        FungibleTokenMetadata {
+            spec: FT_METADATA_SPEC.to_string(),
+            name: "Example NEAR fungible token".to_string(),
+            symbol: "EXAMPLE".to_string(),
+            icon: Some(DATA_IMAGE_SVG_NEAR_ICON.to_string()),
+            reference: None,
+            reference_hash: None,
+            decimals: 24,
+        }
+    }
 
     const TOTAL_SUPPLY: Balance = 1_000_000_000 * 10u128.pow(24);
 
@@ -375,10 +384,32 @@ mod tests {
     fn test_new() {
         let mut context = get_context(accounts(1));
         testing_env!(context.build());
-        let contract = Contract::new_default_meta(accounts(1).into(), TOTAL_SUPPLY.into());
+        let contract = Contract::new(
+            accounts(1).into(),
+            TOTAL_SUPPLY.into(),
+            default_ft_metadata(),
+            None,
+            vec![
+                InitDistribution {
+                    account_id: accounts(2),
+                    amount: U128(1_000),
+                },
+                InitDistribution {
+                    account_id: accounts(3),
+                    amount: U128(7_000),
+                },
+                InitDistribution {
+                    account_id: accounts(4),
+                    amount: U128(2_000),
+                },
+            ],
+        );
         testing_env!(context.is_view(true).build());
         assert_eq!(contract.ft_total_supply().0, TOTAL_SUPPLY);
-        assert_eq!(contract.ft_balance_of(accounts(1)).0, TOTAL_SUPPLY);
+        assert_eq!(contract.ft_balance_of(accounts(1)).0, TOTAL_SUPPLY - 10_000);
+        assert_eq!(contract.ft_balance_of(accounts(2)).0, 1_000);
+        assert_eq!(contract.ft_balance_of(accounts(3)).0, 7_000);
+        assert_eq!(contract.ft_balance_of(accounts(4)).0, 2_000);
     }
 
     #[test]
@@ -393,7 +424,13 @@ mod tests {
     fn test_transfer() {
         let mut context = get_context(accounts(2));
         testing_env!(context.build());
-        let mut contract = Contract::new_default_meta(accounts(2).into(), TOTAL_SUPPLY.into());
+        let mut contract = Contract::new(
+            accounts(2).into(),
+            TOTAL_SUPPLY.into(),
+            default_ft_metadata(),
+            None,
+            vec![],
+        );
         testing_env!(context
             .storage_usage(env::storage_usage())
             .attached_deposit(contract.storage_balance_bounds().min.into())
