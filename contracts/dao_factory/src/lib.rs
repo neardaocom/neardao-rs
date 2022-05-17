@@ -8,7 +8,7 @@ use near_sdk::{
 use near_sdk::{Gas, IntoStorageKey};
 
 ///include binary code of dao contract
-const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../../res/dao.wasm");
+const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../../res/dao_opt_size_max.wasm");
 
 /// Gas spent on the call & account creation.
 const CREATE_CALL_GAS: Gas = Gas(150_000_000_000_000);
@@ -27,7 +27,6 @@ pub trait ExtSelf {
         predecessor_account_id: AccountId,
         dao_info: DaoInfo,
     ) -> bool;
-
     fn on_delete(&mut self, account: String) -> bool;
 }
 

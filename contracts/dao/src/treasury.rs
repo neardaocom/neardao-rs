@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use library::locking::UnlockingDB;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
@@ -139,14 +141,9 @@ impl PartitionAsset {
     }
     /// Remove amount up to `amount` and returns actually removed amount.
     pub fn remove_amount(&mut self, amount: u128) -> u128 {
-        if self.amount >= amount {
-            self.amount -= amount;
-            amount
-        } else {
-            let amount_removed = amount - self.amount;
-            self.amount = 0;
-            amount_removed
-        }
+        let remove_amount = std::cmp::min(self.amount, amount);
+        self.amount -= remove_amount;
+        remove_amount
     }
     /// Unlock all possible tokens and returns new amount.
     pub fn unlock(&mut self, current_timestamp: TimestampSec) -> u128 {
@@ -167,6 +164,7 @@ impl PartitionAsset {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Eq, PartialOrd, Ord)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 pub enum Asset {
@@ -175,7 +173,17 @@ pub enum Asset {
     NFT(AssetNFT),
 }
 
+impl Display for Asset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Asset::Near => write!(f, "near"),
+            Asset::FT(a) => write!(f, "ft:{}", a.account_id),
+            Asset::NFT(a) => write!(f, "nft:{};token_id:{}", a.account_id, a.token_id),
+        }
+    }
+}
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Eq, PartialOrd, Ord)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
 pub struct AssetFT {
     pub account_id: AccountId,
@@ -197,6 +205,7 @@ impl PartialEq for AssetFT {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Eq, PartialOrd, Ord)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
 pub struct AssetNFT {
     pub account_id: AccountId,

@@ -65,7 +65,6 @@ impl Reward {
     pub fn reward_amounts(&self) -> &[(Asset, u128)] {
         self.reward_amounts.as_slice()
     }
-    /// TODO: Check edge cases in wasm to know max/min amounts.
     /// Return amount of total available wage asset reward at the current timestamp.
     /// Panics if reward type is not Wage.
     pub fn available_wage_amount(&self, asset: &Asset, current_timestamp: TimestampSec) -> u128 {
@@ -77,7 +76,8 @@ impl Reward {
         };
         let amount = match self.r#type {
             RewardType::Wage(ref wage) => {
-                let seconds_passed = current_timestamp - self.time_valid_from;
+                let seconds_passed =
+                    std::cmp::min(current_timestamp, self.time_valid_to) - self.time_valid_from;
                 let units = seconds_passed / wage.unit_seconds as u64;
                 amount * units as u128
             }

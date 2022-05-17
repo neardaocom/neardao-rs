@@ -1,17 +1,7 @@
 use near_sdk::ONE_NEAR;
 
-use data::workflow::{
-    basic::{
-        bounty::{Bounty1, Bounty1ProposeOptions},
-        reward::Reward1,
-        trade::{Trade1, Trade1ProposeOptions},
-        wf_add::{WfAdd1, WfAdd1ProposeOptions},
-    },
-    integration::skyward::{Skyward1, Skyward1ProposeOptions, AUCTION_DURATION, AUCTION_START},
-};
-use library::{types::datatype::Value, workflow::instance::InstanceState};
-use workspaces::{network::DevAccountDeployer, AccountId};
-
+use crate::contract_utils::dao::view::statistics;
+#[allow(unused)]
 use crate::{
     contract_utils::{
         dao::{
@@ -45,6 +35,17 @@ use crate::{
     },
     utils::Wait,
 };
+use data::workflow::{
+    basic::{
+        bounty::{Bounty1, Bounty1ProposeOptions},
+        reward::Reward1,
+        trade::{Trade1, Trade1ProposeOptions},
+        wf_add::{WfAdd1, WfAdd1ProposeOptions},
+    },
+    integration::skyward::{Skyward1, Skyward1ProposeOptions, AUCTION_DURATION, AUCTION_START},
+};
+use library::{types::datatype::Value, workflow::instance::InstanceState};
+use workspaces::{network::DevAccountDeployer, AccountId};
 
 const DAO_FT_TOTAL_SUPPLY: u128 = 1_000_000_000;
 const DEFAULT_DECIMALS: u128 = 10u128.pow(24);
@@ -95,6 +96,8 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
     .await?;
     let wnear = init_wnear(&worker).await?;
     let skyward = init_skyward(&worker, &wnear, None).await?;
+
+    statistics(&worker, &dao_account_id).await?;
 
     // Storage deposit staking in fungible_token.
     storage_deposit(
@@ -401,6 +404,7 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
         wnear.id(),
     )
     .await?;
+    statistics(&worker, &dao_account_id).await?;
     Ok(())
 }
 

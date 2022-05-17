@@ -13,5 +13,10 @@ pub mod workflow;
 #[cfg(test)]
 pub mod output;
 
-pub type TemplateData = (Template, Vec<FnCallId>, Vec<Vec<ObjectMetadata>>, Vec<MethodName>);
+pub type TemplateData = (
+    Template,
+    Vec<FnCallId>,
+    Vec<Vec<ObjectMetadata>>,
+    Vec<MethodName>,
+);
 pub type TemplateUserSettings = (Vec<TemplateSettings>, ProposeSettings);

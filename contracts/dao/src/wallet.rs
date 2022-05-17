@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env, ext_contract,
@@ -180,7 +182,7 @@ impl Wallet {
 pub struct WalletReward {
     reward_id: u16,
     time_added: TimestampSec,
-    /// Vec of all withdrawn stats per asset from reward.
+    /// Collection of all withdrawn stats per asset from reward.
     /// All assets MUST be defined in the reward.
     /// In case of UserActivityReward its counter of executed activities.
     /// Withdraw asset resets it.
@@ -356,9 +358,35 @@ impl Contract {
         }
         total_withdrawn.into()
     }
-    /// Calculate available rewards for `account_id`.
-    pub fn available_rewards(&self, account_id: AccountId) {
-        todo!();
+    /// Calculate claimable rewards for `account_id`.
+    pub fn claimable_rewards(&self, account_id: AccountId) -> HashMap<String, u128> {
+        let wallet: Wallet = self
+            .wallets
+            .get(&account_id)
+            .expect("Wallet not found.")
+            .into();
+        let mut claimable_rewards = HashMap::new();
+        let current_timestamp = current_timestamp_sec();
+        for wallet_reward in wallet.rewards() {
+            if let Some(versioned_reward) = self.rewards.get(&wallet_reward.reward_id) {
+                let reward: Reward = versioned_reward.into();
+                for (asset, _) in reward.reward_amounts().into_iter() {
+                    let (amount, _) = Contract::internal_claimable_reward_asset(
+                        &wallet,
+                        wallet_reward.reward_id,
+                        &reward,
+                        &asset,
+                        current_timestamp,
+                    );
+                    if let Some(value) = claimable_rewards.get_mut(&asset.to_string()) {
+                        *value += amount;
+                    } else {
+                        claimable_rewards.insert(asset.to_string(), amount);
+                    }
+                }
+            }
+        }
+        claimable_rewards
     }
 
     #[private]
@@ -399,6 +427,24 @@ impl Contract {
             .unwrap_or_else(|| VersionedWallet::Current(Wallet::new()))
             .into()
     }
+    /// Return (claimable amount, amount per activity) that is possible to be withdrawn from `reward_id`.
+    pub fn internal_claimable_reward_asset(
+        wallet: &Wallet,
+        reward_id: u16,
+        reward: &Reward,
+        asset: &Asset,
+        current_timestamp: TimestampSec,
+    ) -> (u128, u128) {
+        if matches!(reward.get_reward_type(), RewardTypeIdent::Wage) {
+            let amount_available_reward = reward.available_wage_amount(&asset, current_timestamp);
+            let amount_already_claimed = wallet.amount_wage_withdrawn(reward_id, &asset);
+            (amount_available_reward - amount_already_claimed, 0)
+        } else {
+            let generated_amount = wallet.user_activity_executed_count(reward_id, &asset) as u128;
+            let amount_per_activity = reward.reward_per_one_execution(&asset);
+            (generated_amount * amount_per_activity, amount_per_activity)
+        }
+    }
     pub fn internal_withdraw_reward(
         &mut self,
         account_id: &AccountId,
@@ -414,22 +460,14 @@ impl Contract {
                 .get(&reward_id)
                 .expect("reward not found in the dao")
                 .into();
-            if !reward.is_valid(current_timestamp) {
-                continue;
-            }
             // Find out max amount user is allowed to claim.
-            let is_wage = matches!(reward.get_reward_type(), RewardTypeIdent::Wage);
-            let (claimable_reward, amount_per_activity) = if is_wage {
-                let amount_available_reward =
-                    reward.available_wage_amount(&asset, current_timestamp);
-                let amount_already_claimed = wallet.amount_wage_withdrawn(reward_id, &asset);
-                (amount_available_reward - amount_already_claimed, 0)
-            } else {
-                let generated_amount =
-                    wallet.user_activity_executed_count(reward_id, &asset) as u128;
-                let amount_per_activity = reward.reward_per_one_execution(&asset);
-                (generated_amount * amount_per_activity, amount_per_activity)
-            };
+            let (claimable_reward, amount_per_activity) = Contract::internal_claimable_reward_asset(
+                &wallet,
+                reward_id,
+                &reward,
+                asset,
+                current_timestamp,
+            );
             // Nothing to claim - check next reward.
             if claimable_reward == 0 {
                 continue;
@@ -445,7 +483,7 @@ impl Contract {
             self.treasury_partition
                 .insert(&reward.partition_id, &partition.into());
             // Update caller's wallet with actually withdrawn amounts.
-            if is_wage {
+            if amount_per_activity == 0 {
                 wallet.withdraw_wage(
                     reward_id,
                     &asset,

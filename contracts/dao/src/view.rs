@@ -5,7 +5,7 @@ use library::workflow::template::Template;
 use library::MethodName;
 use near_sdk::json_types::U128;
 use near_sdk::serde::Serialize;
-use near_sdk::{env, near_bindgen, AccountId, Balance};
+use near_sdk::{env, near_bindgen, AccountId};
 
 use crate::group::{Group, GroupMember};
 use crate::internal::utils::current_timestamp_sec;
@@ -16,8 +16,8 @@ use crate::settings::Settings;
 use crate::tags::Tags;
 use crate::treasury::TreasuryPartition;
 use crate::wallet::Wallet;
-use crate::{core::*, GroupId, GroupName, StorageKey};
-use crate::{TagCategory, TimestampSec};
+use crate::TagCategory;
+use crate::{core::*, GroupId, StorageKey};
 
 #[near_bindgen]
 impl Contract {
@@ -36,14 +36,15 @@ impl Contract {
         Statistics {
             staking_id: self.staking_id,
             token_id: self.token_id,
-            total_delegation_amount: self.total_delegation_amount,
+            total_delegation_amount: self.total_delegation_amount.into(),
             total_delegators_count: self.total_delegators_count,
             ft_total_supply: self.ft_total_supply,
             decimals: self.decimals,
             total_members_count: self.total_members_count,
-            total_account_balance: env::account_balance(),
-            free_account_balance: env::account_balance()
-                - env::storage_usage() as u128 * env::storage_byte_cost(),
+            total_account_balance: U128(env::account_balance()),
+            free_account_balance: U128(
+                env::account_balance() - env::storage_usage() as u128 * env::storage_byte_cost(),
+            ),
         }
     }
 
@@ -199,11 +200,11 @@ impl Contract {
 pub struct Statistics {
     pub staking_id: AccountId,
     pub token_id: AccountId,
-    pub total_delegation_amount: Balance,
+    pub total_delegation_amount: U128,
     pub total_delegators_count: u32,
     pub ft_total_supply: u32,
     pub decimals: u8,
     pub total_members_count: u32,
-    pub total_account_balance: u128,
-    pub free_account_balance: u128,
+    pub total_account_balance: U128,
+    pub free_account_balance: U128,
 }

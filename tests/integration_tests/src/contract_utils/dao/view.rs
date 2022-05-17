@@ -9,7 +9,7 @@ use super::types::{
     consts::{DAO_VIEW_INSTANCE, DAO_VIEW_TEMPLATES, DAO_VIEW_WORKFLOW_STORAGE},
     proposal::{Proposal, Votes},
     reward::{Reward, Wallet},
-    view::{UserRoles, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
+    view::{Statistics, UserRoles, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
 };
 
 pub(crate) async fn proposal<T>(
@@ -229,4 +229,15 @@ where
     view_outcome_pretty::<UserRoles>("view user roles", &outcome);
     let roles = parse_view_result::<UserRoles>(&outcome).expect("failed to parse user roles");
     Ok(roles)
+}
+
+pub(crate) async fn statistics<T>(worker: &Worker<T>, dao: &AccountId) -> anyhow::Result<Statistics>
+where
+    T: DevNetwork,
+{
+    let args = json!({}).to_string().into_bytes();
+    let outcome = worker.view(&dao, "statistics", args).await?;
+    view_outcome_pretty::<Statistics>("view dao statistics", &outcome);
+    let stats = parse_view_result::<Statistics>(&outcome).expect("failed to parse dao statistics");
+    Ok(stats)
 }
