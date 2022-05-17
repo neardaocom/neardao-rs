@@ -1,189 +1,85 @@
 //! Workflow data which are outputed on stdout and loaded to workflow provider by hand.
 //! TODO: Missing automation.
 
-use library::workflow::types::ObjectMetadata;
+use library::{
+    workflow::{help::TemplateHelp, template::Template, types::ObjectMetadata},
+    FnCallId, MethodName,
+};
 
 use near_sdk::serde_json;
 
-use super::object_metadata::standard_fn_calls::{
-    nep_141_ft_transfer, nep_141_ft_transfer_call, nep_171_nft_transfer, nep_171_nft_transfer_call,
+use crate::{
+    object_metadata::standard_fn_calls::{standard_fn_call_metadatas, standard_fn_call_methods},
+    workflow::{
+        basic::{bounty::Bounty1, reward::Reward1, trade::Trade1, wf_add::WfAdd1},
+        integration::skyward::{Skyward1, Skyward1TemplateOptions},
+    },
 };
 
-fn pretty_print(name: &str, meta: Vec<ObjectMetadata>) {
+pub const WF_PROVIDER: &str = "workflow-provider.v1.neardao.testnet";
+pub const SKYWARD: &str = "skyward.v1.neardao.testnet";
+pub const WNEAR: &str = "wnear.v1.neardao.testnet";
+
+fn pretty_print_template_data(
+    name: &str,
+    data: (
+        (
+            Template,
+            Vec<FnCallId>,
+            Vec<Vec<ObjectMetadata>>,
+            Vec<MethodName>,
+        ),
+        Option<TemplateHelp>,
+    ),
+) {
     println!(
-        "------------------------------ {} ------------------------------\n{}",
+        "------------------------------ WF: {} ------------------------------\n{{\"workflow\":{},\n\"fncalls\":{},\n\"fncall_metadata\":{},\n\"standard_fncalls\":{},\n\"help\":{}}}",
         name,
-        serde_json::to_string(&meta).expect(name)
+        serde_json::to_string(&data.0.0).expect(name),
+        serde_json::to_string(&data.0.1).expect(name),
+        serde_json::to_string(&data.0.2).expect(name),
+        serde_json::to_string(&data.0.3).expect(name),
+        serde_json::to_string(&data.1).expect(name),
     );
 }
 
-/*
+fn pretty_print_standards(functions: Vec<MethodName>, metadata: Vec<Vec<ObjectMetadata>>) {
+    println!(
+        "------------------------------ STANDARD FNCALLS ------------------------------\n{{\"fncalls\":{},\"fncall_metadata\":{}}}",
+        serde_json::to_string(&functions).unwrap(),
+        serde_json::to_string(&metadata).unwrap(),
+    );
+}
+
 #[test]
 fn output_workflows_basic() {
-    println!(
-        "------------------------------ WORKFLOW ADD ------------------------------\n{}",
-        serde_json::to_string(&workflow_wf_add()).unwrap()
+    pretty_print_template_data("WFADD1", (WfAdd1::template(WF_PROVIDER.into()), None));
+    pretty_print_template_data(
+        "SKYWARD1",
+        (
+            Skyward1::template(Some(Skyward1TemplateOptions {
+                skyward_account_id: SKYWARD.into(),
+                wnear_account_id: WNEAR.into(),
+            })),
+            None,
+        ),
     );
-
-    println!(
-            "------------------------------ WORKFLOW PAYOUT NEAR IN LOOP ------------------------------\n{}",
-            serde_json::to_string(&workflow_treasury_send_near_loop()).unwrap()
-        );
-
-    println!(
-        "------------------------------ WORKFLOW PAYOUT NEAR ------------------------------\n{}",
-        serde_json::to_string(&workflow_treasury_send_near()).unwrap()
-    );
-
-    println!(
-        "------------------------------ WORKFLOW PAYOUT FT ------------------------------\n{}",
-        serde_json::to_string(&workflow_treasury_send_ft()).unwrap()
-    );
-
-    println!(
-        "------------------------------ WORKFLOW ADD GROUP ------------------------------\n{}",
-        serde_json::to_string(&workflow_group_add()).unwrap()
-    );
-
-    println!(
-            "------------------------------ WORKFLOW ADD GROUP MEMBERS ------------------------------\n{}",
-            serde_json::to_string(&workflow_group_members_add()).unwrap()
-        );
-
-    println!(
-            "------------------------------ WORKFLOW REMOVE GROUP MEMBER ------------------------------\n{}",
-            serde_json::to_string(&workflow_group_member_remove()).unwrap()
-        );
-
-    println!(
-        "------------------------------ WORKFLOW REMOVE GROUP ------------------------------\n{}",
-        serde_json::to_string(&workflow_group_remove()).unwrap()
-    );
-
-    println!(
-        "------------------------------ WORKFLOW TAG ADD ------------------------------\n{}",
-        serde_json::to_string(&workflow_tag_add()).unwrap()
-    );
-
-    println!(
-        "------------------------------ WORKFLOW TAG EDIT ------------------------------\n{}",
-        serde_json::to_string(&workflow_tag_edit()).unwrap()
-    );
-
-    println!(
-        "------------------------------ WORKFLOW FT DISTRIBUTE ------------------------------\n{}",
-        serde_json::to_string(&workflow_ft_distribute()).unwrap()
-    );
-
-    println!(
-        "------------------------------ WORKFLOW MEDIA ADD ------------------------------\n{}",
-        serde_json::to_string(&workflow_media_add()).unwrap()
-    );
+    pretty_print_template_data("BOUNTY1", (Bounty1::template(), None));
+    pretty_print_template_data("REWARD1", (Reward1::template(), None));
+    pretty_print_template_data("TRADE1", (Trade1::template(), None));
 }
 
 #[test]
-pub fn output_workflow_skyward_template_1() {
-    let (wf, fncalls, metadata) = workflow_skyward_template_data_1();
+fn output_standard_fn_calls() {
+    let methods = standard_fn_call_methods();
+    let fn_calls = standard_fn_call_metadatas();
+    pretty_print_standards(methods, fn_calls);
+}
 
+#[test]
+fn output_wf_add_template_settings() {
     println!(
-        "------------------------------ WORKFLOW SKYWARD ------------------------------\n{}",
-        serde_json::to_string(&wf).unwrap()
+        "------------------------------ WFADD1 - TEMPLATE SETTINGS ------------------------------\n{}",
+        serde_json::to_string(&vec![WfAdd1::template_settings(Some(60))]).unwrap(),
     );
-
-    println!(
-            "------------------------------ WORKFLOW SKYWARD FNCALLS ------------------------------\n{}",
-            serde_json::to_string(&fncalls).unwrap()
-        );
-
-    println!(
-            "------------------------------ WORKFLOW SKYWARD FN_METADATA ------------------------------\n{}",
-            serde_json::to_string(&metadata).unwrap()
-        );
-}
-
-#[test]
-fn output_workflow_skyward_settings_1() {
-    let (wfs, settings) = workflow_skyward_template_settings_data_1();
-
-    println!(
-            "------------------------------ TEMPLATE SETTINGS SKYWARD ------------------------------\n{}",
-            serde_json::to_string(&wfs).unwrap()
-        );
-
-    println!(
-            "------------------------------ PROPOSE SETTINGS SKYWARD ------------------------------\n{}",
-            serde_json::to_string(&settings).unwrap()
-        );
-}
-
-#[test]
-pub fn output_workflow_bounty_template_1() {
-    let (wf, fncalls, metadata) = workflow_bounty_template_data_1();
-
-    println!(
-        "------------------------------ WORKFLOW BOUNTY ------------------------------\n{}",
-        serde_json::to_string(&wf).unwrap()
-    );
-}
-
-#[test]
-fn output_workflow_bounty_settings_1() {
-    let (wfs, settings) = workflow_bounty_template_settings_data_1();
-
-    println!(
-            "------------------------------ TEMPLATE SETTINGS BOUNTY  ------------------------------\n{}",
-            serde_json::to_string(&wfs).unwrap()
-        );
-
-    println!(
-            "------------------------------ PROPOSE SETTINGS BOUNTY  ------------------------------\n{}",
-            serde_json::to_string(&settings).unwrap()
-        );
-}
-
-#[test]
-fn output_settings() {
-    println!(
-            "------------------------------ TEMPLATE SETTINGS ADD WORFLOW ------------------------------\n{}",
-            serde_json::to_string(&workflow_settings_wf_add()).unwrap()
-        );
-
-    let wf_settings_add_wf = ProposeSettings {
-        binds: vec![DataType::U16(2)],
-        storage_key: "wf_add_wf_1".into(),
-    };
-
-    println!(
-            "------------------------------ PROPOSE SETTINGS ADD WORKFLOW ------------------------------\n{}",
-            serde_json::to_string(&wf_settings_add_wf).unwrap()
-        );
-
-    println!(
-            "------------------------------ TEMPLATE SETTINGS BASIC WORKFLOW ------------------------------\n{}",
-            serde_json::to_string(&workflow_settings_basic()).unwrap()
-        );
-
-    println!(
-            "------------------------------ TEMPLATE SETTINGS SEND NEAR IN LOOP WORKFLOW ------------------------------\n{}",
-            serde_json::to_string(&workflow_settings_treasury_send_near_loop()).unwrap()
-        );
-
-    let wf_settings_near_send = ProposeSettings {
-        binds: vec![DataType::U128(10u128.pow(24).into())],
-        storage_key: "wf_send_near_1".into(),
-    };
-
-    println!(
-            "------------------------------ PROPOSE SETTINGS SEND NEAR IN LOOP WORKFLOW ------------------------------\n{}",
-            serde_json::to_string(&wf_settings_near_send).unwrap()
-        );
-}
- */
-
-#[test]
-fn standard_fn_calls() {
-    pretty_print("NEP_141_FT_TRANSFER", nep_141_ft_transfer());
-    pretty_print("NEP_141_FT_TRANSFER_CALL", nep_141_ft_transfer_call());
-    pretty_print("NEP_171_NFT_TRANSFER", nep_171_nft_transfer());
-    pretty_print("NEP_171_NFT_TRANSFER_CALL", nep_171_nft_transfer_call());
 }

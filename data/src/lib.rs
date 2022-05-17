@@ -4,7 +4,7 @@ use library::{
         template::Template,
         types::ObjectMetadata,
     },
-    FnCallId,
+    FnCallId, MethodName,
 };
 
 pub mod object_metadata;
@@ -13,5 +13,5 @@ pub mod workflow;
 #[cfg(test)]
 pub mod output;
 
-pub type TemplateData = (Template, Vec<FnCallId>, Vec<Vec<ObjectMetadata>>);
+pub type TemplateData = (Template, Vec<FnCallId>, Vec<Vec<ObjectMetadata>>, Vec<MethodName>);
 pub type TemplateUserSettings = (Vec<TemplateSettings>, ProposeSettings);

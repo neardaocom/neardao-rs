@@ -11,7 +11,7 @@ use crate::group::{Group, GroupMember};
 use crate::internal::utils::current_timestamp_sec;
 use crate::proposal::VersionedProposal;
 use crate::reward::Reward;
-use crate::role::UserRoles;
+use crate::role::{Roles, UserRoles};
 use crate::settings::Settings;
 use crate::tags::Tags;
 use crate::treasury::TreasuryPartition;
@@ -136,6 +136,9 @@ impl Contract {
     }
     pub fn user_roles(self, account_id: AccountId) -> Option<UserRoles> {
         self.user_roles.get(&account_id)
+    }
+    pub fn group_roles(self, id: u16) -> Option<Roles> {
+        self.group_roles.get(&id)
     }
 
     #[allow(unused_variables)]

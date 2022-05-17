@@ -370,8 +370,7 @@ impl Bounty1 {
             constants: SourceDataVariant::Map(HashMap::new()),
             end: vec![6],
         };
-
-        (template, vec![], vec![])
+        (template, vec![], vec![], vec![])
     }
     pub fn propose_settings(
         options: Option<Bounty1ProposeOptions>,

@@ -129,7 +129,7 @@ impl Reward1 {
             end: vec![2, 3],
         };
 
-        (template, vec![], vec![])
+        (template, vec![], vec![], vec![])
     }
     pub fn propose_settings(storage_key: Option<&str>) -> ProposeSettings {
         // User proposed settings type

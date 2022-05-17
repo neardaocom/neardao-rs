@@ -2,7 +2,7 @@
 
 use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
 use crate::reward::VersionedReward;
-use crate::role::{Role, UserRoles};
+use crate::role::{Roles, UserRoles};
 use crate::settings::{assert_valid_dao_settings, Settings, VersionedSettings};
 use crate::tags::{TagInput, Tags};
 use crate::treasury::VersionedTreasuryPartition;
@@ -83,7 +83,7 @@ pub struct Contract {
     /// User's roles in groups.
     pub user_roles: LookupMap<AccountId, UserRoles>,
     /// Group's provided roles.
-    pub group_roles: LookupMap<GroupId, Role>,
+    pub group_roles: LookupMap<GroupId, Roles>,
     /// Total amount of minted tokens.
     pub ft_total_supply: u32,
     /// Decimals of token.

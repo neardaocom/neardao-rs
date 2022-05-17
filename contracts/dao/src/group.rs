@@ -8,7 +8,7 @@ use near_sdk::{
 
 use crate::{
     core::Contract,
-    role::{Role, UserRoles},
+    role::{Roles, UserRoles},
     GroupId, TagId,
 };
 
@@ -196,7 +196,7 @@ impl Contract {
             user_roles.add_new_group(self.group_last_id);
             cache.insert(&member.account_id, user_roles);
         }
-        let mut group_roles = Role::new();
+        let mut group_roles = Roles::new();
         for (role_name, members) in group.member_roles {
             if let Some(role_id) = group_roles.insert(role_name) {
                 for member in members {

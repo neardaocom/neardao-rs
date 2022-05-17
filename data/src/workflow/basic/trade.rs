@@ -103,7 +103,7 @@ impl Trade1 {
             end: vec![1],
         };
 
-        (template, vec![], vec![])
+        (template, vec![], vec![],  vec![])
     }
     pub fn propose_settings(
         options: Option<Trade1ProposeOptions>,

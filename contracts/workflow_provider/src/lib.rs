@@ -45,6 +45,7 @@ impl Contract {
         &mut self,
         workflow: Template,
         fncalls: Vec<FnCallId>,
+        standard_fncalls: Vec<MethodName>,
         mut fncall_metadata: Vec<Vec<ObjectMetadata>>,
         help: Option<TemplateHelp>,
     ) {
@@ -64,7 +65,7 @@ impl Contract {
             self.workflow_help.insert(&self.last_wf_id, &help);
         }
         self.workflow_fncalls
-            .insert(&self.last_wf_id, &(fncalls, vec![]));
+            .insert(&self.last_wf_id, &(fncalls, standard_fncalls));
         self.last_wf_id += 1;
     }
 

@@ -44,10 +44,11 @@ where
     let tpls = wf_templates(provider.id().to_string(), wnear_id, skyward_id);
     let templates_len = tpls.len();
     for (name, tpl, help) in tpls {
-        let (wf, fncalls, meta) = tpl;
+        let (wf, fncalls, meta, std_fncalls) = tpl;
         let args = json!({
             "workflow": wf,
             "fncalls": fncalls,
+            "standard_fncalls": std_fncalls,
             "fncall_metadata": meta,
             "help": help,
         })
@@ -85,7 +86,7 @@ fn wf_templates(
     // Skyward1 is always pos 1.
     if wnear_id.is_some() && skyward_id.is_some() {
         templates.push((
-            "skyward".into(),
+            "skyward1".into(),
             Skyward1::template(Some(Skyward1TemplateOptions {
                 skyward_account_id: skyward_id.unwrap().to_string(),
                 wnear_account_id: wnear_id.unwrap().to_string(),
@@ -140,6 +141,7 @@ fn dummy_template_data() -> (String, TemplateData, Option<TemplateHelp>) {
                 constants: SourceDataVariant::Map(HashMap::default()),
                 end: vec![],
             },
+            vec![],
             vec![],
             vec![],
         ),

@@ -5,9 +5,11 @@ use workspaces::{AccountId, Contract, DevNetwork, Worker};
 use crate::utils::{parse_view_result, view_outcome_pretty};
 
 use super::{
-    types::init::GroupOutput,
+    types::group::{Group, GroupMembers, GroupSettings},
     view::{workflow_instance, workflow_storage, workflow_templates},
 };
+
+type GroupOutput = (u16, Group);
 
 pub(crate) async fn check_group<T>(
     worker: &Worker<T>,
@@ -21,12 +23,20 @@ pub(crate) async fn check_group<T>(
 where
     T: DevNetwork,
 {
-    let expected = GroupOutput::from_expected(
+    let members = expected_group_members
+        .into_iter()
+        .map(|(a, t)| (a.to_owned(), t))
+        .collect();
+    let expected = (
         expected_group_id,
-        expected_group_name,
-        expected_group_leader.map(|l| l.to_owned()),
-        expected_group_parent,
-        expected_group_members,
+        Group {
+            settings: GroupSettings {
+                name: expected_group_name,
+                leader: expected_group_leader.map(|l| l.to_owned()),
+                parent_group: expected_group_parent,
+            },
+            members: GroupMembers(members),
+        },
     );
     internal_check_group(worker, dao, expected).await
 }
@@ -40,7 +50,7 @@ where
     T: DevNetwork,
 {
     let args = json!({
-        "id": group.id,
+        "id": group.0,
     })
     .to_string()
     .into_bytes();

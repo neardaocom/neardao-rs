@@ -839,7 +839,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
 async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
     let ft_name = "dao_token";
     let dao_name = "test_dao";
-    let worker = workspaces::testnet().await?;
+    let worker = workspaces::sandbox().await?;
     let member = worker.dev_create_account().await?;
     let bounty_hunter = worker.dev_create_account().await?;
 
@@ -891,7 +891,7 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
     // Load workflows to provider.
     load_workflow_templates(&worker, &wf_provider, None, None).await?;
 
-    let proposal_id = proposal_to_finish_testnet(
+    let proposal_id = proposal_to_finish(
         &worker,
         &member,
         &dao_account_id,
@@ -932,7 +932,7 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
     .await?;
 
     // Propose Bounty1.
-    let proposal_id = proposal_to_finish_testnet(
+    let proposal_id = proposal_to_finish(
         &worker,
         &member,
         &dao_account_id,

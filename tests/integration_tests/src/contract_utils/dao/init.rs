@@ -12,7 +12,10 @@ use crate::{
     utils::{get_dao_wasm, outcome_pretty, FnCallId, MethodName},
 };
 
-use super::types::init::{DaoInit, GroupInput, GroupMember, GroupOutput, GroupSettings, Settings};
+use super::types::{
+    group::{Group, GroupInput, GroupMember, GroupMembers, GroupSettings},
+    init::{DaoInit, Settings},
+};
 
 pub(crate) async fn init_dao<T>(
     worker: &Worker<T>,
@@ -74,7 +77,7 @@ pub fn dao_init_args(
     provider_id: AccountId,
     admin_id: AccountId,
     council_members: Vec<&AccountId>,
-) -> (DaoInit, GroupOutput) {
+) -> (DaoInit, (u16, Group)) {
     let settings = dao_settings(provider_id.clone(), admin_id);
     let group = default_group(council_members);
     let standard_function_calls = standard_function_calls();
@@ -84,11 +87,19 @@ pub fn dao_init_args(
     let workflow_templates = workflow_templates(provider_id.to_string());
     let workflow_template_settings = workflow_template_settings();
 
-    let group_output = GroupOutput {
-        settings: group.settings.clone(),
-        id: 1,
-        members: group.members.clone(),
-    };
+    let members = group
+        .members
+        .clone()
+        .into_iter()
+        .map(|m| (m.account_id, m.tags))
+        .collect();
+    let group_output = (
+        1,
+        Group {
+            settings: group.settings.clone(),
+            members: GroupMembers(members),
+        },
+    );
     (
         DaoInit {
             token_id,

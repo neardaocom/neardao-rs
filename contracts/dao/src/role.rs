@@ -10,14 +10,14 @@ use crate::{GroupId, RoleId};
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-pub struct Role {
+pub struct Roles {
     last_id: RoleId,
     map: HashMap<RoleId, String>,
 }
 
-impl Role {
+impl Roles {
     pub fn new() -> Self {
-        Role {
+        Roles {
             last_id: 0,
             map: HashMap::new(),
         }

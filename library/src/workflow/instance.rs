@@ -9,6 +9,7 @@ use super::activity::{Transition, TransitionCounter, TransitionLimit};
     BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone, Copy,
 )]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum InstanceState {
     /// Waiting for proposal to be accepted.
     Waiting,

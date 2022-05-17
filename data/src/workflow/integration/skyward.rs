@@ -132,7 +132,7 @@ impl Skyward1 {
 
         let wf =
             Template {
-                code: "wf_skyward".into(),
+                code: "skyward1".into(),
                 version: "1".into(),
                 auto_exec: false,
                 need_storage: true,
@@ -470,7 +470,11 @@ impl Skyward1 {
         ];
 
         let metadata = vec![metadata_1, metadata_2];
-        (wf, fncalls, metadata)
+        let std_fncalls = vec![
+            NEP_145_STORAGE_DEPOSIT.into(),
+            NEP_141_FT_TRANSFER_CALL.into(),
+        ];
+        (wf, fncalls, metadata, std_fncalls)
     }
 
     pub fn propose_settings(
@@ -984,7 +988,11 @@ impl Skyward2 {
         ];
 
         let metadata = vec![metadata_1, metadata_2];
-        (wf, fncalls, metadata)
+        let std_fncalls = vec![
+            NEP_145_STORAGE_DEPOSIT.into(),
+            NEP_141_FT_TRANSFER_CALL.into(),
+        ];
+        (wf, fncalls, metadata, std_fncalls)
     }
 
     pub fn propose_settings(

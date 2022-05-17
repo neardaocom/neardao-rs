@@ -95,7 +95,7 @@ impl WfAdd1 {
             arg_names: vec!["id".into()],
             arg_types: vec![Datatype::U64(false)],
         }]];
-        (tpl, fn_calls, metadata)
+        (tpl, fn_calls, metadata, vec![])
     }
     pub fn propose_settings(options: Option<WfAdd1ProposeOptions>) -> ProposeSettings {
         let WfAdd1ProposeOptions {
