@@ -62,7 +62,7 @@ impl Contract {
             .collect()
     }
 
-    pub fn dao_settings(self) -> Settings {
+    pub fn settings(self) -> Settings {
         self.settings.get().unwrap().into()
     }
 
@@ -113,7 +113,7 @@ impl Contract {
     }
     pub fn reward_list(self, from_id: u16, limit: u16) -> Vec<(u16, Reward)> {
         let mut rewards = Vec::with_capacity(self.reward_last_id as usize);
-        for i in from_id..std::cmp::min(self.reward_last_id, limit) {
+        for i in from_id..std::cmp::min(self.reward_last_id + 1, limit) {
             if let Some(reward) = self.rewards.get(&i) {
                 rewards.push((i, reward.into()));
             }
@@ -122,7 +122,7 @@ impl Contract {
     }
     pub fn partition_list(self, from_id: u16, limit: u16) -> Vec<(u16, TreasuryPartition)> {
         let mut partitions = Vec::with_capacity(self.reward_last_id as usize);
-        for i in from_id..std::cmp::min(self.partition_last_id, limit) {
+        for i in from_id..std::cmp::min(self.partition_last_id + 1, limit) {
             if let Some(partition) = self.treasury_partition.get(&i) {
                 partitions.push((i, partition.into()));
             }

@@ -1,6 +1,6 @@
 use near_sdk::ONE_NEAR;
 
-use crate::contract_utils::dao::view::statistics;
+use crate::contract_utils::dao::view::{partitions, statistics};
 #[allow(unused)]
 use crate::{
     contract_utils::{
@@ -92,6 +92,7 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
         wf_provider.id(),
         factory.id(),
         vec![member.id()],
+        0,
     )
     .await?;
     let wnear = init_wnear(&worker).await?;
@@ -466,6 +467,7 @@ async fn workflow_trade1_scenario() -> anyhow::Result<()> {
         wf_provider.id(),
         factory.id(),
         vec![member.id()],
+        0,
     )
     .await?;
     //let vote_token = init_fungible_token(&worker, dao_account_id.as_str(), 1_000_000_000).await?;
@@ -685,6 +687,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
         wf_provider.id(),
         factory.id(),
         vec![member.id()],
+        0,
     )
     .await?;
 
@@ -879,6 +882,7 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
         wf_provider.id(),
         factory.id(),
         vec![member.id()],
+        0,
     )
     .await?;
 
@@ -1099,8 +1103,10 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
         wf_provider.id(),
         factory.id(),
         vec![member.id()],
+        0,
     )
     .await?;
+    partitions(&worker, &dao_account_id).await?;
 
     // Storage deposit staking in fungible_token.
     storage_deposit(
@@ -1170,6 +1176,7 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
         ProposalState::Accepted,
     )
     .await?;
+    partitions(&worker, &dao_account_id).await?;
 
     // Execute Workflow Reward1.
     run_activity(
@@ -1184,6 +1191,7 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
     .await?;
     worker.wait(5).await?;
     let timestamp = get_timestamp(&worker, &dao_account_id).await?;
+    partitions(&worker, &dao_account_id).await?;
     run_activity(
         &worker,
         &member,
@@ -1191,16 +1199,16 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
         proposal_id,
         2,
         ActivityInputReward1::activity_2(
-            60,
+            10,
             1,
             1,
-            1,
+            3,
             timestamp,
             timestamp + 7200 + 10,
             reward_token_account_id.to_string(),
             3,
             24,
-            ONE_NEAR / 4,
+            ONE_NEAR,
         ),
         true,
     )
@@ -1228,7 +1236,7 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
         ONE_NEAR,
     )
     .await?;
-    worker.wait(3600).await?;
+    worker.wait(60).await?;
     ft_balance_of(&worker, &reward_token_account_id, &dao_account_id).await?;
     assert!(
         ft_balance_of(&worker, &reward_token_account_id, &member.id())
@@ -1271,7 +1279,207 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
         worker.view_account(&dao_account_id).await?.balance / 10u128.pow(24);
     assert!(dao_account_balance_before > dao_account_balance_after);
     view_user_wallet(&worker, &dao_account_id, &member.id()).await?;
+    partitions(&worker, &dao_account_id).await?;
     debug_log(&worker, &dao_account_id).await?;
+    Ok(())
+}
+
+/// DAO member adds new partition, new wage reward and then is able to withdraw his reward.
+#[tokio::test]
+async fn workflow_reward1_wage_withdraw_more_near_than_on_dao_account() -> anyhow::Result<()> {
+    let ft_name = "dao_token";
+    let dao_name = "test_dao";
+    let reward_token_name = "reward_token";
+    let worker = workspaces::sandbox().await?;
+    let member = worker.dev_create_account().await?;
+
+    // Contracts init.
+    let ft_factory = init_ft_factory(&worker).await?;
+    let factory = init_dao_factory(&worker).await?;
+    let dao_account_id = AccountId::try_from(format!("{}.{}", dao_name, factory.id()))
+        .expect("invalid dao account id");
+    let token_account_id = AccountId::try_from(format!("{}.{}", ft_name, ft_factory.id()))
+        .expect("invalid ft account id");
+    let reward_token_account_id =
+        AccountId::try_from(format!("{}.{}", reward_token_name, ft_factory.id()))
+            .expect("invalid ft account id");
+    create_ft_via_factory(
+        &worker,
+        &ft_factory,
+        ft_name,
+        dao_account_id.as_str(),
+        DAO_FT_TOTAL_SUPPLY,
+        24,
+        None,
+        None,
+        vec![],
+    )
+    .await?;
+    create_ft_via_factory(
+        &worker,
+        &ft_factory,
+        reward_token_name,
+        dao_account_id.as_str(),
+        DAO_FT_TOTAL_SUPPLY,
+        24,
+        None,
+        None,
+        vec![],
+    )
+    .await?;
+    let staking = init_staking(&worker).await?;
+    let wf_provider = init_workflow_provider(&worker).await?;
+    create_dao_via_factory(
+        &worker,
+        &factory,
+        &dao_name,
+        &token_account_id,
+        DAO_FT_TOTAL_SUPPLY as u32,
+        24,
+        staking.id(),
+        wf_provider.id(),
+        factory.id(),
+        vec![member.id()],
+        0,
+    )
+    .await?;
+    partitions(&worker, &dao_account_id).await?;
+
+    // Storage deposit staking in fungible_token.
+    storage_deposit(
+        &worker,
+        &factory.as_account(),
+        &token_account_id,
+        staking.id(),
+        ONE_NEAR,
+    )
+    .await?;
+
+    // Load workflows to provider.
+    load_workflow_templates(&worker, &wf_provider, None, None).await?;
+
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao_account_id,
+        DAO_TPL_ID_WF_ADD,
+        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+            template_id: PROVIDER_TPL_ID_REWARD1,
+            provider_id: wf_provider.id().to_string(),
+        })),
+        Some(vec![Reward1::template_settings(Some(20))]),
+        vec![(&member, 1)],
+        100,
+        WfAdd1::deposit_propose(),
+        WfAdd1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
+
+    // Execute AddWorkflow by DAO member to add Reward1 template.
+    run_activity(
+        &worker,
+        &member,
+        &dao_account_id,
+        proposal_id,
+        1,
+        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_REWARD1),
+        true,
+    )
+    .await?;
+    worker.wait(10).await?;
+    check_wf_templates(&worker, &dao_account_id, 2).await?;
+    check_instance(
+        &worker,
+        &dao_account_id,
+        proposal_id,
+        1,
+        InstanceState::Finished,
+    )
+    .await?;
+
+    // Propose Reward1.
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao_account_id,
+        DAO_TPL_ID_OF_FIRST_ADDED,
+        Reward1::propose_settings(Some("wf_reward1")),
+        None,
+        vec![(&member, 1)],
+        100,
+        Reward1::deposit_propose(),
+        Reward1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
+    partitions(&worker, &dao_account_id).await?;
+
+    // Execute Workflow Reward1.
+    run_activity(
+        &worker,
+        &member,
+        &dao_account_id,
+        proposal_id,
+        1,
+        ActivityInputReward1::activity_1(reward_token_account_id.to_string(), 1000, 24, 1000),
+        true,
+    )
+    .await?;
+    worker.wait(5).await?;
+    let timestamp = get_timestamp(&worker, &dao_account_id).await?;
+    partitions(&worker, &dao_account_id).await?;
+    run_activity(
+        &worker,
+        &member,
+        &dao_account_id,
+        proposal_id,
+        2,
+        ActivityInputReward1::activity_2(
+            10,
+            1,
+            1,
+            3,
+            timestamp,
+            timestamp + 7200 + 10,
+            reward_token_account_id.to_string(),
+            3,
+            24,
+            10 * ONE_NEAR,
+        ),
+        true,
+    )
+    .await?;
+    worker.wait(5).await?;
+    check_instance(
+        &worker,
+        &dao_account_id,
+        proposal_id,
+        2,
+        InstanceState::Finished,
+    )
+    .await?;
+    worker.wait(3600).await?;
+    debug_log(&worker, &dao_account_id).await?;
+    partitions(&worker, &dao_account_id).await?;
+    statistics(&worker, &dao_account_id).await?;
+    view_user_roles(&worker, &dao_account_id, &member.id()).await?;
+    view_reward(&worker, &dao_account_id, 1).await?;
+    view_user_wallet(&worker, &dao_account_id, &member.id()).await?;
+
+    // Withdraw NEAR reward which exceeds available account balance.
+    assert!(withdraw_rewards(
+        &worker,
+        &member,
+        &dao_account_id,
+        vec![1],
+        Asset::new_near(),
+    )
+    .await
+    .is_err());
+    partitions(&worker, &dao_account_id).await?;
+    statistics(&worker, &dao_account_id).await?;
+    view_user_wallet(&worker, &dao_account_id, &member.id()).await?;
     Ok(())
 }
 
@@ -1331,8 +1539,10 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
         wf_provider.id(),
         factory.id(),
         vec![member.id()],
+        0,
     )
     .await?;
+    partitions(&worker, &dao_account_id).await?;
 
     // Storage deposit staking in fungible_token.
     storage_deposit(
@@ -1426,7 +1636,7 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
             vec![RewardActivity::AcceptedProposal, RewardActivity::Vote],
             1,
             1,
-            1,
+            3,
             timestamp,
             timestamp + 7200 + 10,
             reward_token_account_id.to_string(),
@@ -1504,6 +1714,7 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
     debug_log(&worker, &dao_account_id).await?;
     view_user_wallet(&worker, &dao_account_id, &member.id()).await?;
     assert!(dao_account_balance_before == dao_account_balance_after);
+    partitions(&worker, &dao_account_id).await?;
 
     // Propose any proposal to test activity rewarding.
     let proposal_id = proposal_to_finish(
@@ -1577,5 +1788,6 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
     debug_log(&worker, &dao_account_id).await?;
     view_user_wallet(&worker, &dao_account_id, &member.id()).await?;
     assert_eq!(dao_account_balance_before, dao_account_balance_after + 2);
+    partitions(&worker, &dao_account_id).await?;
     Ok(())
 }

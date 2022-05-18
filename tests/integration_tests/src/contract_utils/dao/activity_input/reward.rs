@@ -22,6 +22,7 @@ impl ActivityInputReward1 {
     ) -> Vec<Option<ActionInput>> {
         let mut map = HashMap::new();
         map.insert("asset_count".into(), Value::U64(2));
+        map.insert("name".into(), Value::String("partition_for_rewards".into()));
         map.insert("assets.0.type".into(), Value::String("ft".into()));
         map.insert("assets.0.amount".into(), Value::U128(ft_amount.into()));
         map.insert(

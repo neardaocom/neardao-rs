@@ -5,7 +5,7 @@ use crate::reward::VersionedReward;
 use crate::role::{Roles, UserRoles};
 use crate::settings::{assert_valid_dao_settings, Settings, VersionedSettings};
 use crate::tags::{TagInput, Tags};
-use crate::treasury::VersionedTreasuryPartition;
+use crate::treasury::{TreasuryPartitionInput, VersionedTreasuryPartition};
 use crate::wallet::VersionedWallet;
 use library::storage::StorageBucket;
 use library::types::datatype::Value;
@@ -138,8 +138,10 @@ impl Contract {
         function_call_metadata: Vec<Vec<ObjectMetadata>>,
         workflow_templates: Vec<Template>,
         workflow_template_settings: Vec<Vec<TemplateSettings>>,
+        treasury_partitions: Vec<TreasuryPartitionInput>,
     ) -> Self {
         assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
+        assert!(decimals <= 24);
         assert_valid_dao_settings(&settings);
 
         let mut contract = Contract {
@@ -189,6 +191,7 @@ impl Contract {
             .init_standard_function_calls(standard_function_calls, standard_function_call_metadata);
         contract.init_workflows(workflow_templates, workflow_template_settings);
         contract.storage_bucket_add(GLOBAL_BUCKET_IDENT);
+        contract.init_treasury_partitions(treasury_partitions);
 
         contract
     }

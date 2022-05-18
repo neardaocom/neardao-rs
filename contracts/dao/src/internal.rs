@@ -9,6 +9,7 @@ use crate::{
     proposal::Proposal,
     settings::Settings,
     tags::{TagInput, Tags},
+    treasury::{TreasuryPartition, TreasuryPartitionInput},
     ProposalId, ProposalWf,
 };
 use library::{
@@ -110,6 +111,14 @@ impl Contract {
         }
 
         self.workflow_last_id += len as u16;
+    }
+    #[inline]
+    pub fn init_treasury_partitions(&mut self, partitions: Vec<TreasuryPartitionInput>) {
+        for partition in partitions {
+            let treasury_partititon = TreasuryPartition::try_from(partition)
+                .expect("Invalid TreasuryPartitionInput object.");
+            self.add_partition(treasury_partititon);
+        }
     }
 
     pub fn get_workflow_and_proposal(&self, proposal_id: u32) -> ProposalWf {

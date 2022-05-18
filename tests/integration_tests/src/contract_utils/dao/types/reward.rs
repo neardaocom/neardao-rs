@@ -8,7 +8,7 @@ use crate::utils::TimestampSec;
 pub type TokenId = String;
 pub type ApprovalId = Option<u64>;
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 pub enum Asset {
@@ -36,7 +36,7 @@ impl Asset {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct AssetFT {
     pub account_id: AccountId,
@@ -51,7 +51,7 @@ impl AssetFT {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct AssetNFT {
     pub account_id: AccountId,
@@ -83,7 +83,7 @@ impl Display for RewardTypeIdent {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Reward {
     pub group_id: u16,
@@ -104,7 +104,7 @@ pub struct Reward {
     time_valid_to: u64,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 pub enum RewardType {
@@ -115,7 +115,7 @@ pub enum RewardType {
     UserActivity(RewardUserActivity),
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Wallet {
     /// Currently provided unique rewards.
@@ -124,7 +124,7 @@ pub struct Wallet {
     failed_withdraws: Vec<(Asset, u128)>,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct WalletReward {
     reward_id: u16,
@@ -134,7 +134,7 @@ pub struct WalletReward {
     withdraw_stats: Vec<WithdrawStats>,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 pub enum WithdrawStats {
@@ -142,20 +142,20 @@ pub enum WithdrawStats {
     Activity(ActivityStats),
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct RewardWage {
     /// Amount of seconds define one unit.
     pub unit_seconds: u16,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct RewardUserActivity {
     pub activity_ids: Vec<u8>,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ActivityStats {
     pub asset_id: Asset,
     /// Count of all executions that have not been withdrawn yet.
@@ -165,7 +165,7 @@ pub struct ActivityStats {
     pub timestamp_last_withdraw: TimestampSec,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct WageStats {
     pub asset_id: Asset,
     pub amount: u128,
@@ -192,11 +192,11 @@ impl From<RewardActivity> for u64 {
     }
 }
 
-/* #[derive(Deserialize, Serialize, Clone, Debug)]
+/* #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct TreasuryPartition {
     pub assets: Vec<PartitionAsset>,
 }
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct PartitionAsset {
     asset_id: Asset,
     /// Available amount of the asset with decimal zeroes.

@@ -53,6 +53,12 @@ pub mod deserialize {
             .expect("binding - missing key: asset_count")
             .try_into_u64()
             .expect("invalid datatype: asset_count");
+        let name = action_input
+            .get(&"name")
+            .expect("binding - missing key: name")
+            .clone()
+            .try_into_string()
+            .expect("invalid datatype: name");
 
         // TODO: Refactor to match flattened structure.
         let mut assets = vec![];
@@ -82,7 +88,7 @@ pub mod deserialize {
             ));
         }
 
-        let partition = TreasuryPartition { assets };
+        let partition = TreasuryPartition { name, assets };
         Some(partition)
     }
 

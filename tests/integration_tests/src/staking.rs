@@ -1,5 +1,5 @@
 use anyhow::Result;
-use near_sdk::{json_types::U128, Balance, Gas, ONE_NEAR, ONE_YOCTO};
+use near_sdk::{json_types::U128, Balance, ONE_YOCTO};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use workspaces::{network::DevAccountDeployer, result::ViewResultDetails, AccountId};
@@ -154,6 +154,7 @@ async fn staking_full_scenario() -> Result<()> {
         wf_provider.id(),
         factory.id(),
         vec![token_holder.id()],
+        0,
     )
     .await?;
 
@@ -814,6 +815,7 @@ async fn staking_withdraw_invalid_amount() -> anyhow::Result<()> {
         wf_provider.id(),
         factory.id(),
         vec![token_holder.id()],
+        0,
     )
     .await?;
 

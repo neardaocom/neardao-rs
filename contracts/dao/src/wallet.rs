@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env, ext_contract,
@@ -344,6 +342,15 @@ pub struct ActivityStats {
     pub timestamp_last_withdraw: TimestampSec,
 }
 
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ClaimbleReward {
+    pub asset: Asset,
+    pub reward_id: u16,
+    pub amount: U128,
+    pub partition_id: u16,
+}
+
 #[near_bindgen]
 impl Contract {
     // TODO: Allow to define max withdraw amount per reward?
@@ -352,20 +359,20 @@ impl Contract {
     /// Return actually withdrawn amount.
     pub fn withdraw_rewards(&mut self, reward_ids: Vec<u16>, asset: Asset) -> U128 {
         let caller = env::predecessor_account_id();
-        let total_withdrawn = self.internal_withdraw_reward(&caller, reward_ids, &asset);
+        let total_withdrawn: u128 = self.internal_withdraw_reward(&caller, reward_ids, &asset);
         if total_withdrawn > 0 {
             self.send_reward(caller, asset, total_withdrawn);
         }
         total_withdrawn.into()
     }
     /// Calculate claimable rewards for `account_id`.
-    pub fn claimable_rewards(&self, account_id: AccountId) -> HashMap<String, u128> {
+    pub fn claimable_rewards(&self, account_id: AccountId) -> Vec<ClaimbleReward> {
         let wallet: Wallet = self
             .wallets
             .get(&account_id)
             .expect("Wallet not found.")
             .into();
-        let mut claimable_rewards = HashMap::new();
+        let mut claimable_rewards = Vec::with_capacity(4);
         let current_timestamp = current_timestamp_sec();
         for wallet_reward in wallet.rewards() {
             if let Some(versioned_reward) = self.rewards.get(&wallet_reward.reward_id) {
@@ -378,11 +385,12 @@ impl Contract {
                         &asset,
                         current_timestamp,
                     );
-                    if let Some(value) = claimable_rewards.get_mut(&asset.to_string()) {
-                        *value += amount;
-                    } else {
-                        claimable_rewards.insert(asset.to_string(), amount);
-                    }
+                    claimable_rewards.push(ClaimbleReward {
+                        asset: asset.clone(),
+                        reward_id: wallet_reward.reward_id,
+                        amount: amount.into(),
+                        partition_id: reward.partition_id,
+                    });
                 }
             }
         }

@@ -5,6 +5,7 @@ use std::{collections::HashMap, convert::TryFrom};
 
 use data::workflow::basic::wf_add::WfAdd1;
 use library::{
+    locking::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingInput},
     workflow::{
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
@@ -19,12 +20,14 @@ use crate::{
     group::{GroupInput, GroupMember, GroupSettings},
     settings::Settings,
     tags::TagInput,
+    treasury::{Asset, PartitionAssetInput, TreasuryPartitionInput},
     DurationSec,
 };
 
 //mod dao; // Require refactoring to match new structure
 mod group;
 mod reward;
+pub mod treasury;
 mod voting;
 
 pub const DURATION_1Y_S: u32 = 31_536_000;
@@ -38,6 +41,7 @@ pub const DURATION_2Y: u64 = 63_072_000_000_000_000;
 pub const DURATION_3Y: u64 = 94_608_000_000_000_000;
 
 const TOKEN_ACC: &str = "some.token.neardao.testnet";
+const VOTE_TOKEN_ACC: &str = "dao-vote-token.neardao.testnet";
 const DAO_ADMIN_ACC: &str = "admin.neardao.testnet";
 const STAKING_ACC: &str = "staking.neardao.testnet";
 const WF_PROVIDER_ACC: &str = "wf-provider.neardao.testnet";
@@ -104,6 +108,7 @@ pub(crate) fn get_contract(
     function_call_metadata: Vec<Vec<ObjectMetadata>>,
     workflow_templates: Vec<Template>,
     workflow_template_settings: Vec<Vec<TemplateSettings>>,
+    treasury_partitions: Vec<TreasuryPartitionInput>,
 ) -> Contract {
     Contract::new(
         token_id,
@@ -119,6 +124,7 @@ pub(crate) fn get_contract(
         function_call_metadata,
         workflow_templates,
         workflow_template_settings,
+        treasury_partitions,
     )
 }
 
@@ -136,6 +142,7 @@ pub(crate) fn get_default_contract() -> Contract {
         get_default_fncall_metadata(),
         get_default_templates(),
         get_default_template_settings(),
+        get_default_treasury_partitions(),
     );
     let founder_1_roles = contract.user_roles.get(&as_account_id(FOUNDER_1));
     let founder_2_roles = contract.user_roles.get(&as_account_id(FOUNDER_2));
@@ -150,6 +157,9 @@ pub(crate) fn get_default_contract() -> Contract {
         contract.total_members_count, 6,
         "invalid total unique members count"
     );
+    assert!(contract.partition_last_id == 2);
+    assert!(contract.treasury_partition.get(&1).is_some());
+    assert!(contract.treasury_partition.get(&2).is_some());
     contract
 }
 
@@ -314,4 +324,38 @@ pub(crate) fn get_role_id(contract: &Contract, group_id: u16, role_name: &str) -
         .find(|(key, name)| name.as_str() == role_name)
         .expect("role not found");
     *role_id.0
+}
+
+pub(crate) fn get_default_treasury_partitions() -> Vec<TreasuryPartitionInput> {
+    vec![
+        TreasuryPartitionInput {
+            name: "near_partition".into(),
+            assets: vec![PartitionAssetInput {
+                asset_id: Asset::new_near(),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 100,
+                    lock: None,
+                },
+            }],
+        },
+        TreasuryPartitionInput {
+            name: "vote_token_partition".into(),
+            assets: vec![PartitionAssetInput {
+                asset_id: Asset::new_ft(as_account_id(VOTE_TOKEN_ACC), 24),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 0,
+                    lock: Some(LockInput {
+                        amount_total_lock: TOKEN_TOTAL_SUPPLY,
+                        start_from: 0,
+                        duration: 1000,
+                        periods: vec![UnlockPeriodInput {
+                            r#type: UnlockMethod::Linear,
+                            duration: 1000,
+                            amount: TOKEN_TOTAL_SUPPLY,
+                        }],
+                    }),
+                },
+            }],
+        },
+    ]
 }

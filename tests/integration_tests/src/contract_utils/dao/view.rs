@@ -7,6 +7,7 @@ use crate::utils::{parse_view_result, view_outcome_pretty};
 
 use super::types::{
     consts::{DAO_VIEW_INSTANCE, DAO_VIEW_TEMPLATES, DAO_VIEW_WORKFLOW_STORAGE},
+    init::TreasuryPartition,
     proposal::{Proposal, Votes},
     reward::{Reward, Wallet},
     view::{Statistics, UserRoles, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
@@ -240,4 +241,24 @@ where
     view_outcome_pretty::<Statistics>("view dao statistics", &outcome);
     let stats = parse_view_result::<Statistics>(&outcome).expect("failed to parse dao statistics");
     Ok(stats)
+}
+
+pub(crate) async fn partitions<T>(
+    worker: &Worker<T>,
+    dao: &AccountId,
+) -> anyhow::Result<Vec<(u16, TreasuryPartition)>>
+where
+    T: DevNetwork,
+{
+    let args = json!({
+        "from_id": 0,
+        "limit": 100,
+    })
+    .to_string()
+    .into_bytes();
+    let outcome = worker.view(&dao, "partition_list", args).await?;
+    view_outcome_pretty::<Vec<(u16, TreasuryPartition)>>("view dao partition list", &outcome);
+    let partitions = parse_view_result::<Vec<(u16, TreasuryPartition)>>(&outcome)
+        .expect("failed to parse partition list");
+    Ok(partitions)
 }

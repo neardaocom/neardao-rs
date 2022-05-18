@@ -28,14 +28,17 @@ impl From<&str> for UnlockMethod {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    derive(Debug, PartialEq, Clone, Deserialize)
+)]
 #[serde(crate = "near_sdk::serde")]
 pub struct UnlockingDB {
     /// Available unlocked amount.
     amount_available_unlocked: u32,
     /// Amount of tokens unlocked during creation.
     amount_init_unlocked: u32,
-    lock: Lock,
+    lock: Option<Lock>,
 }
 
 impl UnlockingDB {
@@ -50,43 +53,61 @@ impl UnlockingDB {
     pub fn available(&self) -> u32 {
         self.amount_available_unlocked
     }
-    /// Return statistics (total locked, total unlocked, available unlocked, init unlocked) amounts.
-    pub fn statistics(&self) -> (u32, u32, u32, u32) {
-        (
-            self.lock.amount_total_locked + self.amount_init_unlocked,
-            self.lock.amount_total_unlocked + self.amount_init_unlocked,
-            self.amount_available_unlocked,
-            self.amount_init_unlocked,
-        )
-    }
     /// Unlock possible amount depending on the `current_time`.
     pub fn unlock(&mut self, current_time: u64) -> u32 {
-        let unlocked = self.lock.unlock(current_time);
-        self.amount_available_unlocked += unlocked;
-        unlocked
+        if let Some(lock) = self.lock.as_mut() {
+            let unlocked = lock.unlock(current_time);
+            self.amount_available_unlocked += unlocked;
+            unlocked
+        } else {
+            0
+        }
     }
-    /// Return total locked amount in lock + initialy unlocked amount.
+    /// Return total locked amount in inner lock.
     pub fn total_locked(&self) -> u32 {
-        self.lock.amount_total_locked + self.amount_init_unlocked
+        if let Some(ref lock) = self.lock {
+            lock.amount_total_locked
+        } else {
+            0
+        }
+    }
+    pub fn init_unlocked(&self) -> u32 {
+        self.amount_init_unlocked
     }
 }
 
-impl TryFrom<LockInput> for UnlockingDB {
+impl TryFrom<UnlockingInput> for UnlockingDB {
     type Error = &'static str;
 
-    fn try_from(input: LockInput) -> Result<Self, Self::Error> {
+    fn try_from(input: UnlockingInput) -> Result<Self, Self::Error> {
+        let lock = if let Some(lock_input) = input.lock {
+            Some(Lock::try_from(lock_input)?)
+        } else {
+            None
+        };
+        Ok(Self {
+            amount_init_unlocked: input.amount_init_unlock,
+            amount_available_unlocked: input.amount_init_unlock,
+            lock,
+        })
+    }
+}
+
+impl TryFrom<LockInput> for Lock {
+    type Error = &'static str;
+
+    fn try_from(value: LockInput) -> Result<Self, Self::Error> {
         if !check_duration_and_amount(
-            input.duration,
-            input.amount_total_lock,
-            input.amount_init_unlock,
-            input.periods.as_slice(),
+            value.duration,
+            value.amount_total_lock,
+            value.periods.as_slice(),
         ) {
             return Err("Invalid duration or amount.");
         }
 
-        let mut end_at = input.start_from;
-        let mut periods = Vec::with_capacity(input.periods.len());
-        for period_input in input.periods.into_iter() {
+        let mut end_at = value.start_from;
+        let mut periods = Vec::with_capacity(value.periods.len());
+        for period_input in value.periods.into_iter() {
             end_at += period_input.duration;
             periods.push(UnlockPeriod {
                 r#type: period_input.r#type,
@@ -95,34 +116,32 @@ impl TryFrom<LockInput> for UnlockingDB {
             })
         }
         let lock = Lock {
-            amount_total_locked: input.amount_total_lock - input.amount_init_unlock,
+            amount_total_locked: value.amount_total_lock,
             amount_total_unlocked: 0,
-            start_from: input.start_from,
-            duration: input.duration,
+            start_from: value.start_from,
+            duration: value.duration,
             periods,
             pos: 0,
             current_period_unlocked: 0,
         };
-
-        Ok(Self {
-            amount_available_unlocked: input.amount_init_unlock,
-            amount_init_unlocked: input.amount_init_unlock,
-            lock,
-        })
+        Ok(lock)
     }
 }
 
 /// Lock model implements unlocking function via interpolating intervals with linear unlocking.
 /// Currently unlocks only integer amounts.
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    derive(Debug, PartialEq, Clone, Deserialize)
+)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Lock {
     /// Total locked amount.
     amount_total_locked: u32,
     /// Total unlocked  amount.
     amount_total_unlocked: u32,
-    /// Unlocking start timestamp in seconds. */
+    /// Unlocking start timestamp in seconds.
     start_from: u64,
     /// Unlocking total duration in seconds.
     duration: u64,
@@ -135,12 +154,14 @@ pub struct Lock {
 }
 
 impl Lock {
+    /// TODO: Refactoring.
     /// Calculates amount of tokens to be unlocked depending on current time.
     /// Updates internal stats.
     /// Currently unlocks only integer amounts.
     /// Return new unlocked amount.
     pub fn unlock(&mut self, current_time: u64) -> u32 {
-        if self.amount_total_locked == self.amount_total_unlocked {
+        if self.amount_total_locked == self.amount_total_unlocked || self.start_from > current_time
+        {
             return 0;
         }
 
@@ -148,7 +169,7 @@ impl Lock {
         let mut current_period = &self.periods[pos];
         let mut new_unlocked = 0;
 
-        // Check if are still in the same period
+        // Check if are still in the same period.
         if current_period.end_at >= current_time {
             if current_period.amount > self.current_period_unlocked {
                 let total_released = match current_period.r#type {
@@ -174,18 +195,21 @@ impl Lock {
                 pos += 1;
                 self.current_period_unlocked = 0;
             }
+        } else if current_time >= self.start_from + self.duration {
+            pos = self.periods.len() - 1;
+            new_unlocked = self.amount_total_locked - self.amount_total_unlocked
         } else {
-            // Unlock reminder amount of current period
+            // Unlock reminder amount of current period.
             new_unlocked += current_period.amount - self.current_period_unlocked;
 
-            // Find new current period
+            // Find new current period.
             for i in pos + 1..self.periods.len() {
                 current_period = &self.periods[i];
                 pos = i;
                 if current_period.end_at >= current_time {
                     break;
                 }
-                // Sum all previous periods
+                // Sum all previous periods.
                 new_unlocked += current_period.amount;
             }
 
@@ -216,82 +240,46 @@ impl Lock {
                 self.current_period_unlocked = 0;
             }
         }
-
-        // Save new stats
+        // Save new stats.
         self.pos = pos as u16;
         self.amount_total_unlocked += new_unlocked;
         new_unlocked
     }
-
-    pub fn total_locked(&self) -> u32 {
-        self.amount_total_locked
-    }
 }
 
+#[derive(Deserialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+pub struct UnlockingInput {
+    /// Amount of tokens unlocked during creation.
+    pub amount_init_unlock: u32,
+    pub lock: Option<LockInput>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
 pub struct LockInput {
     /// Total locked amount.
     pub amount_total_lock: u32,
-    /// Amount of tokens unlocked during creation.
-    /// Must be <= `amount_total_lock`.
-    pub amount_init_unlock: u32,
     /// Timestamp in seconds.
     pub start_from: u64,
     /// Duration in seconds.
     pub duration: u64,
     /// Interpolated function into vec of periods. Max len is `u16::MAX`;
     pub periods: Vec<UnlockPeriodInput>,
-    /// Current period.
-    pub pos: u16,
-    /// Total amount unlocked from current period.
-    pub current_period_unlocked: u32,
-}
-
-impl TryFrom<LockInput> for Lock {
-    type Error = &'static str;
-    fn try_from(input: LockInput) -> Result<Self, Self::Error> {
-        if !check_duration_and_amount(
-            input.duration,
-            input.amount_total_lock,
-            0,
-            input.periods.as_slice(),
-        ) {
-            return Err("Invalid duration or amount.");
-        }
-
-        let mut end_at = input.start_from;
-        let mut periods = Vec::with_capacity(input.periods.len());
-        for period_input in input.periods.into_iter() {
-            end_at += period_input.duration;
-            periods.push(UnlockPeriod {
-                r#type: period_input.r#type,
-                amount: period_input.amount,
-                end_at,
-            })
-        }
-
-        Ok(Self {
-            amount_total_locked: input.amount_total_lock,
-            amount_total_unlocked: 0,
-            start_from: input.start_from,
-            duration: input.duration,
-            periods,
-            pos: 0,
-            current_period_unlocked: 0,
-        })
-    }
 }
 
 /// Validation that sum of all `UnlockPeriodInput` matches duration and total amount locked.
 pub fn check_duration_and_amount(
     duration: u64,
     amount_total_lock: u32,
-    amount_init_unlock: u32,
     unlock_periods: &[UnlockPeriodInput],
 ) -> bool {
     let duration_sum: u64 = unlock_periods.iter().map(|el| el.duration).sum();
     let amount_sum: u32 = unlock_periods.iter().map(|el| el.amount).sum();
 
-    amount_sum + amount_init_unlock == amount_total_lock
+    amount_sum == amount_total_lock
         && duration_sum == duration
         && unlock_periods.len() <= u16::MAX as usize
 }
@@ -307,11 +295,8 @@ pub struct UnlockPeriod {
     pub amount: u32,
 }
 
-#[derive(Deserialize)]
-#[cfg_attr(
-    not(target_arch = "wasm32"),
-    derive(Clone, Debug, PartialEq, Serialize)
-)]
+#[derive(Deserialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 /// Input version of `UnlockPeriod`.
 pub struct UnlockPeriodInput {
@@ -322,21 +307,38 @@ pub struct UnlockPeriodInput {
 
 #[cfg(test)]
 mod test {
-    use super::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingDB};
+    use super::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingDB, UnlockingInput};
     const TOTAL_AMOUNT: u32 = 1_000_000_000;
     /// TOTAL_AMOUNT / 8
     const INIT_AMOUNT: u32 = TOTAL_AMOUNT / 8;
+    const LOCK_AMOUNT: u32 = TOTAL_AMOUNT - INIT_AMOUNT;
+
+    fn lock_one_linear_period() -> UnlockingDB {
+        let input = get_unlocking_input(
+            10,
+            0,
+            10,
+            10,
+            vec![UnlockPeriodInput {
+                r#type: UnlockMethod::Linear,
+                duration: 10,
+                amount: 10,
+            }],
+        );
+        UnlockingDB::try_from(input).expect("failed to convert LockInput to Lock")
+    }
 
     fn default_lock() -> UnlockingDB {
-        let input = get_lock(
-            TOTAL_AMOUNT,
+        let input = get_unlocking_input(
+            LOCK_AMOUNT,
+            INIT_AMOUNT,
             0,
             1000,
             vec![
                 UnlockPeriodInput {
                     r#type: UnlockMethod::Linear,
                     duration: 100,
-                    amount: TOTAL_AMOUNT / 8,
+                    amount: LOCK_AMOUNT / 8,
                 },
                 UnlockPeriodInput {
                     r#type: UnlockMethod::Linear,
@@ -346,42 +348,44 @@ mod test {
                 UnlockPeriodInput {
                     r#type: UnlockMethod::None,
                     duration: 300,
-                    amount: TOTAL_AMOUNT / 2,
+                    amount: LOCK_AMOUNT / 2,
                 },
                 UnlockPeriodInput {
                     r#type: UnlockMethod::Linear,
                     duration: 100,
-                    amount: TOTAL_AMOUNT / 16,
+                    amount: LOCK_AMOUNT / 8,
                 },
                 UnlockPeriodInput {
                     r#type: UnlockMethod::Linear,
                     duration: 100,
-                    amount: TOTAL_AMOUNT / 16,
+                    amount: LOCK_AMOUNT / 8,
                 },
                 UnlockPeriodInput {
                     r#type: UnlockMethod::Linear,
                     duration: 100,
-                    amount: TOTAL_AMOUNT / 8,
+                    amount: LOCK_AMOUNT / 8,
                 },
             ],
         );
         UnlockingDB::try_from(input).expect("failed to convert LockInput to Lock")
     }
 
-    fn get_lock(
+    fn get_unlocking_input(
         amount_locked: u32,
+        init_amount: u32,
         start_from: u64,
         duration: u64,
         periods: Vec<UnlockPeriodInput>,
-    ) -> LockInput {
-        LockInput {
+    ) -> UnlockingInput {
+        let lock_input = Some(LockInput {
             amount_total_lock: amount_locked,
-            amount_init_unlock: INIT_AMOUNT,
             start_from,
             duration,
             periods,
-            pos: 0,
-            current_period_unlocked: 0,
+        });
+        UnlockingInput {
+            amount_init_unlock: init_amount,
+            lock: lock_input,
         }
     }
 
@@ -389,109 +393,136 @@ mod test {
     fn lock_unlock_scenario() {
         let mut tl = default_lock();
 
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
-        assert_eq!(tl.lock.amount_total_unlocked, 0);
-        assert_eq!(tl.amount_available_unlocked, INIT_AMOUNT);
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_locked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
+        assert_eq!(tl.lock.as_ref().unwrap().amount_total_unlocked, 0);
+        assert_eq!(tl.available(), INIT_AMOUNT);
         assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
 
         assert_eq!(tl.withdraw(INIT_AMOUNT / 2), INIT_AMOUNT / 2);
         assert_eq!(tl.unlock(0), 0);
 
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
-        assert_eq!(tl.lock.amount_total_unlocked, 0);
-        assert_eq!(tl.amount_available_unlocked, INIT_AMOUNT / 2);
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_locked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
+        assert_eq!(tl.lock.as_ref().unwrap().amount_total_unlocked, 0);
+        assert_eq!(tl.available(), INIT_AMOUNT / 2);
         assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
 
         // Unlock multiple times in one period.
-        assert_eq!(tl.unlock(25), TOTAL_AMOUNT / 32);
-        assert_eq!(tl.unlock(75), TOTAL_AMOUNT / 16);
-        assert_eq!(tl.unlock(100), TOTAL_AMOUNT / 32);
+        assert_eq!(tl.unlock(25), LOCK_AMOUNT / 32);
+        assert_eq!(tl.unlock(75), LOCK_AMOUNT / 16);
+        assert_eq!(tl.unlock(100), LOCK_AMOUNT / 32);
         assert_eq!(tl.withdraw(INIT_AMOUNT / 2), INIT_AMOUNT / 2);
 
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
-        assert_eq!(tl.lock.amount_total_unlocked, TOTAL_AMOUNT / 8);
+        assert_eq!(tl.lock.as_ref().unwrap().amount_total_locked, LOCK_AMOUNT);
         assert_eq!(
-            tl.amount_available_unlocked,
-            TOTAL_AMOUNT / 4 - TOTAL_AMOUNT / 8
+            tl.lock.as_ref().unwrap().amount_total_unlocked,
+            LOCK_AMOUNT / 8
         );
+        assert_eq!(tl.available(), LOCK_AMOUNT / 8);
         assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
 
         // Unlock 0 over some period.
         assert_eq!(tl.unlock(250), 0);
         assert_eq!(tl.unlock(399), 0);
         assert_eq!(tl.unlock(400), 0);
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
-        assert_eq!(tl.lock.amount_total_unlocked, TOTAL_AMOUNT / 8);
+        assert_eq!(tl.lock.as_ref().unwrap().amount_total_locked, LOCK_AMOUNT);
         assert_eq!(
-            tl.amount_available_unlocked,
-            TOTAL_AMOUNT / 4 - TOTAL_AMOUNT / 8
+            tl.lock.as_ref().unwrap().amount_total_unlocked,
+            LOCK_AMOUNT / 8
         );
+        assert_eq!(tl.available(), LOCK_AMOUNT / 8);
         assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
 
         // Unlock with all tokens distributed immediately.
-        assert_eq!(tl.unlock(400), TOTAL_AMOUNT / 2);
+        assert_eq!(tl.unlock(400), LOCK_AMOUNT / 2);
         assert_eq!(tl.unlock(550), 0);
         assert_eq!(tl.unlock(600), 0);
         assert_eq!(tl.unlock(700), 0);
 
         // Unlock after some periods already passed.
-        assert_eq!(tl.unlock(900), TOTAL_AMOUNT / 8);
-        assert_eq!(tl.unlock(950), TOTAL_AMOUNT / 16);
-        assert_eq!(tl.unlock(1000), TOTAL_AMOUNT / 16);
+        assert_eq!(tl.unlock(900), LOCK_AMOUNT / 4);
+        assert_eq!(tl.unlock(950), LOCK_AMOUNT / 16);
+        assert_eq!(tl.unlock(1000), LOCK_AMOUNT / 16);
 
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
         assert_eq!(
-            tl.lock.amount_total_unlocked,
+            tl.lock.as_ref().unwrap().amount_total_locked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_unlocked,
             TOTAL_AMOUNT / 8 + TOTAL_AMOUNT / 4 + TOTAL_AMOUNT / 2
         );
-        assert_eq!(
-            tl.amount_available_unlocked,
-            TOTAL_AMOUNT - TOTAL_AMOUNT / 8
-        );
+        assert_eq!(tl.available(), TOTAL_AMOUNT - TOTAL_AMOUNT / 8);
         assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
 
         // Withdraw max possible amount.
         assert_eq!(tl.withdraw(TOTAL_AMOUNT), TOTAL_AMOUNT - TOTAL_AMOUNT / 8);
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
         assert_eq!(
-            tl.lock.amount_total_unlocked,
+            tl.lock.as_ref().unwrap().amount_total_locked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_unlocked,
             TOTAL_AMOUNT / 8 + TOTAL_AMOUNT / 4 + TOTAL_AMOUNT / 2
         );
-        assert_eq!(tl.amount_available_unlocked, 0);
+        assert_eq!(tl.available(), 0);
         assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
 
         // Try to unlock when all FT has already been unlocked.
         assert_eq!(tl.unlock(2000), 0);
 
         assert_eq!(tl.withdraw(TOTAL_AMOUNT), 0);
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
         assert_eq!(
-            tl.lock.amount_total_unlocked,
+            tl.lock.as_ref().unwrap().amount_total_locked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_unlocked,
             TOTAL_AMOUNT / 8 + TOTAL_AMOUNT / 4 + TOTAL_AMOUNT / 2
         );
-        assert_eq!(tl.amount_available_unlocked, 0);
+        assert_eq!(tl.available(), 0);
         assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
     }
 
     #[test]
     fn lock_unlock_all_at_once() {
         let mut tl = default_lock();
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
-        assert_eq!(tl.lock.amount_total_unlocked, 0);
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_locked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
+        assert_eq!(tl.lock.as_ref().unwrap().amount_total_unlocked, 0);
         assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
         assert_eq!(tl.amount_available_unlocked, INIT_AMOUNT);
 
         // Unlock all - lock duration has passed.
-        assert_eq!(tl.unlock(1000), TOTAL_AMOUNT - INIT_AMOUNT);
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
-        assert_eq!(tl.lock.amount_total_unlocked, TOTAL_AMOUNT - INIT_AMOUNT);
+        assert_eq!(tl.unlock(1500), TOTAL_AMOUNT - INIT_AMOUNT);
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_locked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_unlocked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
         assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
         assert_eq!(tl.amount_available_unlocked, TOTAL_AMOUNT);
 
         // Try to unlock when all FT has already been unlocked.
         assert_eq!(tl.unlock(2000), 0);
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
-        assert_eq!(tl.lock.amount_total_unlocked, TOTAL_AMOUNT - INIT_AMOUNT);
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_locked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_unlocked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
         assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
         assert_eq!(tl.amount_available_unlocked, TOTAL_AMOUNT);
     }
@@ -499,24 +530,50 @@ mod test {
     #[test]
     fn lock_init() {
         let tl = default_lock();
-        assert_eq!(tl.lock.periods.len(), 6);
-        assert_eq!(tl.lock.amount_total_locked, TOTAL_AMOUNT - INIT_AMOUNT);
-        assert_eq!(tl.lock.amount_total_unlocked, 0);
-        assert_eq!(tl.amount_init_unlocked, TOTAL_AMOUNT / 8);
-        assert_eq!(tl.amount_available_unlocked, TOTAL_AMOUNT / 8);
-        assert_eq!(tl.lock.duration, 1000);
-        assert_eq!(tl.lock.start_from, 0);
-        assert_eq!(tl.lock.periods[0].end_at, 100);
-        assert_eq!(tl.lock.periods[0].amount, TOTAL_AMOUNT / 8);
-        assert_eq!(tl.lock.periods[1].end_at, 400);
-        assert_eq!(tl.lock.periods[1].amount, 0);
-        assert_eq!(tl.lock.periods[2].end_at, 700);
-        assert_eq!(tl.lock.periods[2].amount, TOTAL_AMOUNT / 2);
-        assert_eq!(tl.lock.periods[3].end_at, 800);
-        assert_eq!(tl.lock.periods[3].amount, TOTAL_AMOUNT / 16);
-        assert_eq!(tl.lock.periods[4].end_at, 900);
-        assert_eq!(tl.lock.periods[4].amount, TOTAL_AMOUNT / 16);
-        assert_eq!(tl.lock.periods[5].end_at, 1000);
-        assert_eq!(tl.lock.periods[5].amount, TOTAL_AMOUNT / 8);
+        assert_eq!(tl.lock.as_ref().unwrap().periods.len(), 6);
+        assert_eq!(
+            tl.lock.as_ref().unwrap().amount_total_locked,
+            TOTAL_AMOUNT - INIT_AMOUNT
+        );
+        assert_eq!(tl.lock.as_ref().unwrap().amount_total_unlocked, 0);
+        assert_eq!(tl.amount_init_unlocked, INIT_AMOUNT);
+        assert_eq!(tl.amount_available_unlocked, INIT_AMOUNT);
+        assert_eq!(tl.lock.as_ref().unwrap().duration, 1000);
+        assert_eq!(tl.lock.as_ref().unwrap().start_from, 0);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[0].end_at, 100);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[0].amount, LOCK_AMOUNT / 8);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[1].end_at, 400);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[1].amount, 0);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[2].end_at, 700);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[2].amount, LOCK_AMOUNT / 2);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[3].end_at, 800);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[3].amount, LOCK_AMOUNT / 8);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[4].end_at, 900);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[4].amount, LOCK_AMOUNT / 8);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[5].end_at, 1000);
+        assert_eq!(tl.lock.as_ref().unwrap().periods[5].amount, LOCK_AMOUNT / 8);
+    }
+
+    #[test]
+    fn lock_later_unlock() {
+        let mut tl = lock_one_linear_period();
+        assert_eq!(tl.unlock(0), 0);
+        assert_eq!(tl.unlock(5), 0);
+        assert_eq!(tl.unlock(9), 0);
+        assert_eq!(tl.unlock(10), 0);
+        assert_eq!(tl.unlock(11), 1);
+        assert_eq!(tl.unlock(12), 1);
+        assert_eq!(tl.unlock(20), 8);
+        assert_eq!(tl.unlock(21), 0);
+        assert_eq!(tl.unlock(200), 0);
+    }
+
+    #[test]
+    fn lock_later_mass_unlock() {
+        let mut tl = lock_one_linear_period();
+        assert_eq!(tl.unlock(0), 0);
+        assert_eq!(tl.unlock(5), 0);
+        assert_eq!(tl.unlock(9), 0);
+        assert_eq!(tl.unlock(21), 10);
     }
 }

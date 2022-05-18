@@ -1,3 +1,3 @@
 mod lock;
 
-pub use lock::UnlockingDB;
+pub use lock::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingDB, UnlockingInput};

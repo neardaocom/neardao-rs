@@ -44,6 +44,7 @@ pub(crate) async fn create_dao_via_factory<T>(
     provider_id: &AccountId,
     admin_id: &AccountId,
     council_members: Vec<&AccountId>,
+    init_distribution: u32,
 ) -> anyhow::Result<()>
 where
     T: DevNetwork,
@@ -56,6 +57,7 @@ where
         provider_id.clone(),
         admin_id.clone(),
         council_members,
+        init_distribution,
     )
     .0;
     let json_input =

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use library::locking::UnlockingDB;
+use library::locking::{UnlockingDB, UnlockingInput};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     near_bindgen,
@@ -21,17 +21,26 @@ pub enum VersionedTreasuryPartition {
     Current(TreasuryPartition),
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct TreasuryPartitionInput {
+    pub name: String,
+    pub assets: Vec<PartitionAssetInput>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PartitionAssetInput {
+    pub asset_id: Asset,
+    pub unlocking: UnlockingInput,
+}
+
 /// Container around unique assets.
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct TreasuryPartition {
+    pub name: String,
     pub assets: Vec<PartitionAsset>,
-}
-
-impl Default for TreasuryPartition {
-    fn default() -> Self {
-        Self { assets: vec![] }
-    }
 }
 
 impl TreasuryPartition {
@@ -99,6 +108,20 @@ impl TreasuryPartition {
         self.assets.iter().position(|el| el.asset_id == *asset_id)
     }
 }
+
+impl TryFrom<TreasuryPartitionInput> for TreasuryPartition {
+    type Error = String;
+    fn try_from(v: TreasuryPartitionInput) -> Result<Self, Self::Error> {
+        let mut assets = Vec::with_capacity(v.assets.len());
+        for asset in v.assets {
+            assets.push(PartitionAsset::try_from(asset)?);
+        }
+        Ok(Self {
+            name: v.name,
+            assets,
+        })
+    }
+}
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PartitionAsset {
@@ -148,8 +171,9 @@ impl PartitionAsset {
     /// Unlock all possible tokens and returns new amount.
     pub fn unlock(&mut self, current_timestamp: TimestampSec) -> u128 {
         if let Some(lock) = &mut self.lock {
-            self.amount += lock.unlock(current_timestamp) as u128
+            let unlocked = lock.unlock(current_timestamp) as u128
                 * 10u128.pow(self.asset_id.decimals() as u32);
+            self.amount += unlocked;
             self.amount
         } else {
             self.amount
@@ -160,6 +184,24 @@ impl PartitionAsset {
     }
     pub fn available_amount(&self) -> u128 {
         self.amount
+    }
+}
+
+impl TryFrom<PartitionAssetInput> for PartitionAsset {
+    type Error = String;
+    fn try_from(v: PartitionAssetInput) -> Result<Self, Self::Error> {
+        let unlocking_db = UnlockingDB::try_from(v.unlocking)?;
+        let amount = unlocking_db.available() as u128 * 10u128.pow(v.asset_id.decimals() as u32);
+        let lock = if unlocking_db.total_locked() > 0 {
+            Some(unlocking_db)
+        } else {
+            None
+        };
+        Ok(Self {
+            asset_id: v.asset_id,
+            amount,
+            lock,
+        })
     }
 }
 

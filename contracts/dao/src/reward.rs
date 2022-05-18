@@ -118,7 +118,6 @@ impl Reward {
     }
 }
 
-/// TODO: Refactor from tuples into structs.
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
@@ -214,10 +213,6 @@ impl Contract {
         self.rewards.insert(&self.reward_last_id, &reward.into());
         self.reward_last_id
     }
-    /// TODO: Check it can be safely removed.
-    pub fn remove_reward(&mut self, reward_id: u16) -> Option<Reward> {
-        self.rewards.remove(&reward_id).map(|reward| reward.into())
-    }
 
     /// Validate that defined assets in rewards are defined in treasury partition.
     pub fn validate_reward_assets(&self, reward: &Reward, partition: &TreasuryPartition) -> bool {
@@ -248,6 +243,7 @@ impl Contract {
         added
     }
 
+    /// Register executed activity to `account_id`'s Wallet for each reward.
     pub fn register_executed_activity(&mut self, account_id: &AccountId, activity_id: u8) {
         if let Some(wallet) = self.wallets.get(account_id) {
             let mut wallet: Wallet = wallet.into();

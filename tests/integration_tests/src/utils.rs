@@ -7,7 +7,7 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use workspaces::{
     network::{Sandbox, Testnet},
     result::{CallExecutionDetails, ViewResultDetails},
-    Worker,
+    AccountId, Worker,
 };
 
 pub const DAO_FT_TOTAL_SUPPLY: u128 = 1_000_000_000;
@@ -156,4 +156,8 @@ impl Wait for Worker<Testnet> {
         sleep(Duration::from_secs(min_seconds)).await;
         Ok(())
     }
+}
+
+pub(crate) fn as_account_id(name: &str) -> AccountId {
+    AccountId::try_from(name.to_string()).unwrap()
 }

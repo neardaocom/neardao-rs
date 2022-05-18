@@ -4,17 +4,21 @@ use data::{
     object_metadata::standard_fn_calls::{standard_fn_call_metadatas, standard_fn_call_methods},
     workflow::basic::wf_add::WfAdd1,
 };
-use library::workflow::{settings::TemplateSettings, template::Template, types::ObjectMetadata};
+use library::{
+    locking::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingInput},
+    workflow::{settings::TemplateSettings, template::Template, types::ObjectMetadata},
+};
 use workspaces::{network::DevAccountDeployer, Account, AccountId, Contract, DevNetwork, Worker};
 
 use crate::{
     contract_utils::dao::check::internal_check_group,
-    utils::{get_dao_wasm, outcome_pretty, FnCallId, MethodName},
+    utils::{as_account_id, get_dao_wasm, outcome_pretty, FnCallId, MethodName},
 };
 
 use super::types::{
     group::{Group, GroupInput, GroupMember, GroupMembers, GroupSettings},
-    init::{DaoInit, Settings},
+    init::{DaoInit, PartitionAssetInput, Settings, TreasuryPartitionInput},
+    reward::Asset,
 };
 
 pub(crate) async fn init_dao<T>(
@@ -28,6 +32,7 @@ pub(crate) async fn init_dao<T>(
     provider_id: &AccountId,
     admin_id: &AccountId,
     council_members: Vec<&AccountId>,
+    init_distribution: u32,
 ) -> anyhow::Result<()>
 where
     T: DevNetwork,
@@ -40,6 +45,7 @@ where
         provider_id.clone(),
         admin_id.clone(),
         council_members,
+        init_distribution,
     );
     let args = serde_json::to_string(&init_args)
         .expect("Failed to serialize DaoInit object")
@@ -77,6 +83,7 @@ pub fn dao_init_args(
     provider_id: AccountId,
     admin_id: AccountId,
     council_members: Vec<&AccountId>,
+    init_distribution: u32,
 ) -> (DaoInit, (u16, Group)) {
     let settings = dao_settings(provider_id.clone(), admin_id);
     let group = default_group(council_members);
@@ -86,6 +93,8 @@ pub fn dao_init_args(
     let function_call_metadata = function_call_metadata(provider_id.to_string());
     let workflow_templates = workflow_templates(provider_id.to_string());
     let workflow_template_settings = workflow_template_settings();
+    let treasury_partitions =
+        treasury_partitions(token_id.as_str(), total_supply - init_distribution);
 
     let members = group
         .members
@@ -115,6 +124,7 @@ pub fn dao_init_args(
             function_call_metadata,
             workflow_templates,
             workflow_template_settings,
+            treasury_partitions,
         },
         group_output,
     )
@@ -184,4 +194,40 @@ fn workflow_templates(provider_id: String) -> Vec<Template> {
 fn workflow_template_settings() -> Vec<Vec<TemplateSettings>> {
     let settings = vec![vec![WfAdd1::template_settings(Some(10))]];
     settings
+}
+fn treasury_partitions(
+    vote_token_id: &str,
+    vote_locked_amount: u32,
+) -> Vec<TreasuryPartitionInput> {
+    vec![
+        TreasuryPartitionInput {
+            name: "near_partition".into(),
+            assets: vec![PartitionAssetInput {
+                asset_id: Asset::new_near(),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 100,
+                    lock: None,
+                },
+            }],
+        },
+        TreasuryPartitionInput {
+            name: "vote_token_partition".into(),
+            assets: vec![PartitionAssetInput {
+                asset_id: Asset::new_ft(as_account_id(vote_token_id), 24),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 0,
+                    lock: Some(LockInput {
+                        amount_total_lock: vote_locked_amount as u32,
+                        start_from: 0,
+                        duration: 1000,
+                        periods: vec![UnlockPeriodInput {
+                            r#type: UnlockMethod::Linear,
+                            duration: 1000,
+                            amount: vote_locked_amount as u32,
+                        }],
+                    }),
+                },
+            }],
+        },
+    ]
 }
