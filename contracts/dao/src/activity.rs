@@ -22,11 +22,14 @@ use near_sdk::{env, ext_contract, log, near_bindgen, AccountId, Gas, Promise, Pr
 use crate::constants::{GLOBAL_BUCKET_IDENT, TGAS};
 use crate::core::*;
 use crate::error::{ActionError, ActivityError, ERR_PROMISE_INVALID_RESULTS_COUNT};
-use crate::helper::deserialize::{try_bind_partition, try_bind_reward};
+use crate::helper::deserialize::{
+    try_bind_group, try_bind_group_members, try_bind_partition, try_bind_reward,
+};
 use crate::internal::utils::current_timestamp_sec;
 use crate::internal::ActivityContext;
 use crate::proposal::ProposalState;
 use crate::reward::RewardActivity;
+use crate::role::UserRoles;
 
 #[ext_contract(ext_self)]
 trait ExtActivity {
@@ -738,7 +741,7 @@ impl Contract {
                 }
                 ActivityRight::Group(g) => match self.groups.get(g) {
                     Some(group) => {
-                        if group.get_member_by_account(account_id).is_some() {
+                        if group.is_member(account_id) {
                             return true;
                         } else {
                             continue;
@@ -751,9 +754,9 @@ impl Contract {
                         continue;
                     }
                     match self.groups.get(g) {
-                        Some(group) => match group.get_member_by_account(account_id) {
-                            Some(_) => return true,
-                            None => continue,
+                        Some(group) => match group.is_member(account_id) {
+                            true => return true,
+                            false => continue,
                         },
                         _ => continue,
                     }
@@ -841,11 +844,122 @@ impl Contract {
         match action_ident {
             DaoActionIdent::TreasuryAddPartition => {
                 let partition = try_bind_partition(inputs).expect("failed to bind partition");
-                self.add_partition(partition);
+                self.partition_add(partition);
             }
             DaoActionIdent::RewardAdd => {
                 let reward = try_bind_reward(inputs).expect("failed to bind reward");
-                self.add_reward(reward);
+                self.reward_add(reward);
+            }
+            DaoActionIdent::GroupAdd => {
+                let group = try_bind_group(inputs);
+                self.group_add(group);
+            }
+            DaoActionIdent::GroupRemove => {
+                let id = inputs
+                    .get("id")
+                    .expect("missing group id")
+                    .try_into_u64()
+                    .expect("invalid datatype: group id") as u16;
+                self.group_remove(id);
+            }
+            DaoActionIdent::GroupAddMembers => {
+                let id = inputs
+                    .get("id")
+                    .expect("missing group id")
+                    .try_into_u64()
+                    .expect("invalid datatype: group id") as u16;
+                let members = try_bind_group_members("members", inputs);
+                self.group_add_members(id, members);
+            }
+            DaoActionIdent::GroupRemoveMember => {
+                let id = inputs
+                    .get("id")
+                    .expect("missing group id")
+                    .try_into_u64()
+                    .expect("invalid datatype: group id") as u16;
+                let account_id_string = inputs
+                    .get("account_id")
+                    .expect("missing account id")
+                    .clone()
+                    .try_into_string()
+                    .expect("invalid datatype: account id");
+                let account_id = AccountId::try_from(account_id_string)
+                    .expect("failed to parse account id from string");
+                self.group_remove_member(id, account_id);
+            }
+            DaoActionIdent::UserRoleAdd => {
+                let group_id = inputs
+                    .get("group_id")
+                    .expect("missing group id")
+                    .try_into_u64()
+                    .expect("invalid datatype: group id") as u16;
+                let role_id = inputs
+                    .get("role_id")
+                    .expect("missing role id")
+                    .try_into_u64()
+                    .expect("invalid datatype: role id") as u16;
+                let group_roles = self.group_roles.get(&group_id).expect("group not found");
+                assert!(
+                    group_roles.find_role_by_id(role_id).is_some(),
+                    "group role does not exist"
+                );
+                let mut i = 0;
+                loop {
+                    let key = format!("account_ids.{}", i);
+                    if let Some(v) = inputs.get(key.as_str()) {
+                        let account_id_string = v
+                            .clone()
+                            .try_into_string()
+                            .expect("invalid datatype: account id");
+                        let account_id = AccountId::try_from(account_id_string)
+                            .expect("failed to parse account id from string");
+                        let mut user_roles = self
+                            .user_roles
+                            .get(&account_id)
+                            .unwrap_or_else(UserRoles::default);
+                        user_roles.add_group_role(group_id, role_id);
+                        self.user_roles.insert(&account_id, &user_roles);
+                        i += 1;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            DaoActionIdent::UserRoleRemove => {
+                let group_id = inputs
+                    .get("group_id")
+                    .expect("missing group id")
+                    .try_into_u64()
+                    .expect("invalid datatype: group id") as u16;
+                let role_id = inputs
+                    .get("role_id")
+                    .expect("missing role id")
+                    .try_into_u64()
+                    .expect("invalid datatype: role id") as u16;
+                let mut i = 0;
+                loop {
+                    let key = format!("account_ids.{}", i);
+                    if let Some(v) = inputs.get(key.as_str()) {
+                        let account_id_string = v
+                            .clone()
+                            .try_into_string()
+                            .expect("invalid datatype: account id");
+                        let account_id = AccountId::try_from(account_id_string)
+                            .expect("failed to parse account id from string");
+                        let mut user_roles = self
+                            .user_roles
+                            .get(&account_id)
+                            .unwrap_or_else(UserRoles::default);
+                        user_roles.remove_group_role(group_id, role_id);
+                        self.user_roles.insert(&account_id, &user_roles);
+                        i += 1;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            DaoActionIdent::TagAdd => {
+                todo!();
             }
             /*             DaoActionIdent::GroupAdd => {
                 let group_input = deserialize_group_input(inputs)?;

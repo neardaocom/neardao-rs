@@ -791,22 +791,6 @@ impl Skyward2 {
                                 tgas: 50,
                                 deposit: Some(ArgSrc::ConstsTpl("deposit_sale_create".into())),
                                 binds: vec![
-                                    /*                                 BindDefinition {
-                                                                        key: "sale.title".into(),
-                                                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstAction(
-                                                                            "title".into(),
-                                                                        )),
-                                                                        prefixes: vec![],
-                                                                        is_collection: false,
-                                                                    }, */
-                                    /*                                 BindDefinition {
-                                                                        key: "sale.url".into(),
-                                                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstAction(
-                                                                            "url".into(),
-                                                                        )),
-                                                                        prefixes: vec![],
-                                                                        is_collection: false,
-                                                                    }, */
                                     BindDefinition {
                                         key: "sale.permissions_contract_id".into(),
                                         key_src: SrcOrExprOrValue::Src(ArgSrc::Const(0)),
@@ -1026,10 +1010,7 @@ impl Skyward2 {
 
         // Sale create action
         let mut sale_create_map: HashMap<String, Value> = HashMap::new();
-        sale_create_map.insert(
-            "start_time".into(),
-            Value::U128(auction_start.into()), // TODO: U128 might not work
-        );
+        sale_create_map.insert("start_time".into(), Value::U128(auction_start.into()));
         sale_create_map.insert("duration".into(), Value::U64(auction_duration as u64));
 
         // User proposed settings type

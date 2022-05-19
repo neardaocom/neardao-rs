@@ -21,6 +21,8 @@ use super::types::{
     reward::Asset,
 };
 
+/// Deprecated.
+/// Used init via factory instead.
 pub(crate) async fn init_dao<T>(
     worker: &Worker<T>,
     factory: &Account,
@@ -59,7 +61,7 @@ where
     outcome_pretty::<()>("dao init", &outcome);
     assert!(outcome.is_success(), "dao init failed");
 
-    internal_check_group(worker, dao, expected_group).await?;
+    //internal_check_group(worker, dao, expected_group).await?;
     // TODO: Other data checks - fn call, token.
 
     Ok(())

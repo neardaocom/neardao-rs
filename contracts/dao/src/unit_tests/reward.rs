@@ -6,7 +6,7 @@ use crate::{
     core::Contract,
     proposal::{Proposal, ProposalState},
     reward::{Reward, RewardType, RewardTypeIdent, RewardWage},
-    treasury::{Asset, PartitionAsset, TreasuryPartition},
+    treasury::{Asset, PartitionAsset, PartitionAssetInput, TreasuryPartition},
     unit_tests::{
         as_account_id, dummy_propose_settings, dummy_template_settings, get_context_builder,
         get_default_contract, get_role_id, ACC_1, ACC_2, FOUNDER_1, FOUNDER_2, FOUNDER_3,
@@ -56,7 +56,6 @@ fn reward_wage_one_asset() {
     testing_env!(ctx.build());
     let mut contract = get_default_contract();
     let reward_asset = Asset::Near;
-    let asset = reward_asset.to_string();
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
@@ -64,10 +63,17 @@ fn reward_wage_one_asset() {
     );
     let partition = TreasuryPartition {
         name: "test".into(),
-        assets: vec![PartitionAsset::new(reward_asset.clone(), 1000, None, 0)],
+        assets: vec![PartitionAsset::try_from(PartitionAssetInput {
+            asset_id: reward_asset.clone(),
+            unlocking: UnlockingInput {
+                amount_init_unlock: 1000,
+                lock: None,
+            },
+        })
+        .unwrap()],
     };
     let role_id = get_role_id(&contract, 1, "leader");
-    let partition_id = contract.add_partition(partition);
+    let partition_id = contract.partition_add(partition);
     let partition: TreasuryPartition = contract
         .treasury_partition
         .get(&partition_id)
@@ -86,7 +92,7 @@ fn reward_wage_one_asset() {
         0,
         1000,
     );
-    let reward_id = contract.add_reward(reward);
+    let reward_id = contract.reward_add(reward);
     let wallet = get_wallet(&contract, &founder_1);
     let wallet_rewards = wallet.rewards();
     assert!(!wallet_rewards.is_empty(), "founder_1 has no rewards");
@@ -161,7 +167,6 @@ fn reward_activity_one_asset() {
     testing_env!(ctx.build());
     let mut contract = get_default_contract();
     let reward_asset = Asset::Near;
-    let asset = reward_asset.to_string();
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
@@ -169,10 +174,17 @@ fn reward_activity_one_asset() {
     );
     let partition = TreasuryPartition {
         name: "test".into(),
-        assets: vec![PartitionAsset::new(reward_asset.clone(), 1000, None, 0)],
+        assets: vec![PartitionAsset::try_from(PartitionAssetInput {
+            asset_id: reward_asset.clone(),
+            unlocking: UnlockingInput {
+                amount_init_unlock: 1000,
+                lock: None,
+            },
+        })
+        .unwrap()],
     };
     let role_id = get_role_id(&contract, 1, "leader");
-    let partition_id = contract.add_partition(partition);
+    let partition_id = contract.partition_add(partition);
     let partition: TreasuryPartition = contract
         .treasury_partition
         .get(&partition_id)
@@ -191,7 +203,7 @@ fn reward_activity_one_asset() {
         0,
         4000,
     );
-    let reward_id = contract.add_reward(reward);
+    let reward_id = contract.reward_add(reward);
     let wallet = get_wallet(&contract, &founder_1);
     let wallet_rewards = wallet.rewards();
     assert!(!wallet_rewards.is_empty(), "founder_1 has no rewards");
@@ -368,9 +380,6 @@ fn reward_multiple_wage_rewards() {
     let reward_asset_1 = Asset::Near;
     let reward_asset_2 = Asset::new_ft(ft_account_id_1.clone(), 24);
     let reward_asset_3 = Asset::new_ft(ft_account_id_2.clone(), 24);
-    let asset_1 = reward_asset_1.to_string();
-    let asset_2 = reward_asset_2.to_string();
-    let asset_3 = reward_asset_3.to_string();
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
@@ -379,13 +388,34 @@ fn reward_multiple_wage_rewards() {
     let partition = TreasuryPartition {
         name: "test".into(),
         assets: vec![
-            PartitionAsset::new(reward_asset_1.clone(), 1000, None, 0),
-            PartitionAsset::new(reward_asset_2.clone(), 2000, None, 0),
-            PartitionAsset::new(reward_asset_3.clone(), 3000, None, 0),
+            PartitionAsset::try_from(PartitionAssetInput {
+                asset_id: reward_asset_1.clone(),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 1000,
+                    lock: None,
+                },
+            })
+            .unwrap(),
+            PartitionAsset::try_from(PartitionAssetInput {
+                asset_id: reward_asset_2.clone(),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 2000,
+                    lock: None,
+                },
+            })
+            .unwrap(),
+            PartitionAsset::try_from(PartitionAssetInput {
+                asset_id: reward_asset_3.clone(),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 3000,
+                    lock: None,
+                },
+            })
+            .unwrap(),
         ],
     };
     let role_id = get_role_id(&contract, 1, "leader");
-    let partition_id = contract.add_partition(partition);
+    let partition_id = contract.partition_add(partition);
     let partition: TreasuryPartition = contract
         .treasury_partition
         .get(&partition_id)
@@ -434,9 +464,9 @@ fn reward_multiple_wage_rewards() {
         0,
         1000,
     );
-    let reward_id_only_near = contract.add_reward(reward_only_near);
-    let reward_id_only_fts = contract.add_reward(reward_only_fts);
-    let reward_id_all_tokens = contract.add_reward(reward_all_tokens);
+    let reward_id_only_near = contract.reward_add(reward_only_near);
+    let reward_id_only_fts = contract.reward_add(reward_only_fts);
+    let reward_id_all_tokens = contract.reward_add(reward_all_tokens);
     assert!(reward_id_only_near == 1 && reward_id_only_fts == 2 && reward_id_all_tokens == 3);
     testing_env!(ctx.block_timestamp(tm(9)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
@@ -600,14 +630,13 @@ fn reward_one_asset_scenario() {
     testing_env!(ctx.build());
     let mut contract = get_default_contract();
     let reward_asset_1 = Asset::Near;
-    let asset_1 = reward_asset_1.to_string();
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
         as_account_id(FOUNDER_3),
     );
     let lock_input = UnlockingInput {
-        amount_init_unlock: 0,
+        amount_init_unlock: 1,
         lock: Some(LockInput {
             amount_total_lock: 5,
             start_from: 5,
@@ -619,17 +648,15 @@ fn reward_one_asset_scenario() {
             }],
         }),
     };
-    let unlocking_db = UnlockingDB::try_from(lock_input).expect("failed to create UnlockingDB");
     let partition = TreasuryPartition {
         name: "test".into(),
-        assets: vec![PartitionAsset::new(
-            reward_asset_1.clone(),
-            1,
-            Some(unlocking_db),
-            0,
-        )],
+        assets: vec![PartitionAsset::try_from(PartitionAssetInput {
+            asset_id: reward_asset_1.clone(),
+            unlocking: lock_input,
+        })
+        .unwrap()],
     };
-    let partition_id = contract.add_partition(partition);
+    let partition_id = contract.partition_add(partition);
     let mut partition: TreasuryPartition = contract
         .treasury_partition
         .get(&partition_id)
@@ -654,7 +681,7 @@ fn reward_one_asset_scenario() {
         0,
         10,
     );
-    let reward_id = contract.add_reward(reward);
+    let reward_id = contract.reward_add(reward);
     testing_env!(ctx.block_timestamp(tm(0)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(

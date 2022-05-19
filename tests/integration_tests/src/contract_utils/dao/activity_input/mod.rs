@@ -1,7 +1,8 @@
-pub mod bounty;
-pub mod reward;
+mod admin_package;
+mod bounty;
+mod reward;
 mod skyward;
-pub mod trade;
+mod trade;
 mod wf_add;
 
 use library::workflow::action::ActionInput;
@@ -10,7 +11,11 @@ use workspaces::{Account, AccountId, Contract, DevNetwork, Worker};
 
 use crate::utils::outcome_pretty;
 
+pub use admin_package::*;
+pub use bounty::*;
+pub use reward::*;
 pub use skyward::*;
+pub use trade::*;
 pub use wf_add::*;
 
 pub(crate) async fn run_activity<T>(

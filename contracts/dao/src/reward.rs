@@ -167,7 +167,7 @@ impl Contract {
     /// TODO: Error handling and validations.
     /// Add new reward entry into DAO rewards.
     /// Also add this reward in affected user wallets.
-    pub fn add_reward(&mut self, reward: Reward) -> u16 {
+    pub fn reward_add(&mut self, reward: Reward) -> u16 {
         let partition = self
             .treasury_partition
             .get(&reward.partition_id)

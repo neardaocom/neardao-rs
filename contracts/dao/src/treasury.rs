@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use library::locking::{UnlockingDB, UnlockingInput};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
@@ -104,17 +102,21 @@ impl TreasuryPartition {
             asset.unlock(current_timestamp);
         }
     }
+    /// Internal search function.
     fn find_asset_pos(&self, asset_id: &Asset) -> Option<usize> {
         self.assets.iter().position(|el| el.asset_id == *asset_id)
     }
 }
 
 impl TryFrom<TreasuryPartitionInput> for TreasuryPartition {
-    type Error = String;
+    type Error = &'static str;
     fn try_from(v: TreasuryPartitionInput) -> Result<Self, Self::Error> {
         let mut assets = Vec::with_capacity(v.assets.len());
         for asset in v.assets {
             assets.push(PartitionAsset::try_from(asset)?);
+        }
+        if assets.is_empty() {
+            return Err("treasury partition has no assets");
         }
         Ok(Self {
             name: v.name,
@@ -132,32 +134,6 @@ pub struct PartitionAsset {
 }
 
 impl PartitionAsset {
-    /// Create new self.
-    /// Available amount is sum of `amount` and result of immediately called unlock on `lock`.
-    /// `amount` is supposed to be integer amount of the asset.
-    /// Eg. amount = 2 for asset_id Asset::Near is actually stored as 2 * 10^24.
-    pub fn new(
-        asset_id: Asset,
-        amount: u128,
-        lock: Option<UnlockingDB>,
-        current_timestamp: TimestampSec,
-    ) -> Self {
-        let (amount, lock) = if let Some(mut lock) = lock {
-            lock.unlock(current_timestamp);
-            (
-                amount * 10u128.pow(asset_id.decimals() as u32)
-                    + lock.available() as u128 * 10u128.pow(asset_id.decimals() as u32),
-                Some(lock),
-            )
-        } else {
-            (amount * 10u128.pow(asset_id.decimals() as u32), lock)
-        };
-        Self {
-            asset_id,
-            amount,
-            lock,
-        }
-    }
     /// Add amount.
     pub fn add_amount(&mut self, amount: u128) {
         self.amount += amount;
@@ -188,7 +164,7 @@ impl PartitionAsset {
 }
 
 impl TryFrom<PartitionAssetInput> for PartitionAsset {
-    type Error = String;
+    type Error = &'static str;
     fn try_from(v: PartitionAssetInput) -> Result<Self, Self::Error> {
         let unlocking_db = UnlockingDB::try_from(v.unlocking)?;
         let amount = unlocking_db.available() as u128 * 10u128.pow(v.asset_id.decimals() as u32);
@@ -215,15 +191,6 @@ pub enum Asset {
     NFT(AssetNFT),
 }
 
-impl Display for Asset {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Asset::Near => write!(f, "near"),
-            Asset::FT(a) => write!(f, "ft:{}", a.account_id),
-            Asset::NFT(a) => write!(f, "nft:{};token_id:{}", a.account_id, a.token_id),
-        }
-    }
-}
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Eq, PartialOrd, Ord)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
@@ -315,7 +282,7 @@ impl Contract {
 }
 
 impl Contract {
-    pub fn add_partition(&mut self, partition: TreasuryPartition) -> u16 {
+    pub fn partition_add(&mut self, partition: TreasuryPartition) -> u16 {
         self.partition_last_id += 1;
         self.treasury_partition
             .insert(&self.partition_last_id, &partition.into());

@@ -3,9 +3,10 @@ use std::collections::{hash_map::Iter, HashMap};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::Serialize,
+    AccountId,
 };
 
-use crate::{GroupId, RoleId};
+use crate::{core::Contract, GroupId, RoleId};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
@@ -47,6 +48,15 @@ impl Roles {
     pub fn iter(&self) -> Iter<RoleId, String> {
         self.map.iter()
     }
+    pub fn find_role_by_name(&self, name: &str) -> Option<RoleId> {
+        self.map.iter().find(|(_, v)| **v == name).map(|e| *e.0)
+    }
+    pub fn find_role_by_id(&self, id: RoleId) -> Option<&str> {
+        self.map
+            .iter()
+            .find(|(k, _)| **k == id)
+            .map(|e| e.1.as_str())
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Default)]
@@ -64,13 +74,6 @@ impl UserRoles {
             self.0.insert(group_id, roles);
         }
     }
-    /// Add new default group role id - 0 to the roles.
-    /// Overwrites all previous `group_id` roles therefore
-    /// caller is responsible to call only on new `group_id`.
-    pub fn add_new_group(&mut self, group_id: GroupId) {
-        let roles = vec![0];
-        self.0.insert(group_id, roles);
-    }
     pub fn remove_group_role(&mut self, group_id: GroupId, role_id: RoleId) {
         if let Some(roles) = self.0.get_mut(&group_id) {
             if let Some(pos) = roles.iter().position(|el| *el == role_id) {
@@ -86,6 +89,29 @@ impl UserRoles {
             roles.contains(&role_id)
         } else {
             false
+        }
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl Contract {
+    pub fn save_user_roles(&mut self, account_id: &AccountId, roles: &UserRoles) {
+        if roles.is_empty() {
+            self.user_roles.remove(account_id);
+        } else if self.user_roles.insert(account_id, roles).is_none() {
+            self.total_members_count += 1;
+        }
+    }
+    pub fn remove_user_role_group(&mut self, account_id: &AccountId, group_id: u16) {
+        if let Some(mut roles) = self.user_roles.get(&account_id) {
+            roles.remove_all_group_roles(group_id);
+            if !roles.is_empty() {
+                self.user_roles.insert(account_id, &roles);
+            } else {
+                self.user_roles.remove(account_id);
+            }
         }
     }
 }

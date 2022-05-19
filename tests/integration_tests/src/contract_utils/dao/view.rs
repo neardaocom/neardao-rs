@@ -7,10 +7,11 @@ use crate::utils::{parse_view_result, view_outcome_pretty};
 
 use super::types::{
     consts::{DAO_VIEW_INSTANCE, DAO_VIEW_TEMPLATES, DAO_VIEW_WORKFLOW_STORAGE},
+    group::{Group, Roles, UserRoles},
     init::TreasuryPartition,
     proposal::{Proposal, Votes},
     reward::{Reward, Wallet},
-    view::{Statistics, UserRoles, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
+    view::{Statistics, ViewInstance, ViewProposal, ViewTemplates, ViewWorkflowStorage},
 };
 
 pub(crate) async fn proposal<T>(
@@ -217,7 +218,7 @@ pub(crate) async fn view_user_roles<T>(
     worker: &Worker<T>,
     dao: &AccountId,
     account_id: &AccountId,
-) -> anyhow::Result<UserRoles>
+) -> anyhow::Result<Option<UserRoles>>
 where
     T: DevNetwork,
 {
@@ -227,8 +228,23 @@ where
     .to_string()
     .into_bytes();
     let outcome = worker.view(&dao, "user_roles", args).await?;
-    view_outcome_pretty::<UserRoles>("view user roles", &outcome);
-    let roles = parse_view_result::<UserRoles>(&outcome).expect("failed to parse user roles");
+    view_outcome_pretty::<Option<UserRoles>>("view user roles", &outcome);
+    let roles = parse_view_result::<Option<UserRoles>>(&outcome).flatten();
+    Ok(roles)
+}
+
+pub(crate) async fn view_group_roles<T>(
+    worker: &Worker<T>,
+    dao: &AccountId,
+    group_id: u16,
+) -> anyhow::Result<Roles>
+where
+    T: DevNetwork,
+{
+    let args = json!({ "id": group_id }).to_string().into_bytes();
+    let outcome = worker.view(&dao, "group_roles", args).await?;
+    view_outcome_pretty::<Roles>("view group roles", &outcome);
+    let roles = parse_view_result::<Roles>(&outcome).expect("failed to parse group roles");
     Ok(roles)
 }
 
@@ -243,7 +259,7 @@ where
     Ok(stats)
 }
 
-pub(crate) async fn partitions<T>(
+pub(crate) async fn view_partitions<T>(
     worker: &Worker<T>,
     dao: &AccountId,
 ) -> anyhow::Result<Vec<(u16, TreasuryPartition)>>
@@ -261,4 +277,19 @@ where
     let partitions = parse_view_result::<Vec<(u16, TreasuryPartition)>>(&outcome)
         .expect("failed to parse partition list");
     Ok(partitions)
+}
+
+pub(crate) async fn view_groups<T>(
+    worker: &Worker<T>,
+    dao: &AccountId,
+) -> anyhow::Result<Vec<(u16, Group)>>
+where
+    T: DevNetwork,
+{
+    let args = json!({}).to_string().into_bytes();
+    let outcome = worker.view(&dao, "groups", args).await?;
+    view_outcome_pretty::<Vec<(u16, Group)>>("view dao group list", &outcome);
+    let groups =
+        parse_view_result::<Vec<(u16, Group)>>(&outcome).expect("failed to parse group list");
+    Ok(groups)
 }

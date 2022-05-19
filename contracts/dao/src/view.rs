@@ -135,10 +135,10 @@ impl Contract {
     pub fn wallet(self, account_id: AccountId) -> Option<Wallet> {
         self.wallets.get(&account_id).map(|w| w.into())
     }
-    pub fn user_roles(self, account_id: AccountId) -> Option<UserRoles> {
+    pub fn user_roles(&self, account_id: AccountId) -> Option<UserRoles> {
         self.user_roles.get(&account_id)
     }
-    pub fn group_roles(self, id: u16) -> Option<Roles> {
+    pub fn group_roles(&self, id: u16) -> Option<Roles> {
         self.group_roles.get(&id)
     }
 
@@ -159,13 +159,6 @@ impl Contract {
 
     pub fn group(self, id: u16) -> Option<Group> {
         self.groups.get(&id)
-    }
-
-    // TODO: Maybe remove
-    pub fn group_members(&self, id: GroupId) -> Option<Vec<GroupMember>> {
-        self.groups
-            .get(&id)
-            .map(|group| group.members.get_members())
     }
 
     pub fn tags(self, category: TagCategory) -> Option<Tags> {

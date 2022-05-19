@@ -17,11 +17,16 @@ use super::expression::Expression;
 )]
 //#[cfg_attr(not(target_arch = "wasm32"), derive())]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum DaoActionIdent {
     GroupAdd,
     GroupRemove,
     GroupUpdate,
     GroupAddMembers,
+    GroupRoleAdd,
+    GroupRoleRemove,
+    UserRoleAdd,
+    UserRoleRemove,
     GroupRemoveMember,
     SettingsUpdate,
     TagAdd,
@@ -47,6 +52,7 @@ pub enum VoteScenario {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum ActivityRight {
     /// Anyone has the right.
     Anyone,
@@ -90,6 +96,7 @@ pub enum ActivityResult {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 /// Defines source of value.
 pub enum ArgSrc {
     /// User's input key name.
@@ -113,6 +120,7 @@ pub enum ArgSrc {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum SrcOrExprOrValue {
     /// Source for value.
     Src(ArgSrc),
@@ -171,6 +179,7 @@ pub struct ObjectMetadata {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum Instruction {
     DeleteKey(String),
     DeleteKeyGlobal(String),

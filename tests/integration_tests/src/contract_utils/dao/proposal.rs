@@ -43,8 +43,8 @@ where
     outcome_pretty::<u32>("dao create_proposal", &outcome);
     assert!(outcome.is_success(), "dao create proposal failed");
     let proposal_id: u32 = outcome.json().expect("failed to parse proposal_id.");
-    let proposal = proposal(worker, dao, proposal_id).await?;
-    assert!(proposal.is_some());
+    //let proposal = proposal(worker, dao, proposal_id).await?;
+    //assert!(proposal.is_some());
 
     Ok(proposal_id)
 }

@@ -300,7 +300,7 @@ impl Contract {
                     }
                     ActivityRight::Group(g) => match self.groups.get(g) {
                         Some(group) => {
-                            max_possible_amount = group.members.members_count() as u128;
+                            max_possible_amount = group.members_count() as u128;
                         }
                         None => panic!("{}", ERR_GROUP_NOT_FOUND),
                     },
@@ -312,15 +312,13 @@ impl Contract {
                     ActivityRight::TokenHolder => {
                         max_possible_amount = self.total_delegators_count as u128;
                     }
-                    // TODO: Fix - If a member exists in 2 groups, then he is accounted twice.
                     ActivityRight::Member => {
                         max_possible_amount = self.total_members_count as u128;
                     }
                     ActivityRight::GroupRole(g, r) => match self.groups.get(g) {
-                        // TODO: Fix
                         Some(group) => {
                             max_possible_amount =
-                                group.get_members_accounts_by_role(*r).len() as u128;
+                                self.get_group_members_with_role(*g, &group, *r).len() as u128;
                         }
                         None => panic!("{}", ERR_GROUP_NOT_FOUND),
                     },
@@ -387,8 +385,7 @@ impl Contract {
                 ActivityRight::GroupMember(g, account_id) => {
                     match self.groups.get(g) {
                         Some(group) => {
-                            let member = group.get_member_by_account(account_id);
-                            if member.is_some() {
+                            if group.is_member(account_id) {
                                 let member_vote_weight =
                                     self.delegations.get(&account_id).unwrap_or(0);
                                 max_possible_amount += member_vote_weight;

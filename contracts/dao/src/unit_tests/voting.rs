@@ -171,7 +171,6 @@ test_voting!(
     YES: 3,
     NO: 1
 );
-// TODO: Voting for Democratic - Member.
 
 // ----- SCENARIO: TOKEN WEIGHTED -----
 test_voting!(

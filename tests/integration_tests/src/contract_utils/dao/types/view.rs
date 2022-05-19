@@ -30,10 +30,6 @@ pub(crate) type ViewTemplates = Vec<(u16, (Template, Vec<TemplateSettings>))>;
 pub(crate) type ViewProposal = Option<(VersionedProposal, Option<Vec<TemplateSettings>>)>;
 pub(crate) type ViewWorkflowStorage = Option<Vec<(String, Value)>>;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
-pub struct UserRoles(HashMap<u16, Vec<u16>>);
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive())]
 #[serde(crate = "near_sdk::serde")]

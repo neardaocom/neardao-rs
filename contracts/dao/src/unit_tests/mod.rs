@@ -151,8 +151,6 @@ pub(crate) fn get_default_contract() -> Contract {
         "roles: founder_1: {:?}; founder_2: {:?}; founder_3: {:?};",
         founder_1_roles, founder_2_roles, founder_3_roles
     );
-    let members = contract.group_members(1).unwrap();
-    println!("group 1 members: {:?}", members);
     assert_eq!(
         contract.total_members_count, 6,
         "invalid total unique members count"

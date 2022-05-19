@@ -49,7 +49,7 @@ impl Contract {
     #[inline]
     pub fn init_groups(&mut self, groups: Vec<GroupInput>) {
         for g in groups.into_iter() {
-            self.add_group(g);
+            self.group_add(g);
         }
 
         assert!(
@@ -117,7 +117,7 @@ impl Contract {
         for partition in partitions {
             let treasury_partititon = TreasuryPartition::try_from(partition)
                 .expect("Invalid TreasuryPartitionInput object.");
-            self.add_partition(treasury_partititon);
+            self.partition_add(treasury_partititon);
         }
     }
 

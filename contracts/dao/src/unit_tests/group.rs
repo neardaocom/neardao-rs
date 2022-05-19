@@ -40,10 +40,6 @@ fn add_group() {
         },
     ];
 
-    let mut actual_group_members = contract.group_members(1).unwrap();
-    actual_group_members.sort();
-    assert_eq!(actual_group_members, expect_group_members);
-
     let new_group_members = vec![
         GroupMember {
             account_id: FOUNDER_4.to_string().try_into().unwrap(),
@@ -55,7 +51,7 @@ fn add_group() {
         },
     ];
 
-    contract.add_group(GroupInput {
+    contract.group_add(GroupInput {
         settings: GroupSettings {
             name: "council_rest".into(),
             leader: Some(FOUNDER_4.to_string().try_into().unwrap()),
@@ -66,14 +62,4 @@ fn add_group() {
     });
 
     assert_eq!(contract.total_members_count, 5);
-
-    //let expected_group_names: Vec<String> = vec!["council".into(), "council_rest".into()];
-    //
-    //let mut actual_group_names = contract.group_names();
-    //actual_group_names.sort();
-    //assert_eq!(actual_group_names, expected_group_names);
-
-    let mut actual_group_members = contract.group_members(2).unwrap();
-    actual_group_members.sort();
-    assert_eq!(actual_group_members, new_group_members);
 }

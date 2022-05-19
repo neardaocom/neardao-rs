@@ -23,47 +23,6 @@ pub struct GroupMember {
     pub tags: Vec<TagId>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-#[repr(transparent)]
-pub struct GroupMembers(HashMap<AccountId, Vec<TagId>>);
-impl GroupMembers {
-    /// Adds members to group.
-    /// Overrides existing.
-    /// Returns false if the member was not in the group before.
-    pub fn add_member(&mut self, member: GroupMember) -> bool {
-        self.0.insert(member.account_id, member.tags).is_some()
-    }
-    pub fn remove_member(&mut self, account_id: AccountId) -> Option<GroupMember> {
-        self.0
-            .remove(&account_id)
-            .map(|tags| GroupMember { account_id, tags })
-    }
-    pub fn members_count(&self) -> usize {
-        self.0.len()
-    }
-    pub fn get_members(&self) -> Vec<GroupMember> {
-        self.0
-            .iter()
-            .map(|(a, t)| GroupMember {
-                account_id: a.clone(),
-                tags: t.clone(),
-            })
-            .collect()
-    }
-}
-
-impl From<Vec<GroupMember>> for GroupMembers {
-    fn from(input: Vec<GroupMember>) -> Self {
-        let mut members = HashMap::with_capacity(input.len());
-        for i in input.into_iter() {
-            members.insert(i.account_id, i.tags);
-        }
-        GroupMembers(members)
-    }
-}
-
 #[derive(Deserialize, BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -97,10 +56,11 @@ pub struct GroupInput {
 #[serde(crate = "near_sdk::serde")]
 pub struct Group {
     pub settings: GroupSettings,
-    pub members: GroupMembers,
+    pub members: HashMap<AccountId, Vec<TagId>>,
 }
 
 impl Group {
+    // TODO: Remove panic.
     pub fn new(settings: GroupSettings, members: Vec<GroupMember>) -> Self {
         if let Some(ref leader) = settings.leader {
             assert!(
@@ -112,59 +72,51 @@ impl Group {
                 "Leader must be contained in group members."
             );
         }
+        let mut hm_members = HashMap::with_capacity(members.len());
+        for i in members.into_iter() {
+            hm_members.insert(i.account_id, i.tags);
+        }
         Group {
             settings,
-            members: members.into(),
+            members: hm_members,
         }
     }
+    pub fn members_count(&self) -> usize {
+        self.members.len()
+    }
 
-    /// Adds members to the group.
-    /// Returns count of new members added.
-    /// New added + overwriten = `members.len()`
-    pub fn add_members(&mut self, members: Vec<GroupMember>) -> u32 {
-        let mut new_added = 0;
-        for m in members.into_iter() {
-            if !self.members.add_member(m) {
-                new_added += 1;
-            }
-        }
-        new_added
+    /// Add member to the group.
+    /// Return true if member was overwriten.
+    pub fn add_member(&mut self, member: GroupMember) -> bool {
+        self.members
+            .insert(member.account_id, member.tags)
+            .is_some()
     }
 
     /// Removes member from group.
+    /// Return true if actually removed.
     /// If the member is leader, then group leader is removed from it's settings.
-    pub fn remove_member(&mut self, account_id: AccountId) -> Option<GroupMember> {
+    pub fn remove_member(&mut self, account_id: &AccountId) -> bool {
         if let Some(ref leader) = self.settings.leader {
-            if account_id == *leader {
+            if *account_id == *leader {
                 self.settings.leader = None;
             }
         }
-        self.members.remove_member(account_id)
+        self.members.remove(account_id).is_some()
+    }
+    pub fn get_members_accounts_refs(&self) -> Vec<&AccountId> {
+        self.members.iter().map(|member| member.0).collect()
     }
 
     pub fn get_members_accounts(&self) -> Vec<AccountId> {
         self.members
-            .get_members()
+            .clone()
             .into_iter()
-            .map(|member| member.account_id)
+            .map(|member| member.0)
             .collect()
     }
-
-    pub fn get_member_by_account(&self, account_id: &AccountId) -> Option<GroupMember> {
-        self.members
-            .get_members()
-            .into_iter()
-            .find(|m| m.account_id == *account_id)
-    }
-
-    // TODO: This is not true, tags does not mean role.
-    pub fn get_members_accounts_by_role(&self, role: TagId) -> Vec<AccountId> {
-        self.members
-            .get_members()
-            .into_iter()
-            .filter(|m| m.tags.iter().any(|r| *r == role))
-            .map(|m| m.account_id)
-            .collect()
+    pub fn is_member(&self, account_id: &AccountId) -> bool {
+        self.members.contains_key(account_id)
     }
     pub fn is_account_id_leader(&self, account_id: &AccountId) -> bool {
         if let Some(ref leader) = self.settings.leader {
@@ -183,17 +135,14 @@ impl Contract {
     /// Also add defined roles to all group users.
     /// Update internal statistics.
     /// TODO: Refactoring maybe.
-    pub fn add_group(&mut self, group: GroupInput) {
+    pub fn group_add(&mut self, group: GroupInput) {
         self.group_last_id += 1;
         let mut cache = HashMap::with_capacity(group.members.len());
         for member in group.members.iter() {
-            let mut user_roles = if let Some(roles) = self.user_roles.get(&member.account_id) {
-                roles
-            } else {
-                self.total_members_count += 1;
-                UserRoles::default()
-            };
-            user_roles.add_new_group(self.group_last_id);
+            let user_roles = self
+                .user_roles
+                .get(&member.account_id)
+                .unwrap_or_else(UserRoles::default);
             cache.insert(&member.account_id, user_roles);
         }
         let mut group_roles = Roles::new();
@@ -205,8 +154,9 @@ impl Contract {
                 }
             }
         }
-        for (account, roles) in cache.into_iter() {
-            self.user_roles.insert(account, &roles);
+        for (account, mut roles) in cache.into_iter() {
+            roles.add_group_role(self.group_last_id, 0);
+            self.save_user_roles(account, &roles);
         }
         self.group_roles.insert(&self.group_last_id, &group_roles);
         self.groups.insert(
@@ -236,31 +186,17 @@ impl Contract {
         result_members
     }
 
-    /// TODO: Refactor.
-    pub fn group_remove(&mut self, id: GroupId) -> bool {
-        if let Some(mut group) = self.groups.remove(&id) {
-            //let token_lock: TokenLock = group.remove_storage_data();
-            //self.ft_total_locked -= token_lock.amount - token_lock.distributed;
-            self.total_members_count -= group.members.members_count() as u32;
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn group_update(&mut self, id: GroupId, settings: GroupSettings) -> bool {
-        if let Some(mut group) = self.groups.get(&id) {
-            group.settings = settings;
-            self.groups.insert(&id, &group);
-            true
-        } else {
-            false
-        }
-    }
-
     pub fn group_add_members(&mut self, id: GroupId, members: Vec<GroupMember>) -> bool {
         if let Some(mut group) = self.groups.get(&id) {
-            self.total_members_count += group.add_members(members);
+            for member in members.into_iter() {
+                let mut user_roles = self
+                    .user_roles
+                    .get(&member.account_id)
+                    .unwrap_or_else(UserRoles::default);
+                user_roles.add_group_role(id, 0);
+                self.save_user_roles(&member.account_id, &user_roles);
+                group.add_member(member);
+            }
             self.groups.insert(&id, &group);
             true
         } else {
@@ -268,14 +204,24 @@ impl Contract {
         }
     }
 
-    pub fn group_remove_member(&mut self, id: GroupId, member: AccountId) -> bool {
+    pub fn group_remove_member(&mut self, id: GroupId, account_id: AccountId) -> bool {
         if let Some(mut group) = self.groups.get(&id) {
-            group.remove_member(member);
-            self.total_members_count -= 1;
+            if group.remove_member(&account_id) {
+                self.remove_user_role_group(&account_id, id);
+            };
             self.groups.insert(&id, &group);
             true
         } else {
             false
+        }
+    }
+
+    pub fn group_remove(&mut self, id: GroupId) {
+        if let Some(group) = self.groups.get(&id) {
+            for account_id in group.get_members_accounts_refs() {
+                self.remove_user_role_group(&account_id, id);
+            }
+            self.groups.remove(&id);
         }
     }
 }

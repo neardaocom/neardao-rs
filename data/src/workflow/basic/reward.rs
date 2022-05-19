@@ -141,7 +141,6 @@ impl Reward1 {
         settings
     }
 
-    /// Default testing template settings for workflow: wf_add.
     pub fn template_settings(duration: Option<u32>) -> TemplateSettings {
         TemplateSettings {
             allowed_proposers: vec![ActivityRight::Group(1)],
