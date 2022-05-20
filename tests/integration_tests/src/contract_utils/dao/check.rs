@@ -22,6 +22,7 @@ pub(crate) async fn check_group<T>(
     expected_group_leader: Option<&str>,
     expected_group_parent: u16,
     expected_group_members: Vec<(&str, Vec<u16>)>,
+    expected_group_rewards: Vec<(u16, u16)>,
 ) -> anyhow::Result<()>
 where
     T: DevNetwork,
@@ -39,6 +40,7 @@ where
                 parent_group: expected_group_parent,
             },
             members: GroupMembers(members),
+            rewards: expected_group_rewards,
         },
     );
     internal_check_group(worker, dao, expected).await
@@ -130,7 +132,7 @@ where
     Ok(())
 }
 
-pub(crate) async fn check_group_exists<T>(
+pub(crate) async fn check_group_stats<T>(
     worker: &Worker<T>,
     dao: &AccountId,
     group_name: &str,
@@ -167,6 +169,29 @@ where
         group_leader.unwrap_or_default()
     );
     assert!(found, "{}", err_msg);
+    Ok(())
+}
+
+pub(crate) async fn check_group_exists<T>(
+    worker: &Worker<T>,
+    dao: &AccountId,
+    group_name: &str,
+    should_exist: bool,
+) -> anyhow::Result<()>
+where
+    T: DevNetwork,
+{
+    let name = group_name.to_string();
+    let groups = view_groups(worker, dao).await?;
+    let mut found = false;
+    for (_, g) in groups {
+        if g.settings.name == name {
+            found = true;
+            break;
+        }
+    }
+    assert!(should_exist == found);
+
     Ok(())
 }
 

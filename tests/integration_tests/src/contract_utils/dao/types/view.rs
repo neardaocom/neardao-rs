@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use library::{
     types::datatype::Value,
     workflow::{instance::Instance, settings::TemplateSettings, template::Template},

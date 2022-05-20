@@ -18,9 +18,11 @@ use near_sdk::{test_utils::VMContextBuilder, AccountId};
 use crate::{
     core::Contract,
     group::{GroupInput, GroupMember, GroupSettings},
+    role::{MemberRoles, Roles, UserRoles},
     settings::Settings,
     tags::TagInput,
     treasury::{Asset, PartitionAssetInput, TreasuryPartitionInput},
+    wallet::{ClaimbleReward, Wallet, WithdrawStats},
     DurationSec,
 };
 
@@ -67,7 +69,7 @@ const ACC_3: &str = "some_account_3.testnet";
 const GROUP_1_NAME: &str = "council";
 const GROUP_2_NAME: &str = "holy_men";
 
-const GROUP_1_ROLE_1: &str = "leader";
+const GROUP_1_ROLE_1: &str = "role for group leader";
 const GROUP_1_ROLE_2: &str = "other";
 
 /// Max possible FT supply.
@@ -144,13 +146,6 @@ pub(crate) fn get_default_contract() -> Contract {
         get_default_template_settings(),
         get_default_treasury_partitions(),
     );
-    let founder_1_roles = contract.user_roles.get(&as_account_id(FOUNDER_1));
-    let founder_2_roles = contract.user_roles.get(&as_account_id(FOUNDER_2));
-    let founder_3_roles = contract.user_roles.get(&as_account_id(FOUNDER_3));
-    println!(
-        "roles: founder_1: {:?}; founder_2: {:?}; founder_3: {:?};",
-        founder_1_roles, founder_2_roles, founder_3_roles
-    );
     assert_eq!(
         contract.total_members_count, 6,
         "invalid total unique members count"
@@ -158,6 +153,12 @@ pub(crate) fn get_default_contract() -> Contract {
     assert!(contract.partition_last_id == 2);
     assert!(contract.treasury_partition.get(&1).is_some());
     assert!(contract.treasury_partition.get(&2).is_some());
+    assert_eq!(contract.group_roles(1).unwrap(), default_group_1_roles());
+    assert_eq!(contract.group_roles(2).unwrap(), default_group_2_roles());
+    assert_user_roles(&contract, as_account_id(FOUNDER_1), Some(founder_1_roles()));
+    assert_user_roles(&contract, as_account_id(FOUNDER_2), Some(founder_2_roles()));
+    assert_user_roles(&contract, as_account_id(FOUNDER_3), Some(founder_3_roles()));
+    assert_group_role_members(&contract, 1, 1, vec![as_account_id(FOUNDER_1)]);
     contract
 }
 
@@ -194,8 +195,10 @@ pub(crate) fn get_default_groups() -> Vec<GroupInput> {
             tags: vec![2],
         },
     ];
-    let mut group_1_roles = HashMap::new();
-    group_1_roles.insert(GROUP_1_ROLE_1.into(), vec![as_account_id(FOUNDER_1)]);
+    let group_1_roles = vec![MemberRoles {
+        name: GROUP_1_ROLE_1.into(),
+        members: vec![as_account_id(FOUNDER_1)],
+    }];
     groups.push(GroupInput {
         settings: GroupSettings {
             name: GROUP_1_NAME.into(),
@@ -228,7 +231,7 @@ pub(crate) fn get_default_groups() -> Vec<GroupInput> {
             tags: vec![],
         },
     ];
-    let mut group_2_roles = HashMap::new();
+    let group_2_roles: Vec<MemberRoles> = vec![];
     groups.push(GroupInput {
         settings: GroupSettings {
             name: GROUP_2_NAME.into(),
@@ -239,6 +242,27 @@ pub(crate) fn get_default_groups() -> Vec<GroupInput> {
         member_roles: group_2_roles,
     });
     groups
+}
+
+pub fn founder_1_roles() -> UserRoles {
+    UserRoles::new().add_role(1, 0).add_role(1, 1)
+}
+pub fn founder_2_roles() -> UserRoles {
+    UserRoles::new().add_role(1, 0).add_role(2, 0)
+}
+pub fn founder_3_roles() -> UserRoles {
+    UserRoles::new().add_role(1, 0).add_role(2, 0)
+}
+
+pub(crate) fn default_group_1_roles() -> Roles {
+    let mut roles = Roles::new();
+    roles.insert(GROUP_1_ROLE_1.into());
+    roles
+}
+
+pub(crate) fn default_group_2_roles() -> Roles {
+    let mut roles = Roles::new();
+    roles
 }
 
 pub(crate) fn get_default_tags() -> Vec<TagInput> {
@@ -356,4 +380,65 @@ pub(crate) fn get_default_treasury_partitions() -> Vec<TreasuryPartitionInput> {
             }],
         },
     ]
+}
+
+/// Convert timestamp seconds to miliseconds
+/// Contract internally works with seconds.
+fn tm(v: u64) -> u64 {
+    v * 10u64.pow(9)
+}
+
+fn get_wallet(contract: &Contract, account_id: &AccountId) -> Wallet {
+    let wallet: Wallet = contract
+        .wallets
+        .get(&account_id)
+        .expect("wallet not found")
+        .into();
+    wallet
+}
+
+fn get_wallet_withdraw_stat<'a>(
+    wallet: &'a Wallet,
+    reward_id: u16,
+    asset: &Asset,
+) -> &'a WithdrawStats {
+    let wallet_reward = wallet
+        .wallet_reward(reward_id)
+        .expect("wallet reward nout found");
+    wallet_reward.withdraw_stat(asset)
+}
+
+fn claimable_rewards_sum(claimable_rewards: &[ClaimbleReward], asset: &Asset) -> u128 {
+    let mut sum = 0;
+    for reward in claimable_rewards.into_iter() {
+        if reward.asset == *asset {
+            sum += reward.amount.0
+        }
+    }
+    sum
+}
+
+fn assert_user_roles(
+    contract: &Contract,
+    account_id: AccountId,
+    mut expected_roles: Option<UserRoles>,
+) {
+    dbg!(account_id.clone());
+    let mut user_roles = contract.user_roles(account_id);
+    let user_roles = user_roles.as_ref().map(|r| r.to_owned().sort());
+    let expected_roles = expected_roles.as_ref().map(|r| r.to_owned().sort());
+    assert_eq!(user_roles, expected_roles);
+}
+
+fn assert_group_role_members(
+    contract: &Contract,
+    group_id: u16,
+    role_id: u16,
+    mut expected_members: Vec<AccountId>,
+) {
+    let group = contract.group(group_id).unwrap();
+    let mut actual_members = contract.get_group_members_with_role(group_id, &group, role_id);
+    actual_members.sort();
+    expected_members.sort();
+    assert_eq!(actual_members, expected_members);
 }

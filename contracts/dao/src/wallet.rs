@@ -15,7 +15,7 @@ use crate::{
     internal::utils::current_timestamp_sec,
     reward::{Reward, RewardTypeIdent},
     treasury::{Asset, TreasuryPartition},
-    TimestampSec,
+    GroupId, RewardId, RoleId, TimestampSec,
 };
 
 #[ext_contract(ext_self)]
@@ -154,6 +154,17 @@ impl Wallet {
             self.rewards[pos].activity_executed();
         }
     }
+    /// Set timestamp `reward_id` Reward was removed from self.
+    pub fn set_reward_timestamp_removed(&mut self, reward_id: u16, timestamp: TimestampSec) {
+        let pos = self.find_reward_pos(reward_id).expect("reward not found");
+        debug_assert!(self.rewards[pos].time_removed.is_none());
+        self.rewards[pos].set_removed_timestamp(timestamp)
+    }
+    /// Return timestamp of reward removal.
+    pub fn reward_timestamp_removed(&self, reward_id: u16) -> Option<TimestampSec> {
+        let pos = self.find_reward_pos(reward_id).expect("reward not found");
+        self.rewards[pos].time_removed
+    }
 
     #[inline]
     fn find_reward_pos(&self, reward_id: u16) -> Option<usize> {
@@ -175,11 +186,14 @@ impl Wallet {
     }
 }
 
+/// Reference to a Reward defined in contract.
+/// Store data about when was added/removed and withdraw stats.
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct WalletReward {
     reward_id: u16,
     time_added: TimestampSec,
+    time_removed: Option<TimestampSec>,
     /// Collection of all withdrawn stats per asset from reward.
     /// All assets MUST be defined in the reward.
     /// In case of UserActivityReward its counter of executed activities.
@@ -202,6 +216,7 @@ impl WalletReward {
         Self {
             reward_id,
             time_added,
+            time_removed: None,
             withdraw_stats,
         }
     }
@@ -250,6 +265,15 @@ impl WalletReward {
     pub fn reward_type(&self) -> RewardTypeIdent {
         let stat = &self.withdraw_stats[0];
         stat.get_reward_type()
+    }
+    pub fn set_removed_timestamp(&mut self, timestamp: TimestampSec) {
+        self.time_removed = Some(timestamp);
+    }
+    pub fn time_added(&self) -> TimestampSec {
+        self.time_added
+    }
+    pub fn time_removed(&self) -> Option<TimestampSec> {
+        self.time_removed
     }
 }
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
@@ -310,6 +334,12 @@ impl WithdrawStats {
         match self {
             WithdrawStats::Wage(s) => s.timestamp_last_withdraw,
             WithdrawStats::Activity(a) => a.timestamp_last_withdraw,
+        }
+    }
+    pub fn reward_asset(&self) -> &Asset {
+        match self {
+            WithdrawStats::Wage(s) => &s.asset_id,
+            WithdrawStats::Activity(a) => &a.asset_id,
         }
     }
 }
@@ -435,7 +465,8 @@ impl Contract {
             .unwrap_or_else(|| VersionedWallet::Current(Wallet::new()))
             .into()
     }
-    /// Return (claimable amount, amount per activity) that is possible to be withdrawn from `reward_id`.
+    /// Return (claimable amount, amount per activity)
+    /// that is possible to be withdrawn from `reward_id` at the moment.
     pub fn internal_claimable_reward_asset(
         wallet: &Wallet,
         reward_id: u16,
@@ -444,7 +475,11 @@ impl Contract {
         current_timestamp: TimestampSec,
     ) -> (u128, u128) {
         if matches!(reward.get_reward_type(), RewardTypeIdent::Wage) {
-            let amount_available_reward = reward.available_wage_amount(&asset, current_timestamp);
+            let wallet_reward = wallet.wallet_reward(reward_id).expect("reward not found");
+            let timestamp_removed = wallet_reward.time_removed().unwrap_or(current_timestamp);
+            let timestamp_added = wallet_reward.time_added();
+            let amount_available_reward =
+                reward.available_wage_amount(&asset, timestamp_removed, timestamp_added);
             let amount_already_claimed = wallet.amount_wage_withdrawn(reward_id, &asset);
             (amount_available_reward - amount_already_claimed, 0)
         } else {

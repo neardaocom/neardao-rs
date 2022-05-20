@@ -228,7 +228,8 @@ where
     .to_string()
     .into_bytes();
     let outcome = worker.view(&dao, "user_roles", args).await?;
-    view_outcome_pretty::<Option<UserRoles>>("view user roles", &outcome);
+    let msg = format!("view user roles: {}", account_id.as_str());
+    view_outcome_pretty::<Option<UserRoles>>(&msg, &outcome);
     let roles = parse_view_result::<Option<UserRoles>>(&outcome).flatten();
     Ok(roles)
 }

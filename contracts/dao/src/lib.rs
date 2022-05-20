@@ -47,6 +47,7 @@ pub(crate) type ProposalWf = (Proposal, Template, TemplateSettings);
 #[allow(dead_code)]
 pub(crate) type InstanceWf = (Instance, ProposeSettings);
 pub(crate) type RoleId = u16;
+pub(crate) type RewardId = u16;
 /// Id of the resource on the resource provider.
 pub(crate) type ResourceId = u32;
 pub type TokenId = String;

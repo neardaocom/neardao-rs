@@ -93,7 +93,7 @@ impl AdminPackage1 {
                     is_sync: true,
                 }),
                 Activity::Activity(TemplateActivity {
-                    code: "group_remove_member".into(),
+                    code: "group_remove_members".into(),
                     postprocessing: None,
                     actions: vec![TemplateAction {
                         exec_condition: None,
@@ -103,7 +103,7 @@ impl AdminPackage1 {
                             expected_input: None,
                             required_deposit: None,
                             binds: vec![],
-                            name: DaoActionIdent::GroupRemoveMember,
+                            name: DaoActionIdent::GroupRemoveMembers,
                         }),
                         postprocessing: None,
                         must_succeed: true,
@@ -114,7 +114,7 @@ impl AdminPackage1 {
                     is_sync: true,
                 }),
                 Activity::Activity(TemplateActivity {
-                    code: "role_add".into(),
+                    code: "group_remove_roles".into(),
                     postprocessing: None,
                     actions: vec![TemplateAction {
                         exec_condition: None,
@@ -124,7 +124,7 @@ impl AdminPackage1 {
                             expected_input: None,
                             required_deposit: None,
                             binds: vec![],
-                            name: DaoActionIdent::UserRoleAdd,
+                            name: DaoActionIdent::GroupRemoveRoles,
                         }),
                         postprocessing: None,
                         must_succeed: true,
@@ -135,7 +135,7 @@ impl AdminPackage1 {
                     is_sync: true,
                 }),
                 Activity::Activity(TemplateActivity {
-                    code: "role_remove".into(),
+                    code: "group_remove_member_roles".into(),
                     postprocessing: None,
                     actions: vec![TemplateAction {
                         exec_condition: None,
@@ -145,7 +145,7 @@ impl AdminPackage1 {
                             expected_input: None,
                             required_deposit: None,
                             binds: vec![],
-                            name: DaoActionIdent::UserRoleRemove,
+                            name: DaoActionIdent::GroupRemoveMemberRoles,
                         }),
                         postprocessing: None,
                         must_succeed: true,

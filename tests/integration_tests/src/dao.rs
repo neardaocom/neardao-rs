@@ -3,9 +3,10 @@ use near_sdk::ONE_NEAR;
 use crate::contract_utils::dao::{
     activity_input::{
         ActivityInputAdminPkg1, ADMINPACKAGE1_ADD_GROUP, ADMINPACKAGE1_ADD_GROUP_MEMBERS,
-        ADMINPACKAGE1_REMOVE_GROUP, ADMINPACKAGE1_REMOVE_GROUP_MEMBER,
+        ADMINPACKAGE1_REMOVE_GROUP, ADMINPACKAGE1_REMOVE_GROUP_MEMBERS,
+        ADMINPACKAGE1_REMOVE_GROUP_MEMBER_ROLES, ADMINPACKAGE1_REMOVE_GROUP_ROLES,
     },
-    check::{check_group, check_group_roles, check_user_roles},
+    check::{check_group, check_group_exists, check_group_roles, check_user_roles},
     types::{
         consts::PROVIDER_TPL_ID_ADMIN_PACKAGE1,
         group::{Roles, UserRoles},
@@ -1936,8 +1937,8 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
             "artists",
             "macho.near",
             vec!["macho.near", "pica.near"],
-            None,
-            vec![],
+            Some("alpha"),
+            vec!["macho.near"],
         ),
         true,
     )
@@ -1951,23 +1952,45 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
         Some("macho.near"),
         0,
         vec![("macho.near", vec![]), ("pica.near", vec![])],
+        vec![],
     )
     .await?;
-    let macho_roles = UserRoles::new().add_group_roles(2, vec![0]);
-    let picasson_roles = macho_roles.clone();
-    check_user_roles(&worker, &dao_account_id, "macho.near", Some(&macho_roles)).await?;
-    check_user_roles(&worker, &dao_account_id, "pica.near", Some(&picasson_roles)).await?;
-    let artists_roles = Roles::new();
+    let macho_roles = UserRoles::new().add_group_roles(2, vec![0, 1]);
+    let pica_roles = UserRoles::new().add_group_roles(2, vec![0]);
+    check_group_exists(&worker, &dao_account_id, "artists", true).await?;
+    check_user_roles(
+        &worker,
+        &dao_account_id,
+        "macho.near",
+        Some(&macho_roles.clone()),
+    )
+    .await?;
+    check_user_roles(
+        &worker,
+        &dao_account_id,
+        "pica.near",
+        Some(&pica_roles.clone()),
+    )
+    .await?;
+    let artists_roles = Roles::new().add_role("alpha");
     check_group_roles(&worker, &dao_account_id, 2, &artists_roles).await?;
 
-    // GroupAddMembers
+    // GroupAddMembers (and roles)
     run_activity(
         &worker,
         &member,
         &dao_account_id,
         proposal_id,
         ADMINPACKAGE1_ADD_GROUP_MEMBERS,
-        ActivityInputAdminPkg1::activity_group_add_members(2, vec!["abc.near", "def.near"]),
+        ActivityInputAdminPkg1::activity_group_add_members(
+            2,
+            vec!["abc.near", "def.near"],
+            vec![
+                ("some_role", vec!["no_one_gets_this_role.near"]),
+                ("alpha", vec!["abc.near"]),
+                ("omega", vec!["pica.near"]),
+            ],
+        ),
         true,
     )
     .await?;
@@ -1984,14 +2007,23 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
             ("abc.near", vec![]),
             ("def.near", vec![]),
         ],
+        vec![],
     )
     .await?;
     let abc_roles = macho_roles.clone();
-    let def_roles = macho_roles.clone();
+    let def_roles = pica_roles.clone();
     check_user_roles(&worker, &dao_account_id, "macho.near", Some(&macho_roles)).await?;
-    check_user_roles(&worker, &dao_account_id, "pica.near", Some(&picasson_roles)).await?;
+    check_user_roles(
+        &worker,
+        &dao_account_id,
+        "pica.near",
+        Some(&pica_roles.clone().add_role(2, 3)),
+    )
+    .await?;
     check_user_roles(&worker, &dao_account_id, "abc.near", Some(&abc_roles)).await?;
     check_user_roles(&worker, &dao_account_id, "def.near", Some(&def_roles)).await?;
+    let artists_roles = artists_roles.add_role("some_role").add_role("omega");
+    check_group_roles(&worker, &dao_account_id, 2, &artists_roles).await?;
 
     // GroupRemoveMember
     run_activity(
@@ -1999,8 +2031,8 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
         &member,
         &dao_account_id,
         proposal_id,
-        ADMINPACKAGE1_REMOVE_GROUP_MEMBER,
-        ActivityInputAdminPkg1::activity_group_remove_member(2, "def.near"),
+        ADMINPACKAGE1_REMOVE_GROUP_MEMBERS,
+        ActivityInputAdminPkg1::activity_group_remove_members(2, vec!["def.near"]),
         true,
     )
     .await?;
@@ -2016,11 +2048,94 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
             ("pica.near", vec![]),
             ("abc.near", vec![]),
         ],
+        vec![],
     )
     .await?;
     check_user_roles(&worker, &dao_account_id, "macho.near", Some(&macho_roles)).await?;
-    check_user_roles(&worker, &dao_account_id, "pica.near", Some(&picasson_roles)).await?;
+    check_user_roles(
+        &worker,
+        &dao_account_id,
+        "pica.near",
+        Some(&pica_roles.add_role(2, 3)),
+    )
+    .await?;
     check_user_roles(&worker, &dao_account_id, "abc.near", Some(&abc_roles)).await?;
+    check_user_roles(&worker, &dao_account_id, "def.near", None).await?;
+
+    // GroupRemoveRole - alpha
+    let artists_roles = artists_roles.remove_role("alpha");
+    run_activity(
+        &worker,
+        &member,
+        &dao_account_id,
+        proposal_id,
+        ADMINPACKAGE1_REMOVE_GROUP_ROLES,
+        ActivityInputAdminPkg1::activity_group_remove_roles(2, vec![1, 4, 5, 6]),
+        true,
+    )
+    .await?;
+    check_group_roles(&worker, &dao_account_id, 2, &artists_roles.clone()).await?;
+    let expected_role = UserRoles::new().add_role(2, 0);
+    check_user_roles(
+        &worker,
+        &dao_account_id,
+        "macho.near",
+        Some(&expected_role.clone()),
+    )
+    .await?;
+    check_user_roles(
+        &worker,
+        &dao_account_id,
+        "pica.near",
+        Some(&expected_role.clone().add_role(2, 3)),
+    )
+    .await?;
+    check_user_roles(
+        &worker,
+        &dao_account_id,
+        "abc.near",
+        Some(&expected_role.clone()),
+    )
+    .await?;
+    check_user_roles(&worker, &dao_account_id, "def.near", None).await?;
+
+    // GroupRemoveMemberRoles - gamma
+    run_activity(
+        &worker,
+        &member,
+        &dao_account_id,
+        proposal_id,
+        ADMINPACKAGE1_REMOVE_GROUP_MEMBER_ROLES,
+        ActivityInputAdminPkg1::activity_group_remove_member_roles(
+            2,
+            vec![("omega", vec![]), ("some_role", vec![])],
+        ),
+        true,
+    )
+    .await?;
+    check_group_roles(&worker, &dao_account_id, 2, &artists_roles).await?;
+    let expected_role = UserRoles::new().add_role(2, 0);
+    check_user_roles(
+        &worker,
+        &dao_account_id,
+        "macho.near",
+        Some(&expected_role.clone()),
+    )
+    .await?;
+    check_user_roles(
+        &worker,
+        &dao_account_id,
+        "pica.near",
+        Some(&expected_role.clone().add_role(2, 3)),
+    )
+    .await?;
+    check_user_roles(
+        &worker,
+        &dao_account_id,
+        "abc.near",
+        Some(&expected_role.clone()),
+    )
+    .await?;
     check_user_roles(&worker, &dao_account_id, "def.near", None).await?;
 
     // GroupRemove - artists
@@ -2038,8 +2153,7 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
     check_user_roles(&worker, &dao_account_id, "macho.near", None).await?;
     check_user_roles(&worker, &dao_account_id, "pica.near", None).await?;
     check_user_roles(&worker, &dao_account_id, "abc.near", None).await?;
-
-    // TODO: Finish
+    check_group_exists(&worker, &dao_account_id, "artists", false).await?;
 
     Ok(())
 }

@@ -108,7 +108,7 @@ impl Contract {
         current_timestamp_sec()
     }
 
-    pub fn reward(self, id: u16) -> Option<Reward> {
+    pub fn reward(&self, id: u16) -> Option<Reward> {
         self.rewards.get(&id).map(|r| r.into())
     }
     pub fn reward_list(self, from_id: u16, limit: u16) -> Vec<(u16, Reward)> {
@@ -132,7 +132,7 @@ impl Contract {
     pub fn partition(&self, id: u16) -> Option<TreasuryPartition> {
         self.treasury_partition.get(&id).map(|p| p.into())
     }
-    pub fn wallet(self, account_id: AccountId) -> Option<Wallet> {
+    pub fn wallet(&self, account_id: AccountId) -> Option<Wallet> {
         self.wallets.get(&account_id).map(|w| w.into())
     }
     pub fn user_roles(&self, account_id: AccountId) -> Option<UserRoles> {
@@ -157,7 +157,7 @@ impl Contract {
         self.groups.to_vec()
     }
 
-    pub fn group(self, id: u16) -> Option<Group> {
+    pub fn group(&self, id: u16) -> Option<Group> {
         self.groups.get(&id)
     }
 

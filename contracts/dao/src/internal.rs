@@ -51,12 +51,6 @@ impl Contract {
         for g in groups.into_iter() {
             self.group_add(g);
         }
-
-        assert!(
-            self.ft_total_supply >= self.ft_total_locked,
-            "{}",
-            ERR_LOCK_AMOUNT_OVERFLOW
-        );
     }
 
     /// Register fncalls and their metadata

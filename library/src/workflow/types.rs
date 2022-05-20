@@ -23,11 +23,9 @@ pub enum DaoActionIdent {
     GroupRemove,
     GroupUpdate,
     GroupAddMembers,
-    GroupRoleAdd,
-    GroupRoleRemove,
-    UserRoleAdd,
-    UserRoleRemove,
-    GroupRemoveMember,
+    GroupRemoveMembers,
+    GroupRemoveRoles,
+    GroupRemoveMemberRoles,
     SettingsUpdate,
     TagAdd,
     TagEdit,
@@ -43,6 +41,7 @@ pub enum DaoActionIdent {
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum VoteScenario {
     Democratic,
     TokenWeighted,
@@ -76,6 +75,7 @@ pub enum ActivityRight {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum ActivityResult {
     Ok,
     Finished,
@@ -158,6 +158,7 @@ pub struct CollectionBindData {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum CollectionBindingStyle {
     /// Overwrites only user provided collection attributes.
     Overwrite,

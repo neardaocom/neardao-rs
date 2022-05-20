@@ -1,16 +1,8 @@
-use data::workflow::integration::skyward::{Skyward1, Skyward1ProposeOptions};
-use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use near_sdk::json_types::U128;
 use serde_json::json;
-use workspaces::{network::Sandbox, Account, AccountId, Contract, DevNetwork, Worker};
+use workspaces::{Account, AccountId, DevNetwork, Worker};
 
-use crate::{
-    contract_utils::dao::{
-        types::proposal::{ProposalCreateInput, ProposalState},
-        view::{proposal, votes},
-    },
-    utils::outcome_pretty,
-};
+use crate::utils::outcome_pretty;
 
 use super::types::reward::Asset;
 

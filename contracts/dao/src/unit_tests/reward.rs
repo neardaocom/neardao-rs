@@ -8,47 +8,13 @@ use crate::{
     reward::{Reward, RewardType, RewardTypeIdent, RewardWage},
     treasury::{Asset, PartitionAsset, PartitionAssetInput, TreasuryPartition},
     unit_tests::{
-        as_account_id, dummy_propose_settings, dummy_template_settings, get_context_builder,
-        get_default_contract, get_role_id, ACC_1, ACC_2, FOUNDER_1, FOUNDER_2, FOUNDER_3,
+        as_account_id, claimable_rewards_sum, dummy_propose_settings, dummy_template_settings,
+        get_context_builder, get_default_contract, get_role_id, get_wallet,
+        get_wallet_withdraw_stat, tm, ACC_1, ACC_2, FOUNDER_1, FOUNDER_2, FOUNDER_3,
+        GROUP_1_ROLE_1,
     },
     wallet::{ClaimbleReward, Wallet, WithdrawStats},
 };
-
-/// Convert timestamp seconds to miliseconds
-/// Contract internally works with seconds.
-fn tm(v: u64) -> u64 {
-    v * 10u64.pow(9)
-}
-
-fn get_wallet(contract: &Contract, account_id: &AccountId) -> Wallet {
-    let wallet: Wallet = contract
-        .wallets
-        .get(&account_id)
-        .expect("wallet not found")
-        .into();
-    wallet
-}
-
-fn get_wallet_withdraw_stat<'a>(
-    wallet: &'a Wallet,
-    reward_id: u16,
-    asset: &Asset,
-) -> &'a WithdrawStats {
-    let wallet_reward = wallet
-        .wallet_reward(reward_id)
-        .expect("wallet reward nout found");
-    wallet_reward.withdraw_stat(asset)
-}
-
-fn claimable_rewards_sum(claimable_rewards: &[ClaimbleReward], asset: &Asset) -> u128 {
-    let mut sum = 0;
-    for reward in claimable_rewards.into_iter() {
-        if reward.asset == *asset {
-            sum += reward.amount.0
-        }
-    }
-    sum
-}
 
 #[test]
 fn reward_wage_one_asset() {
@@ -72,7 +38,7 @@ fn reward_wage_one_asset() {
         })
         .unwrap()],
     };
-    let role_id = get_role_id(&contract, 1, "leader");
+    let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
     let partition_id = contract.partition_add(partition);
     let partition: TreasuryPartition = contract
         .treasury_partition
@@ -183,7 +149,7 @@ fn reward_activity_one_asset() {
         })
         .unwrap()],
     };
-    let role_id = get_role_id(&contract, 1, "leader");
+    let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
     let partition_id = contract.partition_add(partition);
     let partition: TreasuryPartition = contract
         .treasury_partition
@@ -414,7 +380,7 @@ fn reward_multiple_wage_rewards() {
             .unwrap(),
         ],
     };
-    let role_id = get_role_id(&contract, 1, "leader");
+    let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
     let partition_id = contract.partition_add(partition);
     let partition: TreasuryPartition = contract
         .treasury_partition
@@ -671,7 +637,7 @@ fn reward_one_asset_scenario() {
         .asset(&reward_asset_1)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1 * ONE_NEAR);
-    let role_id = get_role_id(&contract, 1, "leader");
+    let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
     let reward = Reward::new(
         1,
         role_id,

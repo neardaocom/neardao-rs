@@ -13,7 +13,9 @@ pub mod deserialize {
     use crate::{
         group::{GroupInput, GroupMember, GroupSettings},
         reward::{Reward, RewardType, RewardUserActivity, RewardWage},
+        role::MemberRoles,
         treasury::{Asset, PartitionAssetInput, TreasuryPartition, TreasuryPartitionInput},
+        RoleId,
     };
 
     pub fn bind_asset(
@@ -260,7 +262,7 @@ pub mod deserialize {
     pub fn try_bind_group(action_input: &mut dyn ActivityInput) -> GroupInput {
         let settings = bind_group_settings("settings", action_input);
         let members = try_bind_group_members("members", action_input);
-        let member_roles = bind_member_roles("member_roles", action_input);
+        let member_roles = try_to_bind_member_roles("member_roles", action_input);
 
         GroupInput {
             settings,
@@ -335,17 +337,79 @@ pub mod deserialize {
         }
         members
     }
-    fn bind_member_roles(
+    pub fn try_to_bind_member_roles(
         prefix: &str,
         action_input: &mut dyn ActivityInput,
-    ) -> HashMap<String, Vec<AccountId>> {
+    ) -> Vec<MemberRoles> {
+        let mut member_roles = vec![];
+        let mut i = 0;
+        loop {
+            let key_name = format!("{}.{}.name", prefix, i);
+            if let Some(v) = action_input.get(&key_name) {
+                let name = v
+                    .clone()
+                    .try_into_string()
+                    .expect("invalid datatype: member roles name");
+
+                let mut members = vec![];
+                let mut j = 0;
+                loop {
+                    let key_account = format!("{}.{}.members.{}", prefix, i, j);
+                    if let Some(v) = action_input.get(&key_account) {
+                        let member_string = v
+                            .clone()
+                            .try_into_string()
+                            .expect("invalid datatype: member name");
+                        let account_id = AccountId::try_from(member_string)
+                            .expect("failed to parse member account id");
+                        members.push(account_id);
+                        j += 1;
+                    } else {
+                        break;
+                    }
+                }
+                member_roles.push(MemberRoles { name, members });
+                i += 1;
+            } else {
+                break;
+            }
+        }
+        member_roles
+    }
+
+    pub fn try_bind_accounts(prefix: &str, action_input: &mut dyn ActivityInput) -> Vec<AccountId> {
+        let mut accounts = vec![];
+        let mut i = 0;
+        loop {
+            let key_name = format!("{}.{}", prefix, i);
+            if let Some(v) = action_input.get(&key_name) {
+                let account_id_string = v
+                    .clone()
+                    .try_into_string()
+                    .expect("invalid datatype: string account id");
+                let account_id =
+                    AccountId::try_from(account_id_string).expect("failed to parse account id");
+                accounts.push(account_id);
+                i += 1;
+            } else {
+                break;
+            }
+        }
+        accounts
+    }
+
+    pub fn try_to_bind_roles(prefix: &str, action_input: &mut dyn ActivityInput) -> Vec<RoleId> {
         if let Some(v) = action_input.get(&prefix) {
-            let hm_str = v.try_into_str().expect("invalid datatype: member roles");
-            let hm =
-                serde_json::from_str(hm_str).expect("failed to deserialize group member roles");
-            hm
+            let roles = v
+                .clone()
+                .try_into_vec_u64()
+                .expect("invalid datatype: role ids vec")
+                .into_iter()
+                .map(|r| r as u16)
+                .collect();
+            roles
         } else {
-            HashMap::new()
+            vec![]
         }
     }
 

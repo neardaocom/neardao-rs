@@ -1,6 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
-use crate::constants::{GLOBAL_BUCKET_IDENT, MAX_FT_TOTAL_SUPPLY};
+use crate::constants::GLOBAL_BUCKET_IDENT;
 use crate::reward::VersionedReward;
 use crate::role::{Roles, UserRoles};
 use crate::settings::{assert_valid_dao_settings, Settings, VersionedSettings};
@@ -140,7 +140,6 @@ impl Contract {
         workflow_template_settings: Vec<Vec<TemplateSettings>>,
         treasury_partitions: Vec<TreasuryPartitionInput>,
     ) -> Self {
-        assert!(total_supply <= MAX_FT_TOTAL_SUPPLY);
         assert!(decimals <= 24);
         assert_valid_dao_settings(&settings);
 

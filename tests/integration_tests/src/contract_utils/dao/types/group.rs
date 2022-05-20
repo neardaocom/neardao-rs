@@ -12,6 +12,7 @@ pub struct GroupMembers(pub HashMap<AccountId, Vec<u16>>);
 pub struct Group {
     pub settings: GroupSettings,
     pub members: GroupMembers,
+    pub rewards: Vec<(u16, u16)>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -19,7 +20,7 @@ pub struct Group {
 pub struct GroupInput {
     pub settings: GroupSettings,
     pub members: Vec<GroupMember>,
-    pub member_roles: HashMap<String, Vec<String>>,
+    pub member_roles: Vec<MemberRoles>,
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(crate = "near_sdk::serde")]
@@ -90,6 +91,8 @@ impl UserRoles {
             if !roles.contains(&role_id) {
                 roles.push(role_id)
             }
+        } else {
+            self.0.insert(group_id, vec![role_id]);
         }
         self
     }
@@ -108,4 +111,11 @@ impl UserRoles {
             .collect();
         Self(roles)
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct MemberRoles {
+    pub name: String,
+    pub members: Vec<String>,
 }

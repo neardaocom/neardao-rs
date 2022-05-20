@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
 use data::{
     object_metadata::standard_fn_calls::{standard_fn_call_metadatas, standard_fn_call_methods},
@@ -10,13 +10,10 @@ use library::{
 };
 use workspaces::{network::DevAccountDeployer, Account, AccountId, Contract, DevNetwork, Worker};
 
-use crate::{
-    contract_utils::dao::check::internal_check_group,
-    utils::{as_account_id, get_dao_wasm, outcome_pretty, FnCallId, MethodName},
-};
+use crate::utils::{as_account_id, get_dao_wasm, outcome_pretty, FnCallId, MethodName};
 
 use super::types::{
-    group::{Group, GroupInput, GroupMember, GroupMembers, GroupSettings},
+    group::{Group, GroupInput, GroupMember, GroupMembers, GroupSettings, MemberRoles},
     init::{DaoInit, PartitionAssetInput, Settings, TreasuryPartitionInput},
     reward::Asset,
 };
@@ -109,6 +106,7 @@ pub fn dao_init_args(
         Group {
             settings: group.settings.clone(),
             members: GroupMembers(members),
+            rewards: vec![],
         },
     );
     (
@@ -146,21 +144,24 @@ fn dao_settings(provider_id: AccountId, admin_id: AccountId) -> Settings {
 }
 fn default_group(members: Vec<&AccountId>) -> GroupInput {
     let leader = AccountId::try_from(members[0].to_string()).unwrap();
-    let mut member_roles = HashMap::new();
-    member_roles.insert(
-        "council".into(),
-        members
-            .iter()
-            .map(|m| m.to_string())
-            .collect::<Vec<String>>(),
-    );
+    let members_accounts = members
+        .iter()
+        .map(|m| m.to_string())
+        .collect::<Vec<String>>();
+
     let members = members
         .into_iter()
         .map(|m| GroupMember {
-            account_id: m.to_owned(),
+            account_id: m.clone(),
             tags: vec![],
         })
-        .collect();
+        .collect::<Vec<GroupMember>>();
+
+    let member_roles = vec![MemberRoles {
+        name: "council".into(),
+        members: members_accounts,
+    }];
+
     GroupInput {
         settings: GroupSettings {
             name: "council".into(),
