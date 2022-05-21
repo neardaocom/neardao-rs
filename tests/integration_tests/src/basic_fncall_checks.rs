@@ -11,7 +11,7 @@ use library::{
         expression::Expression,
         types::{
             ArgSrc, BindDefinition, CollectionBindData, CollectionBindingStyle, ObjectMetadata,
-            SrcOrExprOrValue,
+            ValueSrc,
         },
         validator::{CollectionValidator, ObjectValidator, Validator},
     },
@@ -180,17 +180,17 @@ fn testcase_skyward() -> TestCase {
     let binds: Vec<BindDefinition> = vec![
         BindDefinition {
             key: "sale.meta.reason".into(),
-            key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl("sale.meta.reason".into())),
+            key_src: ValueSrc::Src(ArgSrc::ConstsTpl("sale.meta.reason".into())),
             collection_data: None,
         },
         BindDefinition {
             key: "sale_info".into(),
-            key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl("sale_info".into())),
+            key_src: ValueSrc::Src(ArgSrc::ConstsTpl("sale_info".into())),
             collection_data: None,
         },
         BindDefinition {
             key: "token_account_id".into(),
-            key_src: SrcOrExprOrValue::Expr(Expression {
+            key_src: ValueSrc::Expr(Expression {
                 args: vec![ArgSrc::ConstsTpl("sale.out_tokens.token_account_id".into())],
                 expr_id: 2,
             }),

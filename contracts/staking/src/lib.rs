@@ -14,13 +14,15 @@ use near_sdk::collections::{LookupMap, UnorderedMap};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, ext_contract, near_bindgen, require, serde_json, AccountId, Balance, BorshStorageKey,
+    env, ext_contract, near_bindgen, require, serde_json, AccountId, Balance, BorshStorageKey, Gas,
     PanicOnDefault, Promise, PromiseOrValue, PromiseResult, StorageUsage,
 };
 
 pub use user::{User, VersionedUser};
 
-use crate::consts::{GAS_FOR_REGISTER, MIN_REGISTER_DEPOSIT, MIN_STORAGE_FOR_DAO};
+use crate::consts::{
+    GAS_FOR_REGISTER, MIN_REGISTER_DEPOSIT, MIN_STORAGE_FOR_DAO, STANDARD_FT_STORAGE_DEPOSIT,
+};
 
 mod consts;
 mod dao;
@@ -61,7 +63,13 @@ impl Contract {
 
     /// Registers new dao in contract.
     /// Dao must have done storage_deposit before this call.
+    #[payable]
     pub fn register_new_dao(&mut self, dao_id: AccountId, vote_token_id: AccountId) {
+        let storage_deposit = env::attached_deposit();
+        assert!(
+            storage_deposit >= STANDARD_FT_STORAGE_DEPOSIT,
+            "not enough deposit"
+        );
         let storage_before = env::storage_usage();
         let mut account_stats = self.get_account_stats(&dao_id);
 
@@ -72,7 +80,7 @@ impl Contract {
 
         let dao_struct = Dao {
             account_id: dao_id.to_owned(),
-            vote_token_id,
+            vote_token_id: vote_token_id.clone(),
             users,
             total_amount,
         };
@@ -84,6 +92,22 @@ impl Contract {
         let storage_diff = storage_after - storage_before;
         account_stats.add_storage_used(storage_diff);
         self.save_account_stats(&dao_id, &account_stats);
+
+        // TODO: Return to the caller if already registered.
+        Promise::new(vote_token_id)
+            .function_call(
+                "storage_deposit".to_string(),
+                b"{\"registration_only\":true}".to_vec(),
+                storage_deposit,
+                Gas(10 * 10u64.pow(12)),
+            )
+            .then(ext_self::return_deposit(
+                env::predecessor_account_id(),
+                storage_deposit,
+                env::current_account_id(),
+                0,
+                Gas(10 * 10u64.pow(12)),
+            ));
     }
 
     /// Registers caller in dao
@@ -93,7 +117,7 @@ impl Contract {
     #[payable]
     pub fn register_in_dao(&mut self, dao_id: AccountId) -> Promise {
         require!(
-            env::attached_deposit() == MIN_REGISTER_DEPOSIT,
+            env::attached_deposit() >= MIN_REGISTER_DEPOSIT,
             "not enough deposit"
         );
         let storage_before = env::storage_usage();
@@ -251,6 +275,21 @@ impl Contract {
             }
         };
     }
+    #[private]
+    pub fn return_deposit(&mut self, account_id: AccountId, amount: u128) {
+        require!(
+            env::promise_results_count() == 1,
+            "internal return_deposit callback",
+        );
+        match env::promise_result(0) {
+            PromiseResult::NotReady => unreachable!(),
+            PromiseResult::Successful(_) => {}
+            PromiseResult::Failed => {
+                Promise::new(account_id).transfer(amount);
+            }
+        };
+    }
+
     /// Total staked amount in dao.
     pub fn dao_ft_total_supply(&self, dao_id: AccountId) -> U128 {
         let dao = self.get_dao(&dao_id);
@@ -397,6 +436,7 @@ pub trait Contract {
         sender_id: AccountId,
         amount: U128,
     );
+    fn return_deposit(&self, account_id: AccountId, amount: u128);
 }
 
 impl Contract {

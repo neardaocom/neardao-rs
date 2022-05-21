@@ -7,12 +7,12 @@ use library::{
     interpreter::expression::{EExpr, EOp, ExprTerm, LogOp, Op, RelOp, TExpr},
     types::{datatype::Value, source::SourceDataVariant},
     workflow::{
-        action::{ActionType, TemplateAction},
+        action::{ActionData, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, ArgSrc, VoteScenario},
+        types::{ActivityRight, ArgSrc, ValueSrc, VoteScenario},
     },
 };
 
@@ -48,7 +48,7 @@ impl Trade1 {
                     code: "send_near".into(),
                     postprocessing: None,
                     actions: vec![TemplateAction {
-                        exec_condition: Some(Expression {
+                        exec_condition: Some(ValueSrc::Expr(Expression {
                             args: vec![
                                 ArgSrc::ConstPropSettings(TRADE1_REQUIRED_TOKEN_KEY.into()),
                                 ArgSrc::Storage("token_id".into()),
@@ -56,13 +56,14 @@ impl Trade1 {
                                 ArgSrc::Storage("amount".into()),
                             ],
                             expr_id: 0,
-                        }),
+                        })),
                         validators: vec![],
-                        action_data: ActionType::SendNear(
-                            ArgSrc::Storage("sender_id".into()),
-                            ArgSrc::ConstPropSettings(TRADE1_OFFERED_AMOUNT_KEY.into()),
+                        action_data: ActionData::SendNear(
+                            ValueSrc::Src(ArgSrc::Storage("sender_id".into())),
+                            ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                TRADE1_OFFERED_AMOUNT_KEY.into(),
+                            )),
                         ),
-                        must_succeed: true,
                         optional: false,
                         postprocessing: None,
                     }],

@@ -27,6 +27,7 @@ use crate::{
 };
 
 //mod dao; // Require refactoring to match new structure
+pub mod activity;
 mod group;
 mod reward;
 pub mod treasury;
@@ -98,8 +99,6 @@ pub(crate) fn get_context_builder() -> VMContextBuilder {
 }
 
 pub(crate) fn get_contract(
-    token_id: AccountId,
-    staking_id: AccountId,
     total_supply: u32,
     settings: Settings,
     groups: Vec<GroupInput>,
@@ -113,8 +112,6 @@ pub(crate) fn get_contract(
     treasury_partitions: Vec<TreasuryPartitionInput>,
 ) -> Contract {
     Contract::new(
-        token_id,
-        staking_id,
         total_supply,
         24,
         settings,
@@ -132,8 +129,6 @@ pub(crate) fn get_contract(
 
 pub(crate) fn get_default_contract() -> Contract {
     let contract = get_contract(
-        as_account_id(TOKEN_ACC),
-        as_account_id(STAKING_ACC),
         TOKEN_TOTAL_SUPPLY,
         get_default_dao_config(),
         get_default_groups(),
@@ -176,6 +171,8 @@ pub(crate) fn get_default_dao_config() -> Settings {
         workflow_provider: as_account_id(WF_PROVIDER_ACC),
         resource_provider: as_account_id(RESOURCE_PROVIDER_ACC),
         scheduler: as_account_id(SCHEDULER_ACC),
+        token_id: as_account_id(TOKEN_ACC),
+        staking_id: as_account_id(STAKING_ACC),
     }
 }
 

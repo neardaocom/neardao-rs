@@ -84,7 +84,7 @@ pub fn dao_init_args(
     council_members: Vec<&AccountId>,
     init_distribution: u32,
 ) -> (DaoInit, (u16, Group)) {
-    let settings = dao_settings(provider_id.clone(), admin_id);
+    let settings = dao_settings(provider_id.clone(), admin_id, token_id.clone(), staking_id);
     let group = default_group(council_members);
     let standard_function_calls = standard_function_calls();
     let standard_function_call_metadata = standard_function_call_metadata();
@@ -111,8 +111,6 @@ pub fn dao_init_args(
     );
     (
         DaoInit {
-            token_id,
-            staking_id,
             total_supply,
             decimals,
             settings,
@@ -130,7 +128,12 @@ pub fn dao_init_args(
     )
 }
 
-fn dao_settings(provider_id: AccountId, admin_id: AccountId) -> Settings {
+fn dao_settings(
+    provider_id: AccountId,
+    admin_id: AccountId,
+    token_id: AccountId,
+    staking_id: AccountId,
+) -> Settings {
     Settings {
         name: "Test dao".into(),
         purpose: "testing".into(),
@@ -140,6 +143,8 @@ fn dao_settings(provider_id: AccountId, admin_id: AccountId) -> Settings {
         workflow_provider: provider_id,
         resource_provider: AccountId::from_str("resource-provider.neardao.testnet").unwrap(),
         scheduler: AccountId::from_str("scheduler.neardao.testnet").unwrap(),
+        token_id,
+        staking_id,
     }
 }
 fn default_group(members: Vec<&AccountId>) -> GroupInput {

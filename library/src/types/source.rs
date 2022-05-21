@@ -39,6 +39,7 @@ pub trait MutableSource {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum SourceDataVariant {
     Map(HashMap<String, Value>),
 }

@@ -8,13 +8,13 @@ use library::{
         source::SourceDataVariant,
     },
     workflow::{
-        action::{ActionType, FnCallData, FnCallIdType, TemplateAction},
+        action::{ActionData, FnCallData, FnCallIdType, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         postprocessing::Postprocessing,
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
         template::Template,
         types::{
-            ActivityRight, ArgSrc, BindDefinition, Instruction, ObjectMetadata, SrcOrExprOrValue,
+            ActivityRight, ArgSrc, BindDefinition, Instruction, ObjectMetadata, ValueSrc,
             VoteScenario,
         },
     },
@@ -54,25 +54,27 @@ impl WfAdd1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::FnCall(FnCallData {
+                        action_data: ActionData::FnCall(FnCallData {
                             id: FnCallIdType::Dynamic(
-                                ArgSrc::ConstPropSettings(WF_ADD1_PROVIDER_ID_KEY.into()),
+                                ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                    WF_ADD1_PROVIDER_ID_KEY.into(),
+                                )),
                                 "wf_template".into(),
                             ),
                             tgas: 30,
                             deposit: None,
                             binds: vec![BindDefinition {
                                 key: "id".into(),
-                                key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
+                                key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
                                     WF_ADD1_TEMPLATE_ID_KEY.into(),
                                 )),
                                 collection_data: None,
                             }],
+                            must_succeed: true,
                         }),
                         postprocessing: Some(Postprocessing {
                             instructions: vec![Instruction::StoreWorkflow],
                         }),
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: true,

@@ -145,11 +145,9 @@ impl Instance {
     }
 
     /// Checks if provided `target_activity_id` activity means transitioning to new activity.
-    pub fn is_new_transition(&self, target_activity_id: usize) -> bool {
+    pub fn is_current_activity_finished(&self) -> bool {
         debug_assert_eq!(self.state, InstanceState::Running);
-        self.current_activity_id as usize == target_activity_id
-            && self.actions_done == self.actions_total
-            || self.current_activity_id as usize != target_activity_id
+        self.actions_done == self.actions_total
     }
 
     /// Find pos of `TransitionCounter` for target `activity_id`.
@@ -215,8 +213,9 @@ impl Instance {
 
     /// Sets instance state to await `promise_count` promises.
     /// No checks are done.
-    pub fn await_promises(&mut self, promise_count: u8) {
+    pub fn await_promises(&mut self, optional_done: u8, promise_count: u8) {
         debug_assert_eq!(self.state, InstanceState::Running);
+        self.actions_done += optional_done;
         self.state = InstanceState::Awaiting;
         self.dispatched_promises_count = promise_count;
     }

@@ -8,13 +8,13 @@ use library::{
         source::SourceDataVariant,
     },
     workflow::{
-        action::{ActionType, DaoActionData, TemplateAction},
+        action::{ActionData, DaoActionData, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         postprocessing::Postprocessing,
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, ArgSrc, DaoActionIdent, Instruction, VoteScenario},
+        types::{ActivityRight, ArgSrc, DaoActionIdent, Instruction, ValueSrc, VoteScenario},
         validator::{ObjectValidator, Validator},
     },
 };
@@ -59,7 +59,7 @@ impl Bounty1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: Some("event_checkin".into()),
                             expected_input: None,
                             required_deposit: None,
@@ -69,10 +69,9 @@ impl Bounty1 {
                         postprocessing: Some(Postprocessing {
                             instructions: vec![Instruction::StoreDynValue(
                                 "account_id_applied".into(),
-                                ArgSrc::Const(2),
+                                ValueSrc::Src(ArgSrc::Const(2)),
                             )],
                         }),
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: true,
@@ -85,7 +84,7 @@ impl Bounty1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: Some("event_unrealized".into()),
                             expected_input: None,
                             required_deposit: None,
@@ -95,7 +94,6 @@ impl Bounty1 {
                         postprocessing: Some(Postprocessing {
                             instructions: vec![Instruction::DeleteKey("account_id_applied".into())],
                         }),
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: true,
@@ -108,7 +106,7 @@ impl Bounty1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: Some("event_approve".into()),
                             expected_input: None,
                             required_deposit: None,
@@ -117,14 +115,16 @@ impl Bounty1 {
                         }),
                         postprocessing: Some(Postprocessing {
                             instructions: vec![
-                                Instruction::StoreDynValue("approved_by".into(), ArgSrc::Const(2)),
+                                Instruction::StoreDynValue(
+                                    "approved_by".into(),
+                                    ValueSrc::Src(ArgSrc::Const(2)),
+                                ),
                                 Instruction::StoreDynValue(
                                     "checkin_accepted".into(),
-                                    ArgSrc::User("checkin_accepted".into()),
+                                    ValueSrc::Src(ArgSrc::User("checkin_accepted".into())),
                                 ),
                             ],
                         }),
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: true,
@@ -137,7 +137,7 @@ impl Bounty1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: Some("event_done".into()),
                             expected_input: Some(vec![("result".into(), Datatype::String(false))]),
                             required_deposit: None,
@@ -147,10 +147,9 @@ impl Bounty1 {
                         postprocessing: Some(Postprocessing {
                             instructions: vec![Instruction::StoreDynValue(
                                 "event_done_result".into(),
-                                ArgSrc::User("result".into()),
+                                ValueSrc::Src(ArgSrc::User("result".into())),
                             )],
                         }),
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: true,
@@ -163,7 +162,7 @@ impl Bounty1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: Some("event_done_approve".into()),
                             expected_input: Some(vec![(
                                 "result_evaluation".into(),
@@ -177,15 +176,14 @@ impl Bounty1 {
                             instructions: vec![
                                 Instruction::StoreDynValue(
                                     "event_done_approved_by".into(),
-                                    ArgSrc::Const(2),
+                                    ValueSrc::Src(ArgSrc::Const(2)),
                                 ),
                                 Instruction::StoreDynValue(
                                     "event_done_result_evaluation".into(),
-                                    ArgSrc::User("result_evaluation".into()),
+                                    ValueSrc::Src(ArgSrc::User("result_evaluation".into())),
                                 ),
                             ],
                         }),
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: true,
@@ -213,11 +211,10 @@ impl Bounty1 {
                                 ],
                             }),
                         ],
-                        action_data: ActionType::SendNear(
-                            ArgSrc::Storage("account_id_applied".into()),
-                            ArgSrc::User("amount_near".into()),
+                        action_data: ActionData::SendNear(
+                            ValueSrc::Src(ArgSrc::Storage("account_id_applied".into())),
+                            ValueSrc::Src(ArgSrc::User("amount_near".into())),
                         ),
-                        must_succeed: true,
                         optional: false,
                         postprocessing: None, // Could be stored amount of sent NEARs.
                     }],
@@ -316,23 +313,23 @@ impl Bounty1 {
                     // Checkin not accepted and new bounty hunter applies.
                     Transition {
                         activity_id: 1,
-                        cond: Some(Expression {
+                        cond: Some(ValueSrc::Expr(Expression {
                             args: vec![ArgSrc::Storage("checkin_accepted".into())],
                             expr_id: 3,
-                        }),
+                        })),
                         time_from_cond: None,
                         time_to_cond: None,
                     },
                     // Bouny hunter decides to give up.
                     Transition {
                         activity_id: 2,
-                        cond: Some(Expression {
+                        cond: Some(ValueSrc::Expr(Expression {
                             args: vec![
                                 ArgSrc::Storage("account_id_applied".into()),
                                 ArgSrc::Const(2),
                             ],
                             expr_id: 1,
-                        }),
+                        })),
                         time_from_cond: None,
                         time_to_cond: None,
                     },
@@ -340,14 +337,14 @@ impl Bounty1 {
                     // This condition is "DOS" protection.
                     Transition {
                         activity_id: 4,
-                        cond: Some(Expression {
+                        cond: Some(ValueSrc::Expr(Expression {
                             args: vec![
                                 ArgSrc::Storage("checkin_accepted".into()),
                                 ArgSrc::Storage("account_id_applied".into()),
                                 ArgSrc::Const(2),
                             ],
                             expr_id: 2,
-                        }),
+                        })),
                         time_from_cond: None,
                         time_to_cond: None,
                     },

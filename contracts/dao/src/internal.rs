@@ -143,27 +143,17 @@ impl Contract {
 
     /// Action logging method.
     /// Will be moved to indexer when its ready.
-    pub fn log_action(
-        &mut self,
-        proposal_id: ProposalId,
-        caller: &AccountId,
-        action_id: u8,
-        args: &[Vec<Value>],
-        args_collections: Option<&[Vec<Value>]>,
-    ) {
+    pub fn log_action(&mut self, proposal_id: ProposalId, caller: AccountId, action_id: u8) {
         let mut logs = self
             .workflow_activity_log
             .get(&proposal_id)
-            .unwrap_or_else(|| Vec::with_capacity(1));
+            .unwrap_or_else(|| Vec::with_capacity(4));
 
         logs.push(ActivityLog {
-            caller: caller.to_owned(),
+            caller,
             action_id,
-            timestamp: env::block_timestamp() / 10u64.pow(9),
-            args: args.to_vec(),
-            args_collections: args_collections.map(|a| a.to_vec()),
+            timestamp: current_timestamp_sec(),
         });
-
         self.workflow_activity_log.insert(&proposal_id, &logs);
     }
 }
@@ -250,9 +240,12 @@ impl ActivityContext {
     }
 
     /// Actions done during activity execution.
-    /// In case of FnCall its count of dispatched promises.
+    /// In case of function call its count of dispatched promises.
     pub fn actions_done(&self) -> u8 {
         self.actions_done_now - self.actions_done_before
+    }
+    pub fn optional_actions_done(&self) -> u8 {
+        self.optional_actions
     }
 
     pub fn set_next_action_done(&mut self) {

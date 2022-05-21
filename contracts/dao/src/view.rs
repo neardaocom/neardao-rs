@@ -7,7 +7,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::Serialize;
 use near_sdk::{env, near_bindgen, AccountId};
 
-use crate::group::{Group, GroupMember};
+use crate::group::Group;
 use crate::internal::utils::current_timestamp_sec;
 use crate::proposal::VersionedProposal;
 use crate::reward::Reward;
@@ -17,7 +17,7 @@ use crate::tags::Tags;
 use crate::treasury::TreasuryPartition;
 use crate::wallet::Wallet;
 use crate::TagCategory;
-use crate::{core::*, GroupId, StorageKey};
+use crate::{core::*, StorageKey};
 
 #[near_bindgen]
 impl Contract {
@@ -34,8 +34,6 @@ impl Contract {
     /// Return general statitstics about DAO.
     pub fn statistics(self) -> Statistics {
         Statistics {
-            staking_id: self.staking_id,
-            token_id: self.token_id,
             total_delegation_amount: self.total_delegation_amount.into(),
             total_delegators_count: self.total_delegators_count,
             ft_total_supply: self.ft_total_supply,
@@ -191,8 +189,6 @@ impl Contract {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Statistics {
-    pub staking_id: AccountId,
-    pub token_id: AccountId,
     pub total_delegation_amount: U128,
     pub total_delegators_count: u32,
     pub ft_total_supply: u32,

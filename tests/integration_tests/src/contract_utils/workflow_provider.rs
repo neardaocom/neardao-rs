@@ -19,9 +19,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use workspaces::{network::DevAccountDeployer, AccountId, Contract, DevNetwork, Worker};
 
-use crate::utils::{
-    get_wf_provider_wasm, outcome_pretty, parse_view_result, view_outcome_pretty, FnCallId,
-    MethodName,
+use crate::{
+    test_data::WfOptionalActions,
+    utils::{
+        get_wf_provider_wasm, outcome_pretty, parse_view_result, view_outcome_pretty, FnCallId,
+        MethodName,
+    },
 };
 
 pub(crate) async fn init_workflow_provider<T>(worker: &Worker<T>) -> anyhow::Result<Contract>
@@ -103,6 +106,11 @@ fn wf_templates(
     templates.push(("bounty1".into(), Bounty1::template(), None));
     templates.push(("reward1".into(), Reward1::template(), None));
     templates.push(("admin_package1".into(), AdminPackage1::template(), None));
+    templates.push((
+        "test_optional_actions".into(),
+        WfOptionalActions::template(),
+        None,
+    ));
     templates
 }
 

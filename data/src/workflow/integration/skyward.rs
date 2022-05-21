@@ -14,7 +14,7 @@ use library::{
         source::SourceDataVariant,
     },
     workflow::{
-        action::{ActionType, FnCallData, FnCallIdType, TemplateAction},
+        action::{ActionData, FnCallData, FnCallIdType, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         postprocessing::Postprocessing,
@@ -22,7 +22,7 @@ use library::{
         template::Template,
         types::{
             ActivityRight, ArgSrc, BindDefinition, CollectionBindData, CollectionBindingStyle,
-            Instruction, ObjectMetadata, SrcOrExprOrValue, VoteScenario,
+            FnCallResultType, Instruction, ObjectMetadata, ValueSrc, VoteScenario,
         },
     },
     FnCallId,
@@ -99,7 +99,7 @@ impl Skyward1 {
         let pp_sale_create = Some(Postprocessing {
             instructions: vec![Instruction::StoreFnCallResult(
                 "skyward_auction_id".into(),
-                Datatype::U64(false),
+                FnCallResultType::Datatype(Datatype::U64(false)),
             )],
         });
 
@@ -130,289 +130,303 @@ impl Skyward1 {
         );
         tpl_consts_map.insert("deposit_ft_transfer_call".into(), Value::U128(1.into()));
 
-        let wf =
-            Template {
-                code: "skyward1".into(),
-                version: "1".into(),
-                auto_exec: false,
-                need_storage: true,
-                activities: vec![
-                    Activity::Init,
-                    Activity::Activity(TemplateActivity {
-                        code: "register_tokens".into(),
-                        postprocessing: None,
-                        actions: vec![TemplateAction {
+        let wf = Template {
+            code: "skyward1".into(),
+            version: "1".into(),
+            auto_exec: false,
+            need_storage: true,
+            activities: vec![
+                Activity::Init,
+                Activity::Activity(TemplateActivity {
+                    code: "register_tokens".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionData::FnCall(FnCallData {
+                            id: FnCallIdType::Static(
+                                AccountId::new_unchecked(skyward_account_id.clone()),
+                                SKYWARD_FNCALL1_NAME.into(),
+                            ),
+                            tgas: 30,
+                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                                "deposit_register_tokens".into(),
+                            ))),
+                            binds: vec![BindDefinition {
+                                key: "token_account_ids".into(),
+                                key_src: ValueSrc::Expr(Expression {
+                                    args: vec![
+                                        ArgSrc::ConstsTpl("account_wnear".into()),
+                                        ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
+                                    ],
+                                    expr_id: 0,
+                                }),
+                                collection_data: None,
+                            }],
+                            must_succeed: true,
+                        }),
+                        postprocessing: pp_register_tokens,
+
+                        optional: false,
+                    }],
+                    automatic: true,
+                    terminal: Terminality::NonTerminal,
+                    is_sync: false,
+                }),
+                Activity::Activity(TemplateActivity {
+                    code: "storage_deposit".into(),
+                    postprocessing: None,
+                    actions: vec![
+                        TemplateAction {
                             exec_condition: None,
                             validators: vec![],
-                            action_data: ActionType::FnCall(FnCallData {
-                                id: FnCallIdType::Static(
-                                    AccountId::new_unchecked(skyward_account_id.clone()),
-                                    SKYWARD_FNCALL1_NAME.into(),
+                            action_data: ActionData::FnCall(FnCallData {
+                                id: FnCallIdType::StandardStatic(
+                                    AccountId::new_unchecked(wnear_account_id.clone()),
+                                    SKYWARD_FNCALL2_NAME.into(),
                                 ),
-                                tgas: 30,
-                                deposit: Some(ArgSrc::ConstsTpl("deposit_register_tokens".into())),
+                                tgas: 10,
+                                deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                                    "deposit_storage".into(),
+                                ))),
                                 binds: vec![BindDefinition {
-                                    key: "token_account_ids".into(),
-                                    key_src: SrcOrExprOrValue::Expr(Expression {
-                                        args: vec![
-                                            ArgSrc::ConstsTpl("account_wnear".into()),
-                                            ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
-                                        ],
-                                        expr_id: 0,
-                                    }),
+                                    key: "account_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
+                                        "account_skyward".into(),
+                                    )),
                                     collection_data: None,
                                 }],
-                            }),
-                            postprocessing: pp_register_tokens,
-                            must_succeed: true,
-                            optional: false,
-                        }],
-                        automatic: true,
-                        terminal: Terminality::NonTerminal,
-                        is_sync: false,
-                    }),
-                    Activity::Activity(TemplateActivity {
-                        code: "storage_deposit".into(),
-                        postprocessing: None,
-                        actions: vec![
-                            TemplateAction {
-                                exec_condition: None,
-                                validators: vec![],
-                                action_data: ActionType::FnCall(FnCallData {
-                                    id: FnCallIdType::StandardStatic(
-                                        AccountId::new_unchecked(wnear_account_id.clone()),
-                                        SKYWARD_FNCALL2_NAME.into(),
-                                    ),
-                                    tgas: 10,
-                                    deposit: Some(ArgSrc::ConstsTpl("deposit_storage".into())),
-                                    binds: vec![BindDefinition {
-                                        key: "account_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                            "account_skyward".into(),
-                                        )),
-                                        collection_data: None,
-                                    }],
-                                }),
-                                postprocessing: pp_storage_deposit_1,
                                 must_succeed: false,
-                                optional: true,
-                            },
-                            TemplateAction {
-                                exec_condition: None,
-                                validators: vec![],
-                                action_data: ActionType::FnCall(FnCallData {
-                                    id: FnCallIdType::StandardDynamic(
-                                        ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
-                                        SKYWARD_FNCALL3_NAME.into(),
-                                    ),
-                                    tgas: 10,
-                                    deposit: Some(ArgSrc::ConstsTpl("deposit_storage".into())),
-                                    binds: vec![BindDefinition {
-                                        key: "account_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                            "account_skyward".into(),
-                                        )),
-                                        collection_data: None,
-                                    }],
-                                }),
-                                postprocessing: pp_storage_deposit_2,
-                                must_succeed: false,
-                                optional: true,
-                            },
-                        ],
-                        automatic: true,
-                        terminal: Terminality::NonTerminal,
-                        is_sync: false,
-                    }),
-                    // Taken from previous because of gas limit.
-                    Activity::Activity(TemplateActivity {
-                        code: "transfer_tokens".into(),
-                        postprocessing: None,
-                        actions: vec![TemplateAction {
-                            exec_condition: None,
-                            validators: vec![],
-                            action_data: ActionType::FnCall(FnCallData {
-                                id: FnCallIdType::StandardDynamic(
-                                    ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
-                                    SKYWARD_FNCALL4_NAME.into(),
-                                ),
-                                tgas: 100,
-                                deposit: Some(ArgSrc::ConstsTpl("deposit_ft_transfer_call".into())),
-                                binds: vec![
-                                    BindDefinition {
-                                        key: "receiver_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                            "account_skyward".into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "amount".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                            OFFERED_TOKEN_AMOUNT_KEY.into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "msg".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                            "ft_transfer_call_msg".into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "memo".into(),
-                                        key_src: SrcOrExprOrValue::Value(Value::Null),
-                                        collection_data: None,
-                                    },
-                                ],
                             }),
-                            postprocessing: pp_ft_transfer_call,
-                            must_succeed: true,
-                            optional: false,
-                        }],
-                        automatic: true,
-                        terminal: Terminality::NonTerminal,
-                        is_sync: false,
-                    }),
-                    Activity::Activity(TemplateActivity {
-                        code: "sale_create".into(),
-                        postprocessing: None,
-                        actions: vec![TemplateAction {
-                            exec_condition: None,
-                            validators: vec![],
-                            action_data: ActionType::FnCall(FnCallData {
-                                id: FnCallIdType::Static(
-                                    AccountId::new_unchecked(skyward_account_id.clone()),
-                                    SKYWARD_FNCALL5_NAME.into(),
-                                ),
-                                tgas: 50,
-                                deposit: Some(ArgSrc::ConstsTpl("deposit_sale_create".into())),
-                                binds: vec![
-                                    BindDefinition {
-                                        key: "sale.permissions_contract_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::Const(0)),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "token_account_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                            OFFERED_TOKEN_KEY.into(),
-                                        )),
-                                        collection_data: Some(CollectionBindData {
-                                            prefixes: vec!["sale.out_tokens".into()],
-                                            collection_binding_type:
-                                                CollectionBindingStyle::ForceSame(1),
-                                        }),
-                                    },
-                                    BindDefinition {
-                                        key: "balance".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                            OFFERED_TOKEN_AMOUNT_KEY.into(),
-                                        )),
-                                        collection_data: Some(CollectionBindData {
-                                            prefixes: vec!["sale.out_tokens".into()],
-                                            collection_binding_type:
-                                                CollectionBindingStyle::ForceSame(1),
-                                        }),
-                                    },
-                                    BindDefinition {
-                                        key: "referral_bpt".into(),
-                                        key_src: SrcOrExprOrValue::Value(Value::Null),
-                                        collection_data: Some(CollectionBindData {
-                                            prefixes: vec!["sale.out_tokens".into()],
-                                            collection_binding_type:
-                                                CollectionBindingStyle::ForceSame(1),
-                                        }),
-                                    },
-                                    BindDefinition {
-                                        key: "sale.in_token_account_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                            "account_wnear".into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "sale.start_time".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstAction(
-                                            "start_time".into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "sale.duration".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstAction(
-                                            "duration".into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                ],
-                            }),
-                            postprocessing: pp_sale_create,
-                            must_succeed: true,
-                            optional: false,
-                        }],
-                        automatic: false,
-                        terminal: Terminality::Automatic,
-                        is_sync: false,
-                    }),
-                ],
-                expressions: vec![
-                    EExpr::Fn(FnName::ToArray),
-                    EExpr::Boolean(TExpr {
-                        operators: vec![Op {
-                            operands_ids: [0, 1],
-                            op_type: EOp::Rel(RelOp::Eqs),
-                        }],
-                        terms: vec![ExprTerm::Arg(0), ExprTerm::Value(Value::Bool(true))],
-                    }),
-                ],
-                transitions: vec![
-                    vec![Transition {
-                        activity_id: 1,
-                        cond: None,
-                        time_from_cond: None,
-                        time_to_cond: None,
-                    }],
-                    vec![
-                        Transition {
-                            activity_id: 2,
-                            cond: Some(Expression {
-                                args: vec![ArgSrc::Storage("pp_1_result".into())],
-                                expr_id: 1,
-                            }),
-                            time_from_cond: None,
-                            time_to_cond: None,
+                            postprocessing: pp_storage_deposit_1,
+                            optional: true,
                         },
-                        Transition {
-                            activity_id: 3,
-                            cond: Some(Expression {
-                                args: vec![ArgSrc::Storage("pp_1_result".into())],
-                                expr_id: 1,
+                        TemplateAction {
+                            exec_condition: None,
+                            validators: vec![],
+                            action_data: ActionData::FnCall(FnCallData {
+                                id: FnCallIdType::StandardDynamic(
+                                    ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                        OFFERED_TOKEN_KEY.into(),
+                                    )),
+                                    SKYWARD_FNCALL3_NAME.into(),
+                                ),
+                                tgas: 10,
+                                deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                                    "deposit_storage".into(),
+                                ))),
+                                binds: vec![BindDefinition {
+                                    key: "account_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
+                                        "account_skyward".into(),
+                                    )),
+                                    collection_data: None,
+                                }],
+                                must_succeed: false,
                             }),
-                            time_from_cond: None,
-                            time_to_cond: None,
+                            postprocessing: pp_storage_deposit_2,
+
+                            optional: true,
                         },
                     ],
-                    vec![Transition {
-                        activity_id: 3,
-                        cond: None,
-                        time_from_cond: None,
-                        time_to_cond: None,
-                    }],
-                    vec![Transition {
-                        activity_id: 4,
-                        cond: Some(Expression {
-                            args: vec![ArgSrc::Storage("pp_3_result".into())],
-                            expr_id: 1,
+                    automatic: true,
+                    terminal: Terminality::NonTerminal,
+                    is_sync: false,
+                }),
+                // Taken from previous because of gas limit.
+                Activity::Activity(TemplateActivity {
+                    code: "transfer_tokens".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionData::FnCall(FnCallData {
+                            id: FnCallIdType::StandardDynamic(
+                                ValueSrc::Src(ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into())),
+                                SKYWARD_FNCALL4_NAME.into(),
+                            ),
+                            tgas: 100,
+                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                                "deposit_ft_transfer_call".into(),
+                            ))),
+                            binds: vec![
+                                BindDefinition {
+                                    key: "receiver_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
+                                        "account_skyward".into(),
+                                    )),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "amount".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                        OFFERED_TOKEN_AMOUNT_KEY.into(),
+                                    )),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "msg".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
+                                        "ft_transfer_call_msg".into(),
+                                    )),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "memo".into(),
+                                    key_src: ValueSrc::Value(Value::Null),
+                                    collection_data: None,
+                                },
+                            ],
+                            must_succeed: true,
                         }),
+                        postprocessing: pp_ft_transfer_call,
+                        optional: false,
+                    }],
+                    automatic: true,
+                    terminal: Terminality::NonTerminal,
+                    is_sync: false,
+                }),
+                Activity::Activity(TemplateActivity {
+                    code: "sale_create".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionData::FnCall(FnCallData {
+                            id: FnCallIdType::Static(
+                                AccountId::new_unchecked(skyward_account_id.clone()),
+                                SKYWARD_FNCALL5_NAME.into(),
+                            ),
+                            tgas: 50,
+                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                                "deposit_sale_create".into(),
+                            ))),
+                            binds: vec![
+                                BindDefinition {
+                                    key: "sale.permissions_contract_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::Const(0)),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "token_account_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                        OFFERED_TOKEN_KEY.into(),
+                                    )),
+                                    collection_data: Some(CollectionBindData {
+                                        prefixes: vec!["sale.out_tokens".into()],
+                                        collection_binding_type: CollectionBindingStyle::ForceSame(
+                                            1,
+                                        ),
+                                    }),
+                                },
+                                BindDefinition {
+                                    key: "balance".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                        OFFERED_TOKEN_AMOUNT_KEY.into(),
+                                    )),
+                                    collection_data: Some(CollectionBindData {
+                                        prefixes: vec!["sale.out_tokens".into()],
+                                        collection_binding_type: CollectionBindingStyle::ForceSame(
+                                            1,
+                                        ),
+                                    }),
+                                },
+                                BindDefinition {
+                                    key: "referral_bpt".into(),
+                                    key_src: ValueSrc::Value(Value::Null),
+                                    collection_data: Some(CollectionBindData {
+                                        prefixes: vec!["sale.out_tokens".into()],
+                                        collection_binding_type: CollectionBindingStyle::ForceSame(
+                                            1,
+                                        ),
+                                    }),
+                                },
+                                BindDefinition {
+                                    key: "sale.in_token_account_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
+                                        "account_wnear".into(),
+                                    )),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "sale.start_time".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstAction(
+                                        "start_time".into(),
+                                    )),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "sale.duration".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstAction("duration".into())),
+                                    collection_data: None,
+                                },
+                            ],
+                            must_succeed: true,
+                        }),
+                        postprocessing: pp_sale_create,
+                        optional: false,
+                    }],
+                    automatic: false,
+                    terminal: Terminality::Automatic,
+                    is_sync: false,
+                }),
+            ],
+            expressions: vec![
+                EExpr::Fn(FnName::ArrayMerge),
+                EExpr::Boolean(TExpr {
+                    operators: vec![Op {
+                        operands_ids: [0, 1],
+                        op_type: EOp::Rel(RelOp::Eqs),
+                    }],
+                    terms: vec![ExprTerm::Arg(0), ExprTerm::Value(Value::Bool(true))],
+                }),
+            ],
+            transitions: vec![
+                vec![Transition {
+                    activity_id: 1,
+                    cond: None,
+                    time_from_cond: None,
+                    time_to_cond: None,
+                }],
+                vec![
+                    Transition {
+                        activity_id: 2,
+                        cond: Some(ValueSrc::Expr(Expression {
+                            args: vec![ArgSrc::Storage("pp_1_result".into())],
+                            expr_id: 1,
+                        })),
                         time_from_cond: None,
                         time_to_cond: None,
-                    }],
+                    },
+                    Transition {
+                        activity_id: 3,
+                        cond: Some(ValueSrc::Expr(Expression {
+                            args: vec![ArgSrc::Storage("pp_1_result".into())],
+                            expr_id: 1,
+                        })),
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
                 ],
-                constants: SourceDataVariant::Map(tpl_consts_map),
-                end: vec![4],
-            };
+                vec![Transition {
+                    activity_id: 3,
+                    cond: None,
+                    time_from_cond: None,
+                    time_to_cond: None,
+                }],
+                vec![Transition {
+                    activity_id: 4,
+                    cond: Some(ValueSrc::Expr(Expression {
+                        args: vec![ArgSrc::Storage("pp_3_result".into())],
+                        expr_id: 1,
+                    })),
+                    time_from_cond: None,
+                    time_to_cond: None,
+                }],
+            ],
+            constants: SourceDataVariant::Map(tpl_consts_map),
+            end: vec![4],
+        };
 
         let fncalls: Vec<FnCallId> = vec![
             (
@@ -601,7 +615,7 @@ impl Skyward2 {
         let pp_sale_create = Some(Postprocessing {
             instructions: vec![Instruction::StoreFnCallResult(
                 "skyward_auction_id".into(),
-                Datatype::U64(false),
+                FnCallResultType::Datatype(Datatype::U64(false)),
             )],
         });
 
@@ -632,289 +646,301 @@ impl Skyward2 {
         );
         tpl_consts_map.insert("deposit_ft_transfer_call".into(), Value::U128(1.into()));
 
-        let wf =
-            Template {
-                code: "wf_skyward".into(),
-                version: "1".into(),
-                auto_exec: false,
-                need_storage: true,
-                activities: vec![
-                    Activity::Init,
-                    Activity::Activity(TemplateActivity {
-                        code: "register_tokens".into(),
-                        postprocessing: None,
-                        actions: vec![TemplateAction {
+        let wf = Template {
+            code: "wf_skyward".into(),
+            version: "1".into(),
+            auto_exec: false,
+            need_storage: true,
+            activities: vec![
+                Activity::Init,
+                Activity::Activity(TemplateActivity {
+                    code: "register_tokens".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionData::FnCall(FnCallData {
+                            id: FnCallIdType::Static(
+                                AccountId::new_unchecked(skyward_account_id.clone()),
+                                SKYWARD_FNCALL1_NAME.into(),
+                            ),
+                            tgas: 30,
+                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                                "deposit_register_tokens".into(),
+                            ))),
+                            binds: vec![BindDefinition {
+                                key: "token_account_ids".into(),
+                                key_src: ValueSrc::Expr(Expression {
+                                    args: vec![
+                                        ArgSrc::ConstsTpl("account_wnear".into()),
+                                        ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
+                                    ],
+                                    expr_id: 0,
+                                }),
+                                collection_data: None,
+                            }],
+                            must_succeed: true,
+                        }),
+                        postprocessing: pp_register_tokens,
+                        optional: false,
+                    }],
+                    automatic: true,
+                    terminal: Terminality::NonTerminal,
+                    is_sync: false,
+                }),
+                Activity::Activity(TemplateActivity {
+                    code: "storage_deposit".into(),
+                    postprocessing: None,
+                    actions: vec![
+                        TemplateAction {
                             exec_condition: None,
                             validators: vec![],
-                            action_data: ActionType::FnCall(FnCallData {
-                                id: FnCallIdType::Static(
-                                    AccountId::new_unchecked(skyward_account_id.clone()),
-                                    SKYWARD_FNCALL1_NAME.into(),
+                            action_data: ActionData::FnCall(FnCallData {
+                                id: FnCallIdType::StandardStatic(
+                                    AccountId::new_unchecked(wnear_account_id.clone()),
+                                    SKYWARD_FNCALL2_NAME.into(),
                                 ),
-                                tgas: 30,
-                                deposit: Some(ArgSrc::ConstsTpl("deposit_register_tokens".into())),
+                                tgas: 10,
+                                deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                                    "deposit_storage".into(),
+                                ))),
                                 binds: vec![BindDefinition {
-                                    key: "token_account_ids".into(),
-                                    key_src: SrcOrExprOrValue::Expr(Expression {
-                                        args: vec![
-                                            ArgSrc::ConstsTpl("account_wnear".into()),
-                                            ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
-                                        ],
-                                        expr_id: 0,
-                                    }),
+                                    key: "account_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
+                                        "account_skyward".into(),
+                                    )),
                                     collection_data: None,
                                 }],
-                            }),
-                            postprocessing: pp_register_tokens,
-                            must_succeed: true,
-                            optional: false,
-                        }],
-                        automatic: true,
-                        terminal: Terminality::NonTerminal,
-                        is_sync: false,
-                    }),
-                    Activity::Activity(TemplateActivity {
-                        code: "storage_deposit".into(),
-                        postprocessing: None,
-                        actions: vec![
-                            TemplateAction {
-                                exec_condition: None,
-                                validators: vec![],
-                                action_data: ActionType::FnCall(FnCallData {
-                                    id: FnCallIdType::StandardStatic(
-                                        AccountId::new_unchecked(wnear_account_id.clone()),
-                                        SKYWARD_FNCALL2_NAME.into(),
-                                    ),
-                                    tgas: 10,
-                                    deposit: Some(ArgSrc::ConstsTpl("deposit_storage".into())),
-                                    binds: vec![BindDefinition {
-                                        key: "account_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                            "account_skyward".into(),
-                                        )),
-                                        collection_data: None,
-                                    }],
-                                }),
-                                postprocessing: pp_storage_deposit_1,
                                 must_succeed: false,
-                                optional: true,
-                            },
-                            TemplateAction {
-                                exec_condition: None,
-                                validators: vec![],
-                                action_data: ActionType::FnCall(FnCallData {
-                                    id: FnCallIdType::StandardDynamic(
-                                        ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
-                                        SKYWARD_FNCALL3_NAME.into(),
-                                    ),
-                                    tgas: 10,
-                                    deposit: Some(ArgSrc::ConstsTpl("deposit_storage".into())),
-                                    binds: vec![BindDefinition {
-                                        key: "account_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                            "account_skyward".into(),
-                                        )),
-                                        collection_data: None,
-                                    }],
-                                }),
-                                postprocessing: pp_storage_deposit_2,
-                                must_succeed: false,
-                                optional: true,
-                            },
-                        ],
-                        automatic: true,
-                        terminal: Terminality::NonTerminal,
-                        is_sync: false,
-                    }),
-                    // Taken from previous because of gas limit.
-                    Activity::Activity(TemplateActivity {
-                        code: "transfer_tokens".into(),
-                        postprocessing: None,
-                        actions: vec![TemplateAction {
-                            exec_condition: None,
-                            validators: vec![],
-                            action_data: ActionType::FnCall(FnCallData {
-                                id: FnCallIdType::StandardDynamic(
-                                    ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
-                                    SKYWARD_FNCALL4_NAME.into(),
-                                ),
-                                tgas: 100,
-                                deposit: Some(ArgSrc::ConstsTpl("deposit_ft_transfer_call".into())),
-                                binds: vec![
-                                    BindDefinition {
-                                        key: "receiver_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                            "account_skyward".into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "amount".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                            OFFERED_TOKEN_AMOUNT_KEY.into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "msg".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                            "ft_transfer_call_msg".into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "memo".into(),
-                                        key_src: SrcOrExprOrValue::Value(Value::Null),
-                                        collection_data: None,
-                                    },
-                                ],
                             }),
-                            postprocessing: pp_ft_transfer_call,
-                            must_succeed: true,
-                            optional: false,
-                        }],
-                        automatic: true,
-                        terminal: Terminality::NonTerminal,
-                        is_sync: false,
-                    }),
-                    Activity::Activity(TemplateActivity {
-                        code: "sale_create".into(),
-                        postprocessing: None,
-                        actions: vec![TemplateAction {
-                            exec_condition: None,
-                            validators: vec![],
-                            action_data: ActionType::FnCall(FnCallData {
-                                id: FnCallIdType::Static(
-                                    AccountId::new_unchecked(skyward_account_id.clone()),
-                                    SKYWARD_FNCALL5_NAME.into(),
-                                ),
-                                tgas: 50,
-                                deposit: Some(ArgSrc::ConstsTpl("deposit_sale_create".into())),
-                                binds: vec![
-                                    BindDefinition {
-                                        key: "sale.permissions_contract_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::Const(0)),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "token_account_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                            OFFERED_TOKEN_KEY.into(),
-                                        )),
-                                        collection_data: Some(CollectionBindData {
-                                            prefixes: vec!["sale.out_tokens".into()],
-                                            collection_binding_type:
-                                                CollectionBindingStyle::ForceSame(1),
-                                        }),
-                                    },
-                                    BindDefinition {
-                                        key: "balance".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstPropSettings(
-                                            OFFERED_TOKEN_AMOUNT_KEY.into(),
-                                        )),
-                                        collection_data: Some(CollectionBindData {
-                                            prefixes: vec!["sale.out_tokens".into()],
-                                            collection_binding_type:
-                                                CollectionBindingStyle::ForceSame(1),
-                                        }),
-                                    },
-                                    BindDefinition {
-                                        key: "referral_bpt".into(),
-                                        key_src: SrcOrExprOrValue::Value(Value::Null),
-                                        collection_data: Some(CollectionBindData {
-                                            prefixes: vec!["sale.out_tokens".into()],
-                                            collection_binding_type:
-                                                CollectionBindingStyle::ForceSame(1),
-                                        }),
-                                    },
-                                    BindDefinition {
-                                        key: "sale.in_token_account_id".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstsTpl(
-                                            "account_wnear".into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "sale.start_time".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstAction(
-                                            "start_time".into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                    BindDefinition {
-                                        key: "sale.duration".into(),
-                                        key_src: SrcOrExprOrValue::Src(ArgSrc::ConstAction(
-                                            "duration".into(),
-                                        )),
-                                        collection_data: None,
-                                    },
-                                ],
-                            }),
-                            postprocessing: pp_sale_create,
-                            must_succeed: true,
-                            optional: false,
-                        }],
-                        automatic: false,
-                        terminal: Terminality::User,
-                        is_sync: false,
-                    }),
-                ],
-                expressions: vec![
-                    EExpr::Fn(FnName::ToArray),
-                    EExpr::Boolean(TExpr {
-                        operators: vec![Op {
-                            operands_ids: [0, 1],
-                            op_type: EOp::Rel(RelOp::Eqs),
-                        }],
-                        terms: vec![ExprTerm::Arg(0), ExprTerm::Value(Value::Bool(true))],
-                    }),
-                ],
-                transitions: vec![
-                    vec![Transition {
-                        activity_id: 1,
-                        cond: None,
-                        time_from_cond: None,
-                        time_to_cond: None,
-                    }],
-                    vec![
-                        Transition {
-                            activity_id: 2,
-                            cond: Some(Expression {
-                                args: vec![ArgSrc::Storage("pp_1_result".into())],
-                                expr_id: 1,
-                            }),
-                            time_from_cond: None,
-                            time_to_cond: None,
+                            postprocessing: pp_storage_deposit_1,
+                            optional: true,
                         },
-                        Transition {
-                            activity_id: 3,
-                            cond: Some(Expression {
-                                args: vec![ArgSrc::Storage("pp_1_result".into())],
-                                expr_id: 1,
+                        TemplateAction {
+                            exec_condition: None,
+                            validators: vec![],
+                            action_data: ActionData::FnCall(FnCallData {
+                                id: FnCallIdType::StandardDynamic(
+                                    ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                        OFFERED_TOKEN_KEY.into(),
+                                    )),
+                                    SKYWARD_FNCALL3_NAME.into(),
+                                ),
+                                tgas: 10,
+                                deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                                    "deposit_storage".into(),
+                                ))),
+                                binds: vec![BindDefinition {
+                                    key: "account_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
+                                        "account_skyward".into(),
+                                    )),
+                                    collection_data: None,
+                                }],
+                                must_succeed: false,
                             }),
-                            time_from_cond: None,
-                            time_to_cond: None,
+                            postprocessing: pp_storage_deposit_2,
+                            optional: true,
                         },
                     ],
-                    vec![Transition {
-                        activity_id: 3,
-                        cond: None,
-                        time_from_cond: None,
-                        time_to_cond: None,
-                    }],
-                    vec![Transition {
-                        activity_id: 4,
-                        cond: Some(Expression {
-                            args: vec![ArgSrc::Storage("pp_3_result".into())],
-                            expr_id: 1,
+                    automatic: true,
+                    terminal: Terminality::NonTerminal,
+                    is_sync: false,
+                }),
+                // Taken from previous because of gas limit.
+                Activity::Activity(TemplateActivity {
+                    code: "transfer_tokens".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionData::FnCall(FnCallData {
+                            id: FnCallIdType::StandardDynamic(
+                                ValueSrc::Src(ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into())),
+                                SKYWARD_FNCALL4_NAME.into(),
+                            ),
+                            tgas: 100,
+                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                                "deposit_ft_transfer_call".into(),
+                            ))),
+                            binds: vec![
+                                BindDefinition {
+                                    key: "receiver_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
+                                        "account_skyward".into(),
+                                    )),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "amount".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                        OFFERED_TOKEN_AMOUNT_KEY.into(),
+                                    )),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "msg".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
+                                        "ft_transfer_call_msg".into(),
+                                    )),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "memo".into(),
+                                    key_src: ValueSrc::Value(Value::Null),
+                                    collection_data: None,
+                                },
+                            ],
+                            must_succeed: true,
                         }),
+                        postprocessing: pp_ft_transfer_call,
+                        optional: false,
+                    }],
+                    automatic: true,
+                    terminal: Terminality::NonTerminal,
+                    is_sync: false,
+                }),
+                Activity::Activity(TemplateActivity {
+                    code: "sale_create".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionData::FnCall(FnCallData {
+                            id: FnCallIdType::Static(
+                                AccountId::new_unchecked(skyward_account_id.clone()),
+                                SKYWARD_FNCALL5_NAME.into(),
+                            ),
+                            tgas: 50,
+                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                                "deposit_sale_create".into(),
+                            ))),
+                            binds: vec![
+                                BindDefinition {
+                                    key: "sale.permissions_contract_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::Const(0)),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "token_account_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                        OFFERED_TOKEN_KEY.into(),
+                                    )),
+                                    collection_data: Some(CollectionBindData {
+                                        prefixes: vec!["sale.out_tokens".into()],
+                                        collection_binding_type: CollectionBindingStyle::ForceSame(
+                                            1,
+                                        ),
+                                    }),
+                                },
+                                BindDefinition {
+                                    key: "balance".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                        OFFERED_TOKEN_AMOUNT_KEY.into(),
+                                    )),
+                                    collection_data: Some(CollectionBindData {
+                                        prefixes: vec!["sale.out_tokens".into()],
+                                        collection_binding_type: CollectionBindingStyle::ForceSame(
+                                            1,
+                                        ),
+                                    }),
+                                },
+                                BindDefinition {
+                                    key: "referral_bpt".into(),
+                                    key_src: ValueSrc::Value(Value::Null),
+                                    collection_data: Some(CollectionBindData {
+                                        prefixes: vec!["sale.out_tokens".into()],
+                                        collection_binding_type: CollectionBindingStyle::ForceSame(
+                                            1,
+                                        ),
+                                    }),
+                                },
+                                BindDefinition {
+                                    key: "sale.in_token_account_id".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
+                                        "account_wnear".into(),
+                                    )),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "sale.start_time".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstAction(
+                                        "start_time".into(),
+                                    )),
+                                    collection_data: None,
+                                },
+                                BindDefinition {
+                                    key: "sale.duration".into(),
+                                    key_src: ValueSrc::Src(ArgSrc::ConstAction("duration".into())),
+                                    collection_data: None,
+                                },
+                            ],
+                            must_succeed: true,
+                        }),
+                        postprocessing: pp_sale_create,
+                        optional: false,
+                    }],
+                    automatic: false,
+                    terminal: Terminality::User,
+                    is_sync: false,
+                }),
+            ],
+            expressions: vec![
+                EExpr::Fn(FnName::ArrayMerge),
+                EExpr::Boolean(TExpr {
+                    operators: vec![Op {
+                        operands_ids: [0, 1],
+                        op_type: EOp::Rel(RelOp::Eqs),
+                    }],
+                    terms: vec![ExprTerm::Arg(0), ExprTerm::Value(Value::Bool(true))],
+                }),
+            ],
+            transitions: vec![
+                vec![Transition {
+                    activity_id: 1,
+                    cond: None,
+                    time_from_cond: None,
+                    time_to_cond: None,
+                }],
+                vec![
+                    Transition {
+                        activity_id: 2,
+                        cond: Some(ValueSrc::Expr(Expression {
+                            args: vec![ArgSrc::Storage("pp_1_result".into())],
+                            expr_id: 1,
+                        })),
                         time_from_cond: None,
                         time_to_cond: None,
-                    }],
+                    },
+                    Transition {
+                        activity_id: 3,
+                        cond: Some(ValueSrc::Expr(Expression {
+                            args: vec![ArgSrc::Storage("pp_1_result".into())],
+                            expr_id: 1,
+                        })),
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
                 ],
-                constants: SourceDataVariant::Map(tpl_consts_map),
-                end: vec![4],
-            };
+                vec![Transition {
+                    activity_id: 3,
+                    cond: None,
+                    time_from_cond: None,
+                    time_to_cond: None,
+                }],
+                vec![Transition {
+                    activity_id: 4,
+                    cond: Some(ValueSrc::Expr(Expression {
+                        args: vec![ArgSrc::Storage("pp_3_result".into())],
+                        expr_id: 1,
+                    })),
+                    time_from_cond: None,
+                    time_to_cond: None,
+                }],
+            ],
+            constants: SourceDataVariant::Map(tpl_consts_map),
+            end: vec![4],
+        };
 
         let fncalls: Vec<FnCallId> = vec![
             (

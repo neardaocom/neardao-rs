@@ -165,6 +165,7 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -243,6 +244,7 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         3,
+        1,
         InstanceState::Running,
     )
     .await?;
@@ -285,6 +287,7 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         4,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -364,6 +367,7 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         3,
+        1,
         InstanceState::Running,
     )
     .await?;
@@ -406,6 +410,7 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         4,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -539,6 +544,7 @@ async fn workflow_trade1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -624,6 +630,7 @@ async fn workflow_trade1_scenario() -> anyhow::Result<()> {
         &worker,
         &dao_account_id,
         proposal_id,
+        1,
         1,
         InstanceState::Finished,
     )
@@ -757,6 +764,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -850,6 +858,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
         &worker,
         &dao_account_id,
         proposal_id,
+        0,
         0,
         InstanceState::Running,
     )
@@ -951,6 +960,7 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
         &worker,
         &dao_account_id,
         proposal_id,
+        1,
         1,
         InstanceState::Finished,
     )
@@ -1058,6 +1068,7 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         6,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -1174,6 +1185,7 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -1236,6 +1248,7 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         2,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -1412,6 +1425,7 @@ async fn workflow_reward1_wage_withdraw_more_near_than_on_dao_account() -> anyho
         &dao_account_id,
         proposal_id,
         1,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -1474,6 +1488,7 @@ async fn workflow_reward1_wage_withdraw_more_near_than_on_dao_account() -> anyho
         &dao_account_id,
         proposal_id,
         2,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -1611,6 +1626,7 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -1671,6 +1687,7 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         3,
+        1,
         InstanceState::Finished,
     )
     .await?;
@@ -1756,6 +1773,7 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
         &worker,
         &dao_account_id,
         proposal_id,
+        0,
         0,
         InstanceState::Running,
     )
@@ -1903,6 +1921,7 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
         &worker,
         &dao_account_id,
         proposal_id,
+        1,
         1,
         InstanceState::Finished,
     )

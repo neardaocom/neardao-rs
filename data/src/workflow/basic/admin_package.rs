@@ -4,7 +4,7 @@ use crate::TemplateData;
 use library::{
     types::source::SourceDataVariant,
     workflow::{
-        action::{ActionType, DaoActionData, TemplateAction},
+        action::{ActionData, DaoActionData, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
@@ -35,7 +35,7 @@ impl AdminPackage1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: None,
                             expected_input: None,
                             required_deposit: None,
@@ -43,7 +43,6 @@ impl AdminPackage1 {
                             name: DaoActionIdent::GroupAdd,
                         }),
                         postprocessing: None,
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: false,
@@ -56,7 +55,7 @@ impl AdminPackage1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: None,
                             expected_input: None,
                             required_deposit: None,
@@ -64,7 +63,6 @@ impl AdminPackage1 {
                             name: DaoActionIdent::GroupRemove,
                         }),
                         postprocessing: None,
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: false,
@@ -77,7 +75,7 @@ impl AdminPackage1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: None,
                             expected_input: None,
                             required_deposit: None,
@@ -85,7 +83,6 @@ impl AdminPackage1 {
                             name: DaoActionIdent::GroupAddMembers,
                         }),
                         postprocessing: None,
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: false,
@@ -98,7 +95,7 @@ impl AdminPackage1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: None,
                             expected_input: None,
                             required_deposit: None,
@@ -106,7 +103,6 @@ impl AdminPackage1 {
                             name: DaoActionIdent::GroupRemoveMembers,
                         }),
                         postprocessing: None,
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: false,
@@ -119,7 +115,7 @@ impl AdminPackage1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: None,
                             expected_input: None,
                             required_deposit: None,
@@ -127,7 +123,6 @@ impl AdminPackage1 {
                             name: DaoActionIdent::GroupRemoveRoles,
                         }),
                         postprocessing: None,
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: false,
@@ -140,7 +135,7 @@ impl AdminPackage1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             code: None,
                             expected_input: None,
                             required_deposit: None,
@@ -148,7 +143,6 @@ impl AdminPackage1 {
                             name: DaoActionIdent::GroupRemoveMemberRoles,
                         }),
                         postprocessing: None,
-                        must_succeed: true,
                         optional: false,
                     }],
                     automatic: false,

@@ -2,6 +2,7 @@ mod admin_package;
 mod bounty;
 mod reward;
 mod skyward;
+pub mod test_optional_actions;
 mod trade;
 mod wf_add;
 
@@ -47,14 +48,27 @@ where
         "dao: running proposal_id: {} activity_id: {}",
         proposal_id, activity_id
     );
+    dbg!(proposal_id);
+    dbg!(activity_id);
+    dbg!(expected_success);
+    println!("{}", msg);
     if expected_success {
         assert!(
-            outcome.as_ref().unwrap().is_success(),
-            "dao running activity failed"
+            outcome.is_ok() && outcome.as_ref().unwrap().is_success(),
+            "dao running activity failed - expected success, result: {:?}",
+            outcome
+        );
+        let msg = format!(
+            "proposal proposal_id: {} activity_id: {} outcome",
+            proposal_id, activity_id
         );
         outcome_pretty::<()>(&msg, &outcome.unwrap());
     } else {
-        assert!(outcome.is_err(), "dao running activity failed");
+        assert!(
+            outcome.is_err() || outcome.as_ref().unwrap().is_failure(),
+            "dao running activity failed - expected failure, result: {:?}",
+            outcome
+        );
     }
 
     Ok(())

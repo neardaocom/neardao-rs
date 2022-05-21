@@ -12,8 +12,6 @@ use super::{group::GroupInput, reward::Asset};
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct DaoInit {
-    pub token_id: AccountId,
-    pub staking_id: AccountId,
     pub total_supply: u32,
     pub decimals: u8,
     pub settings: Settings,
@@ -39,6 +37,10 @@ pub struct Settings {
     pub workflow_provider: AccountId,
     pub resource_provider: AccountId,
     pub scheduler: AccountId,
+    /// Vote token id.
+    pub token_id: AccountId,
+    /// Staking contract.
+    pub staking_id: AccountId,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]

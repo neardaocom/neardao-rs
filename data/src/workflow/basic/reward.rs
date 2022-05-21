@@ -6,7 +6,7 @@ use crate::TemplateData;
 use library::{
     types::source::SourceDataVariant,
     workflow::{
-        action::{ActionType, DaoActionData, TemplateAction},
+        action::{ActionData, DaoActionData, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
@@ -44,14 +44,13 @@ impl Reward1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             name: DaoActionIdent::TreasuryAddPartition,
                             required_deposit: None,
                             binds: vec![],
                             code: None,
                             expected_input: None,
                         }),
-                        must_succeed: true,
                         optional: false,
                         postprocessing: None,
                     }],
@@ -65,16 +64,15 @@ impl Reward1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             name: DaoActionIdent::RewardAdd,
                             required_deposit: None,
                             binds: vec![],
                             code: None,
                             expected_input: None,
                         }),
-                        must_succeed: true,
-                        optional: false,
                         postprocessing: None,
+                        optional: false,
                     }],
                     automatic: false,
                     terminal: Terminality::Automatic,
@@ -86,14 +84,13 @@ impl Reward1 {
                     actions: vec![TemplateAction {
                         exec_condition: None,
                         validators: vec![],
-                        action_data: ActionType::Action(DaoActionData {
+                        action_data: ActionData::Action(DaoActionData {
                             name: DaoActionIdent::RewardAdd,
                             required_deposit: None,
                             binds: vec![],
                             code: None,
                             expected_input: None,
                         }),
-                        must_succeed: true,
                         optional: false,
                         postprocessing: None,
                     }],

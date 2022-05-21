@@ -71,6 +71,7 @@ pub(crate) async fn check_instance<T>(
     dao: &AccountId,
     proposal_id: u32,
     expected_activity_id: u8,
+    expected_actions_done: u8,
     expected_state: InstanceState,
 ) -> anyhow::Result<()>
 where
@@ -84,6 +85,11 @@ where
         instance.get_current_activity_id(),
         expected_activity_id,
         "check_instance_state: instance activities are not equal",
+    );
+    assert_eq!(
+        instance.actions_done_count(),
+        expected_actions_done,
+        "check_instance_state: instance actions done are not equal",
     );
     assert_eq!(
         instance.get_state(),

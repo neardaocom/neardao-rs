@@ -22,6 +22,11 @@ pub struct Settings {
     pub workflow_provider: AccountId,
     pub resource_provider: AccountId,
     pub scheduler: AccountId,
+    /// Vote token id.
+    pub token_id: AccountId,
+    /// Staking contract.
+    pub staking_id: AccountId,
+    // TODO: staking id, vote token id
 }
 
 derive_from_versioned!(VersionedSettings, Settings);

@@ -90,6 +90,21 @@ where
     Ok(storage)
 }
 
+pub(crate) async fn workflow_storage_buckets<T>(
+    worker: &Worker<T>,
+    dao: &AccountId,
+) -> anyhow::Result<Vec<String>>
+where
+    T: DevNetwork,
+{
+    let args = json!({}).to_string().into_bytes();
+    let outcome = worker.view(dao, "storage_buckets", args).await?;
+    view_outcome_pretty::<Vec<String>>("dao view workflow storage buckets", &outcome);
+    let storage_buckets = parse_view_result::<Vec<String>>(&outcome)
+        .expect("failed to parse workflow storage buckets");
+    Ok(storage_buckets)
+}
+
 pub(crate) async fn ft_balance_of<T>(
     worker: &Worker<T>,
     ft_contract: &AccountId,

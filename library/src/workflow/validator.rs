@@ -16,6 +16,7 @@ use super::types::ArgSrc;
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum Validator {
     Object(ObjectValidator),
     Collection(CollectionValidator),

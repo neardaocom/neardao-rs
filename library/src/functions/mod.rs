@@ -1,4 +1,5 @@
 pub mod binding;
+pub mod evaluation;
 pub mod math;
 pub mod serialization;
 mod unit_tests;

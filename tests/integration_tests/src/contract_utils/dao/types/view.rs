@@ -32,8 +32,6 @@ pub(crate) type ViewWorkflowStorage = Option<Vec<(String, Value)>>;
 #[cfg_attr(not(target_arch = "wasm32"), derive())]
 #[serde(crate = "near_sdk::serde")]
 pub struct Statistics {
-    pub staking_id: String,
-    pub token_id: String,
     pub total_delegation_amount: U128,
     pub total_delegators_count: u32,
     pub ft_total_supply: u32,

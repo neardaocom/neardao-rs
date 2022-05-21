@@ -5,7 +5,7 @@ use near_sdk::{
 
 use crate::{interpreter::expression::EExpr, types::source::SourceDataVariant, Version};
 
-use super::activity::{Activity, TemplateActivity, Transition};
+use super::activity::{Activity, Transition};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
@@ -22,20 +22,9 @@ pub struct Template {
     pub expressions: Vec<EExpr>,
     /// Index of transition is id of activity from.
     pub transitions: Vec<Vec<Transition>>,
-    // TODO figure out structure.
     pub constants: SourceDataVariant,
     /// Ids of activities which make possible to finish workflow when their are successfully executed.
     pub end: Vec<u8>,
-}
-
-impl Template {
-    /// Returns reference to inner activity. Init activity is considered as no activity so id 0 always returns `None`.
-    pub fn get_activity_as_ref(&self, id: u8) -> Option<&TemplateActivity> {
-        match self.activities.get(id as usize) {
-            Some(activity) => activity.activity_as_ref(),
-            None => None,
-        }
-    }
 }
 
 // TODO: Implement.

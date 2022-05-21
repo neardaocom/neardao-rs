@@ -1,22 +1,23 @@
+use library::functions::binding::bind_input;
+use library::functions::evaluation::eval;
 use library::functions::serialization::serialize_to_json;
 use library::functions::validation::validate;
-use library::functions::{binding::bind_input, utils::get_value_from_source};
 use library::interpreter::expression::EExpr;
 use library::MethodName;
 
 use library::storage::StorageBucket;
 use library::types::activity_input::ActivityInput;
-use library::types::error::ProcessingError;
 use library::types::source::{DefaultSource, Source};
-use library::workflow::action::{ActionInput, ActionType, FnCallIdType, TemplateAction};
+use library::workflow::action::{ActionData, ActionInput, FnCallIdType, TemplateAction};
 use library::workflow::activity::{TemplateActivity, Terminality};
 use library::workflow::instance::InstanceState;
 use library::workflow::postprocessing::Postprocessing;
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
-use library::workflow::types::ArgSrc::User;
 use library::workflow::types::{ActivityRight, DaoActionIdent, ObjectMetadata};
-use near_sdk::{env, ext_contract, log, near_bindgen, AccountId, Gas, Promise, PromiseResult};
+use near_sdk::{
+    env, ext_contract, log, near_bindgen, require, AccountId, Gas, Promise, PromiseResult,
+};
 
 use crate::constants::GLOBAL_BUCKET_IDENT;
 use crate::core::*;
@@ -29,7 +30,6 @@ use crate::internal::utils::current_timestamp_sec;
 use crate::internal::ActivityContext;
 use crate::proposal::ProposalState;
 use crate::reward::RewardActivity;
-use crate::role::UserRoles;
 
 #[ext_contract(ext_self)]
 trait ExtActivity {
@@ -109,7 +109,7 @@ impl Contract {
             .expect("Activity is init");
 
         // Loop / other activity case
-        if wfi.is_new_transition(activity_id) {
+        if wfi.is_current_activity_finished() {
             // Find transition.
             let transition = wfi
                 .find_transition(transitions.as_slice(), activity_id)
@@ -126,11 +126,12 @@ impl Contract {
                 transition
                     .cond
                     .as_ref()
-                    .map(|expr| expr
-                        .bind_and_eval(sources.as_ref(), None, expressions.as_slice())
-                        .expect("Binding and eval transition condition failed.")
-                        .try_into_bool()
-                        .expect("Invalid transition condition definition."))
+                    .map(
+                        |src| eval(src, sources.as_mut(), expressions.as_slice(), None)
+                            .expect("Binding and eval transition condition failed.")
+                            .try_into_bool()
+                            .expect("Invalid transition condition definition.")
+                    )
                     .unwrap_or(true),
                 "Transition condition failed."
             );
@@ -140,7 +141,10 @@ impl Contract {
                 terminal == Terminality::Automatic,
             );
         } else {
-            assert!(wfi.actions_remaining() > 0, "activity is already finished");
+            require!(
+                activity_id as u8 == wfi.get_current_activity_id(),
+                "Current activity must be finished first."
+            );
         }
 
         // Put activity's shared values into Source object if defined.
@@ -222,15 +226,12 @@ impl Contract {
                 wfi.new_actions_done(ctx.actions_done(), current_timestamp_sec());
             }
         } else {
-            // Optional actions will be immediatelly added to instance.
-            let mut optional_actions = 0;
             // In case of fn calls activity storages are mutated in postprocessing as promises resolve.
             result = self.run_async_activity(
                 &mut ctx,
                 expressions.as_slice(),
                 sources.as_mut(),
                 actions_inputs,
-                &mut optional_actions,
             );
             if result.is_err() || ctx.actions_done() == 0 {
                 panic!(
@@ -238,7 +239,10 @@ impl Contract {
                     result, ctx
                 );
             } else {
-                wfi.await_promises(ctx.actions_done());
+                wfi.await_promises(
+                    ctx.optional_actions_done(),
+                    ctx.actions_done() - ctx.optional_actions_done(),
+                );
             }
         }
 
@@ -347,7 +351,7 @@ impl Contract {
     ) -> Result<(), ActionError> {
         // Loop which tries to execute all actions, starting from the last done. Returns when something goes wrong.
         let last_action_done = ctx.actions_done_before as usize;
-        for idx in last_action_done..ctx.actions.len() {
+        for idx in last_action_done..input.len() {
             // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
             let mut action_input = match input.get_mut(idx).unwrap().take() {
                 Some(a) => a.values.into_activity_input(),
@@ -360,8 +364,8 @@ impl Contract {
 
             // Check exec condition.
             if let Some(cond) = tpl_action.exec_condition.as_ref() {
-                if !cond
-                    .bind_and_eval(sources, Some(action_input.as_ref()), expressions)?
+                if !eval(cond, sources, expressions, Some(action_input.as_ref()))
+                    .expect("failed to eval action condition")
                     .try_into_bool()?
                 {
                     return Err(ActionError::Condition(idx as u8));
@@ -389,7 +393,7 @@ impl Contract {
             }
 
             // TODO: Refactor.
-            let action_data = std::mem::replace(&mut tpl_action.action_data, ActionType::None)
+            let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                 .try_into_action_data()
                 .ok_or(ActionError::InvalidWfStructure(
                     "missing action data".into(),
@@ -412,8 +416,8 @@ impl Contract {
             bind_input(sources, binds, expressions, action_input.as_mut())?;
 
             let deposit = match &action_data.required_deposit {
-                Some(arg_src) => get_value_from_source(sources, arg_src)
-                    .map_err(|_| ActionError::InvalidSource)?
+                Some(arg_src) => eval(&arg_src, sources, expressions, None)
+                    .expect("invalid value")
                     .try_into_u128()?,
                 _ => 0,
             };
@@ -429,7 +433,7 @@ impl Contract {
 
             // TODO: Handle error so we do only part of the batch.
             if let Some(mut pp) = tpl_action.postprocessing.take() {
-                pp.bind_instructions(sources, action_input.as_ref())
+                pp.bind_instructions(sources, expressions, action_input.as_ref())
                     .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
                 // TODO: Different execute version for DaoActions?
                 // TODO: Global storage manipulation.
@@ -451,6 +455,8 @@ impl Contract {
 
             self.debug_log
                 .push(format!("dao action executed: {}", ctx.activity_id));
+
+            self.log_action(ctx.proposal_id, env::predecessor_account_id(), idx as u8);
             ctx.set_next_action_done();
         }
 
@@ -463,7 +469,6 @@ impl Contract {
         expressions: &[EExpr],
         sources: &mut dyn Source,
         mut input: Vec<Option<ActionInput>>,
-        optional_actions: &mut u8,
     ) -> Result<(), ActionError> {
         // Loop which tries to execute all actions, starting from the last done. Returns when something goes wrong.
         // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
@@ -473,32 +478,30 @@ impl Contract {
         // This strange variable is here because "optional-required-optional" actions case might happen.
         // Therefore we must not considered 3th action as sucessfull but instead of that break the cycle.
         // This might be redundant and "YAGNI" stuff I let it stay here for now.
-        let mut optional_state = 0;
+        let mut required_promise_dispatched = false;
         let mut promise: Option<Promise> = None;
-        for idx in last_action_done..ctx.actions.len() {
+        for idx in last_action_done..input.len() {
+            let tpl_action = ctx.actions.get_mut(idx).unwrap();
             let mut action_input = match input.get_mut(idx).unwrap().take() {
                 Some(a) => {
-                    if optional_state == 1 {
-                        optional_state = 2;
+                    if !tpl_action.optional {
+                        required_promise_dispatched = true;
                     }
                     a.values.into_activity_input()
                 }
                 None => {
-                    if optional_state == 2 {
+                    if required_promise_dispatched {
                         break;
                     }
-                    optional_state = 1;
                     ctx.set_next_optional_action_done();
                     ctx.set_next_action_done();
                     continue;
                 }
             };
-
-            let tpl_action = ctx.actions.get_mut(idx).unwrap();
             // Check exec condition.
             if let Some(cond) = tpl_action.exec_condition.as_ref() {
-                if !cond
-                    .bind_and_eval(sources, Some(action_input.as_ref()), expressions)?
+                if !eval(cond, sources, expressions, Some(action_input.as_ref()))
+                    .expect("failed to eval action condition")
                     .try_into_bool()?
                 {
                     return Err(ActionError::Condition(idx as u8));
@@ -525,9 +528,10 @@ impl Contract {
                 sources.unset_prop_action();
             }
 
+            // TODO: Refactoring.
             let new_promise;
             if tpl_action.action_data.is_fncall() {
-                let action_data = std::mem::replace(&mut tpl_action.action_data, ActionType::None)
+                let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                     .try_into_fncall_data()
                     .ok_or(ActionError::InvalidWfStructure(
                         "missing action data".into(),
@@ -535,8 +539,12 @@ impl Contract {
 
                 // Metadata are provided by workflow provider when workflow is added.
                 // Missing metadata are fault of the workflow provider and are considered as fatal runtime error.
-                let (name, method, metadata) =
-                    self.get_fncall_id_with_metadata(action_data.id, sources)?;
+                let (name, method, metadata) = self.get_fncall_id_with_metadata(
+                    action_data.id,
+                    sources,
+                    expressions,
+                    action_input.as_ref(),
+                )?;
 
                 if !validate(
                     sources,
@@ -551,14 +559,14 @@ impl Contract {
                 bind_input(sources, binds, expressions, action_input.as_mut())?;
 
                 let deposit = match action_data.deposit {
-                    Some(arg_src) => get_value_from_source(sources, &arg_src)
-                        .map_err(|_| ActionError::InvalidSource)?
+                    Some(arg_src) => eval(&arg_src, sources, expressions, None)
+                        .expect("invalid value")
                         .try_into_u128()?,
                     None => 0,
                 };
 
                 let pp = if let Some(mut pp) = tpl_action.postprocessing.take() {
-                    pp.bind_instructions(sources, action_input.as_ref())
+                    pp.bind_instructions(sources, expressions, action_input.as_ref())
                         .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
                     Some(pp)
                 } else {
@@ -580,7 +588,7 @@ impl Contract {
                     .then(ext_self::postprocess(
                         ctx.proposal_id,
                         idx as u8,
-                        tpl_action.must_succeed,
+                        action_data.must_succeed,
                         ctx.proposal_settings.storage_key.clone(),
                         pp,
                         env::current_account_id(),
@@ -589,43 +597,48 @@ impl Contract {
                     ));
             } else {
                 let (sender_src, amount_src) =
-                    std::mem::replace(&mut tpl_action.action_data, ActionType::None)
+                    std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                         .try_into_send_near_sources()
                         .ok_or(ActionError::InvalidWfStructure(
                             "send near invalid data".into(),
                         ))?;
-                let name = match &sender_src {
-                    User(key) => action_input
-                        .get(&key)
-                        .ok_or(ActionError::InputStructure(idx as u8))?
-                        .to_owned(),
-                    _ => get_value_from_source(sources, &sender_src)
-                        .map_err(|_| ActionError::InputStructure(idx as u8))?,
-                }
+                let name = eval(
+                    &sender_src,
+                    sources,
+                    expressions,
+                    Some(action_input.as_ref()),
+                )
+                .expect("invalid value")
                 .try_into_string()?;
 
-                let amount = match &amount_src {
-                    User(key) => action_input
-                        .get(&key)
-                        .ok_or(ActionError::InputStructure(idx as u8))?
-                        .to_owned(),
-                    _ => get_value_from_source(sources, &amount_src)
-                        .map_err(|_| ActionError::InputStructure(idx as u8))?,
-                }
+                let amount = eval(
+                    &amount_src,
+                    sources,
+                    expressions,
+                    Some(action_input.as_ref()),
+                )
+                .expect("invalid value")
                 .try_into_u128()?;
                 self.debug_log.push(format!(
                     "promise send near - name: {}, amount: {}; ",
                     &name, amount,
                 ));
+                let pp = if let Some(mut pp) = tpl_action.postprocessing.take() {
+                    pp.bind_instructions(sources, expressions, action_input.as_ref())
+                        .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
+                    Some(pp)
+                } else {
+                    None
+                };
                 new_promise =
                     Promise::new(AccountId::try_from(name).expect("invalid account_id name"))
                         .transfer(amount)
                         .then(ext_self::postprocess(
                             ctx.proposal_id,
                             idx as u8,
-                            tpl_action.must_succeed,
+                            true,
                             ctx.proposal_settings.storage_key.clone(),
-                            None,
+                            pp,
                             env::current_account_id(),
                             0,
                             Gas(10 * 10u64.pow(12)),
@@ -639,6 +652,7 @@ impl Contract {
             };
 
             // Number of successfully dispatched promises.
+            self.log_action(ctx.proposal_id, env::predecessor_account_id(), idx as u8);
             ctx.set_next_action_done();
         }
 
@@ -813,15 +827,15 @@ impl Contract {
         inputs: &[Option<ActionInput>],
         actions_done: usize,
     ) -> bool {
-        for (idx, action) in actions.iter().enumerate().skip(actions_done) {
-            match (
-                action.optional,
-                inputs
-                    .get(idx - actions_done)
-                    .expect("Missing action input"),
-            ) {
+        assert!(
+            inputs.len() <= actions.len() && inputs.len() > actions_done,
+            "Action input has invalid length."
+        );
+        for (idx, action) in inputs.iter().enumerate().skip(actions_done) {
+            let template_action = actions.get(idx).expect("internal - missing tpl action");
+            match (template_action.optional, action) {
                 (_, Some(a)) => {
-                    if !a.action.eq(&action.action_data) {
+                    if !a.action.eq(&template_action.action_data) {
                         return false;
                     }
                 }
@@ -918,6 +932,8 @@ impl Contract {
         &self,
         id: FnCallIdType,
         sources: &dyn Source,
+        expressions: &[EExpr],
+        inputs: &dyn ActivityInput,
     ) -> Result<(AccountId, MethodName, Vec<ObjectMetadata>), ActionError> {
         let data = match id {
             FnCallIdType::Static(account, method) => (
@@ -928,8 +944,8 @@ impl Contract {
                     .ok_or(ActionError::MissingFnCallMetadata(method))?,
             ),
             FnCallIdType::Dynamic(arg_src, method) => {
-                let name = get_value_from_source(sources, &arg_src)
-                    .map_err(ProcessingError::Source)?
+                let name = eval(&arg_src, sources, expressions, Some(inputs))
+                    .expect("invalid value")
                     .try_into_string()?;
                 (
                     AccountId::try_from(name.to_string())
@@ -952,8 +968,8 @@ impl Contract {
                     .ok_or(ActionError::MissingFnCallMetadata(method))?,
             ),
             FnCallIdType::StandardDynamic(arg_src, method) => {
-                let name = get_value_from_source(sources, &arg_src)
-                    .map_err(ProcessingError::Source)?
+                let name = eval(&arg_src, sources, expressions, Some(inputs))
+                    .expect("invalid value")
                     .try_into_string()?;
                 (
                     AccountId::try_from(name.to_string())

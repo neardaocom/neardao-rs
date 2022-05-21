@@ -44,7 +44,7 @@ fn sync_scenario() {
         .unwrap()
         .actions
         .len() as u8;
-    assert!(instance.is_new_transition(activity_id));
+    assert!(instance.is_current_activity_finished());
     assert!(instance
         .find_transition(tpls_trans.as_slice(), activity_id)
         .is_some());
@@ -66,7 +66,7 @@ fn sync_scenario() {
         .unwrap()
         .actions
         .len() as u8;
-    assert!(instance.is_new_transition(activity_id));
+    assert!(instance.is_current_activity_finished());
     assert!(instance
         .find_transition(tpls_trans.as_slice(), activity_id)
         .is_some());
@@ -82,7 +82,7 @@ fn sync_scenario() {
     assert_eq!(instance.actions_remaining(), 1);
 
     // Second activity - second action.
-    assert!(!instance.is_new_transition(activity_id));
+    assert!(!instance.is_current_activity_finished());
     assert_eq!(instance.get_state(), InstanceState::Running);
     assert_eq!(instance.get_current_activity_id(), activity_id as u8);
     assert_eq!(instance.actions_done_count(), 1);
@@ -109,7 +109,7 @@ fn sync_rollback_new() {
         .unwrap()
         .actions
         .len() as u8;
-    assert!(instance.is_new_transition(activity_id));
+    assert!(instance.is_current_activity_finished());
     assert!(instance
         .find_transition(tpls_trans.as_slice(), activity_id)
         .is_some());
@@ -140,13 +140,13 @@ fn async_scenario() {
         .unwrap()
         .actions
         .len() as u8;
-    assert!(instance.is_new_transition(activity_id));
+    assert!(instance.is_current_activity_finished());
     assert!(instance
         .find_transition(tpls_trans.as_slice(), activity_id)
         .is_some());
     assert!(instance.update_transition_counter(activity_id));
     instance.register_new_activity(activity_id as u8, activity_actions_len, false);
-    instance.await_promises(1);
+    instance.await_promises(0, 1);
     assert_eq!(instance.get_state(), InstanceState::Awaiting);
     assert_eq!(instance.get_current_activity_id(), activity_id as u8);
     assert_eq!(instance.actions_done_count(), 0);
@@ -164,13 +164,13 @@ fn async_scenario() {
         .unwrap()
         .actions
         .len() as u8;
-    assert!(instance.is_new_transition(activity_id));
+    assert!(instance.is_current_activity_finished());
     assert!(instance
         .find_transition(tpls_trans.as_slice(), activity_id)
         .is_some());
     assert!(instance.update_transition_counter(activity_id));
     instance.register_new_activity(activity_id as u8, activity_actions_len, false);
-    instance.await_promises(1);
+    instance.await_promises(0, 1);
     assert_eq!(instance.get_state(), InstanceState::Awaiting);
     assert_eq!(instance.get_current_activity_id(), activity_id as u8);
     assert_eq!(instance.actions_done_count(), 0);
@@ -182,12 +182,12 @@ fn async_scenario() {
     assert_eq!(instance.actions_remaining(), 1);
 
     // Second activity - second action.
-    assert!(!instance.is_new_transition(activity_id));
+    assert!(!instance.is_current_activity_finished());
     assert_eq!(instance.get_state(), InstanceState::Running);
     assert_eq!(instance.get_current_activity_id(), activity_id as u8);
     assert_eq!(instance.actions_done_count(), 1);
     assert_eq!(instance.actions_remaining(), 1);
-    instance.await_promises(1);
+    instance.await_promises(0, 1);
     assert_eq!(instance.get_state(), InstanceState::Awaiting);
     assert_eq!(instance.actions_done_count(), 1);
     assert_eq!(instance.actions_remaining(), 1);
@@ -214,13 +214,13 @@ fn async_rollback_new() {
         .unwrap()
         .actions
         .len() as u8;
-    assert!(instance.is_new_transition(activity_id));
+    assert!(instance.is_current_activity_finished());
     assert!(instance
         .find_transition(tpls_trans.as_slice(), activity_id)
         .is_some());
     assert!(instance.update_transition_counter(activity_id));
     instance.register_new_activity(activity_id as u8, activity_actions_len, false);
-    instance.await_promises(2);
+    instance.await_promises(0, 2);
     assert_eq!(instance.get_state(), InstanceState::Awaiting);
     assert_eq!(instance.get_current_activity_id(), activity_id as u8);
     assert_eq!(instance.actions_done_count(), 0);
@@ -245,13 +245,13 @@ fn async_promises_out_of_order() {
         .unwrap()
         .actions
         .len() as u8;
-    assert!(instance.is_new_transition(activity_id));
+    assert!(instance.is_current_activity_finished());
     assert!(instance
         .find_transition(tpls_trans.as_slice(), activity_id)
         .is_some());
     assert!(instance.update_transition_counter(activity_id));
     instance.register_new_activity(activity_id as u8, activity_actions_len, false);
-    instance.await_promises(2);
+    instance.await_promises(0, 2);
     assert_eq!(instance.get_state(), InstanceState::Awaiting);
     assert_eq!(instance.get_current_activity_id(), activity_id as u8);
     assert_eq!(instance.actions_done_count(), 0);

@@ -8,7 +8,6 @@ use crate::tags::{TagInput, Tags};
 use crate::treasury::{TreasuryPartitionInput, VersionedTreasuryPartition};
 use crate::wallet::VersionedWallet;
 use library::storage::StorageBucket;
-use library::types::datatype::Value;
 use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
@@ -35,8 +34,6 @@ pub struct ActivityLog {
     pub caller: AccountId,
     pub action_id: u8,
     pub timestamp: u64,
-    pub args: Vec<Vec<Value>>,
-    pub args_collections: Option<Vec<Vec<Value>>>,
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
@@ -70,10 +67,6 @@ pub enum StorageKeys {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
-    /// Vote token id.
-    pub token_id: AccountId,
-    /// Staking contract.
-    pub staking_id: AccountId,
     /// Delegations per user.
     pub delegations: LookupMap<AccountId, Balance>,
     /// Total count of unique delegators.
@@ -125,8 +118,6 @@ pub struct Contract {
 impl Contract {
     #[init]
     pub fn new(
-        token_id: AccountId,
-        staking_id: AccountId,
         total_supply: u32,
         decimals: u8,
         settings: Settings,
@@ -144,8 +135,6 @@ impl Contract {
         assert_valid_dao_settings(&settings);
 
         let mut contract = Contract {
-            token_id,
-            staking_id,
             delegations: LookupMap::new(StorageKeys::Delegations),
             total_delegation_amount: 0,
             user_roles: LookupMap::new(StorageKeys::UserRoles),

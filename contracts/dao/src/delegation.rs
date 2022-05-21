@@ -2,7 +2,7 @@
 //! Only staking contract is allowed to call methods in this module.
 //! Forked and modified code from https://github.com/near-daos/sputnik-dao-contract/blob/main/sputnikdao2/src/delegation.rs
 
-use crate::{core::*, reward::RewardActivity};
+use crate::{core::*, reward::RewardActivity, settings::Settings};
 use near_sdk::{env, json_types::U128, log, near_bindgen, require, AccountId, Balance};
 
 impl Contract {
@@ -23,14 +23,22 @@ const ERR_STAKING_INTERNAL: &str = "staking internal";
 impl Contract {
     #[payable]
     pub fn register_delegation(&mut self, account_id: AccountId) {
-        require!(env::predecessor_account_id() == self.staking_id, ERR_CALLER);
+        let settings: Settings = self.settings.get().unwrap().into();
+        require!(
+            env::predecessor_account_id() == settings.staking_id,
+            ERR_CALLER
+        );
         log!("register_delegation for account: {}", &account_id);
         self.delegations.insert(&account_id, &0);
     }
     /// Adds given amount to given account as delegated weight.
     /// Returns previous amount, new amount and total delegated amount.
     pub fn delegate_owned(&mut self, account_id: AccountId, amount: U128) -> (U128, U128, U128) {
-        require!(env::predecessor_account_id() == self.staking_id, ERR_CALLER);
+        let settings: Settings = self.settings.get().unwrap().into();
+        require!(
+            env::predecessor_account_id() == settings.staking_id,
+            ERR_CALLER
+        );
         let prev_amount = self.delegations.get(&account_id).expect(ERR_NOT_REGISTERED);
         let new_amount = prev_amount + amount.0;
         self.delegations.insert(&account_id, &new_amount);
@@ -46,7 +54,11 @@ impl Contract {
     /// Removes given amount from given account's delegations.
     /// Returns previous, new amount of this account and total delegated amount.
     pub fn undelegate(&mut self, account_id: AccountId, amount: U128) -> (U128, U128, U128) {
-        require!(env::predecessor_account_id() == self.staking_id, ERR_CALLER);
+        let settings: Settings = self.settings.get().unwrap().into();
+        require!(
+            env::predecessor_account_id() == settings.staking_id,
+            ERR_CALLER
+        );
         let prev_amount = self.delegations.get(&account_id).unwrap_or_default();
         require!(prev_amount >= amount.0, ERR_STAKING_INTERNAL);
         let new_amount = prev_amount - amount.0;
@@ -67,7 +79,11 @@ impl Contract {
         new_account_id: AccountId,
         amount: U128,
     ) -> (U128, U128) {
-        require!(env::predecessor_account_id() == self.staking_id, ERR_CALLER);
+        let settings: Settings = self.settings.get().unwrap().into();
+        require!(
+            env::predecessor_account_id() == settings.staking_id,
+            ERR_CALLER
+        );
         let prev_account_prev_amount = self
             .delegations
             .get(&prev_account_id)

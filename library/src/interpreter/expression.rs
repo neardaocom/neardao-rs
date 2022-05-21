@@ -11,15 +11,20 @@ use super::{error::EvalError, ArgId};
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum ExprTerm {
+    /// Specific Value.
     Value(Value),
+    /// Argument id with Value.
     Arg(ArgId),
-    FnCall(FnName, (u8, u8)),
+    /// Function with defined interval (inclusive) for arguments.
+    Fn(FnName, (ArgId, ArgId)),
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum FnName {
     Concat,
     InString,
@@ -27,13 +32,12 @@ pub enum FnName {
     ArrayAtIdx,
     ArrayRemove,
     ArrayPush,
-    ArrayPop, // TODO remove?? when we have array_remove
+    ArrayPop,
     ArrayLen,
-    ToArray,
+    ArrayMerge,
     ValueExists,
 }
 
-// Recursive structure does not work with deserializer
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -53,6 +57,7 @@ pub struct Op {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum EExpr {
     Aritmetic(TExpr),
     Boolean(TExpr),
@@ -90,7 +95,7 @@ impl EExpr {
                     let lhs = match lhs {
                         ExprTerm::Value(v) => v.clone(),
                         ExprTerm::Arg(id) => args[*id as usize].clone(),
-                        ExprTerm::FnCall(fn_name, (li, ui)) => {
+                        ExprTerm::Fn(fn_name, (li, ui)) => {
                             self.eval_fn(fn_name, &args[*li as usize..=*ui as usize])?
                         }
                     };
@@ -98,7 +103,7 @@ impl EExpr {
                     let rhs = match rhs {
                         ExprTerm::Value(v) => v.clone(),
                         ExprTerm::Arg(id) => args[*id as usize].clone(),
-                        ExprTerm::FnCall(fn_name, (li, ui)) => {
+                        ExprTerm::Fn(fn_name, (li, ui)) => {
                             self.eval_fn(fn_name, &args[*li as usize..=*ui as usize])?
                         }
                     };
@@ -126,7 +131,7 @@ impl EExpr {
                 }
                 Ok(Value::String(result))
             }
-            FnName::ToArray => match &args[0] {
+            FnName::ArrayMerge => match &args[0] {
                 Value::String(_) => {
                     let mut result = Vec::with_capacity(args.len());
                     for arg in args.iter() {
@@ -152,6 +157,7 @@ impl EExpr {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum AriOp {
     Add,
     Subtract,
@@ -163,6 +169,7 @@ pub enum AriOp {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum RelOp {
     Eqs,
     NEqs,
@@ -175,6 +182,7 @@ pub enum RelOp {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum LogOp {
     And,
     Or,
@@ -183,6 +191,7 @@ pub enum LogOp {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum EOp {
     Ari(AriOp),
     Log(LogOp),
@@ -310,7 +319,7 @@ mod test {
     #[test]
     pub fn expr_fn_concat_in_cond() {
         //TEST CASE
-        //"abc_group" == concat(["a", "b", "c"]) + "_group" //last one is binded
+        //"abc_group" == concat(["a", "b", "c"]) + "_group"
 
         let mut args = vec![
             Value::String("a".into()),
@@ -325,7 +334,7 @@ mod test {
                 operands_ids: [0, 1],
                 op_type: EOp::Rel(RelOp::Eqs),
             }],
-            terms: vec![ExprTerm::Arg(4), ExprTerm::FnCall(FnName::Concat, (0, 3))],
+            terms: vec![ExprTerm::Arg(4), ExprTerm::Fn(FnName::Concat, (0, 3))],
         });
 
         let result = expr.eval(&mut args).unwrap();
@@ -366,7 +375,7 @@ mod test {
             ],
             terms: vec![
                 ExprTerm::Arg(4),
-                ExprTerm::FnCall(FnName::Concat, (0, 3)),
+                ExprTerm::Fn(FnName::Concat, (0, 3)),
                 ExprTerm::Arg(5),
                 ExprTerm::Arg(6),
             ],

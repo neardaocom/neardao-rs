@@ -7,7 +7,6 @@ use near_sdk::{
 use crate::{
     interpreter::{condition::Condition, expression::EExpr},
     types::datatype::{Datatype, Value},
-    FnCallResultDatatype,
 };
 
 use super::expression::Expression;
@@ -121,7 +120,7 @@ pub enum ArgSrc {
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
-pub enum SrcOrExprOrValue {
+pub enum ValueSrc {
     /// Source for value.
     Src(ArgSrc),
     /// Expression source which evaluates to the value.
@@ -137,7 +136,7 @@ pub struct BindDefinition {
     /// Key being binded.
     pub key: String,
     /// Value source for `key`.
-    pub key_src: SrcOrExprOrValue,
+    pub key_src: ValueSrc,
     /// Data related to collection object.
     pub collection_data: Option<CollectionBindData>,
 }
@@ -185,24 +184,41 @@ pub enum Instruction {
     DeleteKey(String),
     DeleteKeyGlobal(String),
     /// User/Source provided value.
-    StoreDynValue(String, ArgSrc),
+    StoreDynValue(String, ValueSrc),
     StoreValue(String, Value),
     StoreValueGlobal(String, Value),
-    StoreFnCallResult(String, Datatype),
-    StoreFnCallResultGlobal(String, Datatype),
+    StoreFnCallResult(String, FnCallResultType),
+    StoreFnCallResultGlobal(String, FnCallResultType),
     StoreWorkflow,
     /// Stores expression
-    /// `FnCallResultDatatype` arg defines if FnCallResult is required and what to deserialize it to.
+    /// `FnCallResultType` arg defines if FnCallResult is required and what to deserialize it to.
     /// FnCall result will always be as last arg in values.
-    StoreExpression(String, Vec<ArgSrc>, EExpr, FnCallResultDatatype),
-    StoreExpressionGlobal(String, Vec<ArgSrc>, EExpr, FnCallResultDatatype),
-    StoreExpressionBinded(String, Vec<Value>, EExpr, FnCallResultDatatype),
-    StoreExpressionGlobalBinded(String, Vec<Value>, EExpr, FnCallResultDatatype),
+    StoreExpression(String, Vec<ValueSrc>, EExpr, Option<FnCallResultType>),
+    StoreExpressionGlobal(String, Vec<ValueSrc>, EExpr, Option<FnCallResultType>),
+    StoreExpressionBinded(String, Vec<Value>, EExpr, Option<FnCallResultType>),
+    StoreExpressionGlobalBinded(String, Vec<Value>, EExpr, Option<FnCallResultType>),
     /// Conditional Jump.
-    /// `FnCallResultDatatype` arg defines if FnCallResult is required and what to deserialize it to.
+    /// `FnCallResultType` arg defines if FnCallResult is required and what to deserialize it to.
     /// FnCall result will always be as last arg in values.
-    Cond(Vec<ArgSrc>, Condition, FnCallResultDatatype),
-    CondBinded(Vec<Value>, Condition, FnCallResultDatatype),
+    Cond(Vec<ValueSrc>, Condition, Option<FnCallResultType>),
+    CondBinded(Vec<Value>, Condition, Option<FnCallResultType>),
     Jump(u8),
     None,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
+pub enum FnCallResultType {
+    Datatype(Datatype),
+}
+
+impl FnCallResultType {
+    pub fn into_datatype_ref(&self) -> Option<&Datatype> {
+        match self {
+            FnCallResultType::Datatype(d) => Some(d),
+            _ => None,
+        }
+    }
 }

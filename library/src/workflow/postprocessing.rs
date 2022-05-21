@@ -6,7 +6,8 @@ use near_sdk::{
 };
 
 use crate::{
-    functions::utils::get_value_from_source,
+    functions::evaluation::eval,
+    interpreter::expression::EExpr,
     storage::StorageBucket,
     types::{
         activity_input::ActivityInput,
@@ -17,10 +18,11 @@ use crate::{
     ProviderTemplateData,
 };
 
-use super::types::{ArgSrc, Instruction};
+use super::types::Instruction;
 
 // TODO: Remove Debug in production.
-/// Simple post-fncall instructions which say what to do based on FnCall result.
+/// Set of instructions executed after action.
+/// It is usually used to save function call result data or save some data to the storage.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
@@ -34,35 +36,25 @@ impl Postprocessing {
     /// Same is valid for variants with opposite *Binded
     /// Supposed to be called before dispatching FnCall action.
     /// Returns `Err(())` in case users's input structure is not correct.
-    #[allow(clippy::result_unit_err)]
     pub fn bind_instructions(
         &mut self,
         sources: &dyn Source,
+        expressions: &[EExpr],
         user_input: &dyn ActivityInput,
     ) -> Result<(), SourceError> {
         // TODO: Improve.
         for ins in self.instructions.iter_mut() {
             match ins {
                 Instruction::StoreDynValue(string, arg_src) => {
-                    let value = match arg_src {
-                        ArgSrc::User(ref key) => user_input
-                            .get(key)
-                            .ok_or(SourceError::SourceMissing("user input".into()))?
-                            .to_owned(),
-                        _ => get_value_from_source(sources, arg_src)?,
-                    };
+                    let value = eval(arg_src, sources, expressions, Some(user_input))
+                        .expect("postprocessing eval value missing");
                     *ins = Instruction::StoreValue(string.clone(), value);
                 }
                 Instruction::Cond(arg_src, cond, required_fncall_result) => {
                     let mut values = Vec::with_capacity(arg_src.len());
                     for src in arg_src.iter() {
-                        let value = match src {
-                            ArgSrc::User(ref key) => user_input
-                                .get(key)
-                                .ok_or(SourceError::SourceMissing("user input".into()))?
-                                .to_owned(),
-                            _ => get_value_from_source(sources, src)?,
-                        };
+                        let value = eval(src, sources, expressions, Some(user_input))
+                            .expect("postprocessing eval value missing");
                         values.push(value);
                     }
                     *ins = Instruction::CondBinded(
@@ -74,13 +66,8 @@ impl Postprocessing {
                 Instruction::StoreExpression(key, arg_src, expr, required_fncall_result) => {
                     let mut values = Vec::with_capacity(arg_src.len());
                     for src in arg_src.iter() {
-                        let value = match src {
-                            ArgSrc::User(ref key) => user_input
-                                .get(key)
-                                .ok_or(SourceError::SourceMissing("user input".into()))?
-                                .to_owned(),
-                            _ => get_value_from_source(sources, src)?,
-                        };
+                        let value = eval(src, sources, expressions, Some(user_input))
+                            .expect("postprocessing eval value missing");
                         values.push(value);
                     }
 
@@ -94,13 +81,8 @@ impl Postprocessing {
                 Instruction::StoreExpressionGlobal(key, arg_src, expr, required_fncall_result) => {
                     let mut values = Vec::with_capacity(arg_src.len());
                     for src in arg_src.iter() {
-                        let value = match src {
-                            ArgSrc::User(ref key) => user_input
-                                .get(key)
-                                .ok_or(SourceError::SourceMissing("user input".into()))?
-                                .to_owned(),
-                            _ => get_value_from_source(sources, src)?,
-                        };
+                        let value = eval(src, sources, expressions, Some(user_input))
+                            .expect("postprocessing eval value missing");
                         values.push(value);
                     }
 
@@ -114,12 +96,10 @@ impl Postprocessing {
                 _ => continue,
             }
         }
-
         Ok(())
     }
     // TODO: Error handling
     /// Executes postprocessing script.
-    #[allow(clippy::result_unit_err)]
     pub fn execute(
         mut self,
         fn_result_val: Vec<u8>,
@@ -143,11 +123,21 @@ impl Postprocessing {
                 }
                 Instruction::StoreValueGlobal(key, value) => global_storage.add_data(key, value),
                 Instruction::StoreFnCallResult(key, type_def) => {
-                    let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
+                    let result = self.deser_datatype_from_slice(
+                        type_def
+                            .into_datatype_ref()
+                            .expect("custom types are not suported yet"),
+                        &fn_result_val,
+                    )?;
                     storage.as_mut().unwrap().add_data(key, &result);
                 }
                 Instruction::StoreFnCallResultGlobal(key, type_def) => {
-                    let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
+                    let result = self.deser_datatype_from_slice(
+                        type_def
+                            .into_datatype_ref()
+                            .expect("custom types are not suported yet"),
+                        &fn_result_val,
+                    )?;
                     global_storage.add_data(key, &result);
                 }
                 Instruction::StoreWorkflow => {
@@ -161,7 +151,12 @@ impl Postprocessing {
                 Instruction::CondBinded(values, cond, required_fncall_result) => {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
-                        let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
+                        let result = self.deser_datatype_from_slice(
+                            type_def
+                                .into_datatype_ref()
+                                .expect("custom types are not suported yet"),
+                            &fn_result_val,
+                        )?;
                         values.push(result);
                     }
 
@@ -184,7 +179,12 @@ impl Postprocessing {
                 Instruction::StoreExpressionBinded(key, values, expr, required_fncall_result) => {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
-                        let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
+                        let result = self.deser_datatype_from_slice(
+                            type_def
+                                .into_datatype_ref()
+                                .expect("custom types are not suported yet"),
+                            &fn_result_val,
+                        )?;
                         values.push(result);
                     }
                     let result = expr.eval(values.as_slice()).map_err(|_| ())?;
@@ -199,13 +199,17 @@ impl Postprocessing {
                 ) => {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
-                        let result = self.deser_datatype_from_slice(type_def, &fn_result_val)?;
+                        let result = self.deser_datatype_from_slice(
+                            type_def
+                                .into_datatype_ref()
+                                .expect("custom types are not suported yet"),
+                            &fn_result_val,
+                        )?;
                         values.push(result);
                     }
 
                     let result = expr.eval(values.as_slice()).map_err(|_| ())?;
                     global_storage.add_data(key, &result);
-
                     values.pop();
                 }
             }
@@ -217,7 +221,6 @@ impl Postprocessing {
         Ok(())
     }
 
-    #[allow(clippy::result_unit_err)]
     fn deser_datatype_from_slice(
         &self,
         type_def: &Datatype,
@@ -276,7 +279,7 @@ mod test {
         },
         workflow::{
             postprocessing::Postprocessing,
-            types::{ArgSrc, Instruction},
+            types::{ArgSrc, FnCallResultType, Instruction, ValueSrc},
         },
     };
 
@@ -286,7 +289,6 @@ mod test {
     /// Assume FnCall result => string: registered/unregistered
     /// If registered, then global storage save 2 * 420.
     /// Else wf storage save "requires registration".
-    #[allow(unused)]
     #[test]
     fn postprocessing_simple_cond_1() {
         testing_env!(VMContextBuilder::new().build());
@@ -315,11 +317,11 @@ mod test {
                         true_path: 1,
                         false_path: 3,
                     },
-                    Some(Datatype::String(false)),
+                    Some(FnCallResultType::Datatype(Datatype::String(false))),
                 ),
                 Instruction::StoreExpressionGlobal(
                     "skey_1".into(),
-                    vec![ArgSrc::User("key_2".into())],
+                    vec![ValueSrc::Src(ArgSrc::User("key_2".into()))],
                     EExpr::Aritmetic(TExpr {
                         operators: vec![Op {
                             operands_ids: [0, 1],
@@ -340,14 +342,14 @@ mod test {
         let mut global_storage = StorageBucket::new(b"global".to_vec());
         let mut storage = StorageBucket::new(b"key".to_vec());
 
-        let dao_consts = Box::new(|id: u8| match id {
+        let _dao_consts = Box::new(|id: u8| match id {
             0 => Some(Value::String("neardao.near".into())),
             _ => None,
         });
 
         let source = SourceMock { tpls: vec![] };
 
-        pp.bind_instructions(&source, user_input.as_ref())
+        pp.bind_instructions(&source, &[], user_input.as_ref())
             .expect("PP - bind_and_convert failed.");
 
         let expected_pp_binded = Postprocessing {
@@ -368,7 +370,7 @@ mod test {
                         true_path: 1,
                         false_path: 3,
                     },
-                    Some(Datatype::String(false)),
+                    Some(FnCallResultType::Datatype(Datatype::String(false))),
                 ),
                 Instruction::StoreExpressionGlobalBinded(
                     "skey_1".into(),

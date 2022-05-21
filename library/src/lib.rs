@@ -22,7 +22,6 @@ pub type BindId = u8;
 pub type ValidatorId = u8;
 pub type ExpressionId = u8;
 pub type TransitionId = u8;
-pub type FnCallResultDatatype = Option<Datatype>;
 pub type ProviderTemplateData = (Template, Vec<FnCallId>, Vec<Vec<ObjectMetadata>>);
 
 /// Timestamp in seconds.
@@ -32,5 +31,4 @@ pub type TimestampSec = u64;
 pub type ObjectValues = Vec<Vec<Value>>;
 
 /// Version string.
-/// Max 16 characters (unchecked atm).
 pub type Version = String;
