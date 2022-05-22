@@ -8,6 +8,7 @@ use crate::tags::{TagInput, Tags};
 use crate::treasury::{TreasuryPartitionInput, VersionedTreasuryPartition};
 use crate::wallet::VersionedWallet;
 use library::storage::StorageBucket;
+use library::types::datatype::Value;
 use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
@@ -26,14 +27,17 @@ use crate::group::{Group, GroupInput};
 use crate::{proposal::*, StorageKey, TagCategory};
 use crate::{GroupId, ProposalId};
 
+/// Action logs.
+/// Will be removed when Indexer is ready.
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-// TODO: Remove.
-pub struct ActivityLog {
+pub struct ActionLog {
     pub caller: AccountId,
+    pub activity_id: u8,
     pub action_id: u8,
-    pub timestamp: u64,
+    pub timestamp_sec: u64,
+    pub user_inputs: Vec<(String, Value)>,
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
@@ -102,7 +106,7 @@ pub struct Contract {
     pub workflow_propose_settings: UnorderedMap<ProposalId, ProposeSettings>,
     /// Proposed workflow template settings for WorkflowAdd.
     pub proposed_workflow_settings: LookupMap<ProposalId, Vec<TemplateSettings>>,
-    pub workflow_activity_log: LookupMap<ProposalId, Vec<ActivityLog>>, // Logs will be moved to indexer when its ready
+    pub workflow_activity_log: LookupMap<ProposalId, Vec<ActionLog>>, // Logs will be moved to indexer when its ready
     /// Id of last created treasury partition.
     pub partition_last_id: u16,
     pub treasury_partition: LookupMap<u16, VersionedTreasuryPartition>,

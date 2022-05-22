@@ -92,8 +92,6 @@ impl Contract {
         let storage_diff = storage_after - storage_before;
         account_stats.add_storage_used(storage_diff);
         self.save_account_stats(&dao_id, &account_stats);
-
-        // TODO: Return to the caller if already registered.
         Promise::new(vote_token_id)
             .function_call(
                 "storage_deposit".to_string(),

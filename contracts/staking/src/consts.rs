@@ -8,13 +8,13 @@ pub const DAO_KEY_PREFIX: &[u8; 4] = b"dao_";
 pub const GAS_FOR_FT_TRANSFER: Gas = Gas(10_000_000_000_000);
 
 /// Amount of gas for delegate action.
-pub const GAS_FOR_DELEGATE: Gas = Gas(10_000_000_000_000);
+pub const GAS_FOR_DELEGATE: Gas = Gas(15_000_000_000_000);
 
 /// Amount of gas for register action.
-pub const GAS_FOR_REGISTER: Gas = Gas(10_000_000_000_000);
+pub const GAS_FOR_REGISTER: Gas = Gas(15_000_000_000_000);
 
 /// Amount of gas for undelegate action.
-pub const GAS_FOR_UNDELEGATE: Gas = Gas(10_000_000_000_000);
+pub const GAS_FOR_UNDELEGATE: Gas = Gas(15_000_000_000_000);
 
 pub const STANDARD_FT_STORAGE_DEPOSIT: Balance = 1_250_000_000_000_000_000_000;
 

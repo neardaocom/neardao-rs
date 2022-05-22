@@ -13,7 +13,6 @@ pub mod error;
 pub(crate) mod helper;
 pub mod tags;
 
-pub mod activity;
 pub mod delegation;
 pub mod group;
 pub mod internal;
@@ -21,6 +20,7 @@ pub mod media;
 pub mod proposal;
 pub mod role;
 pub mod settings;
+pub mod workflow;
 
 pub mod core;
 pub mod receiver;

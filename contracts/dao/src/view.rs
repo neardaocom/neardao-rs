@@ -180,7 +180,7 @@ impl Contract {
             .flatten()
     }
 
-    pub fn wf_log(self, proposal_id: u32) -> Option<Vec<ActivityLog>> {
+    pub fn wf_log(self, proposal_id: u32) -> Option<Vec<ActionLog>> {
         self.workflow_activity_log.get(&proposal_id)
     }
 }

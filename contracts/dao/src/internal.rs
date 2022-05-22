@@ -2,7 +2,7 @@ use near_sdk::{env, require, AccountId, Balance};
 
 use crate::{
     constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, C_PREDECESSOR},
-    core::{ActivityLog, Contract},
+    core::{ActionLog, Contract},
     error::ERR_LOCK_AMOUNT_OVERFLOW,
     group::GroupInput,
     internal::utils::current_timestamp_sec,
@@ -143,16 +143,25 @@ impl Contract {
 
     /// Action logging method.
     /// Will be moved to indexer when its ready.
-    pub fn log_action(&mut self, proposal_id: ProposalId, caller: AccountId, action_id: u8) {
+    pub fn log_action(
+        &mut self,
+        proposal_id: ProposalId,
+        caller: AccountId,
+        activity_id: u8,
+        action_id: u8,
+        user_inputs: Vec<(String, Value)>,
+    ) {
         let mut logs = self
             .workflow_activity_log
             .get(&proposal_id)
             .unwrap_or_else(|| Vec::with_capacity(4));
 
-        logs.push(ActivityLog {
+        logs.push(ActionLog {
             caller,
+            activity_id,
             action_id,
-            timestamp: current_timestamp_sec(),
+            timestamp_sec: current_timestamp_sec(),
+            user_inputs,
         });
         self.workflow_activity_log.insert(&proposal_id, &logs);
     }
