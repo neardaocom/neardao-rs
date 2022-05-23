@@ -33,10 +33,10 @@ pub struct DaoSettings {
     pub purpose: String,
     pub tags: Vec<u16>,
     pub dao_admin_account_id: AccountId,
-    pub dao_admin_rights: Vec<String>, //TODO should be rights
+    pub dao_admin_rights: Vec<AdminRight>,
     pub workflow_provider: AccountId,
-    pub resource_provider: AccountId,
-    pub scheduler: AccountId,
+    pub resource_provider: Option<AccountId>,
+    pub scheduler: Option<AccountId>,
     /// Vote token id.
     pub token_id: AccountId,
     /// Staking contract.
@@ -103,4 +103,11 @@ pub struct PartitionAsset {
 pub struct TreasuryPartition {
     pub name: String,
     pub assets: Vec<PartitionAsset>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
+pub enum AdminRight {
+    Upgrade,
 }

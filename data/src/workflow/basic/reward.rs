@@ -131,8 +131,8 @@ impl Reward1 {
     pub fn propose_settings(storage_key: Option<&str>) -> ProposeSettings {
         // User proposed settings type
         let settings = ProposeSettings {
-            global: None,
-            binds: vec![None, None, None, None],
+            constants: None,
+            activity_constants: vec![None, None, None, None],
             storage_key: Some(storage_key.unwrap_or(REWARD1_STORAGE_KEY).into()),
         };
         settings

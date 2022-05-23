@@ -12,10 +12,9 @@ pub fn validate(
     user_input: &dyn ActivityInput,
 ) -> Result<bool, ProcessingError> {
     for validator in validators.iter() {
-        if !validator.validate(sources, user_input, expressions)? {
+        if !validator.validate(sources, expressions, user_input)? {
             return Ok(false);
         }
     }
-
     Ok(true)
 }

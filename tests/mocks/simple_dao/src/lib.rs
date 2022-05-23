@@ -8,7 +8,7 @@ use library::functions::validation::validate;
 use library::interpreter::expression::EExpr;
 use library::storage::StorageBucket;
 use library::types::activity_input::UserInput;
-use library::types::consts::Consts;
+use library::types::consts::RuntimeConstantProvider;
 use library::types::datatype::Value;
 use library::types::source::SourceProvider;
 use library::workflow::types::{BindDefinition, ObjectMetadata};
@@ -82,7 +82,7 @@ impl Contract {
         serialize_to_json(user_input, fncall_metadata.as_slice())
     }
 
-    fn get_dao_consts(&self) -> impl Consts {
+    fn get_dao_consts(&self) -> impl RuntimeConstantProvider {
         DaoConsts::default()
     }
 }
@@ -100,7 +100,7 @@ pub struct TestCase {
 #[derive(Default)]
 pub struct DaoConsts;
 
-impl Consts for DaoConsts {
+impl RuntimeConstantProvider for DaoConsts {
     fn get(&self, key: u8) -> Option<Value> {
         match key {
             0 => Some(Value::String(env::current_account_id().to_string())),

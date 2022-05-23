@@ -8,7 +8,7 @@ use library::functions::validation::validate;
 use library::interpreter::expression::EExpr;
 use library::storage::StorageBucket;
 use library::types::activity_input::UserInput;
-use library::types::consts::Consts;
+use library::types::consts::RuntimeConstantProvider;
 use library::types::datatype::Value;
 use library::types::source::SourceProvider;
 use library::workflow::types::{BindDefinition, ObjectMetadata};

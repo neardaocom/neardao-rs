@@ -4,12 +4,12 @@ use near_sdk::{
 };
 
 use crate::{
-    functions::utils::object_key,
+    functions::{evaluation::eval, utils::object_key},
     interpreter::expression::EExpr,
-    types::{activity_input::ActivityInput, error::ProcessingError, source::SourceProvider},
+    types::{activity_input::ActivityInput, error::ProcessingError, source::Source},
 };
 
-use super::types::ArgSrc;
+use super::types::{Src, ValueSrc};
 
 // TODO: Remove all Debug in production!
 
@@ -29,7 +29,7 @@ pub struct ObjectValidator {
     /// Id of expression "doing" the validation.
     pub expression_id: u8,
     /// Sources for keys being validated.
-    pub key_src: Vec<ArgSrc>,
+    pub value: Vec<ValueSrc>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
@@ -39,55 +39,29 @@ pub struct CollectionValidator {
     /// Id of expression "doing" the validation.
     pub expression_id: u8,
     /// Sources for keys being validated.
-    pub key_src: Vec<ArgSrc>,
+    pub value: Vec<ValueSrc>,
     /// Prefixes for nested collection objects.
     /// Defined as Vec<String> for forward-compatible changes.
     pub prefixes: Vec<String>,
 }
 
 impl Validator {
-    pub fn validate<S, A>(
+    pub fn validate(
         &self,
-        sources: &S,
-        args: &A,
+        sources: &dyn Source,
         expressions: &[EExpr],
-    ) -> Result<bool, ProcessingError>
-    where
-        S: SourceProvider + ?Sized,
-        A: ActivityInput + ?Sized,
-    {
+        input: &dyn ActivityInput,
+    ) -> Result<bool, ProcessingError> {
         let expr = expressions
             .get(self.get_expression_id() as usize)
             .expect("Validator expression missing");
         let mut binded_args = Vec::with_capacity(8);
         let result = match self {
             Validator::Object(o) => {
-                for src in o.key_src.iter() {
-                    match src {
-                        ArgSrc::User(key) => {
-                            binded_args.push(
-                                args.get(key.as_str())
-                                    .expect("Failed to get user value")
-                                    .clone(),
-                            );
-                        }
-                        ArgSrc::ConstsTpl(key) => {
-                            binded_args.push(
-                                sources
-                                    .tpl(key.as_str())
-                                    .expect("Failed to get tpl value")
-                                    .clone(),
-                            );
-                        }
-                        ArgSrc::ConstsSettings(_) => todo!(),
-                        ArgSrc::ConstActivityShared(_) => todo!(),
-                        ArgSrc::ConstAction(_) => todo!(),
-                        ArgSrc::Storage(_) => todo!(),
-                        ArgSrc::GlobalStorage(_) => todo!(),
-                        //ArgSrcNew::Expression(_) => todo!(),
-                        ArgSrc::Const(_) => todo!(),
-                        ArgSrc::ConstPropSettings(_) => todo!(),
-                    }
+                for src in o.value.iter() {
+                    let value =
+                        eval(src, sources, expressions, Some(input)).expect("value not found");
+                    binded_args.push(value);
                 }
                 expr.eval(binded_args.as_slice())?.try_into_bool()?
             }
@@ -95,43 +69,36 @@ impl Validator {
                 let mut counter: u32 = 0;
                 let mut started_new = false;
                 loop {
-                    for src in o.key_src.iter() {
-                        match src {
-                            ArgSrc::User(key_suffix) => {
+                    for src in o.value.iter() {
+                        let mapped_src = if let ValueSrc::Src(src) = src {
+                            if let Src::User(key_suffix) = src {
                                 let key = object_key(
                                     o.prefixes.get(0).expect("No prefix for collection"),
                                     counter.to_string().as_str(),
                                     key_suffix.as_str(),
                                 );
-                                if let Some(v) = args.get(key.as_str()) {
-                                    binded_args.push(v.clone());
-                                    started_new = true;
-                                } else {
-                                    break;
-                                };
+                                let src = src.with_new_user_key(key).expect("invalid variant");
+                                Some(ValueSrc::Src(src))
+                            } else {
+                                None
                             }
-                            ArgSrc::ConstsTpl(key) => {
-                                if let Some(v) = sources.tpl(key.as_str()) {
-                                    binded_args.push(v.clone());
-                                } else {
-                                    return Err(ProcessingError::InvalidValidatorDefinition);
-                                    // TODO: add other variant
-                                }
-                            }
-                            ArgSrc::ConstsSettings(_) => todo!(),
-                            ArgSrc::ConstActivityShared(_) => todo!(),
-                            ArgSrc::ConstAction(_) => todo!(),
-                            ArgSrc::Storage(_) => todo!(),
-                            ArgSrc::GlobalStorage(_) => todo!(),
-                            //ArgSrcNew::Expression(_) => todo!(),
-                            ArgSrc::Const(_) => todo!(),
-                            ArgSrc::ConstPropSettings(_) => todo!(),
-                        }
+                        } else {
+                            None
+                        };
+
+                        let value = eval(
+                            mapped_src.as_ref().unwrap_or(src),
+                            sources,
+                            expressions,
+                            Some(input),
+                        )
+                        .expect("value not found");
+                        binded_args.push(value);
                     }
                     // Return true only if all object attributes have been validated.
                     if !started_new {
                         break true;
-                    } else if binded_args.len() < o.key_src.len() {
+                    } else if binded_args.len() < o.value.len() {
                         return Err(ProcessingError::InvalidValidatorDefinition);
                     // TODO: add other variant
                     } else {
@@ -145,7 +112,6 @@ impl Validator {
                 }
             }
         };
-
         Ok(result)
     }
 

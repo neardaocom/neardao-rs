@@ -11,6 +11,7 @@ use crate::{
     internal::utils::current_timestamp_sec,
     reward::Reward,
     role::{MemberRoles, Roles, UserRoles},
+    wallet::Wallet,
     GroupId, RewardId, RoleId, TagId,
 };
 
@@ -196,7 +197,7 @@ impl Contract {
     /// - If a member in the `members` has defined member role in `member_roles`,
     /// then he gets assigned the role and all existing role rewards.
     /// - Add all member roles to the group and to the members defined.
-    /// NOTE: Accounts defined in `member_roles` but not in defined `members` or not existing in the group,
+    /// NOTE: Accounts defined in `member_roles` but not in defined `members` nor in the existing group members,
     /// will be ignored.
     /// TODO: Refactor maybe.
     pub fn group_add_members(
@@ -296,7 +297,7 @@ impl Contract {
                 .expect("internal - group roles not found");
             let rewards: Vec<(u16, u16)> = group.group_reward_ids();
             let current_timestamp = current_timestamp_sec();
-            let mut user_roles_cache: HashMap<AccountId, UserRoles> = HashMap::new();
+            let mut user_cache: HashMap<AccountId, (UserRoles, Vec<(u16, u16)>)> = HashMap::new();
             for role_id in roles {
                 if role_id == 0 {
                     continue;
@@ -310,27 +311,27 @@ impl Contract {
                     let members_with_the_role =
                         self.get_group_members_with_role(id, &group, role_id);
                     for account_id in members_with_the_role {
-                        // TODO: Cache too maybe.
-                        self.remove_wallet_reward(
-                            &account_id,
-                            rewards_to_remove.as_slice(),
-                            current_timestamp,
-                        );
-                        if let Some(user_role) = user_roles_cache.get_mut(&account_id) {
+                        if let Some((user_role, rewards)) = user_cache.get_mut(&account_id) {
                             user_role.remove_group_role(id, role_id);
+                            rewards.append(&mut rewards_to_remove.clone());
                         } else {
                             let mut user_role = self
                                 .user_roles
                                 .get(&account_id)
                                 .expect("internal - user roles not found");
                             user_role.remove_group_role(id, role_id);
-                            user_roles_cache.insert(account_id, user_role);
+                            user_cache.insert(account_id, (user_role, Vec::with_capacity(2)));
                         }
                     }
                 }
             }
-            for (account_id, user_roles) in user_roles_cache.into_iter() {
+            for (account_id, (user_roles, rewards_to_remove)) in user_cache.into_iter() {
                 self.save_user_roles(&account_id, &user_roles);
+                self.remove_wallet_reward(
+                    &account_id,
+                    rewards_to_remove.as_slice(),
+                    current_timestamp,
+                );
             }
             self.group_roles.insert(&id, &group_roles);
             true
@@ -352,7 +353,7 @@ impl Contract {
                 .expect("internal - group roles not found");
             let rewards: Vec<(u16, u16)> = group.group_reward_ids();
             let current_timestamp = current_timestamp_sec();
-            let mut user_roles_cache: HashMap<AccountId, UserRoles> = HashMap::new();
+            let mut user_cache: HashMap<AccountId, (UserRoles, Vec<(u16, u16)>)> = HashMap::new();
             for role in member_roles {
                 if let Some(role_id) = group_roles.find_role_by_name(role.name.as_str()) {
                     let rewards_to_remove: Vec<(u16, u16)> = rewards
@@ -361,27 +362,27 @@ impl Contract {
                         .filter(|(_, r)| *r == role_id)
                         .collect();
                     for account_id in role.members {
-                        // TODO: Cache too maybe.
-                        self.remove_wallet_reward(
-                            &account_id,
-                            rewards_to_remove.as_slice(),
-                            current_timestamp,
-                        );
-                        if let Some(user_role) = user_roles_cache.get_mut(&account_id) {
+                        if let Some((user_role, rewards)) = user_cache.get_mut(&account_id) {
                             user_role.remove_group_role(id, role_id);
+                            rewards.append(&mut rewards_to_remove.clone());
                         } else {
                             let mut user_role = self
                                 .user_roles
                                 .get(&account_id)
                                 .expect("internal - user roles not found");
                             user_role.remove_group_role(id, role_id);
-                            user_roles_cache.insert(account_id, user_role);
+                            user_cache.insert(account_id, (user_role, Vec::with_capacity(2)));
                         }
                     }
                 }
             }
-            for (account_id, user_roles) in user_roles_cache.into_iter() {
+            for (account_id, (user_roles, rewards_to_remove)) in user_cache.into_iter() {
                 self.save_user_roles(&account_id, &user_roles);
+                self.remove_wallet_reward(
+                    &account_id,
+                    rewards_to_remove.as_slice(),
+                    current_timestamp,
+                );
             }
             true
         } else {

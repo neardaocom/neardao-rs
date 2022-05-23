@@ -433,8 +433,8 @@ impl AdminPackage1 {
     }
     pub fn propose_settings() -> ProposeSettings {
         let settings = ProposeSettings {
-            global: None,
-            binds: vec![None, None, None, None, None, None, None],
+            constants: None,
+            activity_constants: vec![None, None, None, None, None, None, None],
             storage_key: None,
         };
         settings

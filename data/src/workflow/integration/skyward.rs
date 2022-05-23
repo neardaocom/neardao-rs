@@ -21,8 +21,8 @@ use library::{
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
         template::Template,
         types::{
-            ActivityRight, ArgSrc, BindDefinition, CollectionBindData, CollectionBindingStyle,
-            FnCallResultType, Instruction, ObjectMetadata, ValueSrc, VoteScenario,
+            ActivityRight, BindDefinition, CollectionBindData, CollectionBindingStyle,
+            FnCallResultType, Instruction, ObjectMetadata, Src, ValueSrc, VoteScenario,
         },
     },
     FnCallId,
@@ -149,15 +149,15 @@ impl Skyward1 {
                                 SKYWARD_FNCALL1_NAME.into(),
                             ),
                             tgas: 30,
-                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                            deposit: Some(ValueSrc::Src(Src::Tpl(
                                 "deposit_register_tokens".into(),
                             ))),
                             binds: vec![BindDefinition {
                                 key: "token_account_ids".into(),
-                                key_src: ValueSrc::Expr(Expression {
+                                value: ValueSrc::Expr(Expression {
                                     args: vec![
-                                        ArgSrc::ConstsTpl("account_wnear".into()),
-                                        ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
+                                        Src::Tpl("account_wnear".into()),
+                                        Src::PropSettings(OFFERED_TOKEN_KEY.into()),
                                     ],
                                     expr_id: 0,
                                 }),
@@ -186,14 +186,10 @@ impl Skyward1 {
                                     SKYWARD_FNCALL2_NAME.into(),
                                 ),
                                 tgas: 10,
-                                deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
-                                    "deposit_storage".into(),
-                                ))),
+                                deposit: Some(ValueSrc::Src(Src::Tpl("deposit_storage".into()))),
                                 binds: vec![BindDefinition {
                                     key: "account_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
-                                        "account_skyward".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Tpl("account_skyward".into())),
                                     collection_data: None,
                                 }],
                                 must_succeed: false,
@@ -206,20 +202,14 @@ impl Skyward1 {
                             validators: vec![],
                             action_data: ActionData::FnCall(FnCallData {
                                 id: FnCallIdType::StandardDynamic(
-                                    ValueSrc::Src(ArgSrc::ConstPropSettings(
-                                        OFFERED_TOKEN_KEY.into(),
-                                    )),
+                                    ValueSrc::Src(Src::PropSettings(OFFERED_TOKEN_KEY.into())),
                                     SKYWARD_FNCALL3_NAME.into(),
                                 ),
                                 tgas: 10,
-                                deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
-                                    "deposit_storage".into(),
-                                ))),
+                                deposit: Some(ValueSrc::Src(Src::Tpl("deposit_storage".into()))),
                                 binds: vec![BindDefinition {
                                     key: "account_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
-                                        "account_skyward".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Tpl("account_skyward".into())),
                                     collection_data: None,
                                 }],
                                 must_succeed: false,
@@ -242,38 +232,34 @@ impl Skyward1 {
                         validators: vec![],
                         action_data: ActionData::FnCall(FnCallData {
                             id: FnCallIdType::StandardDynamic(
-                                ValueSrc::Src(ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into())),
+                                ValueSrc::Src(Src::PropSettings(OFFERED_TOKEN_KEY.into())),
                                 SKYWARD_FNCALL4_NAME.into(),
                             ),
                             tgas: 100,
-                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                            deposit: Some(ValueSrc::Src(Src::Tpl(
                                 "deposit_ft_transfer_call".into(),
                             ))),
                             binds: vec![
                                 BindDefinition {
                                     key: "receiver_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
-                                        "account_skyward".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Tpl("account_skyward".into())),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "amount".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                    value: ValueSrc::Src(Src::PropSettings(
                                         OFFERED_TOKEN_AMOUNT_KEY.into(),
                                     )),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "msg".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
-                                        "ft_transfer_call_msg".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Tpl("ft_transfer_call_msg".into())),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "memo".into(),
-                                    key_src: ValueSrc::Value(Value::Null),
+                                    value: ValueSrc::Value(Value::Null),
                                     collection_data: None,
                                 },
                             ],
@@ -298,18 +284,16 @@ impl Skyward1 {
                                 SKYWARD_FNCALL5_NAME.into(),
                             ),
                             tgas: 50,
-                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
-                                "deposit_sale_create".into(),
-                            ))),
+                            deposit: Some(ValueSrc::Src(Src::Tpl("deposit_sale_create".into()))),
                             binds: vec![
                                 BindDefinition {
                                     key: "sale.permissions_contract_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::Const(0)),
+                                    value: ValueSrc::Src(Src::Runtime(0)),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "token_account_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                    value: ValueSrc::Src(Src::PropSettings(
                                         OFFERED_TOKEN_KEY.into(),
                                     )),
                                     collection_data: Some(CollectionBindData {
@@ -321,7 +305,7 @@ impl Skyward1 {
                                 },
                                 BindDefinition {
                                     key: "balance".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                    value: ValueSrc::Src(Src::PropSettings(
                                         OFFERED_TOKEN_AMOUNT_KEY.into(),
                                     )),
                                     collection_data: Some(CollectionBindData {
@@ -333,7 +317,7 @@ impl Skyward1 {
                                 },
                                 BindDefinition {
                                     key: "referral_bpt".into(),
-                                    key_src: ValueSrc::Value(Value::Null),
+                                    value: ValueSrc::Value(Value::Null),
                                     collection_data: Some(CollectionBindData {
                                         prefixes: vec!["sale.out_tokens".into()],
                                         collection_binding_type: CollectionBindingStyle::ForceSame(
@@ -343,21 +327,17 @@ impl Skyward1 {
                                 },
                                 BindDefinition {
                                     key: "sale.in_token_account_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
-                                        "account_wnear".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Tpl("account_wnear".into())),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "sale.start_time".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstAction(
-                                        "start_time".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Action("start_time".into())),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "sale.duration".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstAction("duration".into())),
+                                    value: ValueSrc::Src(Src::Action("duration".into())),
                                     collection_data: None,
                                 },
                             ],
@@ -392,7 +372,7 @@ impl Skyward1 {
                     Transition {
                         activity_id: 2,
                         cond: Some(ValueSrc::Expr(Expression {
-                            args: vec![ArgSrc::Storage("pp_1_result".into())],
+                            args: vec![Src::Storage("pp_1_result".into())],
                             expr_id: 1,
                         })),
                         time_from_cond: None,
@@ -401,7 +381,7 @@ impl Skyward1 {
                     Transition {
                         activity_id: 3,
                         cond: Some(ValueSrc::Expr(Expression {
-                            args: vec![ArgSrc::Storage("pp_1_result".into())],
+                            args: vec![Src::Storage("pp_1_result".into())],
                             expr_id: 1,
                         })),
                         time_from_cond: None,
@@ -417,7 +397,7 @@ impl Skyward1 {
                 vec![Transition {
                     activity_id: 4,
                     cond: Some(ValueSrc::Expr(Expression {
-                        args: vec![ArgSrc::Storage("pp_3_result".into())],
+                        args: vec![Src::Storage("pp_3_result".into())],
                         expr_id: 1,
                     })),
                     time_from_cond: None,
@@ -530,15 +510,15 @@ impl Skyward1 {
 
         // User proposed settings type
         let propose_settings = ProposeSettings {
-            global: Some(SourceDataVariant::Map(global_consts)),
-            binds: vec![
+            constants: Some(SourceDataVariant::Map(global_consts)),
+            activity_constants: vec![
                 None,
                 None,
                 None,
                 None,
                 Some(ActivityBind {
-                    shared: None,
-                    values: vec![Some(SourceDataVariant::Map(sale_create_map))],
+                    constants: None,
+                    actions_constants: vec![Some(SourceDataVariant::Map(sale_create_map))],
                 }),
             ],
             storage_key: Some(storage_key.unwrap_or(SKYWARD1_STORAGE_KEY).into()),
@@ -665,15 +645,15 @@ impl Skyward2 {
                                 SKYWARD_FNCALL1_NAME.into(),
                             ),
                             tgas: 30,
-                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                            deposit: Some(ValueSrc::Src(Src::Tpl(
                                 "deposit_register_tokens".into(),
                             ))),
                             binds: vec![BindDefinition {
                                 key: "token_account_ids".into(),
-                                key_src: ValueSrc::Expr(Expression {
+                                value: ValueSrc::Expr(Expression {
                                     args: vec![
-                                        ArgSrc::ConstsTpl("account_wnear".into()),
-                                        ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into()),
+                                        Src::Tpl("account_wnear".into()),
+                                        Src::PropSettings(OFFERED_TOKEN_KEY.into()),
                                     ],
                                     expr_id: 0,
                                 }),
@@ -701,14 +681,10 @@ impl Skyward2 {
                                     SKYWARD_FNCALL2_NAME.into(),
                                 ),
                                 tgas: 10,
-                                deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
-                                    "deposit_storage".into(),
-                                ))),
+                                deposit: Some(ValueSrc::Src(Src::Tpl("deposit_storage".into()))),
                                 binds: vec![BindDefinition {
                                     key: "account_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
-                                        "account_skyward".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Tpl("account_skyward".into())),
                                     collection_data: None,
                                 }],
                                 must_succeed: false,
@@ -721,20 +697,14 @@ impl Skyward2 {
                             validators: vec![],
                             action_data: ActionData::FnCall(FnCallData {
                                 id: FnCallIdType::StandardDynamic(
-                                    ValueSrc::Src(ArgSrc::ConstPropSettings(
-                                        OFFERED_TOKEN_KEY.into(),
-                                    )),
+                                    ValueSrc::Src(Src::PropSettings(OFFERED_TOKEN_KEY.into())),
                                     SKYWARD_FNCALL3_NAME.into(),
                                 ),
                                 tgas: 10,
-                                deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
-                                    "deposit_storage".into(),
-                                ))),
+                                deposit: Some(ValueSrc::Src(Src::Tpl("deposit_storage".into()))),
                                 binds: vec![BindDefinition {
                                     key: "account_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
-                                        "account_skyward".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Tpl("account_skyward".into())),
                                     collection_data: None,
                                 }],
                                 must_succeed: false,
@@ -756,38 +726,34 @@ impl Skyward2 {
                         validators: vec![],
                         action_data: ActionData::FnCall(FnCallData {
                             id: FnCallIdType::StandardDynamic(
-                                ValueSrc::Src(ArgSrc::ConstPropSettings(OFFERED_TOKEN_KEY.into())),
+                                ValueSrc::Src(Src::PropSettings(OFFERED_TOKEN_KEY.into())),
                                 SKYWARD_FNCALL4_NAME.into(),
                             ),
                             tgas: 100,
-                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
+                            deposit: Some(ValueSrc::Src(Src::Tpl(
                                 "deposit_ft_transfer_call".into(),
                             ))),
                             binds: vec![
                                 BindDefinition {
                                     key: "receiver_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
-                                        "account_skyward".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Tpl("account_skyward".into())),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "amount".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                    value: ValueSrc::Src(Src::PropSettings(
                                         OFFERED_TOKEN_AMOUNT_KEY.into(),
                                     )),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "msg".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
-                                        "ft_transfer_call_msg".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Tpl("ft_transfer_call_msg".into())),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "memo".into(),
-                                    key_src: ValueSrc::Value(Value::Null),
+                                    value: ValueSrc::Value(Value::Null),
                                     collection_data: None,
                                 },
                             ],
@@ -812,18 +778,16 @@ impl Skyward2 {
                                 SKYWARD_FNCALL5_NAME.into(),
                             ),
                             tgas: 50,
-                            deposit: Some(ValueSrc::Src(ArgSrc::ConstsTpl(
-                                "deposit_sale_create".into(),
-                            ))),
+                            deposit: Some(ValueSrc::Src(Src::Tpl("deposit_sale_create".into()))),
                             binds: vec![
                                 BindDefinition {
                                     key: "sale.permissions_contract_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::Const(0)),
+                                    value: ValueSrc::Src(Src::Runtime(0)),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "token_account_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                    value: ValueSrc::Src(Src::PropSettings(
                                         OFFERED_TOKEN_KEY.into(),
                                     )),
                                     collection_data: Some(CollectionBindData {
@@ -835,7 +799,7 @@ impl Skyward2 {
                                 },
                                 BindDefinition {
                                     key: "balance".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                    value: ValueSrc::Src(Src::PropSettings(
                                         OFFERED_TOKEN_AMOUNT_KEY.into(),
                                     )),
                                     collection_data: Some(CollectionBindData {
@@ -847,7 +811,7 @@ impl Skyward2 {
                                 },
                                 BindDefinition {
                                     key: "referral_bpt".into(),
-                                    key_src: ValueSrc::Value(Value::Null),
+                                    value: ValueSrc::Value(Value::Null),
                                     collection_data: Some(CollectionBindData {
                                         prefixes: vec!["sale.out_tokens".into()],
                                         collection_binding_type: CollectionBindingStyle::ForceSame(
@@ -857,21 +821,17 @@ impl Skyward2 {
                                 },
                                 BindDefinition {
                                     key: "sale.in_token_account_id".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstsTpl(
-                                        "account_wnear".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Tpl("account_wnear".into())),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "sale.start_time".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstAction(
-                                        "start_time".into(),
-                                    )),
+                                    value: ValueSrc::Src(Src::Action("start_time".into())),
                                     collection_data: None,
                                 },
                                 BindDefinition {
                                     key: "sale.duration".into(),
-                                    key_src: ValueSrc::Src(ArgSrc::ConstAction("duration".into())),
+                                    value: ValueSrc::Src(Src::Action("duration".into())),
                                     collection_data: None,
                                 },
                             ],
@@ -906,7 +866,7 @@ impl Skyward2 {
                     Transition {
                         activity_id: 2,
                         cond: Some(ValueSrc::Expr(Expression {
-                            args: vec![ArgSrc::Storage("pp_1_result".into())],
+                            args: vec![Src::Storage("pp_1_result".into())],
                             expr_id: 1,
                         })),
                         time_from_cond: None,
@@ -915,7 +875,7 @@ impl Skyward2 {
                     Transition {
                         activity_id: 3,
                         cond: Some(ValueSrc::Expr(Expression {
-                            args: vec![ArgSrc::Storage("pp_1_result".into())],
+                            args: vec![Src::Storage("pp_1_result".into())],
                             expr_id: 1,
                         })),
                         time_from_cond: None,
@@ -931,7 +891,7 @@ impl Skyward2 {
                 vec![Transition {
                     activity_id: 4,
                     cond: Some(ValueSrc::Expr(Expression {
-                        args: vec![ArgSrc::Storage("pp_3_result".into())],
+                        args: vec![Src::Storage("pp_3_result".into())],
                         expr_id: 1,
                     })),
                     time_from_cond: None,
@@ -1041,15 +1001,15 @@ impl Skyward2 {
 
         // User proposed settings type
         let propose_settings = ProposeSettings {
-            global: Some(SourceDataVariant::Map(global_consts)),
-            binds: vec![
+            constants: Some(SourceDataVariant::Map(global_consts)),
+            activity_constants: vec![
                 None,
                 None,
                 None,
                 None,
                 Some(ActivityBind {
-                    shared: None,
-                    values: vec![Some(SourceDataVariant::Map(sale_create_map))],
+                    constants: None,
+                    actions_constants: vec![Some(SourceDataVariant::Map(sale_create_map))],
                 }),
             ],
             storage_key: Some(storage_key.unwrap_or(SKYWARD1_STORAGE_KEY).into()),

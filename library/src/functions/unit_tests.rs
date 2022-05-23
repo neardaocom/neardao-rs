@@ -21,7 +21,7 @@ use crate::{
     workflow::{
         expression::Expression,
         types::{
-            ArgSrc, BindDefinition, CollectionBindData, CollectionBindingStyle, ObjectMetadata,
+            BindDefinition, CollectionBindData, CollectionBindingStyle, ObjectMetadata, Src,
             ValueSrc,
         },
         validator::{CollectionValidator, ObjectValidator, Validator},
@@ -167,25 +167,25 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
     let validators = vec![
         Validator::Object(ObjectValidator {
             expression_id: 0,
-            key_src: vec![
-                ArgSrc::ConstsTpl("sale.permissions_contract_id".into()),
-                ArgSrc::User("sale.permissions_contract_id".into()),
+            value: vec![
+                ValueSrc::Src(Src::Tpl("sale.permissions_contract_id".into())),
+                ValueSrc::Src(Src::User("sale.permissions_contract_id".into())),
             ],
         }),
         Validator::Collection(CollectionValidator {
             prefixes: vec!["sale.out_tokens".into()],
             expression_id: 1,
-            key_src: vec![
-                ArgSrc::ConstsTpl("sale.out_tokens.balance".into()),
-                ArgSrc::User("balance".into()),
+            value: vec![
+                ValueSrc::Src(Src::Tpl("sale.out_tokens.balance".into())),
+                ValueSrc::Src(Src::User("balance".into())),
             ],
         }),
         Validator::Collection(CollectionValidator {
             prefixes: vec!["sale.out_tokens".into()],
             expression_id: 1,
-            key_src: vec![
-                ArgSrc::ConstsTpl("sale.out_tokens.shares.amount".into()),
-                ArgSrc::User("shares.amount".into()),
+            value: vec![
+                ValueSrc::Src(Src::Tpl("sale.out_tokens.shares.amount".into())),
+                ValueSrc::Src(Src::User("shares.amount".into())),
             ],
         }),
     ];
@@ -274,18 +274,18 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
     let source_defs: Vec<BindDefinition> = vec![
         BindDefinition {
             key: "sale.meta.reason".into(),
-            key_src: ValueSrc::Src(ArgSrc::ConstsTpl("sale.meta.reason".into())),
+            value: ValueSrc::Src(Src::Tpl("sale.meta.reason".into())),
             collection_data: None,
         },
         BindDefinition {
             key: "sale_info".into(),
-            key_src: ValueSrc::Src(ArgSrc::ConstsTpl("sale_info".into())),
+            value: ValueSrc::Src(Src::Tpl("sale_info".into())),
             collection_data: None,
         },
         BindDefinition {
             key: "token_account_id".into(),
-            key_src: ValueSrc::Expr(Expression {
-                args: vec![ArgSrc::ConstsTpl("sale.out_tokens.token_account_id".into())],
+            value: ValueSrc::Expr(Expression {
+                args: vec![Src::Tpl("sale.out_tokens.token_account_id".into())],
                 expr_id: 2,
             }),
             collection_data: Some(CollectionBindData {

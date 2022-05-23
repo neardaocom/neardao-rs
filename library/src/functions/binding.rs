@@ -1,3 +1,4 @@
+use crate::types::source::SourceProvider;
 use crate::workflow::types::CollectionBindingStyle::{ForceSame, Overwrite};
 use crate::{
     interpreter::expression::EExpr,
@@ -19,7 +20,7 @@ pub fn bind_input(
         match &def.collection_data {
             None => {
                 let value =
-                    eval(&def.key_src, sources, expressions, Some(input)).expect("value not found");
+                    eval(&def.value, sources, expressions, Some(input)).expect("value not found");
                 input.set(def.key.as_str(), value);
             }
             Some(data) => {
@@ -29,7 +30,7 @@ pub fn bind_input(
                     .get(0)
                     .expect("At least 0 prefix must be defined for a collection");
                 let value =
-                    eval(&def.key_src, sources, expressions, Some(input)).expect("value not found");
+                    eval(&def.value, sources, expressions, Some(input)).expect("value not found");
                 let mut counter: u32 = 0;
                 let mut key = object_key(prefix, counter.to_string().as_str(), def.key.as_str());
                 match data.collection_binding_type {

@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use library::storage::StorageBucket;
-use library::types::consts::Consts;
+use library::types::consts::RuntimeConstantProvider;
 use library::types::datatype::Value;
 use library::types::source::{MutableSource, Source, SourceDataVariant, SourceProvider};
 use near_sdk::json_types::U128;

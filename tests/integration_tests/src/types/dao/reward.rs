@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use near_sdk::json_types::U128;
 use serde::{Deserialize, Serialize};
 use workspaces::AccountId;
 
@@ -191,16 +192,17 @@ impl From<RewardActivity> for u64 {
         }
     }
 }
-
-/* #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct TreasuryPartition {
-    pub assets: Vec<PartitionAsset>,
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ClaimableReward {
+    pub asset: Asset,
+    pub reward_id: u16,
+    pub amount: U128,
+    pub partition_id: u16,
 }
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct PartitionAsset {
-    asset_id: Asset,
-    /// Available amount of the asset with decimal zeroes.
-    amount: u128,
-    lock: Option<Lock>,
+#[serde(crate = "near_sdk::serde")]
+pub struct ClaimableRewards {
+    pub claimable_rewards: Vec<ClaimableReward>,
+    pub failed_withdraws: Vec<(Asset, U128)>,
 }
- */

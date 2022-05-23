@@ -27,25 +27,33 @@ impl Dao {
     /// Delegate `amount` of votes from `sender_id` to `delegate_id` account.
     pub fn delegate_owned(&mut self, sender_id: AccountId, delegate_id: AccountId, amount: u128) {
         let mut sender = self.get_user(&sender_id);
-        let mut delegate = self.get_user(&delegate_id);
         sender.delegate_owned(delegate_id.clone(), amount);
-        delegate.add_delegator(sender_id.clone(), amount);
+        if sender_id != delegate_id {
+            let mut delegate = self.get_user(&delegate_id);
+            delegate.add_delegator(sender_id.clone(), amount);
+            self.save_user(&delegate_id, delegate);
+        } else {
+            sender.add_delegator(sender_id.clone(), amount);
+        }
         self.save_user(&sender_id, sender);
-        self.save_user(&delegate_id, delegate);
     }
 
     /// Undelegates `amount` from `delegate_id` account back to `sender`id account.
     pub fn undelegate(&mut self, sender_id: AccountId, delegate_id: AccountId, amount: u128) {
         let mut sender = self.get_user(&sender_id);
-        let mut delegate = self.get_user(&delegate_id);
-        let remainaing_amount = sender.undelegate(&delegate_id, amount);
-        delegate.remove_delegated_amount(&sender_id, amount, remainaing_amount);
+        let remaining_amount = sender.undelegate(&delegate_id, amount);
+        if sender_id != delegate_id {
+            let mut delegate = self.get_user(&delegate_id);
+            delegate.remove_delegated_amount(&sender_id, amount, remaining_amount);
+            self.save_user(&delegate_id, delegate);
+        } else {
+            sender.remove_delegated_amount(&sender_id, amount, remaining_amount);
+        }
         self.save_user(&sender_id, sender);
-        self.save_user(&delegate_id, delegate);
     }
 
     /// Delegate all delegated tokens aka transitive delegation.
-    /// Once done - cannot undone.
+    /// Once delegated - cannot be undeleged.
     pub fn delegate(&mut self, sender_id: &AccountId, delegate_id: AccountId) -> u128 {
         let mut sender = self.get_user(sender_id);
         let (amount, delegators) = sender.forward_delegated();

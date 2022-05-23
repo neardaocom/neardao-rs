@@ -19,10 +19,10 @@ use crate::{
     core::Contract,
     group::{GroupInput, GroupMember, GroupSettings},
     role::{MemberRoles, Roles, UserRoles},
-    settings::Settings,
+    settings::{AdminRight, Settings},
     tags::TagInput,
     treasury::{Asset, PartitionAssetInput, TreasuryPartitionInput},
-    wallet::{ClaimbleReward, Wallet, WithdrawStats},
+    wallet::{ClaimableReward, Wallet, WithdrawStats},
     DurationSec,
 };
 
@@ -167,10 +167,10 @@ pub(crate) fn get_default_dao_config() -> Settings {
         purpose: "test".into(),
         tags: vec![0, 1, 2],
         dao_admin_account_id: as_account_id(DAO_ADMIN_ACC),
-        dao_admin_rights: vec!["all".into()],
+        dao_admin_rights: vec![AdminRight::Upgrade],
         workflow_provider: as_account_id(WF_PROVIDER_ACC),
-        resource_provider: as_account_id(RESOURCE_PROVIDER_ACC),
-        scheduler: as_account_id(SCHEDULER_ACC),
+        resource_provider: Some(as_account_id(RESOURCE_PROVIDER_ACC)),
+        scheduler: Some(as_account_id(SCHEDULER_ACC)),
         token_id: as_account_id(TOKEN_ACC),
         staking_id: as_account_id(STAKING_ACC),
     }
@@ -292,8 +292,8 @@ pub(crate) fn as_account_id(name: &str) -> AccountId {
 
 pub(crate) fn dummy_propose_settings() -> ProposeSettings {
     ProposeSettings {
-        global: None,
-        binds: vec![None, None],
+        constants: None,
+        activity_constants: vec![None, None],
         storage_key: None,
     }
 }
@@ -405,7 +405,7 @@ fn get_wallet_withdraw_stat<'a>(
     wallet_reward.withdraw_stat(asset)
 }
 
-fn claimable_rewards_sum(claimable_rewards: &[ClaimbleReward], asset: &Asset) -> u128 {
+fn claimable_rewards_sum(claimable_rewards: &[ClaimableReward], asset: &Asset) -> u128 {
     let mut sum = 0;
     for reward in claimable_rewards.into_iter() {
         if reward.asset == *asset {

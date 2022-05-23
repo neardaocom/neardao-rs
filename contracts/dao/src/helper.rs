@@ -291,7 +291,7 @@ pub mod deserialize {
         };
         let key_parent_group = format!("{}.parent_group", prefix);
         let parent_group = if let Some(v) = action_input.get(&key_parent_group) {
-            v.try_into_u64().expect("invalid datatype: duration") as u16
+            v.try_into_u64().expect("invalid datatype: parent_group") as u16
         } else {
             0
         };

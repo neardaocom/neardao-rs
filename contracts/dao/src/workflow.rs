@@ -78,7 +78,7 @@ impl Contract {
         let mut sources: Box<dyn Source> = Box::new(DefaultSource::from(
             constants,
             wfs.constants,
-            prop_settings.global.take(),
+            prop_settings.constants.take(),
             dao_consts,
             storage,
             Some(global_storage),
@@ -149,11 +149,11 @@ impl Contract {
 
         // Put activity's shared values into Source object if defined.
         if let Some(activity_input) = prop_settings
-            .binds
+            .activity_constants
             .get_mut(activity_id)
             .expect("fatal - missing activity bind")
         {
-            if let Some(prop_shared) = activity_input.shared.take() {
+            if let Some(prop_shared) = activity_input.constants.take() {
                 sources.set_prop_shared(prop_shared);
             }
         }
@@ -374,13 +374,13 @@ impl Contract {
             // Assign current action proposal binds to source if there's defined one.
             if let Some(mut binds) = ctx
                 .proposal_settings
-                .binds
+                .activity_constants
                 .get_mut(ctx.activity_id)
                 .unwrap()
                 .take()
             {
                 if let Some(prop_binds) = binds
-                    .values
+                    .actions_constants
                     .get_mut(idx)
                     .expect("Missing activity bind")
                     .take()
@@ -481,13 +481,10 @@ impl Contract {
         // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
         let last_action_done = ctx.actions_done_before as usize;
         log!("last action done: {}", last_action_done);
-
-        // This strange variable is here because "optional-required-optional" actions case might happen.
-        // Therefore we must not considered 3th action as sucessfull but instead of that break the cycle.
-        // This might be redundant and "YAGNI" stuff I let it stay here for now.
         let mut required_promise_dispatched = false;
         let mut promise: Option<Promise> = None;
         for idx in last_action_done..input.len() {
+            // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
             let tpl_action = ctx.actions.get_mut(idx).unwrap();
             let mut action_input = match input.get_mut(idx).unwrap().take() {
                 Some(a) => {
@@ -518,13 +515,13 @@ impl Contract {
             // Assign current action proposal binds to source if there's defined one.
             if let Some(mut binds) = ctx
                 .proposal_settings
-                .binds
+                .activity_constants
                 .get_mut(ctx.activity_id)
                 .unwrap()
                 .take()
             {
                 if let Some(prop_binds) = binds
-                    .values
+                    .actions_constants
                     .get_mut(idx)
                     .expect("Missing activity bind")
                     .take()

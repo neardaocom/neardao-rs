@@ -15,13 +15,12 @@ use crate::{
     internal::utils::current_timestamp_sec,
     reward::{Reward, RewardTypeIdent},
     treasury::{Asset, TreasuryPartition},
-    GroupId, RewardId, RoleId, TimestampSec,
+    TimestampSec,
 };
 
 #[ext_contract(ext_self)]
 trait ExtWallet {
-    /// Rollback if promise failed.
-    fn withdraw_rollback(account_id: AccountId, asset: Asset, amount: u128);
+    fn withdraw_check(account_id: AccountId, asset: Asset, amount: u128);
 }
 
 derive_into_versioned!(Wallet, VersionedWallet);
@@ -374,11 +373,18 @@ pub struct ActivityStats {
 
 #[derive(Serialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct ClaimbleReward {
+pub struct ClaimableReward {
     pub asset: Asset,
     pub reward_id: u16,
     pub amount: U128,
     pub partition_id: u16,
+}
+
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ClaimableRewards {
+    pub claimable_rewards: Vec<ClaimableReward>,
+    pub failed_withdraws: Vec<(Asset, U128)>,
 }
 
 #[near_bindgen]
@@ -396,7 +402,7 @@ impl Contract {
         total_withdrawn.into()
     }
     /// Calculate claimable rewards for `account_id`.
-    pub fn claimable_rewards(&self, account_id: AccountId) -> Vec<ClaimbleReward> {
+    pub fn claimable_rewards(&self, account_id: AccountId) -> ClaimableRewards {
         let wallet: Wallet = self
             .wallets
             .get(&account_id)
@@ -415,7 +421,7 @@ impl Contract {
                         &asset,
                         current_timestamp,
                     );
-                    claimable_rewards.push(ClaimbleReward {
+                    claimable_rewards.push(ClaimableReward {
                         asset: asset.clone(),
                         reward_id: wallet_reward.reward_id,
                         amount: amount.into(),
@@ -424,7 +430,15 @@ impl Contract {
                 }
             }
         }
-        claimable_rewards
+        ClaimableRewards {
+            claimable_rewards,
+            failed_withdraws: wallet
+                .failed_withdraws
+                .clone()
+                .into_iter()
+                .map(|(a, v)| (a, v.into()))
+                .collect(),
+        }
     }
 
     #[private]
@@ -559,7 +573,7 @@ impl Contract {
                 );
                 Promise::new(ft.account_id.clone())
                     .function_call("ft_transfer".into(), args.into_bytes(), 1, TGAS * 10)
-                    .then(ext_self::withdraw_rollback(
+                    .then(ext_self::withdraw_check(
                         account_id,
                         Asset::new_ft(ft.account_id, ft.decimals),
                         amount,
@@ -580,7 +594,7 @@ impl Contract {
                 );
                 Promise::new(nft.account_id.clone())
                     .function_call("nft_transfer".into(), args.into_bytes(), 1, TGAS * 10)
-                    .then(ext_self::withdraw_rollback(
+                    .then(ext_self::withdraw_check(
                         account_id,
                         Asset::new_nft(nft.account_id, nft.token_id, nft.approval_id),
                         amount,

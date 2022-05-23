@@ -14,8 +14,7 @@ use library::{
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
         template::Template,
         types::{
-            ActivityRight, ArgSrc, BindDefinition, Instruction, ObjectMetadata, ValueSrc,
-            VoteScenario,
+            ActivityRight, BindDefinition, Instruction, ObjectMetadata, Src, ValueSrc, VoteScenario,
         },
     },
 };
@@ -56,16 +55,14 @@ impl WfAdd1 {
                         validators: vec![],
                         action_data: ActionData::FnCall(FnCallData {
                             id: FnCallIdType::Dynamic(
-                                ValueSrc::Src(ArgSrc::ConstPropSettings(
-                                    WF_ADD1_PROVIDER_ID_KEY.into(),
-                                )),
+                                ValueSrc::Src(Src::PropSettings(WF_ADD1_PROVIDER_ID_KEY.into())),
                                 "wf_template".into(),
                             ),
                             tgas: 30,
                             deposit: None,
                             binds: vec![BindDefinition {
                                 key: "id".into(),
-                                key_src: ValueSrc::Src(ArgSrc::ConstPropSettings(
+                                value: ValueSrc::Src(Src::PropSettings(
                                     WF_ADD1_TEMPLATE_ID_KEY.into(),
                                 )),
                                 collection_data: None,
@@ -116,12 +113,12 @@ impl WfAdd1 {
 
         // User proposed settings type
         let settings = ProposeSettings {
-            global: Some(SourceDataVariant::Map(global_consts)),
-            binds: vec![
+            constants: Some(SourceDataVariant::Map(global_consts)),
+            activity_constants: vec![
                 None,
                 Some(ActivityBind {
-                    shared: None,
-                    values: vec![None],
+                    constants: None,
+                    actions_constants: vec![None],
                 }),
             ],
             storage_key: None,

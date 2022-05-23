@@ -11,7 +11,7 @@ use library::{
         postprocessing::Postprocessing,
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, ArgSrc, DaoActionIdent, Instruction, ValueSrc, VoteScenario},
+        types::{ActivityRight, DaoActionIdent, Instruction, Src, ValueSrc, VoteScenario},
     },
 };
 
@@ -120,7 +120,7 @@ impl WfOptionalActions {
                             exec_condition: None,
                             validators: vec![],
                             action_data: ActionData::SendNear(
-                                ValueSrc::Src(ArgSrc::Const(2)),
+                                ValueSrc::Src(Src::Runtime(2)),
                                 ValueSrc::Value(Value::U128((5 * ONE_NEAR).into())),
                             ),
                             postprocessing: Some(Postprocessing {
@@ -135,7 +135,7 @@ impl WfOptionalActions {
                             exec_condition: None,
                             validators: vec![],
                             action_data: ActionData::SendNear(
-                                ValueSrc::Src(ArgSrc::Const(2)),
+                                ValueSrc::Src(Src::Runtime(2)),
                                 ValueSrc::Value(Value::U128((5 * ONE_NEAR).into())),
                             ),
                             postprocessing: Some(Postprocessing {
@@ -150,7 +150,7 @@ impl WfOptionalActions {
                             exec_condition: None,
                             validators: vec![],
                             action_data: ActionData::SendNear(
-                                ValueSrc::Src(ArgSrc::Const(2)),
+                                ValueSrc::Src(Src::Runtime(2)),
                                 ValueSrc::Value(Value::U128((5 * ONE_NEAR).into())),
                             ),
                             postprocessing: Some(Postprocessing {
@@ -165,7 +165,7 @@ impl WfOptionalActions {
                             exec_condition: None,
                             validators: vec![],
                             action_data: ActionData::SendNear(
-                                ValueSrc::Src(ArgSrc::Const(2)),
+                                ValueSrc::Src(Src::Runtime(2)),
                                 ValueSrc::Value(Value::U128((5 * ONE_NEAR).into())),
                             ),
                             postprocessing: Some(Postprocessing {
@@ -206,8 +206,8 @@ impl WfOptionalActions {
     }
     pub fn propose_settings(storage_key: &str) -> ProposeSettings {
         let settings = ProposeSettings {
-            global: None,
-            binds: vec![None, None, None],
+            constants: None,
+            activity_constants: vec![None, None, None],
             storage_key: Some(storage_key.into()),
         };
         settings

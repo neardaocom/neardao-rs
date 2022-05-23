@@ -58,16 +58,16 @@ pub enum ActivityRight {
     Group(u16),
     /// Only member in the group.
     GroupMember(u16, AccountId),
-    /// Defined account.
-    Account(AccountId),
-    /// Any account_id with > 0 tokens.
-    TokenHolder,
-    /// Member in any group.
-    Member,
     /// Members in the group with the role id.
     GroupRole(u16, u16),
     /// Only the group leader.
     GroupLeader(u16),
+    /// Defined account.
+    Account(AccountId),
+    /// Any account with > 0 staked vote tokens in the DAO.
+    TokenHolder,
+    /// Member in any group.
+    Member,
 }
 
 // TODO: Refactor.
@@ -97,22 +97,33 @@ pub enum ActivityResult {
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 /// Defines source of value.
-pub enum ArgSrc {
+pub enum Src {
     /// User's input key name.
     User(String),
     /// Bind from template.
-    ConstsTpl(String),
+    Tpl(String),
     /// Bind from template settings.
-    ConstsSettings(String),
-    ConstPropSettings(String),
+    TplSettings(String),
+    /// Bind from proposal settings - constants.
+    PropSettings(String),
     /// Bind from proposal settings.
-    ConstActivityShared(String),
+    Activity(String),
     /// Bind from proposal settings.
-    ConstAction(String),
+    Action(String),
     Storage(String),
     GlobalStorage(String),
-    /// Dao specific value known at runtime, eg. 0 means dao's account name.
-    Const(u8),
+    /// Specific value known at runtime.
+    /// Eg. 0 means dao's account name in case of DAO contract.
+    Runtime(u8),
+}
+
+impl Src {
+    pub fn with_new_user_key(&self, key: String) -> Result<Self, &'static str> {
+        match self {
+            Src::User(_) => Ok(Src::User(key)),
+            _ => Err("Invalid variant of self."),
+        }
+    }
 }
 
 // TODO: Remove Debug in production.
@@ -122,9 +133,10 @@ pub enum ArgSrc {
 #[serde(rename_all = "snake_case")]
 pub enum ValueSrc {
     /// Source for value.
-    Src(ArgSrc),
+    Src(Src),
     /// Expression source which evaluates to the value.
     Expr(Expression),
+    /// Constant value.
     Value(Value),
 }
 
@@ -136,7 +148,7 @@ pub struct BindDefinition {
     /// Key being binded.
     pub key: String,
     /// Value source for `key`.
-    pub key_src: ValueSrc,
+    pub value: ValueSrc,
     /// Data related to collection object.
     pub collection_data: Option<CollectionBindData>,
 }

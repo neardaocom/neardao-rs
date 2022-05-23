@@ -14,7 +14,7 @@ use library::{
         postprocessing::Postprocessing,
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, ArgSrc, DaoActionIdent, Instruction, ValueSrc, VoteScenario},
+        types::{ActivityRight, DaoActionIdent, Instruction, Src, ValueSrc, VoteScenario},
         validator::{ObjectValidator, Validator},
     },
 };
@@ -69,7 +69,7 @@ impl Bounty1 {
                         postprocessing: Some(Postprocessing {
                             instructions: vec![Instruction::StoreDynValue(
                                 "account_id_applied".into(),
-                                ValueSrc::Src(ArgSrc::Const(2)),
+                                ValueSrc::Src(Src::Runtime(2)),
                             )],
                         }),
                         optional: false,
@@ -117,11 +117,11 @@ impl Bounty1 {
                             instructions: vec![
                                 Instruction::StoreDynValue(
                                     "approved_by".into(),
-                                    ValueSrc::Src(ArgSrc::Const(2)),
+                                    ValueSrc::Src(Src::Runtime(2)),
                                 ),
                                 Instruction::StoreDynValue(
                                     "checkin_accepted".into(),
-                                    ValueSrc::Src(ArgSrc::User("checkin_accepted".into())),
+                                    ValueSrc::Src(Src::User("checkin_accepted".into())),
                                 ),
                             ],
                         }),
@@ -147,7 +147,7 @@ impl Bounty1 {
                         postprocessing: Some(Postprocessing {
                             instructions: vec![Instruction::StoreDynValue(
                                 "event_done_result".into(),
-                                ValueSrc::Src(ArgSrc::User("result".into())),
+                                ValueSrc::Src(Src::User("result".into())),
                             )],
                         }),
                         optional: false,
@@ -176,11 +176,11 @@ impl Bounty1 {
                             instructions: vec![
                                 Instruction::StoreDynValue(
                                     "event_done_approved_by".into(),
-                                    ValueSrc::Src(ArgSrc::Const(2)),
+                                    ValueSrc::Src(Src::Runtime(2)),
                                 ),
                                 Instruction::StoreDynValue(
                                     "event_done_result_evaluation".into(),
-                                    ValueSrc::Src(ArgSrc::User("result_evaluation".into())),
+                                    ValueSrc::Src(Src::User("result_evaluation".into())),
                                 ),
                             ],
                         }),
@@ -198,22 +198,24 @@ impl Bounty1 {
                         validators: vec![
                             Validator::Object(ObjectValidator {
                                 expression_id: 0,
-                                key_src: vec![
-                                    ArgSrc::User("amount_near".into()),
-                                    ArgSrc::ConstPropSettings(BOUNTY1_OFFERED_AMOUNT_KEY.into()),
+                                value: vec![
+                                    ValueSrc::Src(Src::User("amount_near".into())),
+                                    ValueSrc::Src(Src::PropSettings(
+                                        BOUNTY1_OFFERED_AMOUNT_KEY.into(),
+                                    )),
                                 ],
                             }),
                             Validator::Object(ObjectValidator {
                                 expression_id: 1,
-                                key_src: vec![
-                                    ArgSrc::User("receiver_id".into()),
-                                    ArgSrc::Storage("account_id_applied".into()),
+                                value: vec![
+                                    ValueSrc::Src(Src::User("receiver_id".into())),
+                                    ValueSrc::Src(Src::Storage("account_id_applied".into())),
                                 ],
                             }),
                         ],
                         action_data: ActionData::SendNear(
-                            ValueSrc::Src(ArgSrc::Storage("account_id_applied".into())),
-                            ValueSrc::Src(ArgSrc::User("amount_near".into())),
+                            ValueSrc::Src(Src::Storage("account_id_applied".into())),
+                            ValueSrc::Src(Src::User("amount_near".into())),
                         ),
                         optional: false,
                         postprocessing: None, // Could be stored amount of sent NEARs.
@@ -314,7 +316,7 @@ impl Bounty1 {
                     Transition {
                         activity_id: 1,
                         cond: Some(ValueSrc::Expr(Expression {
-                            args: vec![ArgSrc::Storage("checkin_accepted".into())],
+                            args: vec![Src::Storage("checkin_accepted".into())],
                             expr_id: 3,
                         })),
                         time_from_cond: None,
@@ -324,10 +326,7 @@ impl Bounty1 {
                     Transition {
                         activity_id: 2,
                         cond: Some(ValueSrc::Expr(Expression {
-                            args: vec![
-                                ArgSrc::Storage("account_id_applied".into()),
-                                ArgSrc::Const(2),
-                            ],
+                            args: vec![Src::Storage("account_id_applied".into()), Src::Runtime(2)],
                             expr_id: 1,
                         })),
                         time_from_cond: None,
@@ -339,9 +338,9 @@ impl Bounty1 {
                         activity_id: 4,
                         cond: Some(ValueSrc::Expr(Expression {
                             args: vec![
-                                ArgSrc::Storage("checkin_accepted".into()),
-                                ArgSrc::Storage("account_id_applied".into()),
-                                ArgSrc::Const(2),
+                                Src::Storage("checkin_accepted".into()),
+                                Src::Storage("account_id_applied".into()),
+                                Src::Runtime(2),
                             ],
                             expr_id: 2,
                         })),
@@ -384,8 +383,8 @@ impl Bounty1 {
 
         // User proposed settings type
         let settings = ProposeSettings {
-            global: Some(SourceDataVariant::Map(global_consts)),
-            binds: vec![None, None, None, None, None, None, None],
+            constants: Some(SourceDataVariant::Map(global_consts)),
+            activity_constants: vec![None, None, None, None, None, None, None],
             storage_key: Some(storage_key.unwrap_or(BOUNTY1_STORAGE_KEY).into()),
         };
         settings

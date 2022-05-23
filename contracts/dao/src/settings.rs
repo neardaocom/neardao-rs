@@ -18,15 +18,22 @@ pub struct Settings {
     pub purpose: String,
     pub tags: Vec<TagId>,
     pub dao_admin_account_id: AccountId,
-    pub dao_admin_rights: Vec<String>, // TODO: Fix - should be rights.
+    pub dao_admin_rights: Vec<AdminRight>, // TODO: Fix - should be rights.
     pub workflow_provider: AccountId,
-    pub resource_provider: AccountId,
-    pub scheduler: AccountId,
+    pub resource_provider: Option<AccountId>,
+    pub scheduler: Option<AccountId>,
     /// Vote token id.
     pub token_id: AccountId,
     /// Staking contract.
     pub staking_id: AccountId,
-    // TODO: staking id, vote token id
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
+pub enum AdminRight {
+    Upgrade,
 }
 
 derive_from_versioned!(VersionedSettings, Settings);

@@ -40,9 +40,9 @@ pub struct TemplateSettings {
 #[serde(crate = "near_sdk::serde")]
 pub struct ProposeSettings {
     /// Top level binds. Shared across all activities.
-    pub global: Option<SourceDataVariant>,
-    /// Bind per activity. Init activity's binds must be 0th and always `None`.
-    pub binds: Vec<Option<ActivityBind>>,
+    pub constants: Option<SourceDataVariant>,
+    /// Constants per activity. Init activity's binds must be 0th and always `None`.
+    pub activity_constants: Vec<Option<ActivityBind>>,
     /// Storage key under which is the workflow data storage created.
     pub storage_key: Option<String>,
 }
@@ -52,7 +52,7 @@ pub struct ProposeSettings {
 #[serde(crate = "near_sdk::serde")]
 pub struct ActivityBind {
     /// Binds shared for all actions.
-    pub shared: Option<SourceDataVariant>,
+    pub constants: Option<SourceDataVariant>,
     /// Bind per activity actions.
-    pub values: Vec<Option<SourceDataVariant>>,
+    pub actions_constants: Vec<Option<SourceDataVariant>>,
 }

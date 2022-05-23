@@ -33,7 +33,7 @@ fn pretty_print_template_data(
     ),
 ) {
     println!(
-        "------------------------------ WF: {} ------------------------------\n{{\"workflow\":{},\n\"fncalls\":{},\n\"fncall_metadata\":{},\n\"standard_fncalls\":{},\n\"help\":{}}}",
+        "------------------------------ WF: {} ------------------------------\n{{\"workflow\":\n{},\n\"fncalls\":{},\n\"fncall_metadata\":{},\n\"standard_fncalls\":{},\n\"help\":{}}}",
         name,
         serde_json::to_string(&data.0.0).expect(name),
         serde_json::to_string(&data.0.1).expect(name),

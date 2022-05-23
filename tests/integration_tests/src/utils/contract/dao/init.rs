@@ -10,7 +10,10 @@ use library::{
 };
 use workspaces::{network::DevAccountDeployer, Account, AccountId, Contract, DevNetwork, Worker};
 
-use crate::utils::{as_account_id, get_dao_wasm, outcome_pretty, FnCallId, MethodName};
+use crate::{
+    types::AdminRight,
+    utils::{as_account_id, get_dao_wasm, outcome_pretty, FnCallId, MethodName},
+};
 
 use crate::types::{
     Asset, {DaoInit, DaoSettings, PartitionAssetInput, TreasuryPartitionInput},
@@ -35,7 +38,7 @@ pub async fn init_dao<T>(
 where
     T: DevNetwork,
 {
-    let (init_args, expected_group) = dao_init_args(
+    let (init_args, _expected_group) = dao_init_args(
         token_id.clone(),
         total_supply,
         decimals,
@@ -58,7 +61,6 @@ where
     assert!(outcome.is_success(), "dao init failed");
 
     //internal_check_group(worker, dao, expected_group).await?;
-    // TODO: Other data checks - fn call, token.
 
     Ok(())
 }
@@ -138,10 +140,10 @@ fn dao_settings(
         purpose: "testing".into(),
         tags: vec![],
         dao_admin_account_id: admin_id,
-        dao_admin_rights: vec!["all".into()],
+        dao_admin_rights: vec![AdminRight::Upgrade],
         workflow_provider: provider_id,
-        resource_provider: AccountId::from_str("resource-provider.neardao.testnet").unwrap(),
-        scheduler: AccountId::from_str("scheduler.neardao.testnet").unwrap(),
+        resource_provider: Some(AccountId::from_str("resource-provider.neardao.testnet").unwrap()),
+        scheduler: Some(AccountId::from_str("scheduler.neardao.testnet").unwrap()),
         token_id,
         staking_id,
     }

@@ -13,7 +13,7 @@ use crate::{
         get_wallet_withdraw_stat, tm, ACC_1, ACC_2, FOUNDER_1, FOUNDER_2, FOUNDER_3,
         GROUP_1_ROLE_1,
     },
-    wallet::{ClaimbleReward, Wallet, WithdrawStats},
+    wallet::{ClaimableReward, Wallet, WithdrawStats},
 };
 
 #[test]
@@ -64,13 +64,19 @@ fn reward_wage_one_asset() {
     assert!(!wallet_rewards.is_empty(), "founder_1 has no rewards");
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         0
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         0
     );
     testing_env!(ctx.block_timestamp(tm(1)).build());
@@ -79,14 +85,20 @@ fn reward_wage_one_asset() {
     testing_env!(ctx.block_timestamp(tm(2)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         1
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
     assert_eq!(withdraw_amount, 1);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         0
     );
     let wallet = get_wallet(&contract, &founder_1);
@@ -98,7 +110,10 @@ fn reward_wage_one_asset() {
     testing_env!(ctx.block_timestamp(tm(1000)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         499
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
@@ -175,13 +190,19 @@ fn reward_activity_one_asset() {
     assert!(!wallet_rewards.is_empty(), "founder_1 has no rewards");
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         0
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         0
     );
     testing_env!(ctx.block_timestamp(tm(1)).build());
@@ -232,7 +253,10 @@ fn reward_activity_one_asset() {
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         0
     );
 
@@ -270,13 +294,19 @@ fn reward_activity_one_asset() {
         .build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         100
     );
     contract.proposal_finish(proposal_id);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         200
     );
     let proposal: Proposal = contract.proposals.get(&proposal_id).unwrap().into();
@@ -293,7 +323,10 @@ fn reward_activity_one_asset() {
     assert_eq!(withdraw_amount, 200);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         0
     );
     let wallet = get_wallet(&contract, &founder_1);
@@ -307,14 +340,20 @@ fn reward_activity_one_asset() {
     testing_env!(ctx.block_timestamp(tm(3500)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         0
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
     assert_eq!(withdraw_amount, 0);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         0
     );
     let wallet = get_wallet(&contract, &founder_1);
@@ -437,72 +476,117 @@ fn reward_multiple_wage_rewards() {
     testing_env!(ctx.block_timestamp(tm(9)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         0
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_2),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_2
+        ),
         0
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_3),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_3
+        ),
         0
     );
     testing_env!(ctx.block_timestamp(tm(10)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         200
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_2),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_2
+        ),
         200
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_3),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_3
+        ),
         200
     );
     testing_env!(ctx.block_timestamp(tm(20)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         400
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_2),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_2
+        ),
         400
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_3),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_3
+        ),
         400
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
     assert_eq!(withdraw_amount, 200);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         200
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_2),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_2
+        ),
         400
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_3),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_3
+        ),
         400
     );
     testing_env!(ctx.block_timestamp(tm(200)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         3_800
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_2),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_2
+        ),
         4_000
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_3),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_3
+        ),
         4_000
     );
     let withdraw_amount =
@@ -510,43 +594,70 @@ fn reward_multiple_wage_rewards() {
     assert_eq!(withdraw_amount, 4_000);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         3_800
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_2),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_2
+        ),
         0
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_3),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_3
+        ),
         4_000
     );
     testing_env!(ctx.block_timestamp(tm(1000)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         19_800
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_2),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_2
+        ),
         16_000
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_3),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_3
+        ),
         20_000
     );
     testing_env!(ctx.block_timestamp(tm(2000)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         19_800
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_2),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_2
+        ),
         16_000
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_3),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_3
+        ),
         20_000
     );
     let withdraw_amount =
@@ -554,15 +665,24 @@ fn reward_multiple_wage_rewards() {
     assert_eq!(withdraw_amount, 20_000);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         19_800
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_2),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_2
+        ),
         16_000
     );
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_3),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_3
+        ),
         0
     );
     let partition: TreasuryPartition = contract
@@ -651,7 +771,10 @@ fn reward_one_asset_scenario() {
     testing_env!(ctx.block_timestamp(tm(0)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         0
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
@@ -659,14 +782,20 @@ fn reward_one_asset_scenario() {
     testing_env!(ctx.block_timestamp(tm(1)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         1 * ONE_NEAR
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
     assert_eq!(withdraw_amount, 1 * ONE_NEAR);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         0
     );
     let partition: TreasuryPartition = contract
@@ -681,7 +810,10 @@ fn reward_one_asset_scenario() {
     testing_env!(ctx.block_timestamp(tm(5)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         4 * ONE_NEAR
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
@@ -689,7 +821,10 @@ fn reward_one_asset_scenario() {
     testing_env!(ctx.block_timestamp(tm(10)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         9 * ONE_NEAR
     );
 
@@ -721,7 +856,10 @@ fn reward_one_asset_scenario() {
     assert_eq!(withdraw_amount, 5 * ONE_NEAR);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         4 * ONE_NEAR
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
@@ -729,7 +867,10 @@ fn reward_one_asset_scenario() {
     testing_env!(ctx.block_timestamp(tm(420)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         4 * ONE_NEAR
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
@@ -758,14 +899,20 @@ fn reward_one_asset_scenario() {
     testing_env!(ctx.block_timestamp(tm(500)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         4 * ONE_NEAR
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
     assert_eq!(withdraw_amount, 4 * ONE_NEAR);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         0
     );
     let partition: TreasuryPartition = contract
@@ -783,7 +930,10 @@ fn reward_one_asset_scenario() {
     testing_env!(ctx.block_timestamp(tm(9999)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset_1),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset_1
+        ),
         0
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);

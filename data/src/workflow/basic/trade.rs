@@ -12,7 +12,7 @@ use library::{
         expression::Expression,
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, ArgSrc, ValueSrc, VoteScenario},
+        types::{ActivityRight, Src, ValueSrc, VoteScenario},
     },
 };
 
@@ -50,19 +50,17 @@ impl Trade1 {
                     actions: vec![TemplateAction {
                         exec_condition: Some(ValueSrc::Expr(Expression {
                             args: vec![
-                                ArgSrc::ConstPropSettings(TRADE1_REQUIRED_TOKEN_KEY.into()),
-                                ArgSrc::Storage("token_id".into()),
-                                ArgSrc::ConstPropSettings(TRADE1_REQUIRED_AMOUNT_KEY.into()),
-                                ArgSrc::Storage("amount".into()),
+                                Src::PropSettings(TRADE1_REQUIRED_TOKEN_KEY.into()),
+                                Src::Storage("token_id".into()),
+                                Src::PropSettings(TRADE1_REQUIRED_AMOUNT_KEY.into()),
+                                Src::Storage("amount".into()),
                             ],
                             expr_id: 0,
                         })),
                         validators: vec![],
                         action_data: ActionData::SendNear(
-                            ValueSrc::Src(ArgSrc::Storage("sender_id".into())),
-                            ValueSrc::Src(ArgSrc::ConstPropSettings(
-                                TRADE1_OFFERED_AMOUNT_KEY.into(),
-                            )),
+                            ValueSrc::Src(Src::Storage("sender_id".into())),
+                            ValueSrc::Src(Src::PropSettings(TRADE1_OFFERED_AMOUNT_KEY.into())),
                         ),
                         optional: false,
                         postprocessing: None,
@@ -131,8 +129,8 @@ impl Trade1 {
 
         // User proposed settings type
         let settings = ProposeSettings {
-            global: Some(SourceDataVariant::Map(global_consts)),
-            binds: vec![None, None],
+            constants: Some(SourceDataVariant::Map(global_consts)),
+            activity_constants: vec![None, None],
             storage_key: Some(storage_key.unwrap_or(TRADE1_STORAGE_KEY).into()),
         };
         settings

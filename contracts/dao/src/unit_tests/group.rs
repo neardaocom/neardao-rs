@@ -1037,28 +1037,40 @@ fn group_scenario() {
     // Bonus test: Withdraw rewards.
     let claimable_rewards = contract.claimable_rewards(accounts(0));
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         30
     );
     let withdraw_amount = contract.internal_withdraw_reward(&accounts(0), vec![1], &reward_asset);
     assert_eq!(withdraw_amount, 30);
     let claimable_rewards = contract.claimable_rewards(accounts(1));
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         20
     );
     let withdraw_amount = contract.internal_withdraw_reward(&accounts(1), vec![1], &reward_asset);
     assert_eq!(withdraw_amount, 20);
     let claimable_rewards = contract.claimable_rewards(accounts(3));
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         20
     );
     let withdraw_amount = contract.internal_withdraw_reward(&accounts(3), vec![1], &reward_asset);
     assert_eq!(withdraw_amount, 20);
     let claimable_rewards = contract.claimable_rewards(founder_account.clone());
     assert_eq!(
-        claimable_rewards_sum(claimable_rewards.as_slice(), &reward_asset),
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
         30
     );
     let withdraw_amount =

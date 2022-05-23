@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-use super::types::ArgSrc;
+use super::types::Src;
 
 // TODO: Remove Debug in production.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
@@ -20,7 +20,7 @@ use super::types::ArgSrc;
 /// Expression wrapper for workflows
 /// with defined sources for expression.
 pub struct Expression {
-    pub args: Vec<ArgSrc>,
+    pub args: Vec<Src>,
     pub expr_id: u8,
 }
 
@@ -39,7 +39,7 @@ where {
 
         for arg_src in self.args.iter() {
             match arg_src {
-                ArgSrc::User(key) => {
+                Src::User(key) => {
                     if let Some(user_input) = input {
                         binded_args.push(
                             user_input

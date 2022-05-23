@@ -3,7 +3,6 @@ use near_sdk::{env, require, AccountId, Balance};
 use crate::{
     constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, C_PREDECESSOR},
     core::{ActionLog, Contract},
-    error::ERR_LOCK_AMOUNT_OVERFLOW,
     group::GroupInput,
     internal::utils::current_timestamp_sec,
     proposal::Proposal,
@@ -14,7 +13,7 @@ use crate::{
 };
 use library::{
     storage::StorageBucket,
-    types::{consts::Consts, datatype::Value},
+    types::{consts::RuntimeConstantProvider, datatype::Value},
     workflow::{
         action::TemplateAction,
         activity::Terminality,
@@ -103,7 +102,6 @@ impl Contract {
                 ),
             );
         }
-
         self.workflow_last_id += len as u16;
     }
     #[inline]
@@ -137,8 +135,8 @@ impl Contract {
 
     /// Closure which might be required in workflow.
     /// Returns DAO's specific values which cannot be known ahead of time.
-    pub fn dao_consts(&self) -> impl Consts {
-        DaoConsts::default()
+    pub fn dao_consts(&self) -> impl RuntimeConstantProvider {
+        DaoConstantProvider::default()
     }
 
     /// Action logging method.
@@ -192,8 +190,8 @@ pub mod utils {
 }
 
 #[derive(Default)]
-pub struct DaoConsts;
-impl Consts for DaoConsts {
+pub struct DaoConstantProvider;
+impl RuntimeConstantProvider for DaoConstantProvider {
     fn get(&self, key: u8) -> Option<Value> {
         match key {
             C_DAO_ID => Some(Value::String(env::current_account_id().to_string())),

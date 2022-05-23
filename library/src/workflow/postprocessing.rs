@@ -279,7 +279,7 @@ mod test {
         },
         workflow::{
             postprocessing::Postprocessing,
-            types::{ArgSrc, FnCallResultType, Instruction, ValueSrc},
+            types::{FnCallResultType, Instruction, Src, ValueSrc},
         },
     };
 
@@ -321,7 +321,7 @@ mod test {
                 ),
                 Instruction::StoreExpressionGlobal(
                     "skey_1".into(),
-                    vec![ValueSrc::Src(ArgSrc::User("key_2".into()))],
+                    vec![ValueSrc::Src(Src::User("key_2".into()))],
                     EExpr::Aritmetic(TExpr {
                         operators: vec![Op {
                             operands_ids: [0, 1],

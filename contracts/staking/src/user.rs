@@ -52,7 +52,7 @@ impl User {
     }
 
     /// Record delegation owned tokens from this account to another account.
-    /// Fails if not enough available balance to delegate.
+    /// Fail if not enough available balance to delegate.
     /// Return true if new delegate was added.
     pub fn delegate_owned(&mut self, delegate_id: AccountId, amount: Balance) -> bool {
         require!(
@@ -63,7 +63,7 @@ impl User {
         if let Some(delegate_pos) = self
             .delegated_amounts
             .iter()
-            .position(|(e, _)| e == &delegate_id)
+            .position(|(e, _)| *e == delegate_id)
         {
             self.delegated_amounts.get_mut(delegate_pos).unwrap().1 += amount;
             false
@@ -73,17 +73,18 @@ impl User {
         }
     }
 
-    /// Removes all delegators and their delegations adn returns them.
+    /// Remove all delegators and their delegations and returns them.
     pub fn forward_delegated(&mut self) -> (u128, Vec<AccountId>) {
         require!(self.delegated_vote_amount > 0, "no delegated tokens");
         let amount = self.delegated_vote_amount;
+        // Only delegated
         let delegators = std::mem::take(&mut self.delegators);
         self.delegated_vote_amount = 0;
         (amount, delegators)
     }
 
     /// Add new delegated vote amount.
-    /// Adds new delegator if he .
+    /// Add new delegator if he was not delegator before.
     pub fn add_delegator(&mut self, delegator_id: AccountId, amount: Balance) {
         if !self.is_delegator(&delegator_id) {
             self.delegators.push(delegator_id);
@@ -150,7 +151,7 @@ impl User {
             self.delegated_amounts.swap_remove(element.0);
             0
         } else {
-            (self.delegated_amounts[element.0].1) -= amount;
+            self.delegated_amounts[element.0].1 -= amount;
             self.delegated_amounts[element.0].1
         }
     }

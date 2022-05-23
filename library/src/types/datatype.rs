@@ -89,13 +89,14 @@ impl Value {
     }
 }
 
+// TODO: Maybe define new Datatype::Enum ??
+/// Definition of expected datatype.
+/// Bool in primitive datatypes denotes if its optional.
+/// ObjectId references Metadata Object by pos.
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
-/// Definition of expected datatype.
-/// Bool in primitive datatypes denotes if its optional.
-/// ObjectId references Metadata Object by pos.
 pub enum Datatype {
     Bool(bool),
     U64(bool),

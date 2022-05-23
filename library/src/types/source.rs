@@ -8,7 +8,7 @@ use near_sdk::{
 
 use crate::storage::StorageBucket;
 
-use super::{consts::Consts, datatype::Value};
+use super::{consts::RuntimeConstantProvider, datatype::Value};
 
 pub trait Source: SourceProvider + MutableSource {}
 /// Trait representing possible `Value` sources for workflow.
@@ -72,7 +72,7 @@ pub trait SourceData {
 
 pub struct DefaultSource<T>
 where
-    T: Consts + Sized,
+    T: RuntimeConstantProvider + Sized,
 {
     tpls: SourceDataVariant,
     settings: Option<SourceDataVariant>,
@@ -86,7 +86,7 @@ where
 
 impl<T> SourceProvider for DefaultSource<T>
 where
-    T: Consts + Sized,
+    T: RuntimeConstantProvider + Sized,
 {
     fn tpl(&self, key: &str) -> Option<&Value> {
         self.tpls.get(key)
@@ -154,7 +154,7 @@ where
 
 impl<T> MutableSource for DefaultSource<T>
 where
-    T: Consts + Sized,
+    T: RuntimeConstantProvider + Sized,
 {
     fn replace_storage(&mut self, new: StorageBucket) -> Option<StorageBucket> {
         if let Some(mut storage) = self.storage.as_mut() {
@@ -209,11 +209,11 @@ where
     }
 }
 
-impl<T> Source for DefaultSource<T> where T: Consts {}
+impl<T> Source for DefaultSource<T> where T: RuntimeConstantProvider {}
 
 impl<T> DefaultSource<T>
 where
-    T: Consts,
+    T: RuntimeConstantProvider,
 {
     pub fn from(
         tpls: SourceDataVariant,
