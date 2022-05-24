@@ -23,7 +23,7 @@ use crate::{
     tags::TagInput,
     treasury::{Asset, PartitionAssetInput, TreasuryPartitionInput},
     wallet::{ClaimableReward, Wallet, WithdrawStats},
-    DurationSec,
+    DurationSec, media::Media,
 };
 
 //mod dao; // Require refactoring to match new structure
@@ -110,6 +110,7 @@ pub(crate) fn get_contract(
     workflow_templates: Vec<Template>,
     workflow_template_settings: Vec<Vec<TemplateSettings>>,
     treasury_partitions: Vec<TreasuryPartitionInput>,
+    media: Vec<Media>,
 ) -> Contract {
     Contract::new(
         total_supply,
@@ -124,6 +125,7 @@ pub(crate) fn get_contract(
         workflow_templates,
         workflow_template_settings,
         treasury_partitions,
+        media,
     )
 }
 
@@ -140,6 +142,7 @@ pub(crate) fn get_default_contract() -> Contract {
         get_default_templates(),
         get_default_template_settings(),
         get_default_treasury_partitions(),
+        get_default_media(),
     );
     assert_eq!(
         contract.total_members_count, 6,
@@ -377,6 +380,10 @@ pub(crate) fn get_default_treasury_partitions() -> Vec<TreasuryPartitionInput> {
             }],
         },
     ]
+}
+
+pub fn get_default_media() -> Vec<Media> {
+    vec![]
 }
 
 /// Convert timestamp seconds to miliseconds

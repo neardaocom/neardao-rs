@@ -3,7 +3,7 @@
 //! Forked and modified code from https://github.com/near-daos/sputnik-dao-contract/blob/main/sputnikdao2/src/delegation.rs
 
 use crate::{core::*, reward::RewardActivity, settings::Settings};
-use near_sdk::{env, json_types::U128, log, near_bindgen, require, AccountId, Balance};
+use near_sdk::{env, json_types::U128, log, near_bindgen, require, AccountId};
 
 impl Contract {
     pub fn update_token_holders_count(&mut self, previous_amount: u128, new_amount: u128) {
@@ -117,8 +117,5 @@ impl Contract {
             RewardActivity::TransitiveDelegate.into(),
         );
         (amount, self.delegation_total_supply())
-    }
-    pub fn get_user_weight(&self, account_id: &AccountId) -> Balance {
-        self.delegations.get(account_id).unwrap_or_default()
     }
 }

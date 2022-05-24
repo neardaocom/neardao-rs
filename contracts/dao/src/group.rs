@@ -11,7 +11,6 @@ use crate::{
     internal::utils::current_timestamp_sec,
     reward::Reward,
     role::{MemberRoles, Roles, UserRoles},
-    wallet::Wallet,
     GroupId, RewardId, RoleId, TagId,
 };
 

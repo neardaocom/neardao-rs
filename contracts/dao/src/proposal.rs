@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use crate::error::ERR_GROUP_NOT_FOUND;
 use crate::internal::utils::current_timestamp_sec;
-use crate::media::ResourceType;
+use crate::media::{ResourceType, Media};
 use crate::reward::RewardActivity;
 use crate::{core::*, CalculatedVoteResults, VoteTotalPossible, Votes};
 use crate::{ResourceId, TimestampSec};
@@ -105,9 +105,6 @@ impl Contract {
     /// then `template_settings` must contain at least one `template_settings`
     /// that will be added to the workflow when downloaded from workflow provider.
     /// "wf_add" workflow is is supposed to have template_id 1.
-    /// Function also:
-    /// - (TODO) if `desc` is provided then schedules promise `desc` to the Resource Provider to store its description.
-    /// - (TODO) if `scheduler_msg` is provided then schedules promise to the scheduler (actually Croncat) to automatically finish this proposal.
     /// Panics if:
     /// - `template_id` does not refer to existing Template
     /// - `template_settings_id` does not refer to valid TemplateSetting for `template_id`
@@ -115,11 +112,11 @@ impl Contract {
     ///  but caller do not have rights to propose them
     /// - `template_id` == 1 (aka "wf_add") but `template_settings` is None
     /// - `propose_settings` contain no storage key but Template requires it or the storage_key already exists
-    /// Caller is responsible to provide valid `propose_settings`.
+    /// Caller is responsible to provide valid `propose_settings`. This is not checked.
     #[payable]
     pub fn proposal_create(
         &mut self,
-        description: Option<ResourceType>, // TODO: Optional
+        description: Option<Media>,
         template_id: u16,
         template_settings_id: u8,
         propose_settings: ProposeSettings,
@@ -184,12 +181,12 @@ impl Contract {
         );
         self.workflow_propose_settings
             .insert(&self.proposal_last_id, &propose_settings);
-        if let Some(resource) = description {
-            // TODO: Implement resource provider.
-            todo!();
+        if let Some(mut media) = description {
+            media.proposal_id = Some(self.proposal_last_id);
+            self.add_media(&media);
         }
-        if let Some(msg) = scheduler_msg {
-            // TODO: Croncat registration to finish proposal
+        if let Some(_) = scheduler_msg {
+            // TODO: Croncat registration to finish proposal.
             todo!();
         }
         self.proposal_last_id

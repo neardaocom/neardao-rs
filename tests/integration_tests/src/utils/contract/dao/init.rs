@@ -124,6 +124,7 @@ pub fn dao_init_args(
             workflow_templates,
             workflow_template_settings,
             treasury_partitions,
+            media: vec![],
         },
         group_output,
     )

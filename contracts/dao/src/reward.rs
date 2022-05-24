@@ -84,7 +84,7 @@ impl Reward {
                 let seconds_passed = std::cmp::min(current_timestamp, self.time_valid_to)
                     - std::cmp::max(self.time_valid_from, timestamp_from);
                 let units = seconds_passed / wage.unit_seconds as u64;
-                amount * units as u128
+             amount.checked_mul(units as u128).unwrap_or(u128::MAX)
             }
             RewardType::UserActivity(_) => panic_str("fatal - invalid reward type"),
         };
@@ -138,6 +138,7 @@ pub enum RewardType {
 #[serde(crate = "near_sdk::serde")]
 pub struct RewardWage {
     /// Amount of seconds define one unit.
+    /// Must be > 0.
     pub unit_seconds: u16,
 }
 

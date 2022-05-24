@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::constants::GLOBAL_BUCKET_IDENT;
+use crate::media::Media;
 use crate::reward::VersionedReward;
 use crate::role::{Roles, UserRoles};
 use crate::settings::{assert_valid_dao_settings, Settings, VersionedSettings};
@@ -66,6 +67,7 @@ pub enum StorageKeys {
     TreasuryPartition,
     Wallet,
     Rewards,
+    Media,
 }
 
 #[near_bindgen]
@@ -116,6 +118,8 @@ pub struct Contract {
     pub wallets: LookupMap<AccountId, VersionedWallet>,
     // TODO: Remove in production.
     pub debug_log: Vec<String>,
+    pub media_last_id: u32,
+    pub media: LookupMap<u32, Media>,
 }
 
 #[near_bindgen]
@@ -134,6 +138,7 @@ impl Contract {
         workflow_templates: Vec<Template>,
         workflow_template_settings: Vec<Vec<TemplateSettings>>,
         treasury_partitions: Vec<TreasuryPartitionInput>,
+        media: Vec<Media>,
     ) -> Self {
         assert!(decimals <= 24);
         assert_valid_dao_settings(&settings);
@@ -174,6 +179,8 @@ impl Contract {
             reward_last_id: 0,
             rewards: LookupMap::new(StorageKeys::Rewards),
             wallets: LookupMap::new(StorageKeys::Wallet),
+            media_last_id: 0,
+            media: LookupMap::new(StorageKeys::Media),
         };
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
@@ -184,7 +191,7 @@ impl Contract {
         contract.init_workflows(workflow_templates, workflow_template_settings);
         contract.storage_bucket_add(GLOBAL_BUCKET_IDENT);
         contract.init_treasury_partitions(treasury_partitions);
-
+        contract.init_media(media);
         contract
     }
 

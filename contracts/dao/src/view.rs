@@ -9,13 +9,14 @@ use near_sdk::{env, near_bindgen, AccountId};
 
 use crate::group::Group;
 use crate::internal::utils::current_timestamp_sec;
+use crate::media::Media;
 use crate::proposal::VersionedProposal;
 use crate::reward::Reward;
 use crate::role::{Roles, UserRoles};
 use crate::settings::Settings;
 use crate::tags::Tags;
 use crate::treasury::TreasuryPartition;
-use crate::wallet::Wallet;
+use crate::wallet::{Wallet, ClaimableRewards, ClaimableReward};
 use crate::TagCategory;
 use crate::{core::*, StorageKey};
 
@@ -25,10 +26,9 @@ impl Contract {
     pub fn delegation_total_supply(&self) -> U128 {
         U128(self.total_delegation_amount)
     }
-
     /// Returns total user vote weight.
     pub fn user_vote_weight(&self, account_id: AccountId) -> U128 {
-        self.get_user_weight(&account_id).into()
+        self.delegations.get(&account_id).unwrap_or_default().into()
     }
 
     /// Return general statitstics about DAO.
@@ -183,6 +183,58 @@ impl Contract {
     pub fn wf_log(self, proposal_id: u32) -> Option<Vec<ActionLog>> {
         self.workflow_activity_log.get(&proposal_id)
     }
+    /// Calculate claimable rewards for `account_id`.
+        pub fn claimable_rewards(&self, account_id: AccountId) -> ClaimableRewards {
+            let wallet: Wallet = self
+                .wallets
+                .get(&account_id)
+                .expect("Wallet not found.")
+                .into();
+            let mut claimable_rewards = Vec::with_capacity(4);
+            let current_timestamp = current_timestamp_sec();
+            for wallet_reward in wallet.rewards() {
+                if let Some(versioned_reward) = self.rewards.get(&wallet_reward.reward_id()) {
+                    let reward: Reward = versioned_reward.into();
+                    for (asset, _) in reward.reward_amounts().into_iter() {
+                        let (amount, _) = Contract::internal_claimable_reward_asset(
+                            &wallet,
+                            wallet_reward.reward_id(),
+                            &reward,
+                            &asset,
+                            current_timestamp,
+                        );
+                        claimable_rewards.push(ClaimableReward {
+                            asset: asset.clone(),
+                            reward_id: wallet_reward.reward_id(),
+                            amount: amount.into(),
+                            partition_id: reward.partition_id,
+                        });
+                    }
+                }
+            }
+            ClaimableRewards {
+                claimable_rewards,
+                failed_withdraws: wallet
+                    .failed_withdraws()
+                    .to_vec()
+                    .into_iter()
+                    .map(|(a, v)| (a, v.into()))
+                    .collect(),
+            }
+        }
+
+        pub fn media(self, id: u32) -> Option<Media> {
+            self.media.get(&id)
+        }
+        pub fn media_list(self, from_id: u32, limit: u32) -> Vec<(u32,Media)> {
+            let mut media_list = Vec::with_capacity(self.media_last_id as usize);
+            for i in from_id..std::cmp::min(self.media_last_id + 1, limit) {
+                if let Some(media) = self.media.get(&i) {
+                    media_list.push((i, media.into()));
+                }
+            }
+            media_list
+        }
 }
 
 #[derive(Serialize)]

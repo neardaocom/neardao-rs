@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use workspaces::AccountId;
 
 use crate::utils::TimestampSec;
+
+use super::Media;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ProposalType {
     WorkflowAdd(WorkflowAddOptions),
@@ -24,7 +26,7 @@ pub struct SkywardOptions {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ProposalCreateInput {
-    desc: ResourceType,
+    description: Option<Media>,
     template_id: u16,
     template_settings_id: u8,
     propose_settings: ProposeSettings,
@@ -34,14 +36,14 @@ pub struct ProposalCreateInput {
 
 impl ProposalCreateInput {
     pub fn new(
-        desc: Option<ResourceType>,
+        description: Option<Media>,
         template_id: u16,
         template_settings_id: u8,
         propose_settings: ProposeSettings,
         template_settings: Option<Vec<TemplateSettings>>,
     ) -> Self {
         ProposalCreateInput {
-            desc: desc.unwrap_or_default(),
+            description,
             template_id,
             template_settings_id,
             propose_settings,
@@ -56,7 +58,7 @@ impl ProposalCreateInput {
         template_settings: Option<Vec<TemplateSettings>>,
     ) -> Self {
         ProposalCreateInput {
-            desc: ResourceType::default(),
+            description: None,
             template_id,
             template_settings_id: 0,
             propose_settings,

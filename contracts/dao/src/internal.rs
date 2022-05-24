@@ -9,7 +9,7 @@ use crate::{
     settings::Settings,
     tags::{TagInput, Tags},
     treasury::{TreasuryPartition, TreasuryPartitionInput},
-    ProposalId, ProposalWf,
+    ProposalId, ProposalWf, media::Media,
 };
 use library::{
     storage::StorageBucket,
@@ -110,6 +110,12 @@ impl Contract {
             let treasury_partititon = TreasuryPartition::try_from(partition)
                 .expect("Invalid TreasuryPartitionInput object.");
             self.partition_add(treasury_partititon);
+        }
+    }
+    #[inline]
+    pub fn init_media(&mut self, media: Vec<Media>) {
+        for m in media.iter() {
+            self.add_media(m);
         }
     }
 

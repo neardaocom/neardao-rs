@@ -15,7 +15,7 @@ use crate::{
     internal::utils::current_timestamp_sec,
     reward::{Reward, RewardTypeIdent},
     treasury::{Asset, TreasuryPartition},
-    TimestampSec,
+    TimestampSec, RewardId,
 };
 
 #[ext_contract(ext_self)]
@@ -164,7 +164,9 @@ impl Wallet {
         let pos = self.find_reward_pos(reward_id).expect("reward not found");
         self.rewards[pos].time_removed
     }
-
+    pub fn failed_withdraws(&self) -> &[(Asset, u128)] {
+        self.failed_withdraws.as_slice()
+    }
     #[inline]
     fn find_reward_pos(&self, reward_id: u16) -> Option<usize> {
         self.rewards.iter().position(|r| r.reward_id == reward_id)
@@ -273,6 +275,9 @@ impl WalletReward {
     }
     pub fn time_removed(&self) -> Option<TimestampSec> {
         self.time_removed
+    }
+    pub fn reward_id(&self) -> RewardId {
+        self.reward_id
     }
 }
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
@@ -401,46 +406,6 @@ impl Contract {
         }
         total_withdrawn.into()
     }
-    /// Calculate claimable rewards for `account_id`.
-    pub fn claimable_rewards(&self, account_id: AccountId) -> ClaimableRewards {
-        let wallet: Wallet = self
-            .wallets
-            .get(&account_id)
-            .expect("Wallet not found.")
-            .into();
-        let mut claimable_rewards = Vec::with_capacity(4);
-        let current_timestamp = current_timestamp_sec();
-        for wallet_reward in wallet.rewards() {
-            if let Some(versioned_reward) = self.rewards.get(&wallet_reward.reward_id) {
-                let reward: Reward = versioned_reward.into();
-                for (asset, _) in reward.reward_amounts().into_iter() {
-                    let (amount, _) = Contract::internal_claimable_reward_asset(
-                        &wallet,
-                        wallet_reward.reward_id,
-                        &reward,
-                        &asset,
-                        current_timestamp,
-                    );
-                    claimable_rewards.push(ClaimableReward {
-                        asset: asset.clone(),
-                        reward_id: wallet_reward.reward_id,
-                        amount: amount.into(),
-                        partition_id: reward.partition_id,
-                    });
-                }
-            }
-        }
-        ClaimableRewards {
-            claimable_rewards,
-            failed_withdraws: wallet
-                .failed_withdraws
-                .clone()
-                .into_iter()
-                .map(|(a, v)| (a, v.into()))
-                .collect(),
-        }
-    }
-
     #[private]
     pub fn withdraw_rollback(&mut self, account_id: AccountId, asset: Asset, amount: u128) {
         assert_eq!(

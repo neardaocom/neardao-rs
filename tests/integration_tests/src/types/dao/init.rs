@@ -7,7 +7,7 @@ use workspaces::AccountId;
 
 use crate::utils::{FnCallId, MethodName};
 
-use super::{group::GroupInput, reward::Asset};
+use super::{group::GroupInput, reward::Asset, Media};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(crate = "near_sdk::serde")]
@@ -24,6 +24,7 @@ pub struct DaoInit {
     pub workflow_templates: Vec<Template>,
     pub workflow_template_settings: Vec<Vec<TemplateSettings>>,
     pub treasury_partitions: Vec<TreasuryPartitionInput>,
+    pub media: Vec<Media>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
