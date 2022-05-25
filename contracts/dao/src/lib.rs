@@ -9,8 +9,6 @@ use proposal::Proposal;
 mod unit_tests;
 
 pub mod constants;
-pub mod error;
-pub(crate) mod helper;
 pub mod tags;
 
 pub mod delegation;
@@ -29,8 +27,6 @@ pub mod treasury;
 pub mod view;
 pub mod wallet;
 
-/// Duration in seconds.
-pub(crate) type DurationSec = u64;
 /// Timestamp in seconds.
 pub(crate) type TimestampSec = u64;
 pub(crate) type ProposalId = u32;
@@ -39,7 +35,6 @@ pub(crate) type StorageKey = String;
 pub(crate) type TagCategory = String;
 /// GroupId = 0 is reserved for "guest" role.
 pub(crate) type GroupId = u16;
-pub(crate) type GroupName = String;
 pub(crate) type VoteTotalPossible = u128;
 pub(crate) type Votes = [u128; 3];
 pub(crate) type CalculatedVoteResults = (VoteTotalPossible, Votes);

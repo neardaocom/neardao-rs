@@ -5,11 +5,12 @@ use crate::{
     core::{ActionLog, Contract},
     group::GroupInput,
     internal::utils::current_timestamp_sec,
+    media::Media,
     proposal::Proposal,
     settings::Settings,
     tags::{TagInput, Tags},
     treasury::{TreasuryPartition, TreasuryPartitionInput},
-    ProposalId, ProposalWf, media::Media,
+    ProposalId, ProposalWf,
 };
 use library::{
     storage::StorageBucket,
@@ -141,7 +142,7 @@ impl Contract {
 
     /// Closure which might be required in workflow.
     /// Returns DAO's specific values which cannot be known ahead of time.
-    pub fn dao_consts(&self) -> impl RuntimeConstantProvider {
+    pub fn runtime_constants(&self) -> impl RuntimeConstantProvider {
         DaoConstantProvider::default()
     }
 

@@ -1,4 +1,4 @@
-use library::functions::math::calculate_percent_u128;
+use library::functions::utils::calculate_percent_u128;
 use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::types::{ActivityRight, VoteScenario};
@@ -8,9 +8,8 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{env, log, near_bindgen, AccountId};
 use std::collections::HashMap;
 
-use crate::error::ERR_GROUP_NOT_FOUND;
 use crate::internal::utils::current_timestamp_sec;
-use crate::media::{ResourceType, Media};
+use crate::media::Media;
 use crate::reward::RewardActivity;
 use crate::{core::*, CalculatedVoteResults, VoteTotalPossible, Votes};
 use crate::{ResourceId, TimestampSec};
@@ -277,7 +276,6 @@ impl Contract {
 }
 
 impl Contract {
-    // TODO: Error handling.
     /// Evaluate vote results by scenario and type of voters.
     /// Return tuple CalculatedVoteResults.
     /// Scenario: TokenWeighted + Voters: Members is currently implemented!
@@ -299,7 +297,7 @@ impl Contract {
                         Some(group) => {
                             max_possible_amount = group.members_count() as u128;
                         }
-                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                        None => panic_str("group not found"),
                     },
                     ActivityRight::GroupMember(_, _)
                     | ActivityRight::Account(_)
@@ -317,7 +315,7 @@ impl Contract {
                             max_possible_amount =
                                 self.get_group_members_with_role(*g, &group, *r).len() as u128;
                         }
-                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                        None => panic_str("group not found"),
                     },
                 }
 
@@ -356,7 +354,7 @@ impl Contract {
                                 }
                             }
                         }
-                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                        None => panic_str("group not found"),
                     };
                 }
                 // Expensive scenario.
@@ -376,7 +374,7 @@ impl Contract {
                                 }
                             }
                         }
-                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                        None => panic_str("group not found"),
                     };
                 }
                 ActivityRight::GroupMember(g, account_id) => {
@@ -391,7 +389,7 @@ impl Contract {
                                 }
                             }
                         }
-                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                        None => panic_str("group not found"),
                     };
                 }
                 ActivityRight::Account(account_id) => {
@@ -412,7 +410,7 @@ impl Contract {
                                 }
                             }
                         }
-                        None => panic!("{}", ERR_GROUP_NOT_FOUND),
+                        None => panic_str("group not found"),
                     };
                 }
             },

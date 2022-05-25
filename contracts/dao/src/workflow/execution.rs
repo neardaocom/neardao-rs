@@ -19,13 +19,13 @@ use near_sdk::{
     env, ext_contract, log, near_bindgen, require, AccountId, Gas, Promise, PromiseResult,
 };
 
+use super::deserialize::{
+    deser_account_ids, deser_group_input, deser_group_members, deser_id, deser_member_roles,
+    deser_partition, deser_reward, deser_roles_ids,
+};
+use super::error::{ActionError, ActivityError};
 use crate::constants::GLOBAL_BUCKET_IDENT;
 use crate::core::*;
-use crate::error::{ActionError, ActivityError, ERR_PROMISE_INVALID_RESULTS_COUNT};
-use crate::helper::deserialize::{
-    try_bind_accounts, try_bind_group, try_bind_group_members, try_bind_partition, try_bind_reward,
-    try_to_bind_member_roles, try_to_bind_roles,
-};
 use crate::internal::utils::current_timestamp_sec;
 use crate::internal::ActivityContext;
 use crate::proposal::ProposalState;
@@ -56,7 +56,7 @@ impl Contract {
         let (proposal, wft, wfs) = self.get_workflow_and_proposal(proposal_id);
         let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
         let mut prop_settings = self.workflow_propose_settings.get(&proposal_id).unwrap();
-        let dao_consts = self.dao_consts();
+        let runtime_constants = self.runtime_constants();
 
         let Template {
             mut activities,
@@ -79,7 +79,7 @@ impl Contract {
             constants,
             wfs.constants,
             prop_settings.constants.take(),
-            dao_consts,
+            runtime_constants,
             storage,
             Some(global_storage),
         ));
@@ -175,7 +175,7 @@ impl Contract {
         // TODO: This might be solved by settings run rights "Anyone" to the automatic activity.
         if automatic {
             // Check rights
-            assert!(
+            require!(
                 self.check_rights(
                     activity_rights
                         .get(activity_id)
@@ -188,7 +188,7 @@ impl Contract {
         }
 
         // Check action input structure including optional actions.
-        assert!(
+        require!(
             self.check_activity_input(
                 ctx.actions.as_slice(),
                 actions_inputs.as_slice(),
@@ -206,7 +206,7 @@ impl Contract {
             );
 
             // In case not a single DaoAction was executed, then consider this call as failed and panic!
-            if result.is_err() || ctx.actions_done() == 0 {
+            if result.is_err() && ctx.actions_done() == 0 {
                 panic!(
                     "Not a single action was executed. error: {:?}, {:?}",
                     result, ctx
@@ -233,7 +233,7 @@ impl Contract {
                 sources.as_mut(),
                 actions_inputs,
             );
-            if result.is_err() || ctx.actions_done() == 0 {
+            if result.is_err() && ctx.actions_done() == 0 {
                 panic!(
                     "Not a single action was executed. error: {:?}, {:?}",
                     result, ctx
@@ -249,25 +249,19 @@ impl Contract {
         // Decide if is fatal error.
         let result = if let Err(e) = result {
             let e = ActivityError::from(e);
-
             if e.is_fatal() {
                 wfi.set_fatal_error();
+                log!("WF FATAL ERROR: {:?}", e);
             }
             Some(e)
         } else {
+            self.register_executed_activity(&ctx.caller, RewardActivity::Activity.into());
             None
         };
-
-        if result.is_none() {
-            self.register_executed_activity(&ctx.caller, RewardActivity::Activity.into())
-        }
-
-        // Save mutated instance state.
         self.workflow_instance.insert(&proposal_id, &wfi);
         result
     }
 
-    // TODO finish error handling
     /// Private callback to check Promise result.
     /// If there's postprocessing, then it's executed.
     /// Postprocessing always requires storage.
@@ -284,8 +278,7 @@ impl Contract {
         assert_eq!(
             env::promise_results_count(),
             1,
-            "{}",
-            ERR_PROMISE_INVALID_RESULTS_COUNT
+            "invalid promise result count"
         );
         match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),
@@ -337,7 +330,6 @@ impl Contract {
     }
 }
 
-// Internal action methods.
 impl Contract {
     /// Tries to run all activity's actions.
     /// Some checks must be done before calling this function.
@@ -350,8 +342,9 @@ impl Contract {
     ) -> Result<(), ActionError> {
         // Loop which tries to execute all actions, starting from the last done. Returns when something goes wrong.
         let last_action_done = ctx.actions_done_before as usize;
-        for idx in last_action_done..input.len() {
+        for idx in 0..input.len() {
             // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
+            let tpl_action = ctx.actions.get_mut(idx + last_action_done).unwrap();
             let mut action_input = match input.get_mut(idx).unwrap().take() {
                 Some(a) => a.values.into_activity_input(),
                 None => {
@@ -359,12 +352,10 @@ impl Contract {
                     continue;
                 }
             };
-            let tpl_action = ctx.actions.get_mut(idx).unwrap();
 
             // Check exec condition.
             if let Some(cond) = tpl_action.exec_condition.as_ref() {
-                if !eval(cond, sources, expressions, Some(action_input.as_ref()))
-                    .expect("failed to eval action condition")
+                if !eval(cond, sources, expressions, Some(action_input.as_ref()))?
                     .try_into_bool()?
                 {
                     return Err(ActionError::Condition(idx as u8));
@@ -382,7 +373,9 @@ impl Contract {
                 if let Some(prop_binds) = binds
                     .actions_constants
                     .get_mut(idx)
-                    .expect("Missing activity bind")
+                    .ok_or(ActionError::InvalidWfStructure(
+                        "missing activity propose bind".into(),
+                    ))?
                     .take()
                 {
                     sources.set_prop_action(prop_binds);
@@ -390,19 +383,12 @@ impl Contract {
             } else {
                 sources.unset_prop_action();
             }
-
             let user_inputs = action_input.to_vec();
-
-            // TODO: Refactor.
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                 .try_into_action_data()
                 .ok_or(ActionError::InvalidWfStructure(
                     "missing action data".into(),
                 ))?;
-
-            // Need metadata coz validations and bindings. Metadata are always included in DAO.
-            let binds = action_data.binds.as_slice();
-
             // Check input validators.
             if !validate(
                 sources,
@@ -410,53 +396,35 @@ impl Contract {
                 expressions,
                 action_input.as_ref(),
             )? {
-                return Err(ActionError::Validation(idx as u8));
+                return Err(ActionError::Validation);
             }
-
             // Bind user inputs.
+            let binds = action_data.binds.as_slice();
             bind_input(sources, binds, expressions, action_input.as_mut())?;
 
             let deposit = match &action_data.required_deposit {
-                Some(arg_src) => eval(&arg_src, sources, expressions, None)
-                    .expect("invalid value")
-                    .try_into_u128()?,
+                Some(arg_src) => eval(&arg_src, sources, expressions, None)?.try_into_u128()?,
                 _ => 0,
             };
-
             ctx.attached_deposit = ctx
                 .attached_deposit
                 .checked_sub(deposit)
                 .ok_or(ActionError::NotEnoughDeposit)?;
-
             if action_data.name != DaoActionIdent::Event {
-                self.execute_dao_action(ctx.proposal_id, action_data.name, action_input.as_mut())?;
+                self.execute_dao_action(action_data.name, action_input.as_mut())?;
             }
-
-            // TODO: Handle error so we do only part of the batch.
             if let Some(mut pp) = tpl_action.postprocessing.take() {
-                pp.bind_instructions(sources, expressions, action_input.as_ref())
-                    .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
-                // TODO: Different execute version for DaoActions?
-                // TODO: Global storage manipulation.
+                pp.bind_instructions(sources, expressions, action_input.as_ref())?;
                 let mut storage = sources.take_storage();
-                let mut global_storage = sources
-                    .take_global_storage()
-                    .expect("Global storage must be accessible.");
-                if pp
-                    .execute(vec![], storage.as_mut(), &mut global_storage, &mut None)
-                    .is_err()
-                {
-                    return Err(ActionError::ActionPostprocessing(idx as u8));
-                }
+                let mut global_storage = sources.take_global_storage().unwrap();
+                pp.execute(vec![], storage.as_mut(), &mut global_storage, &mut None)?;
                 sources.replace_global_storage(global_storage);
                 if let Some(storage) = storage {
                     sources.replace_storage(storage);
                 }
             }
-
             self.debug_log
                 .push(format!("dao action executed: {}", ctx.activity_id));
-
             self.log_action(
                 ctx.proposal_id,
                 env::predecessor_account_id(),
@@ -483,9 +451,9 @@ impl Contract {
         log!("last action done: {}", last_action_done);
         let mut required_promise_dispatched = false;
         let mut promise: Option<Promise> = None;
-        for idx in last_action_done..input.len() {
+        for idx in 0..input.len() {
             // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
-            let tpl_action = ctx.actions.get_mut(idx).unwrap();
+            let tpl_action = ctx.actions.get_mut(idx + last_action_done).unwrap();
             let mut action_input = match input.get_mut(idx).unwrap().take() {
                 Some(a) => {
                     if !tpl_action.optional {
@@ -504,8 +472,7 @@ impl Contract {
             };
             // Check exec condition.
             if let Some(cond) = tpl_action.exec_condition.as_ref() {
-                if !eval(cond, sources, expressions, Some(action_input.as_ref()))
-                    .expect("failed to eval action condition")
+                if !eval(cond, sources, expressions, Some(action_input.as_ref()))?
                     .try_into_bool()?
                 {
                     return Err(ActionError::Condition(idx as u8));
@@ -523,7 +490,9 @@ impl Contract {
                 if let Some(prop_binds) = binds
                     .actions_constants
                     .get_mut(idx)
-                    .expect("Missing activity bind")
+                    .ok_or(ActionError::InvalidWfStructure(
+                        "missing activity propose bind".into(),
+                    ))?
                     .take()
                 {
                     sources.set_prop_action(prop_binds);
@@ -534,7 +503,6 @@ impl Contract {
 
             let user_inputs = action_input.to_vec();
 
-            // TODO: Refactoring.
             let new_promise;
             if tpl_action.action_data.is_fncall() {
                 let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
@@ -545,7 +513,7 @@ impl Contract {
 
                 // Metadata are provided by workflow provider when workflow is added.
                 // Missing metadata are fault of the workflow provider and are considered as fatal runtime error.
-                let (name, method, metadata) = self.get_fncall_id_with_metadata(
+                let (name, method, metadata) = self.load_fncall_id_with_metadata(
                     action_data.id,
                     sources,
                     expressions,
@@ -558,27 +526,24 @@ impl Contract {
                     expressions,
                     action_input.as_ref(),
                 )? {
-                    return Err(ActionError::Validation(idx as u8));
+                    return Err(ActionError::Validation);
                 }
 
                 let binds = action_data.binds.as_slice();
                 bind_input(sources, binds, expressions, action_input.as_mut())?;
 
                 let deposit = match action_data.deposit {
-                    Some(arg_src) => eval(&arg_src, sources, expressions, None)
-                        .expect("invalid value")
-                        .try_into_u128()?,
+                    Some(arg_src) => eval(&arg_src, sources, expressions, None)?.try_into_u128()?,
                     None => 0,
                 };
 
                 let pp = if let Some(mut pp) = tpl_action.postprocessing.take() {
-                    pp.bind_instructions(sources, expressions, action_input.as_ref())
-                        .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
+                    pp.bind_instructions(sources, expressions, action_input.as_ref())?;
                     Some(pp)
                 } else {
                     None
                 };
-                let args = serialize_to_json(action_input, metadata.as_slice());
+                let args = serialize_to_json(action_input, metadata.as_slice())?;
                 self.debug_log.push(format!(
                     "promise dispatch - contract: {}, method: {}; args: {}; ",
                     &name, &method, &args
@@ -613,50 +578,46 @@ impl Contract {
                     sources,
                     expressions,
                     Some(action_input.as_ref()),
-                )
-                .expect("invalid value")
+                )?
                 .try_into_string()?;
-
                 let amount = eval(
                     &amount_src,
                     sources,
                     expressions,
                     Some(action_input.as_ref()),
-                )
-                .expect("invalid value")
+                )?
                 .try_into_u128()?;
                 self.debug_log.push(format!(
                     "promise send near - name: {}, amount: {}; ",
                     &name, amount,
                 ));
                 let pp = if let Some(mut pp) = tpl_action.postprocessing.take() {
-                    pp.bind_instructions(sources, expressions, action_input.as_ref())
-                        .map_err(|_| ActionError::ActionPostprocessing(idx as u8))?;
+                    pp.bind_instructions(sources, expressions, action_input.as_ref())?;
                     Some(pp)
                 } else {
                     None
                 };
-                new_promise =
-                    Promise::new(AccountId::try_from(name).expect("invalid account_id name"))
-                        .transfer(amount)
-                        .then(ext_self::postprocess(
-                            ctx.proposal_id,
-                            idx as u8,
-                            true,
-                            ctx.proposal_settings.storage_key.clone(),
-                            pp,
-                            env::current_account_id(),
-                            0,
-                            Gas(10 * 10u64.pow(12)),
-                        ));
+                new_promise = Promise::new(
+                    AccountId::try_from(name)
+                        .map_err(|_| ActionError::ParseAccountId(sender_src.is_user_input()))?,
+                )
+                .transfer(amount)
+                .then(ext_self::postprocess(
+                    ctx.proposal_id,
+                    idx as u8,
+                    true,
+                    ctx.proposal_settings.storage_key.clone(),
+                    pp,
+                    env::current_account_id(),
+                    0,
+                    Gas(10 * 10u64.pow(12)),
+                ));
             }
-
             promise = if let Some(p) = promise {
                 Some(p.and(new_promise))
             } else {
                 Some(new_promise)
             };
-
             // Number of successfully dispatched promises.
             self.log_action(
                 ctx.proposal_id,
@@ -667,11 +628,9 @@ impl Contract {
             );
             ctx.set_next_action_done();
         }
-
         Ok(())
     }
 
-    // TODO: Review process.
     /// Error callback.
     /// If promise did not have to succeed, then instance is still updated.
     pub fn postprocessing_failed(&mut self, proposal_id: u32, must_succeed: bool) {
@@ -681,15 +640,13 @@ impl Contract {
         } else {
             let timestamp = current_timestamp_sec();
             wfi.promise_success();
-            //wfi.try_to_advance_activity();
             wfi.new_actions_done(1, timestamp);
         }
         self.workflow_instance.insert(&proposal_id, &wfi);
     }
 
-    // TODO: Review process.
     /// Success callback.
-    /// Modifies workflow's instance.
+    /// Update workflow's instance.
     /// If `postprocessing` is included, then also postprocessing script is executed.
     /// Only successful postprocessing updates action as sucessfully executed.
     pub fn postprocessing_success(
@@ -701,17 +658,12 @@ impl Contract {
         promise_call_result: Vec<u8>,
     ) {
         let mut wfi = self.workflow_instance.get(&proposal_id).unwrap();
-        // Action transaction check if previous action succesfully finished.
         if wfi.check_invalid_action(action_id) {
             self.workflow_instance.insert(&proposal_id, &wfi);
             return;
         }
-        // Check if its first action done in the activity
-        wfi.promise_success();
-        wfi.new_actions_done(1, current_timestamp_sec());
-        log!("wfi after update: {:?}", wfi);
 
-        // Execute postprocessing script which must always succeed.
+        // Execute postprocessing script which must always succeed - fatal error otherwise.
         if let Some(pp) = postprocessing {
             let mut global_storage = self.storage.get(&GLOBAL_BUCKET_IDENT.into()).unwrap();
             let mut storage = if let Some(ref storage_key) = storage_key {
@@ -720,16 +672,15 @@ impl Contract {
                 None
             };
             let mut new_template = None;
-            if pp
-                .execute(
-                    promise_call_result,
-                    storage.as_mut(),
-                    &mut global_storage,
-                    &mut new_template,
-                )
-                .is_err()
-            {
+            let result = pp.execute(
+                promise_call_result,
+                storage.as_mut(),
+                &mut global_storage,
+                &mut new_template,
+            );
+            if result.is_err() {
                 wfi.set_fatal_error();
+                log!("WF FATAL ERROR: {:?}", result);
             } else {
                 // Only in case its workflow Add.
                 if let Some((workflow, fncalls, fncall_metadata)) = new_template {
@@ -752,7 +703,8 @@ impl Contract {
                     .insert(&GLOBAL_BUCKET_IDENT.into(), &global_storage);
             }
         };
-        log!("wfi before save: {:?}", wfi);
+        wfi.promise_success();
+        wfi.new_actions_done(1, current_timestamp_sec());
         self.workflow_instance.insert(&proposal_id, &wfi);
     }
 
@@ -840,11 +792,13 @@ impl Contract {
         actions_done: usize,
     ) -> bool {
         assert!(
-            inputs.len() <= actions.len() && inputs.len() > actions_done,
+            inputs.len() + actions_done <= actions.len(),
             "Action input has invalid length."
         );
-        for (idx, action) in inputs.iter().enumerate().skip(actions_done) {
-            let template_action = actions.get(idx).expect("internal - missing tpl action");
+        for (idx, action) in inputs.iter().enumerate() {
+            let template_action = actions
+                .get(idx + actions_done)
+                .expect("internal - missing tpl action");
             match (template_action.optional, action) {
                 (_, Some(a)) => {
                     if !a.action.eq(&template_action.action_data) {
@@ -858,75 +812,48 @@ impl Contract {
         true
     }
 
-    // TODO: refactor
     /// Executes DAO's native action.
-    /// Inner methods panic when provided malformed inputs - structure/datatype.
     pub fn execute_dao_action(
         &mut self,
-        _proposal_id: u32,
         action_ident: DaoActionIdent,
         inputs: &mut dyn ActivityInput,
     ) -> Result<(), ActionError> {
         match action_ident {
             DaoActionIdent::TreasuryAddPartition => {
-                let partition = try_bind_partition(inputs).expect("failed to bind partition");
+                let partition = deser_partition(inputs)?;
                 self.partition_add(partition);
             }
             DaoActionIdent::RewardAdd => {
-                let reward = try_bind_reward(inputs).expect("failed to bind reward");
-                self.reward_add(reward);
+                let reward = deser_reward(inputs)?;
+                self.reward_add(reward)?;
             }
             DaoActionIdent::GroupAdd => {
-                let group = try_bind_group(inputs);
+                let group = deser_group_input(inputs)?;
                 self.group_add(group);
             }
             DaoActionIdent::GroupRemove => {
-                let id = inputs
-                    .get("id")
-                    .expect("missing group id")
-                    .try_into_u64()
-                    .expect("invalid datatype: group id") as u16;
+                let id = deser_id("id", inputs)? as u16;
                 self.group_remove(id);
             }
             DaoActionIdent::GroupAddMembers => {
-                let id = inputs
-                    .get("id")
-                    .expect("missing group id")
-                    .try_into_u64()
-                    .expect("invalid datatype: group id") as u16;
-                let members = try_bind_group_members("members", inputs);
-                let member_roles = try_to_bind_member_roles("member_roles", inputs);
+                let id = deser_id("id", inputs)? as u16;
+                let members = deser_group_members("members", inputs)?;
+                let member_roles = deser_member_roles("member_roles", inputs)?;
                 self.group_add_members(id, members, member_roles);
             }
             DaoActionIdent::GroupRemoveMembers => {
-                let id = inputs
-                    .get("id")
-                    .expect("missing group id")
-                    .try_into_u64()
-                    .expect("invalid datatype: group id") as u16;
-
-                let members = try_bind_accounts("members", inputs);
-                if !members.is_empty() {
-                    self.group_remove_members(id, members);
-                }
+                let id = deser_id("id", inputs)? as u16;
+                let members = deser_account_ids("members", inputs)?;
+                self.group_remove_members(id, members);
             }
             DaoActionIdent::GroupRemoveRoles => {
-                let id = inputs
-                    .get("id")
-                    .expect("missing group id")
-                    .try_into_u64()
-                    .expect("invalid datatype: group id") as u16;
-
-                let roles = try_to_bind_roles("role_ids", inputs);
+                let id = deser_id("id", inputs)? as u16;
+                let roles = deser_roles_ids("role_ids", inputs)?;
                 self.group_remove_roles(id, roles);
             }
             DaoActionIdent::GroupRemoveMemberRoles => {
-                let id = inputs
-                    .get("id")
-                    .expect("missing group id")
-                    .try_into_u64()
-                    .expect("invalid datatype: group id") as u16;
-                let member_roles = try_to_bind_member_roles("member_roles", inputs);
+                let id = deser_id("id", inputs)? as u16;
+                let member_roles = deser_member_roles("member_roles", inputs)?;
                 self.group_remove_member_roles(id, member_roles);
             }
             DaoActionIdent::TagAdd => {
@@ -934,13 +861,11 @@ impl Contract {
             }
             _ => unreachable!(),
         }
-
         Ok(())
     }
 
-    // TODO: Tests.
-    /// Binds dao FnCall
-    pub fn get_fncall_id_with_metadata(
+    /// Return function call receiver and method name with all necessary object metadata.
+    pub fn load_fncall_id_with_metadata(
         &self,
         id: FnCallIdType,
         sources: &dyn Source,
@@ -953,23 +878,26 @@ impl Contract {
                 method.clone(),
                 self.function_call_metadata
                     .get(&(account, method.clone()))
-                    .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                    .ok_or(ActionError::InvalidWfStructure(
+                        "missing fn call metadata".into(),
+                    ))?,
             ),
             FnCallIdType::Dynamic(arg_src, method) => {
-                let name = eval(&arg_src, sources, expressions, Some(inputs))
-                    .expect("invalid value")
-                    .try_into_string()?;
+                let name = eval(&arg_src, sources, expressions, Some(inputs))?.try_into_string()?;
                 (
                     AccountId::try_from(name.to_string())
-                        .map_err(|_| ActionError::InvalidDataType)?,
+                        .map_err(|_| ActionError::ParseAccountId(arg_src.is_user_input()))?,
                     method.clone(),
                     self.function_call_metadata
                         .get(&(
-                            AccountId::try_from(name.to_string())
-                                .map_err(|_| ActionError::InvalidDataType)?,
+                            AccountId::try_from(name.to_string()).map_err(|_| {
+                                ActionError::ParseAccountId(arg_src.is_user_input())
+                            })?,
                             method.clone(),
                         ))
-                        .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                        .ok_or(ActionError::InvalidWfStructure(
+                            "missing fn call metadata".into(),
+                        ))?,
                 )
             }
             FnCallIdType::StandardStatic(account, method) => (
@@ -977,19 +905,19 @@ impl Contract {
                 method.clone(),
                 self.standard_function_call_metadata
                     .get(&method.clone())
-                    .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                    .ok_or(ActionError::InvalidWfStructure(
+                        "missing standard fn call metadata".into(),
+                    ))?,
             ),
             FnCallIdType::StandardDynamic(arg_src, method) => {
-                let name = eval(&arg_src, sources, expressions, Some(inputs))
-                    .expect("invalid value")
-                    .try_into_string()?;
+                let name = eval(&arg_src, sources, expressions, Some(inputs))?.try_into_string()?;
                 (
                     AccountId::try_from(name.to_string())
-                        .map_err(|_| ActionError::InvalidDataType)?,
+                        .map_err(|_| ActionError::ParseAccountId(arg_src.is_user_input()))?,
                     method.clone(),
-                    self.standard_function_call_metadata
-                        .get(&method)
-                        .ok_or(ActionError::MissingFnCallMetadata(method))?,
+                    self.standard_function_call_metadata.get(&method).ok_or(
+                        ActionError::InvalidWfStructure("missing standard fn call metadata".into()),
+                    )?,
                 )
             }
         };

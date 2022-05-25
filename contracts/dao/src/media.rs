@@ -1,8 +1,8 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 
-use crate::ProposalId;
 use crate::core::Contract;
+use crate::ProposalId;
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
@@ -35,7 +35,6 @@ pub struct Media {
     pub version: String,
     pub valid: bool,
 }
-
 
 impl Contract {
     pub fn add_media(&mut self, media: &Media) -> u32 {

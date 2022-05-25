@@ -732,7 +732,7 @@ fn group_scenario() {
         0,
         1000,
     );
-    let reward_id = contract.reward_add(reward);
+    let reward_id = contract.reward_add(reward).unwrap();
     assert_eq!(contract.reward_last_id, reward_id);
     assert!(contract.reward(reward_id).is_some());
     assert!(contract.reward(reward_id + 1).is_none());

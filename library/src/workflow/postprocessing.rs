@@ -12,7 +12,7 @@ use crate::{
     types::{
         activity_input::ActivityInput,
         datatype::{Datatype, Value},
-        error::SourceError,
+        error::{PostprocessingError, ProcessingError},
         source::Source,
     },
     ProviderTemplateData,
@@ -31,7 +31,6 @@ pub struct Postprocessing {
 }
 
 impl Postprocessing {
-    // TODO: replace with PostprocessingError
     /// Replaces all StoryDynValue variants with StoreValue variants.
     /// Same is valid for variants with opposite *Binded
     /// Supposed to be called before dispatching FnCall action.
@@ -41,20 +40,17 @@ impl Postprocessing {
         sources: &dyn Source,
         expressions: &[EExpr],
         user_input: &dyn ActivityInput,
-    ) -> Result<(), SourceError> {
-        // TODO: Improve.
+    ) -> Result<(), ProcessingError> {
         for ins in self.instructions.iter_mut() {
             match ins {
                 Instruction::StoreDynValue(string, arg_src) => {
-                    let value = eval(arg_src, sources, expressions, Some(user_input))
-                        .expect("postprocessing eval value missing");
+                    let value = eval(arg_src, sources, expressions, Some(user_input))?;
                     *ins = Instruction::StoreValue(string.clone(), value);
                 }
                 Instruction::Cond(arg_src, cond, required_fncall_result) => {
                     let mut values = Vec::with_capacity(arg_src.len());
                     for src in arg_src.iter() {
-                        let value = eval(src, sources, expressions, Some(user_input))
-                            .expect("postprocessing eval value missing");
+                        let value = eval(src, sources, expressions, Some(user_input))?;
                         values.push(value);
                     }
                     *ins = Instruction::CondBinded(
@@ -66,8 +62,7 @@ impl Postprocessing {
                 Instruction::StoreExpression(key, arg_src, expr, required_fncall_result) => {
                     let mut values = Vec::with_capacity(arg_src.len());
                     for src in arg_src.iter() {
-                        let value = eval(src, sources, expressions, Some(user_input))
-                            .expect("postprocessing eval value missing");
+                        let value = eval(src, sources, expressions, Some(user_input))?;
                         values.push(value);
                     }
 
@@ -81,8 +76,7 @@ impl Postprocessing {
                 Instruction::StoreExpressionGlobal(key, arg_src, expr, required_fncall_result) => {
                     let mut values = Vec::with_capacity(arg_src.len());
                     for src in arg_src.iter() {
-                        let value = eval(src, sources, expressions, Some(user_input))
-                            .expect("postprocessing eval value missing");
+                        let value = eval(src, sources, expressions, Some(user_input))?;
                         values.push(value);
                     }
 
@@ -98,44 +92,54 @@ impl Postprocessing {
         }
         Ok(())
     }
-    // TODO: Error handling
-    /// Executes postprocessing script.
+    /// Execute postprocessing script.
     pub fn execute(
         mut self,
         fn_result_val: Vec<u8>,
         mut storage: Option<&mut StorageBucket>,
         global_storage: &mut StorageBucket,
         new_template: &mut Option<ProviderTemplateData>,
-    ) -> Result<(), ()> {
+    ) -> Result<(), ProcessingError> {
         let mut i = 0;
         while i < self.instructions.len() {
             // Replace/Swap to avoid cloning.
             let mut ins = std::mem::replace(&mut self.instructions[i], Instruction::None);
             match &mut ins {
                 Instruction::DeleteKey(key) => {
-                    storage.as_mut().unwrap().remove_data(key);
+                    storage
+                        .as_mut()
+                        .ok_or(PostprocessingError::StorageMissing)?
+                        .remove_data(key);
                 }
                 Instruction::DeleteKeyGlobal(key) => {
                     global_storage.remove_data(key);
                 }
-                Instruction::StoreValue(key, value) => {
-                    storage.as_mut().unwrap().add_data(key, value)
-                }
+                Instruction::StoreValue(key, value) => storage
+                    .as_mut()
+                    .ok_or(PostprocessingError::StorageMissing)?
+                    .add_data(key, value),
                 Instruction::StoreValueGlobal(key, value) => global_storage.add_data(key, value),
                 Instruction::StoreFnCallResult(key, type_def) => {
                     let result = self.deser_datatype_from_slice(
-                        type_def
-                            .into_datatype_ref()
-                            .expect("custom types are not suported yet"),
+                        type_def.into_datatype_ref().ok_or(
+                            PostprocessingError::UnsupportedFnCallResult(
+                                "custom types are not suported yet".into(),
+                            ),
+                        )?,
                         &fn_result_val,
                     )?;
-                    storage.as_mut().unwrap().add_data(key, &result);
+                    storage
+                        .as_mut()
+                        .ok_or(PostprocessingError::StorageMissing)?
+                        .add_data(key, &result);
                 }
                 Instruction::StoreFnCallResultGlobal(key, type_def) => {
                     let result = self.deser_datatype_from_slice(
-                        type_def
-                            .into_datatype_ref()
-                            .expect("custom types are not suported yet"),
+                        type_def.into_datatype_ref().ok_or(
+                            PostprocessingError::UnsupportedFnCallResult(
+                                "custom types are not suported yet".into(),
+                            ),
+                        )?,
                         &fn_result_val,
                     )?;
                     global_storage.add_data(key, &result);
@@ -146,21 +150,21 @@ impl Postprocessing {
 
                     *new_template = Some((workflow, fncalls, fncall_metadata))
                 }
-                Instruction::StoreExpression(_, _, _, _) => return Err(()),
-                Instruction::StoreExpressionGlobal(_, _, _, _) => return Err(()),
                 Instruction::CondBinded(values, cond, required_fncall_result) => {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
                         let result = self.deser_datatype_from_slice(
-                            type_def
-                                .into_datatype_ref()
-                                .expect("custom types are not suported yet"),
+                            type_def.into_datatype_ref().ok_or(
+                                PostprocessingError::UnsupportedFnCallResult(
+                                    "custom types are not suported yet".into(),
+                                ),
+                            )?,
                             &fn_result_val,
                         )?;
                         values.push(result);
                     }
 
-                    let next_ins = cond.eval(values.as_slice()).map_err(|_| ())? as usize;
+                    let next_ins = cond.eval(values.as_slice())? as usize;
                     // In case this condition is evaluated again we want to restore it back.
                     values.pop();
                     std::mem::swap(&mut self.instructions[i], &mut ins);
@@ -173,21 +177,21 @@ impl Postprocessing {
                     i = next_ins;
                     continue;
                 }
-                Instruction::StoreDynValue(_, _) => return Err(()),
-                Instruction::Cond(_, _, _) => return Err(()),
                 Instruction::None => continue,
                 Instruction::StoreExpressionBinded(key, values, expr, required_fncall_result) => {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
                         let result = self.deser_datatype_from_slice(
-                            type_def
-                                .into_datatype_ref()
-                                .expect("custom types are not suported yet"),
+                            type_def.into_datatype_ref().ok_or(
+                                PostprocessingError::UnsupportedFnCallResult(
+                                    "custom types are not suported yet".into(),
+                                ),
+                            )?,
                             &fn_result_val,
                         )?;
                         values.push(result);
                     }
-                    let result = expr.eval(values.as_slice()).map_err(|_| ())?;
+                    let result = expr.eval(values.as_slice())?;
                     storage.as_mut().unwrap().add_data(key, &result);
                     values.pop();
                 }
@@ -200,18 +204,21 @@ impl Postprocessing {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
                         let result = self.deser_datatype_from_slice(
-                            type_def
-                                .into_datatype_ref()
-                                .expect("custom types are not suported yet"),
+                            type_def.into_datatype_ref().ok_or(
+                                PostprocessingError::UnsupportedFnCallResult(
+                                    "custom types are not suported yet".into(),
+                                ),
+                            )?,
                             &fn_result_val,
                         )?;
                         values.push(result);
                     }
 
-                    let result = expr.eval(values.as_slice()).map_err(|_| ())?;
+                    let result = expr.eval(values.as_slice())?;
                     global_storage.add_data(key, &result);
                     values.pop();
                 }
+                _ => return Err(PostprocessingError::NonBindedInstruction).map_err(|e| e.into()),
             }
             // Swap instruction back.
             std::mem::swap(&mut self.instructions[i], &mut ins);
@@ -225,37 +232,39 @@ impl Postprocessing {
         &self,
         type_def: &Datatype,
         promise_result_data: &[u8],
-    ) -> Result<Value, ()> {
+    ) -> Result<Value, PostprocessingError> {
         match type_def {
             Datatype::String(_) => {
                 let value = serde_json::from_slice::<String>(promise_result_data);
-                Ok(Value::String(value.map_err(|_| ())?))
+                Ok(Value::String(value?))
             }
             Datatype::Bool(_) => {
                 let value = serde_json::from_slice::<bool>(promise_result_data);
-                Ok(Value::Bool(value.map_err(|_| ())?))
+                Ok(Value::Bool(value?))
             }
             Datatype::U64(_) => {
                 let value = serde_json::from_slice::<u64>(promise_result_data);
-                Ok(Value::U64(value.map_err(|_| ())?))
+                Ok(Value::U64(value?))
             }
             Datatype::U128(_) => {
                 let value = serde_json::from_slice::<U128>(promise_result_data);
-                Ok(Value::U128(value.map_err(|_| ())?))
+                Ok(Value::U128(value?))
             }
             Datatype::VecString => {
                 let value = serde_json::from_slice::<Vec<String>>(promise_result_data);
-                Ok(Value::VecString(value.map_err(|_| ())?))
+                Ok(Value::VecString(value?))
             }
             Datatype::VecU64 => {
                 let value = serde_json::from_slice::<Vec<u64>>(promise_result_data);
-                Ok(Value::VecU64(value.map_err(|_| ())?))
+                Ok(Value::VecU64(value?))
             }
             Datatype::VecU128 => {
                 let value = serde_json::from_slice::<Vec<U128>>(promise_result_data);
-                Ok(Value::VecU128(value.map_err(|_| ())?))
+                Ok(Value::VecU128(value?))
             }
-            _ => Err(()),
+            _ => Err(PostprocessingError::UnsupportedFnCallResult(
+                "unknown type".into(),
+            )),
         }
     }
 }

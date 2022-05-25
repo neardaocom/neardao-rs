@@ -79,7 +79,7 @@ impl Contract {
         )
         .expect("Binding failed");
 
-        serialize_to_json(user_input, fncall_metadata.as_slice())
+        serialize_to_json(user_input, fncall_metadata.as_slice()).unwrap()
     }
 
     fn get_dao_consts(&self) -> impl RuntimeConstantProvider {

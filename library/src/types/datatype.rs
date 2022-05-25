@@ -6,9 +6,9 @@ use near_sdk::{
 
 use crate::ObjectId;
 
-use super::error::TypeError;
+use super::error::CastError;
 
-//TODO remove debug in prod
+// TODO: Remove debug in production.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive())]
 #[serde(crate = "near_sdk::serde")]
@@ -31,56 +31,71 @@ impl Default for Value {
     }
 }
 
-// TODO better error type
 impl Value {
-    pub fn try_into_bool(&self) -> Result<bool, TypeError> {
+    pub fn datatype(&self) -> &str {
+        match self {
+            Value::Bool(_) => "bool",
+            Value::U64(_) => "u64",
+            Value::U128(_) => "U128",
+            Value::String(_) => "string",
+            Value::VecBool(_) => "vec_bool",
+            Value::VecU64(_) => "vec_u64",
+            Value::VecU128(_) => "vec_u128",
+            Value::VecString(_) => "vec_string",
+            Value::Null => "null",
+        }
+    }
+}
+
+impl Value {
+    pub fn try_into_bool(&self) -> Result<bool, CastError> {
         match self {
             Value::Bool(b) => Ok(*b),
-            _ => Err(TypeError::Conversion),
+            _ => Err(CastError::new(self.datatype(), "bool")),
         }
     }
 
-    pub fn try_into_string(self) -> Result<String, TypeError> {
+    pub fn try_into_string(self) -> Result<String, CastError> {
         match self {
             Value::String(s) => Ok(s),
-            _ => Err(TypeError::Conversion),
+            _ => Err(CastError::new(self.datatype(), "string")),
         }
     }
 
-    pub fn try_into_u128(&self) -> Result<u128, TypeError> {
+    pub fn try_into_u128(&self) -> Result<u128, CastError> {
         match self {
             Value::U64(n) => Ok(*n as u128),
             Value::U128(n) => Ok(n.0),
-            _ => Err(TypeError::Conversion),
+            _ => Err(CastError::new(self.datatype(), "u128")),
         }
     }
 
-    pub fn try_into_u64(&self) -> Result<u64, TypeError> {
+    pub fn try_into_u64(&self) -> Result<u64, CastError> {
         match self {
             Value::U64(n) => Ok(*n),
             Value::U128(n) => Ok(n.0 as u64),
-            _ => Err(TypeError::Conversion),
+            _ => Err(CastError::new(self.datatype(), "u64")),
         }
     }
 
-    pub fn try_into_vec_string(self) -> Result<Vec<String>, TypeError> {
+    pub fn try_into_vec_string(self) -> Result<Vec<String>, CastError> {
         match self {
             Value::VecString(v) => Ok(v),
-            _ => Err(TypeError::Conversion),
+            _ => Err(CastError::new(self.datatype(), "vec_string")),
         }
     }
 
-    pub fn try_into_vec_u64(self) -> Result<Vec<u64>, TypeError> {
+    pub fn try_into_vec_u64(self) -> Result<Vec<u64>, CastError> {
         match self {
             Value::VecU64(v) => Ok(v),
-            _ => Err(TypeError::Conversion),
+            _ => Err(CastError::new(self.datatype(), "vec_u64")),
         }
     }
 
-    pub fn try_into_str(&self) -> Result<&str, TypeError> {
+    pub fn try_into_str(&self) -> Result<&str, CastError> {
         match self {
             Value::String(v) => Ok(v.as_str()),
-            _ => Err(TypeError::Conversion),
+            _ => Err(CastError::new(self.datatype(), "&str")),
         }
     }
 
@@ -114,6 +129,7 @@ impl Datatype {
     pub fn is_optional(&self) -> bool {
         match self {
             Self::Bool(v) | Self::U64(v) | Self::U128(v) | Self::String(v) => *v,
+            Self::NullableObject(_) => true,
             _ => false,
         }
     }

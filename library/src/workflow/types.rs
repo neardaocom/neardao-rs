@@ -140,6 +140,18 @@ pub enum ValueSrc {
     Value(Value),
 }
 
+impl ValueSrc {
+    pub fn is_user_input(&self) -> bool {
+        match self {
+            ValueSrc::Src(src) => match src {
+                Src::User(_) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+}
+
 // TODO: Remove Debug in production.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]

@@ -1,92 +1,90 @@
-use std::error::Error;
-use std::fmt::{self, Display};
+use near_sdk::serde_json::Error;
+use thiserror::Error;
 
 use crate::interpreter::error::EvalError;
 
-#[derive(Debug)]
-pub enum TypeError {
-    Conversion,
+#[derive(Error, Debug)]
+#[error("failed to cast datatype {from} to {to}")]
+pub struct CastError {
+    from: String,
+    to: String,
 }
 
-impl Display for TypeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TypeError::Conversion => write!(f, "Conversion failed"),
+impl CastError {
+    pub fn new(from: &str, to: &str) -> Self {
+        Self {
+            from: from.into(),
+            to: to.into(),
         }
     }
 }
 
-impl Error for TypeError {}
-
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum SourceError {
-    InvalidSourceVariant,
-    /// Source is not available but workflow requires it.
-    SourceMissing(String),
-    /// Case when id pos from ArgSrc enum is not in the source.
-    InvalidArgId,
+    #[error("invalid source variant: `{0}`")]
+    InvalidSourceVariant(String),
+    #[error("tpl value missing for key: `{0}`")]
+    TplValueMissing(String),
+    #[error("tpl setitngs value missing for key: `{0}`")]
+    TplSettingValueMissing(String),
+    #[error("propose value missing for key: `{0}`")]
+    ProposeValueMissing(String),
+    #[error("activity value missing for key: `{0}`")]
+    ActivityValueMissing(String),
+    #[error("action value missing for key: `{0}`")]
+    ActionValueMissing(String),
+    #[error("global storage value missing for key: `{0}`")]
+    GlobalStorageValueMissing(String),
+    #[error("storage value missing for key: `{0}`")]
+    StorageValueMissing(String),
+    #[error("runtime value missing for key: `{0}`")]
+    RuntimeValueMissing(u8),
 }
 
-impl Display for SourceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SourceError::InvalidSourceVariant => write!(f, "Invalid source variant."),
-            SourceError::SourceMissing(s) => write!(f, "Missing source: {}", s),
-            SourceError::InvalidArgId => write!(f, "Argument ID is invalid."),
-        }
-    }
+#[derive(Error, Debug)]
+pub enum BindingError {
+    #[error("collecion prefix: `{0}` is missing")]
+    CollectionPrefixMissing(u8),
 }
 
-impl Error for SourceError {}
+#[derive(Error, Debug)]
+pub enum PostprocessingError {
+    #[error("storage not provided")]
+    StorageMissing,
+    #[error("invalid instruction variant")]
+    NonBindedInstruction,
+    #[error("failed to deserialize into expected type: `{0}`")]
+    Deserialize(#[from] Error),
+    #[error("unsupported function call result type: `{0}`")]
+    UnsupportedFnCallResult(String),
+}
 
-#[derive(Debug)]
-/// Unites all underlying error types.
+#[derive(Error, Debug)]
+pub enum ValidationError {
+    #[error("invalid validator definition")]
+    InvalidDefinition,
+    #[error("missing key prefix at pos: `{0}`")]
+    MissingKeyPrefix(u8),
+}
+
+#[derive(Error, Debug)]
 pub enum ProcessingError {
-    Conversion,
-    Source(SourceError),
-    InvalidExpressionStructure,
-    InvalidValidatorDefinition,
-    MissingExpression,
-    Eval(EvalError),
-    UserInput(u8),
-    Unreachable,
-}
-
-impl Display for ProcessingError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ProcessingError::Source(e) => {
-                write!(f, "Fetching value from source failed: {}", e)
-            }
-            ProcessingError::Eval(e) => write!(f, "Evaluation failed: {}", e),
-            ProcessingError::UserInput(id) => write!(f, "Missing value at pos: {}.", id),
-            ProcessingError::Conversion => {
-                write!(f, "Converting datatype failed - got invalid datatype.")
-            }
-            ProcessingError::Unreachable => write!(f, "Processing reached unreachable branch."),
-            ProcessingError::InvalidValidatorDefinition => todo!(),
-            ProcessingError::MissingExpression => todo!(),
-            ProcessingError::InvalidExpressionStructure => todo!(),
-        }
-    }
-}
-
-impl Error for ProcessingError {}
-
-impl From<SourceError> for ProcessingError {
-    fn from(e: SourceError) -> Self {
-        Self::Source(e)
-    }
-}
-
-impl From<EvalError> for ProcessingError {
-    fn from(e: EvalError) -> Self {
-        Self::Eval(e)
-    }
-}
-
-impl From<TypeError> for ProcessingError {
-    fn from(_e: TypeError) -> Self {
-        Self::Conversion
-    }
+    #[error("missing user input for key: `{0}`")]
+    MissingUserInputKey(String),
+    #[error("source required user input which was not provided")]
+    UserInputNotProvided,
+    #[error("cast failed: `{0}`")]
+    Cast(#[from] CastError),
+    #[error("binding failed: `{0}`")]
+    Binding(#[from] BindingError),
+    #[error("validation failed: `{0}`")]
+    Validation(#[from] ValidationError),
+    #[error("fetch from source failed: `{0}`")]
+    Source(#[from] SourceError),
+    #[error("expression id `{0}` is missing")]
+    MissingExpression(u8),
+    #[error("evaluation exprsesion failed: `{0}`")]
+    Eval(#[from] EvalError),
+    #[error("postprocessing failed: `{0}`")]
+    Postprocessing(#[from] PostprocessingError),
 }

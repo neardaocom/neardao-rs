@@ -34,25 +34,24 @@ impl Expression {
 where {
         let expr = expressions
             .get(self.expr_id as usize)
-            .ok_or(ProcessingError::MissingExpression)?;
+            .ok_or(ProcessingError::MissingExpression(self.expr_id))?;
         let mut binded_args: Vec<Value> = Vec::with_capacity(self.args.len());
 
-        for arg_src in self.args.iter() {
-            match arg_src {
+        for src in self.args.iter() {
+            let value = match src {
                 Src::User(key) => {
                     if let Some(user_input) = input {
-                        binded_args.push(
-                            user_input
-                                .get(key.as_str())
-                                .expect("Failed to get value")
-                                .clone(),
-                        )
+                        user_input
+                            .get(key.as_str())
+                            .ok_or(ProcessingError::MissingUserInputKey(key.into()))?
+                            .clone()
                     } else {
-                        return Err(ProcessingError::InvalidExpressionStructure);
+                        return Err(ProcessingError::UserInputNotProvided);
                     }
                 }
-                _ => binded_args.push(get_value_from_source(sources, arg_src)?),
-            }
+                _ => get_value_from_source(sources, src)?,
+            };
+            binded_args.push(value);
         }
         Ok(expr.eval(binded_args.as_slice())?)
     }

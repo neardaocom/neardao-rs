@@ -436,7 +436,7 @@ async fn test_workflow_optional_actions_cannot_leave_activity() -> anyhow::Resul
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInput::activity_1_action_3(),
+        ActivityInput::activity_1_action_3_skip_2(),
         true,
     )
     .await?;
@@ -695,7 +695,7 @@ async fn test_workflow_optional_actions_execute_activity_1_without_3rd_action() 
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInput::activity_1_action_3(),
+        ActivityInput::activity_1_action_3_skip_previous(),
         true,
     )
     .await?;

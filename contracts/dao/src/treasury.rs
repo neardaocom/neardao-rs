@@ -112,8 +112,16 @@ impl TryFrom<TreasuryPartitionInput> for TreasuryPartition {
     type Error = &'static str;
     fn try_from(v: TreasuryPartitionInput) -> Result<Self, Self::Error> {
         let mut assets = Vec::with_capacity(v.assets.len());
-        for asset in v.assets {
-            assets.push(PartitionAsset::try_from(asset)?);
+        for asset_input in v.assets {
+            let asset = PartitionAsset::try_from(asset_input)?;
+            if assets
+                .iter()
+                .find(|a: &&PartitionAsset| a.asset_id() == asset.asset_id())
+                .is_some()
+            {
+                return Err("duplicate asset");
+            }
+            assets.push(asset);
         }
         if assets.is_empty() {
             return Err("treasury partition has no assets");

@@ -58,7 +58,7 @@ fn reward_wage_one_asset() {
         0,
         1000,
     );
-    let reward_id = contract.reward_add(reward);
+    let reward_id = contract.reward_add(reward).unwrap();
     let wallet = get_wallet(&contract, &founder_1);
     let wallet_rewards = wallet.rewards();
     assert!(!wallet_rewards.is_empty(), "founder_1 has no rewards");
@@ -184,7 +184,7 @@ fn reward_activity_one_asset() {
         0,
         4000,
     );
-    let reward_id = contract.reward_add(reward);
+    let reward_id = contract.reward_add(reward).unwrap();
     let wallet = get_wallet(&contract, &founder_1);
     let wallet_rewards = wallet.rewards();
     assert!(!wallet_rewards.is_empty(), "founder_1 has no rewards");
@@ -469,9 +469,9 @@ fn reward_multiple_wage_rewards() {
         0,
         1000,
     );
-    let reward_id_only_near = contract.reward_add(reward_only_near);
-    let reward_id_only_fts = contract.reward_add(reward_only_fts);
-    let reward_id_all_tokens = contract.reward_add(reward_all_tokens);
+    let reward_id_only_near = contract.reward_add(reward_only_near).unwrap();
+    let reward_id_only_fts = contract.reward_add(reward_only_fts).unwrap();
+    let reward_id_all_tokens = contract.reward_add(reward_all_tokens).unwrap();
     assert!(reward_id_only_near == 1 && reward_id_only_fts == 2 && reward_id_all_tokens == 3);
     testing_env!(ctx.block_timestamp(tm(9)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
@@ -767,7 +767,7 @@ fn reward_one_asset_scenario() {
         0,
         10,
     );
-    let reward_id = contract.reward_add(reward);
+    let reward_id = contract.reward_add(reward).unwrap();
     testing_env!(ctx.block_timestamp(tm(0)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(

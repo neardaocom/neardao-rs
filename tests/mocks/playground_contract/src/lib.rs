@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::{unimplemented, vec::Vec};
 
-use library::functions::math::calculate_percent_u128;
+use library::functions::utils::calculate_percent_u128;
 use library::functions::utils::into_storage_key_wrapper_u16;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};

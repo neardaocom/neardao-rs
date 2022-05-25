@@ -1,10 +1,11 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::env::panic_str;
 use near_sdk::serde::Serialize;
-use near_sdk::AccountId;
+use near_sdk::{require, AccountId};
 
 use crate::internal::utils::current_timestamp_sec;
 use crate::wallet::Wallet;
+use crate::workflow::InternalDaoActionError;
 use crate::{core::*, derive_from_versioned, derive_into_versioned, RewardId, RoleId};
 use crate::{
     treasury::{Asset, TreasuryPartition},
@@ -42,7 +43,6 @@ pub struct Reward {
 }
 
 impl Reward {
-    /// TODO: Validations
     pub fn new(
         group_id: u16,
         role_id: u16,
@@ -84,7 +84,7 @@ impl Reward {
                 let seconds_passed = std::cmp::min(current_timestamp, self.time_valid_to)
                     - std::cmp::max(self.time_valid_from, timestamp_from);
                 let units = seconds_passed / wage.unit_seconds as u64;
-             amount.checked_mul(units as u128).unwrap_or(u128::MAX)
+                amount.checked_mul(units as u128).unwrap_or(u128::MAX)
             }
             RewardType::UserActivity(_) => panic_str("fatal - invalid reward type"),
         };
@@ -217,59 +217,60 @@ impl PartialEq<u8> for RewardActivity {
 }
 
 impl Contract {
-    /// TODO: Error handling and validations.
     /// Add new reward entry into DAO rewards.
     /// Also add this reward in affected user wallets and related group.
-    pub fn reward_add(&mut self, reward: Reward) -> u16 {
+    pub fn reward_add(&mut self, reward: Reward) -> Result<u16, InternalDaoActionError> {
         let partition = self
             .treasury_partition
             .get(&reward.partition_id)
-            .expect("partition not found")
+            .ok_or(InternalDaoActionError("partition not found".into()))?
             .into();
-
-        assert!(
-            self.validate_reward_assets(&reward, &partition),
-            "partion does not have all required assets"
-        );
-
-        let mut group = self.groups.get(&reward.group_id).expect("group not found");
+        if !self.validate_reward_assets(&reward, &partition) {
+            return Err(InternalDaoActionError(
+                "partion does not have all required assets".into(),
+            ));
+        }
+        let mut group = self
+            .groups
+            .get(&reward.group_id)
+            .ok_or(InternalDaoActionError("group not found".into()))?;
         let rewarded_users = if reward.role_id == 0 {
             group.get_members_accounts()
         } else {
             self.get_group_members_with_role(reward.group_id, &group, reward.role_id)
         };
-
         self.reward_last_id += 1;
-
-        // Add reward to role members wallets.
         let mut reward_assets: Vec<Asset> = reward
             .reward_amounts()
             .into_iter()
             .map(|(a, _)| a.to_owned())
             .collect();
-
         // Check for duplicates.
         reward_assets.sort();
         let len_before = reward_assets.len();
         reward_assets.dedup();
-        assert!(len_before == reward_assets.len(), "duplicate assets");
+        if len_before != reward_assets.len() {
+            return Err(InternalDaoActionError("duplicate assets".into()));
+        }
         let current_timestamp = current_timestamp_sec();
+        // Add reward to role members wallets.
         for user in rewarded_users {
-            assert!(
-                self.add_wallet_reward(
-                    self.reward_last_id,
-                    reward.get_reward_type(),
-                    &user,
-                    reward_assets.clone(),
-                    current_timestamp
-                ),
-                "failed to added reward to user wallet"
-            );
+            if !self.add_wallet_reward(
+                self.reward_last_id,
+                reward.get_reward_type(),
+                &user,
+                reward_assets.clone(),
+                current_timestamp,
+            ) {
+                return Err(InternalDaoActionError(
+                    "failed to added reward to user wallet".into(),
+                ));
+            }
         }
         group.add_new_reward(self.reward_last_id, reward.role_id);
         self.groups.insert(&reward.group_id, &group);
         self.rewards.insert(&self.reward_last_id, &reward.into());
-        self.reward_last_id
+        Ok(self.reward_last_id)
     }
 
     /// Validate that defined assets in rewards are defined in treasury partition.

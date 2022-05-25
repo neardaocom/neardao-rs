@@ -16,7 +16,7 @@ use crate::role::{Roles, UserRoles};
 use crate::settings::Settings;
 use crate::tags::Tags;
 use crate::treasury::TreasuryPartition;
-use crate::wallet::{Wallet, ClaimableRewards, ClaimableReward};
+use crate::wallet::{ClaimableReward, ClaimableRewards, Wallet};
 use crate::TagCategory;
 use crate::{core::*, StorageKey};
 
@@ -184,57 +184,57 @@ impl Contract {
         self.workflow_activity_log.get(&proposal_id)
     }
     /// Calculate claimable rewards for `account_id`.
-        pub fn claimable_rewards(&self, account_id: AccountId) -> ClaimableRewards {
-            let wallet: Wallet = self
-                .wallets
-                .get(&account_id)
-                .expect("Wallet not found.")
-                .into();
-            let mut claimable_rewards = Vec::with_capacity(4);
-            let current_timestamp = current_timestamp_sec();
-            for wallet_reward in wallet.rewards() {
-                if let Some(versioned_reward) = self.rewards.get(&wallet_reward.reward_id()) {
-                    let reward: Reward = versioned_reward.into();
-                    for (asset, _) in reward.reward_amounts().into_iter() {
-                        let (amount, _) = Contract::internal_claimable_reward_asset(
-                            &wallet,
-                            wallet_reward.reward_id(),
-                            &reward,
-                            &asset,
-                            current_timestamp,
-                        );
-                        claimable_rewards.push(ClaimableReward {
-                            asset: asset.clone(),
-                            reward_id: wallet_reward.reward_id(),
-                            amount: amount.into(),
-                            partition_id: reward.partition_id,
-                        });
-                    }
+    pub fn claimable_rewards(&self, account_id: AccountId) -> ClaimableRewards {
+        let wallet: Wallet = self
+            .wallets
+            .get(&account_id)
+            .expect("Wallet not found.")
+            .into();
+        let mut claimable_rewards = Vec::with_capacity(4);
+        let current_timestamp = current_timestamp_sec();
+        for wallet_reward in wallet.rewards() {
+            if let Some(versioned_reward) = self.rewards.get(&wallet_reward.reward_id()) {
+                let reward: Reward = versioned_reward.into();
+                for (asset, _) in reward.reward_amounts().into_iter() {
+                    let (amount, _) = Contract::internal_claimable_reward_asset(
+                        &wallet,
+                        wallet_reward.reward_id(),
+                        &reward,
+                        &asset,
+                        current_timestamp,
+                    );
+                    claimable_rewards.push(ClaimableReward {
+                        asset: asset.clone(),
+                        reward_id: wallet_reward.reward_id(),
+                        amount: amount.into(),
+                        partition_id: reward.partition_id,
+                    });
                 }
             }
-            ClaimableRewards {
-                claimable_rewards,
-                failed_withdraws: wallet
-                    .failed_withdraws()
-                    .to_vec()
-                    .into_iter()
-                    .map(|(a, v)| (a, v.into()))
-                    .collect(),
-            }
         }
+        ClaimableRewards {
+            claimable_rewards,
+            failed_withdraws: wallet
+                .failed_withdraws()
+                .to_vec()
+                .into_iter()
+                .map(|(a, v)| (a, v.into()))
+                .collect(),
+        }
+    }
 
-        pub fn media(self, id: u32) -> Option<Media> {
-            self.media.get(&id)
-        }
-        pub fn media_list(self, from_id: u32, limit: u32) -> Vec<(u32,Media)> {
-            let mut media_list = Vec::with_capacity(self.media_last_id as usize);
-            for i in from_id..std::cmp::min(self.media_last_id + 1, limit) {
-                if let Some(media) = self.media.get(&i) {
-                    media_list.push((i, media.into()));
-                }
+    pub fn media(self, id: u32) -> Option<Media> {
+        self.media.get(&id)
+    }
+    pub fn media_list(self, from_id: u32, limit: u32) -> Vec<(u32, Media)> {
+        let mut media_list = Vec::with_capacity(self.media_last_id as usize);
+        for i in from_id..std::cmp::min(self.media_last_id + 1, limit) {
+            if let Some(media) = self.media.get(&i) {
+                media_list.push((i, media.into()));
             }
-            media_list
         }
+        media_list
+    }
 }
 
 #[derive(Serialize)]

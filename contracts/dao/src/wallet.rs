@@ -11,11 +11,10 @@ use crate::{
     constants::TGAS,
     core::*,
     derive_from_versioned, derive_into_versioned,
-    error::ERR_PROMISE_INVALID_RESULTS_COUNT,
     internal::utils::current_timestamp_sec,
     reward::{Reward, RewardTypeIdent},
     treasury::{Asset, TreasuryPartition},
-    TimestampSec, RewardId,
+    RewardId, TimestampSec,
 };
 
 #[ext_contract(ext_self)]
@@ -411,8 +410,7 @@ impl Contract {
         assert_eq!(
             env::promise_results_count(),
             1,
-            "{}",
-            ERR_PROMISE_INVALID_RESULTS_COUNT
+            "invalid promise result count",
         );
         match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),

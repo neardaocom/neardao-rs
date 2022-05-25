@@ -4,7 +4,7 @@ use crate::{
     workflow::validator::Validator,
 };
 
-/// Validates inputs by validator_exprs.
+/// Validate `user_input` according to `validators` definition.
 pub fn validate(
     sources: &dyn Source,
     validators: &[Validator],

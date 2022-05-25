@@ -55,7 +55,7 @@ fn activity_check_activity_input() {
         test_event_action(true),
         test_event_action(true),
     ];
-    let inputs = vec![None, None, None];
+    let inputs = vec![None];
     assert!(contract.check_activity_input(&actions, &inputs, 2));
 
     let actions = vec![
@@ -63,7 +63,7 @@ fn activity_check_activity_input() {
         test_event_action(true),
         test_event_action(false),
     ];
-    let inputs = vec![None, None, action_input()];
+    let inputs = vec![action_input()];
     assert!(contract.check_activity_input(&actions, &inputs, 2));
 
     let actions = vec![
@@ -147,7 +147,7 @@ fn activity_check_activity_input_invalid() {
         test_event_action(true),
         test_event_action(false),
     ];
-    let inputs = vec![None, None, None];
+    let inputs = vec![None];
     assert!(!contract.check_activity_input(&actions, &inputs, 2));
 
     let actions = vec![

@@ -1,4 +1,5 @@
 use crate::types::datatype::Value;
+use crate::types::error::ProcessingError;
 use crate::workflow::types::{Src, ValueSrc};
 use crate::{
     interpreter::expression::EExpr,
@@ -7,28 +8,28 @@ use crate::{
 
 use super::utils::get_value_from_source;
 
-// TODO: Error handling.
+/// Evaluate to Value according to `src` definition.
 pub fn eval(
     src: &ValueSrc,
     sources: &dyn Source,
     expressions: &[EExpr],
     input: Option<&dyn ActivityInput>,
-) -> Option<Value> {
+) -> Result<Value, ProcessingError> {
     match src {
         ValueSrc::Src(arg_src) => match arg_src {
             Src::User(key) => {
                 if let Some(input) = input {
-                    Some(input.get(key).expect("Failed to get value").clone())
+                    Ok(input
+                        .get(key)
+                        .ok_or(ProcessingError::MissingUserInputKey(key.into()))?
+                        .clone())
                 } else {
-                    panic!("eval user input not provided")
+                    return Err(ProcessingError::UserInputNotProvided);
                 }
             }
-            _ => Some(get_value_from_source(sources, arg_src).expect("eval source error")),
+            _ => Ok(get_value_from_source(sources, arg_src)?),
         },
-        ValueSrc::Expr(expr) => Some(
-            expr.bind_and_eval(sources, input, expressions)
-                .expect("eval expr error"),
-        ),
-        ValueSrc::Value(v) => Some(v.clone()),
+        ValueSrc::Expr(expr) => Ok(expr.bind_and_eval(sources, input, expressions)?),
+        ValueSrc::Value(v) => Ok(v.clone()),
     }
 }

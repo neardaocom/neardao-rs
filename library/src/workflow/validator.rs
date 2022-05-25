@@ -6,7 +6,11 @@ use near_sdk::{
 use crate::{
     functions::{evaluation::eval, utils::object_key},
     interpreter::expression::EExpr,
-    types::{activity_input::ActivityInput, error::ProcessingError, source::Source},
+    types::{
+        activity_input::ActivityInput,
+        error::{ProcessingError, ValidationError},
+        source::Source,
+    },
 };
 
 use super::types::{Src, ValueSrc};
@@ -54,13 +58,12 @@ impl Validator {
     ) -> Result<bool, ProcessingError> {
         let expr = expressions
             .get(self.get_expression_id() as usize)
-            .expect("Validator expression missing");
+            .ok_or(ProcessingError::MissingExpression(self.get_expression_id()))?;
         let mut binded_args = Vec::with_capacity(8);
         let result = match self {
             Validator::Object(o) => {
                 for src in o.value.iter() {
-                    let value =
-                        eval(src, sources, expressions, Some(input)).expect("value not found");
+                    let value = eval(src, sources, expressions, Some(input))?;
                     binded_args.push(value);
                 }
                 expr.eval(binded_args.as_slice())?.try_into_bool()?
@@ -73,33 +76,34 @@ impl Validator {
                         let mapped_src = if let ValueSrc::Src(src) = src {
                             if let Src::User(key_suffix) = src {
                                 let key = object_key(
-                                    o.prefixes.get(0).expect("No prefix for collection"),
+                                    o.prefixes
+                                        .get(0)
+                                        .ok_or(ValidationError::MissingKeyPrefix(0))?,
                                     counter.to_string().as_str(),
                                     key_suffix.as_str(),
                                 );
-                                let src = src.with_new_user_key(key).expect("invalid variant");
-                                Some(ValueSrc::Src(src))
+                                Some(ValueSrc::Src(src.with_new_user_key(key).unwrap()))
                             } else {
                                 None
                             }
                         } else {
                             None
                         };
-
                         let value = eval(
                             mapped_src.as_ref().unwrap_or(src),
                             sources,
                             expressions,
                             Some(input),
-                        )
-                        .expect("value not found");
+                        )?;
                         binded_args.push(value);
                     }
                     // Return true only if all object attributes have been validated.
                     if !started_new {
                         break true;
                     } else if binded_args.len() < o.value.len() {
-                        return Err(ProcessingError::InvalidValidatorDefinition);
+                        return Err(ProcessingError::Validation(
+                            ValidationError::InvalidDefinition,
+                        ));
                     // TODO: add other variant
                     } else {
                         counter += 1;

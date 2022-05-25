@@ -417,7 +417,7 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
         sale_info: Some("sale info binded".into()),
     };
 
-    let result_json_string = serialize_to_json(user_input, metadata.as_slice());
+    let result_json_string = serialize_to_json(user_input, metadata.as_slice()).unwrap();
     let expected_json_string = serde_json::to_string(&sale_create_input).unwrap();
     assert_eq!(result_json_string, expected_json_string);
     assert_eq!(
@@ -584,7 +584,7 @@ fn serialize_complex() {
 
     let input = Box::new(input_data);
 
-    let json = serialize_to_json(input, metadata.as_slice());
+    let json = serialize_to_json(input, metadata.as_slice()).unwrap();
 
     dbg!(json.clone());
     let _: PersonInfo =
