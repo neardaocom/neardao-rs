@@ -117,8 +117,7 @@ pub enum FnCallIdType {
 }
 
 // TODO: Remove Debug and Clone in production.
-#[derive(Deserialize, Debug, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Serialize))]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ActionInput {
     pub action: ActionInputType,
@@ -127,8 +126,7 @@ pub struct ActionInput {
 
 // TODO: Update structure.
 // TODO: Remove Debug and Clone in production.
-#[derive(Deserialize, Clone, Debug)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Serialize))]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 pub enum ActionInputType {

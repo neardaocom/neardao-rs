@@ -116,5 +116,10 @@ pub fn get_value_from_source(
 /// Panics or gives invalid results otherwise.
 /// Tested in wasm32 environment via workspaces-rs in Sandbox and Testnet.
 pub fn calculate_percent_u128(value: u128, total: u128) -> u8 {
+    if total == 0 {
+        return 0;
+    } else if value > total {
+        return 100;
+    }
     (((value * 10_000) / total) as f64 / 100.0).round() as u8
 }

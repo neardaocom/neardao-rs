@@ -1,8 +1,8 @@
-FROM rust:1.58.0
+FROM rust:1.60.0
 
 LABEL description="Container for builds"
 
-RUN rustup default 1.58.0
+RUN rustup default 1.60.0
 RUN rustup target add wasm32-unknown-unknown
 
 RUN apt-get update && apt-get install -y \

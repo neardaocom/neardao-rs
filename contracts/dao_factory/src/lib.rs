@@ -9,6 +9,7 @@ use near_sdk::{Gas, IntoStorageKey};
 
 ///include binary code of dao contract
 const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../../res/dao_opt_size_max.wasm");
+const MIGRATION_BLOB: &[u8] = include_bytes!("../../../res/dao_opt_size_max.wasm");
 
 /// Gas spent on the call & account creation.
 const CREATE_CALL_GAS: Gas = Gas(150_000_000_000_000);
@@ -17,6 +18,15 @@ const ON_CREATE_CALL_GAS: Gas = Gas(30_000_000_000_000);
 
 const DEPOSIT_CREATE: u128 = 10_000_000_000_000_000_000_000_000;
 const MAX_DAO_VERSIONS: u8 = 5;
+
+#[derive(Serialize, Deserialize, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
+pub enum MigrationType {
+    OnlyMigration,
+    NewMigrationBin,
+    NewUpgradeBin,
+}
 
 #[ext_contract(ext_self)]
 pub trait ExtSelf {
@@ -34,18 +44,26 @@ pub trait ExtSelf {
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 pub enum StorageKeys {
     Daos,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
+    CurrentVersion,
+    LatestVersion,
+    V1Migration,
+    V1Upgrade,
+    V2Migration,
+    V2Upgrade,
+    V3Migration,
+    V3Upgrade,
+    V4Migration,
+    V4Upgrade,
+    V5Migration,
+    V5Upgrade,
 }
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
     pub daos: UnorderedMap<AccountId, DaoInfo>,
     pub tags: Vec<String>,
-    pub latest_dao_version_idx: u8,
+    pub latest_upgrade_version_idx: u8,
+    pub latest_migration_version_idx: u8,
     pub version_count: u8,
 }
 
@@ -53,10 +71,14 @@ pub struct Contract {
 impl Contract {
     #[init]
     pub fn new(tags: Vec<String>) -> Self {
-        env::storage_write(&StorageKeys::V1.into_storage_key(), NEWEST_DAO_VERSION);
+        env::storage_write(
+            &StorageKeys::CurrentVersion.into_storage_key(),
+            NEWEST_DAO_VERSION,
+        );
         Self {
             daos: UnorderedMap::new(StorageKeys::Daos),
-            latest_dao_version_idx: 1,
+            latest_upgrade_version_idx: 1,
+            latest_migration_version_idx: 1,
             version_count: 1,
             tags,
         }
@@ -64,15 +86,26 @@ impl Contract {
 
     #[private]
     #[init(ignore_state)]
-    pub fn migrate(dao_version_update: bool) -> Self {
+    pub fn migrate(r#type: MigrationType) -> Self {
         let mut factory: Contract = env::state_read().expect("Failed to migrate");
 
-        if dao_version_update {
+        if r#type != MigrationType::OnlyMigration {
             // Check if we dont upload same version
             //assert_ne!(dao.version_hash(dao.latest_dao_version_idx).unwrap(), Base64VecU8::from(env::sha256(&NEWEST_DAO_VERSION.to_vec())), "Uploaded existing DAO bin as next version");
 
-            let key = factory.update_version_and_get_slot();
-            env::storage_write(&key.into_storage_key(), NEWEST_DAO_VERSION);
+            let is_upgrade = r#type == MigrationType::NewUpgradeBin;
+            let key = factory.update_version_and_get_slot(is_upgrade);
+            if is_upgrade {
+                env::storage_write(&key.into_storage_key(), NEWEST_DAO_VERSION);
+            } else {
+                env::storage_write(&key.into_storage_key(), MIGRATION_BLOB);
+            }
+            if factory.latest_migration_version_idx == factory.latest_upgrade_version_idx {
+                env::storage_write(
+                    &StorageKeys::LatestVersion.into_storage_key(),
+                    &factory.version_count.to_le_bytes(),
+                );
+            }
         }
         factory
     }
@@ -95,7 +128,7 @@ impl Contract {
         }
     }
 
-    /// Returns sha256 of requested dao binary version as base64.
+    /*     /// Returns sha256 of requested dao binary version as base64.
     /// Argument with value 0 means newest version.
     pub fn version_hash(&self, version: u8) -> Option<Base64VecU8> {
         // Check it was already uploaded or we still keep this version
@@ -125,7 +158,7 @@ impl Contract {
         };
 
         Some(Base64VecU8::from(env::sha256(&code)))
-    }
+    } */
 
     #[payable]
     pub fn create(&mut self, name: String, info: DaoInfo, args: Base64VecU8) -> Promise {
@@ -150,15 +183,16 @@ impl Contract {
                 0,
                 env::prepaid_gas() - CREATE_CALL_GAS - ON_CREATE_CALL_GAS,
             )
-            .then(ext_self::on_create(
-                account_id,
-                U128(env::attached_deposit()),
-                env::predecessor_account_id(),
-                info,
-                env::current_account_id(),
-                0,
-                ON_CREATE_CALL_GAS,
-            ))
+            .then(
+                ext_self::ext(env::current_account_id())
+                    .with_static_gas(ON_CREATE_CALL_GAS)
+                    .on_create(
+                        account_id,
+                        U128(env::attached_deposit()),
+                        env::predecessor_account_id(),
+                        info,
+                    ),
+            )
     }
 
     pub fn on_create(
@@ -190,68 +224,131 @@ impl Contract {
     /// Removes all version blobs so we can delete factory account
     #[private]
     pub fn clean_self() {
-        env::storage_remove(&StorageKeys::V1.into_storage_key());
-        env::storage_remove(&StorageKeys::V2.into_storage_key());
-        env::storage_remove(&StorageKeys::V3.into_storage_key());
-        env::storage_remove(&StorageKeys::V4.into_storage_key());
-        env::storage_remove(&StorageKeys::V5.into_storage_key());
+        env::storage_remove(&StorageKeys::V1Migration.into_storage_key());
+        env::storage_remove(&StorageKeys::V1Upgrade.into_storage_key());
+        env::storage_remove(&StorageKeys::V2Migration.into_storage_key());
+        env::storage_remove(&StorageKeys::V2Upgrade.into_storage_key());
+        env::storage_remove(&StorageKeys::V3Migration.into_storage_key());
+        env::storage_remove(&StorageKeys::V3Upgrade.into_storage_key());
+        env::storage_remove(&StorageKeys::V4Migration.into_storage_key());
+        env::storage_remove(&StorageKeys::V4Upgrade.into_storage_key());
+        env::storage_remove(&StorageKeys::V5Migration.into_storage_key());
+        env::storage_remove(&StorageKeys::V5Upgrade.into_storage_key());
     }
 }
 
 impl Contract {
-    pub fn update_version_and_get_slot(&mut self) -> StorageKeys {
-        // Inc version counter and rotate storage slots
-        if self.latest_dao_version_idx == MAX_DAO_VERSIONS {
-            self.latest_dao_version_idx = 1;
-        } else {
-            self.latest_dao_version_idx += 1;
+    pub fn update_version_and_get_slot(&mut self, upgrade: bool) -> StorageKeys {
+        if self.latest_upgrade_version_idx == MAX_DAO_VERSIONS {
+            self.latest_upgrade_version_idx = 1;
+            self.latest_migration_version_idx = 1;
         }
-        self.version_count += 1;
+
+        if upgrade {
+            self.latest_upgrade_version_idx += 1;
+        } else {
+            self.latest_migration_version_idx += 1;
+        }
+
+        if self.latest_migration_version_idx == self.latest_upgrade_version_idx {
+            self.version_count += 1;
+        }
+
+        assert!(
+            self.latest_migration_version_idx
+                .checked_sub(self.latest_upgrade_version_idx)
+                .unwrap_or(2)
+                <= 1,
+            "Load next upgrade bin first."
+        );
 
         // Store new dao version to storage
-        match self.latest_dao_version_idx {
-            1 => StorageKeys::V1,
-            2 => StorageKeys::V2,
-            3 => StorageKeys::V3,
-            4 => StorageKeys::V4,
-            5 => StorageKeys::V5,
-            _ => unreachable!(),
-        }
+        let key = if upgrade {
+            match self.latest_upgrade_version_idx {
+                1 => StorageKeys::V1Upgrade,
+                2 => StorageKeys::V2Upgrade,
+                3 => StorageKeys::V3Upgrade,
+                4 => StorageKeys::V4Upgrade,
+                5 => StorageKeys::V5Upgrade,
+                _ => unreachable!(),
+            }
+        } else {
+            match self.latest_migration_version_idx {
+                1 => StorageKeys::V1Migration,
+                2 => StorageKeys::V2Migration,
+                3 => StorageKeys::V3Migration,
+                4 => StorageKeys::V4Migration,
+                5 => StorageKeys::V5Migration,
+                _ => unreachable!(),
+            }
+        };
+        key
     }
 }
 
-/// Sends wasm blob back to caller (dao) based on provided dao version
-/// Dao must implement "store_new_version" method
-/// Prepaid gas should be 100+ TGas
+/// Sends wasm blobs back to caller (dao) based on provided dao version
+/// Dao must implement necessary store methods to be able to save the blobs.
+/// Prepaid gas should be 200+ TGas
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
-pub extern "C" fn download_dao_bin() {
-    const GAS_SEND_BIN_LIMIT: Gas = Gas(100_000_000_000_000);
+pub extern "C" fn download_new_version() {
+    const GAS_DOWNLOAD_ACTION: Gas = Gas(100_000_000_000_000);
     env::setup_panic_hook();
 
     let version: u8 = *env::input().unwrap().get(0).unwrap();
-    let predecessor = env::predecessor_account_id();
-    let method_name = "store_new_version";
+    let caller = env::predecessor_account_id();
+    let method_store_migration_bin = "store_migration_bin";
+    let method_store_upgrade_bin = "store_upgrade_bin";
 
     log!("Got version: {:?}", version);
 
-    let key = match version % 5 {
-        0 => StorageKeys::V1,
-        1 => StorageKeys::V2,
-        2 => StorageKeys::V3,
-        3 => StorageKeys::V4,
-        4 => StorageKeys::V5,
+    let last_version_stored: u8 = u8::from_le(
+        env::storage_read(&StorageKeys::LatestVersion.into_storage_key())
+            .expect("No upgrade stored yet.")[0],
+    );
+    assert!(
+        last_version_stored > version,
+        "Next version is not available."
+    );
+
+    let key_migration = match version % 5 {
+        0 => StorageKeys::V1Migration,
+        1 => StorageKeys::V2Migration,
+        2 => StorageKeys::V3Migration,
+        3 => StorageKeys::V4Migration,
+        4 => StorageKeys::V5Migration,
         _ => unreachable!(),
     }
     .into_storage_key();
 
-    let code = env::storage_read(key.as_slice()).expect("Failed to read code from storage.");
-    env::promise_create(
-        predecessor,
-        method_name,
-        code.as_slice(),
+    let key_upgrade = match version % 5 {
+        0 => StorageKeys::V1Upgrade,
+        1 => StorageKeys::V2Upgrade,
+        2 => StorageKeys::V3Upgrade,
+        3 => StorageKeys::V4Upgrade,
+        4 => StorageKeys::V5Upgrade,
+        _ => unreachable!(),
+    }
+    .into_storage_key();
+
+    let migration_bin = env::storage_read(key_migration.as_slice())
+        .expect("Next version migration code not found.");
+    let upgrade_bin =
+        env::storage_read(key_upgrade.as_slice()).expect("Next version upgrade code not found.");
+    let promise_id = env::promise_batch_create(&caller);
+    env::promise_batch_action_function_call(
+        promise_id,
+        method_store_migration_bin,
+        migration_bin.as_slice(),
         0,
-        GAS_SEND_BIN_LIMIT,
+        GAS_DOWNLOAD_ACTION,
+    );
+    env::promise_batch_action_function_call(
+        promise_id,
+        method_store_upgrade_bin,
+        upgrade_bin.as_slice(),
+        0,
+        GAS_DOWNLOAD_ACTION,
     );
 }
 
@@ -285,7 +382,7 @@ mod tests {
         testing_env!(context.build());
 
         let mut factory = Contract::new(vec![]);
-
+        /*
         assert_eq!(factory.version_count, 1);
 
         assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V2);
@@ -304,6 +401,6 @@ mod tests {
         assert_eq!(factory.version_count, 6);
 
         assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V2);
-        assert_eq!(factory.version_count, 7);
+        assert_eq!(factory.version_count, 7); */
     }
 }

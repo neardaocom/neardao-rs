@@ -24,6 +24,7 @@ pub mod core;
 pub mod receiver;
 pub mod reward;
 pub mod treasury;
+mod upgrade;
 pub mod view;
 pub mod wallet;
 

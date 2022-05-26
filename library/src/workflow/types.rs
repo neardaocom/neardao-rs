@@ -242,7 +242,6 @@ impl FnCallResultType {
     pub fn into_datatype_ref(&self) -> Option<&Datatype> {
         match self {
             FnCallResultType::Datatype(d) => Some(d),
-            _ => None,
         }
     }
 }

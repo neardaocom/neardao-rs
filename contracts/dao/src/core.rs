@@ -54,7 +54,8 @@ pub enum StorageKeys {
     StandardFunctionCallMetadata,
     Storage,
     DaoSettings,
-    NewVersionCode,
+    NewVersionUpgradeBin,
+    NewVersionMigrationBin,
     Groups,
     FunctionCallWhitelist,
     WfTemplate,
@@ -195,19 +196,6 @@ impl Contract {
         contract
     }
 
-    #[private]
-    #[init(ignore_state)]
-    pub fn upgrade() -> Self {
-        assert!(env::storage_remove(
-            &StorageKeys::NewVersionCode.into_storage_key()
-        ));
-        let mut _dao: Contract = env::state_read().expect("Failed to migrate");
-
-        // ADD migration here
-
-        _dao
-    }
-
     /// For dev/testing purposes only
     #[cfg(feature = "testnet")]
     #[private]
@@ -233,81 +221,4 @@ impl Contract {
     pub fn delete_self(&mut self) -> Promise {
         Promise::new(env::current_account_id()).delete_account("neardao.testnet".into())
     }
-}
-
-/// Triggers new version download from factory.
-#[cfg(target_arch = "wasm32")]
-#[no_mangle]
-pub extern "C" fn download_new_version() {
-    use crate::constants::{GAS_DOWNLOAD_NEW_VERSION, VERSION};
-
-    env::setup_panic_hook();
-
-    // We are not able to access council members any other way so we have deserialize SC
-    let contract: Contract = env::state_read().unwrap();
-    let dao_settings: Settings = contract.settings.get().unwrap().into();
-
-    //TODO download rights
-    assert_eq!(
-        dao_settings.dao_admin_account_id,
-        env::predecessor_account_id()
-    );
-
-    let admin_acc = dao_settings.dao_admin_account_id;
-    let method_name = "download_dao_bin";
-
-    env::promise_create(
-        admin_acc,
-        method_name,
-        &[VERSION],
-        0,
-        GAS_DOWNLOAD_NEW_VERSION,
-    );
-}
-
-/// Method called by dao factory as response to download_new_version method.
-/// Saves provided dao binary in storage under "NewVersionCode".
-#[cfg(target_arch = "wasm32")]
-#[no_mangle]
-pub extern "C" fn store_new_version() {
-    env::setup_panic_hook();
-
-    let contract: Contract = env::state_read().unwrap();
-    let dao_settings: Settings = contract.settings.get().unwrap().into();
-
-    assert_eq!(
-        dao_settings.dao_admin_account_id,
-        env::predecessor_account_id()
-    );
-    env::storage_write(
-        &StorageKeys::NewVersionCode.into_storage_key(),
-        &env::input().unwrap(),
-    );
-}
-
-// TODO: Use near-sys to access low-level interface.
-#[cfg(target_arch = "wasm32")]
-#[no_mangle]
-pub extern "C" fn upgrade_self() {
-    use crate::constants::GAS_UPGRADE;
-
-    env::setup_panic_hook();
-
-    // We are not able to access council members any other way so we have deserialize SC
-    let contract: Contract = env::state_read().unwrap();
-    let dao_settings: Settings = contract.settings.get().unwrap().into();
-
-    assert_eq!(
-        dao_settings.dao_admin_account_id,
-        env::predecessor_account_id()
-    );
-
-    let current_acc = env::current_account_id();
-    let method_name = "upgrade";
-    let key = StorageKeys::NewVersionCode.into_storage_key();
-
-    let code = env::storage_read(key.as_slice()).expect("Failed to read code from storage.");
-    let promise = env::promise_batch_create(&current_acc);
-    env::promise_batch_action_deploy_contract(promise, code.as_slice());
-    env::promise_batch_action_function_call(promise, method_name, &[], 0, GAS_UPGRADE);
 }

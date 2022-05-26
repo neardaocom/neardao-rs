@@ -1,5 +1,5 @@
 use near_sdk::AccountId;
-use types::datatype::{Datatype, Value};
+use types::datatype::Value;
 use workflow::{template::Template, types::ObjectMetadata};
 
 pub mod constants;

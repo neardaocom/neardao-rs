@@ -35,6 +35,11 @@ pub const FT_FACTORY: &str = "ft_factory.wasm";
 pub const SKYWARD: &str = "05022022_skyward.wasm";
 pub const WNEAR: &str = "w_near.wasm";
 
+// Upgrade contracts.
+pub const FACTORY_V1: &str = "upgrade_dao_factory_v1.wasm";
+pub const FACTORY_V2_MIGRATION: &str = "upgrade_dao_factory_v2_migration.wasm";
+pub const FACTORY_V2: &str = "upgrade_dao_factory_v2.wasm";
+
 macro_rules! wasm_bin_getters {
     ( $($fnname:ident => $const:expr)*) => {
         $(
@@ -49,6 +54,14 @@ macro_rules! wasm_bin_getters {
             /// Returns path of external wasm blob.
             pub fn $fnname() -> String {
                 format!("{}/../res_3rd_party/{}",ROOT_PATH,$const)
+            }
+        )*
+    };
+    (UPGRADE $($fnname:ident => $const:expr)*) => {
+        $(
+            /// Returns path of external wasm blob.
+            pub fn $fnname() -> String {
+                format!("{}/../res_upgrade/{}",ROOT_PATH,$const)
             }
         )*
     };
@@ -67,6 +80,13 @@ wasm_bin_getters!(
     EXTERNAL
     get_skyward_wasm => SKYWARD
     get_wnear_wasm => WNEAR
+);
+
+wasm_bin_getters!(
+    UPGRADE
+    get_factory_v1 => FACTORY_V1
+    get_factory_v2_migration => FACTORY_V2_MIGRATION
+    get_factory_v2 => FACTORY_V2
 );
 
 pub fn outcome_pretty<T>(name: &str, outcome: &CallExecutionDetails)

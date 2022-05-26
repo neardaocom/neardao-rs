@@ -19,7 +19,7 @@ use near_sdk::ONE_NEAR;
 
 // This is ugly. Refactoring is welcomed.
 macro_rules! test_voting {
-    ($fn_name:ident; $target:expr, TokenWeighted; $($name:expr => $vote:literal,$tokens:literal)*; TOTAL: $sum:expr, SPAM: $spam:expr, YES: $yes:expr, NO: $no:expr) => {
+    ($fn_name:ident; $target:expr, TokenWeighted; $($name:expr => $vote:literal,$tokens:expr)*; TOTAL: $sum:expr, SPAM: $spam:expr, YES: $yes:expr, NO: $no:expr) => {
         #[test]
         fn $fn_name() {
                 let mut ctx = get_context_builder();
@@ -53,7 +53,7 @@ macro_rules! test_voting {
                 assert_eq!(vote_result, expected_result);
         }
     };
-    ($fn_name:ident; $target:expr, Democratic; $($name:expr => $vote:literal,$tokens:literal)*; TOTAL: $sum:expr, SPAM: $spam:expr, YES: $yes:expr, NO: $no:expr) => {
+    ($fn_name:ident; $target:expr, Democratic; $($name:expr => $vote:literal,$tokens:expr)*; TOTAL: $sum:expr, SPAM: $spam:expr, YES: $yes:expr, NO: $no:expr) => {
         #[test]
         fn $fn_name() {
                 let mut ctx = get_context_builder();
@@ -173,6 +173,15 @@ test_voting!(
 );
 
 // ----- SCENARIO: TOKEN WEIGHTED -----
+test_voting!(
+    voting_tokenweighted_anyone_big_int;
+    ActivityRight::Anyone, TokenWeighted;
+    FOUNDER_1 => 1,1_000_000_000 * ONE_NEAR FOUNDER_2 => 1,1_000_000_000 * ONE_NEAR FOUNDER_3 => 2,1_000_000_000 * ONE_NEAR  "guest_1.testnet" => 1,1 "guest_2.testnet" => 2,2 "guest_3.testnet" => 2,0;
+    TOTAL: 3_000_000_000 * ONE_NEAR + 3,
+    SPAM: 0,
+    YES: 2_000_000_000 * ONE_NEAR + 1,
+    NO:  1_000_000_000 * ONE_NEAR + 2
+);
 test_voting!(
     voting_tokenweighted_anyone;
     ActivityRight::Anyone, TokenWeighted;

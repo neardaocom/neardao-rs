@@ -1,10 +1,13 @@
 use near_sdk::{json_types::Base64VecU8, ONE_NEAR};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use workspaces::Account;
 use workspaces::{network::DevAccountDeployer, AccountId, Contract, DevNetwork, Worker};
 
 use crate::utils::contract::dao::dao_init_args;
-use crate::utils::{get_dao_factory_wasm, outcome_pretty};
+use crate::utils::{
+    get_dao_factory_wasm, get_factory_v1, get_factory_v2, get_factory_v2_migration, outcome_pretty,
+};
 
 pub async fn init_dao_factory<T>(worker: &Worker<T>) -> anyhow::Result<Contract>
 where
@@ -89,6 +92,59 @@ where
         "create dao via dao factory init failed"
     );
     Ok(())
+}
+
+pub async fn deploy_upgrade_dao_factory<T>(
+    worker: &Worker<T>,
+    factory: Option<&Account>,
+    version: &str,
+) -> anyhow::Result<Contract>
+where
+    T: DevNetwork,
+{
+    let (wasm_blob, migration_type) = match version {
+        "v1" => (get_factory_v1(), "only_migration"),
+        "v2_migration" => (get_factory_v2_migration(), "new_migration_bin"),
+        "v2" => (get_factory_v2(), "new_upgrade_bin"),
+        _ => panic!("Invalid upgrade dao factory version"),
+    };
+
+    let factory_contract = if version == "v1" {
+        let factory_contract = worker.dev_deploy(&std::fs::read(wasm_blob)?).await?;
+        let tags: Vec<String> = vec![];
+        let args = json!({
+            "tags" :tags,
+        })
+        .to_string()
+        .into_bytes();
+        let outcome = factory_contract
+            .call(&worker, "new")
+            .args(args)
+            .max_gas()
+            .transact()
+            .await?;
+        outcome_pretty::<()>("dao factory init", &outcome);
+        assert!(outcome.is_success(), "dao factory init failed");
+        factory_contract
+    } else {
+        let factory = factory.expect("invalid use - expected factory contract");
+        let factory_contract = factory.deploy(worker, &std::fs::read(wasm_blob)?).await?;
+        let args = json!({
+            "type": migration_type,
+        })
+        .to_string()
+        .into_bytes();
+        let outcome = factory
+            .call(&worker, factory.id(), "migrate")
+            .args(args)
+            .max_gas()
+            .transact()
+            .await?;
+        outcome_pretty::<()>("dao factory upgrade", &outcome);
+        assert!(outcome.is_success(), "dao factory upgrade failed");
+        factory_contract.into_result()?
+    };
+    Ok(factory_contract)
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]

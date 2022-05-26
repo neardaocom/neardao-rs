@@ -5,7 +5,7 @@
 # B) Or with smart contract name you want to build
 #################
 
-set -xe 
+set -e 
 
 CRATES=(dao_factory dao workflow_provider staking ft_factory fungible_token)
 FEATURES=""
@@ -19,6 +19,7 @@ if [ ! -z "$1" -a -d "${ABS_BASEDIR}/contracts/${1}" ]; then
 
     LIB_DIR="${ABS_BASEDIR}/contracts/${1}"
     cd $LIB_DIR
+    echo "Building: ${1}"  
     RUSTFLAGS='-C link-arg=-s' cargo build --target wasm32-unknown-unknown $FEATURES --release
 
     if [ ! -e "${ABS_BASEDIR}/res" ]; then
@@ -30,7 +31,8 @@ else
 
     for lib in "${CRATES[@]}"
     do
-    :         
+    :   
+        echo "Building: $lib"      
         RUSTFLAGS='-C link-arg=-s' cargo build -p $lib --target wasm32-unknown-unknown --release
         cp "${ABS_BASEDIR}/target/wasm32-unknown-unknown/release/${lib}.wasm" "${ABS_BASEDIR}/res/"
     done

@@ -70,14 +70,15 @@ impl Contract {
                 0,
                 env::prepaid_gas() - CREATE_CALL_GAS - ON_CREATE_CALL_GAS,
             )
-            .then(ext_self::on_create(
-                account_id,
-                U128(env::attached_deposit()),
-                env::predecessor_account_id(),
-                env::current_account_id(),
-                0,
-                ON_CREATE_CALL_GAS,
-            ))
+            .then(
+                ext_self::ext(env::current_account_id())
+                    .with_static_gas(ON_CREATE_CALL_GAS)
+                    .on_create(
+                        account_id,
+                        U128(env::attached_deposit()),
+                        env::predecessor_account_id(),
+                    ),
+            )
     }
     pub fn on_create(
         &mut self,

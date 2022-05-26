@@ -6,7 +6,6 @@ use consts::{
 };
 use dao::Dao;
 use library::functions::utils::into_storage_key_wrapper_u16;
-use near_contract_standards::fungible_token::core_impl::ext_fungible_token;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
@@ -99,13 +98,11 @@ impl Contract {
                 storage_deposit,
                 Gas(10 * 10u64.pow(12)),
             )
-            .then(ext_self::return_deposit(
-                env::predecessor_account_id(),
-                storage_deposit,
-                env::current_account_id(),
-                0,
-                Gas(10 * 10u64.pow(12)),
-            ));
+            .then(
+                ext_self::ext(env::current_account_id())
+                    .with_static_gas(Gas(10 * 10u64.pow(12)))
+                    .return_deposit(env::predecessor_account_id(), storage_deposit),
+            );
     }
 
     /// Registers caller in dao
@@ -129,14 +126,14 @@ impl Contract {
         account_stats.inc_user_count();
         self.save_account_stats(&dao_id, &account_stats);
         account_stats.assert_enough_deposit();
-        ext_dao::register_delegation(
-            sender_id.clone(),
-            dao_id,
-            sender_id.as_bytes().len() as u128
-                * MIN_STORAGE_FOR_DAO as Balance
-                * env::storage_byte_cost(),
-            GAS_FOR_REGISTER,
-        )
+        ext_dao::ext(dao_id)
+            .with_attached_deposit(
+                sender_id.as_bytes().len() as u128
+                    * MIN_STORAGE_FOR_DAO as Balance
+                    * env::storage_byte_cost(),
+            )
+            .with_static_gas(GAS_FOR_REGISTER)
+            .register_delegation(sender_id.clone())
     }
 
     /// Unregisters caller from dao.
@@ -176,7 +173,9 @@ impl Contract {
         account_stats.add_storage_used(storage_after - storage_before);
         self.save_account_stats(&dao_id, &account_stats);
         account_stats.assert_enough_deposit();
-        ext_dao::delegate_owned(delegate_id, amount, dao.account_id, 0, GAS_FOR_DELEGATE)
+        ext_dao::ext(dao.account_id)
+            .with_static_gas(GAS_FOR_DELEGATE)
+            .delegate_owned(delegate_id, amount)
     }
 
     /// Undelegates `amount` tokens from `delegate_id`.
@@ -196,7 +195,9 @@ impl Contract {
         account_stats.remove_storage_used(storage_before - storage_after);
         self.save_account_stats(&dao_id, &account_stats);
         account_stats.assert_enough_deposit();
-        ext_dao::undelegate(delegate_id, amount, dao.account_id, 0, GAS_FOR_UNDELEGATE)
+        ext_dao::ext(dao.account_id)
+            .with_static_gas(GAS_FOR_UNDELEGATE)
+            .undelegate(delegate_id, amount)
     }
 
     /// Delegate all delegated tokens from caller's delegators to `delegate_id`.
@@ -216,14 +217,9 @@ impl Contract {
         }
         self.save_account_stats(&dao_id, &account_stats);
         account_stats.assert_enough_deposit();
-        ext_dao::transfer_amount(
-            sender_id,
-            delegate_id,
-            amount.into(),
-            dao.account_id.clone(),
-            0,
-            GAS_FOR_UNDELEGATE,
-        )
+        ext_dao::ext(dao.account_id.clone())
+            .with_static_gas(GAS_FOR_UNDELEGATE)
+            .transfer_amount(sender_id, delegate_id, amount.into())
     }
     /// Withdraw vote tokens.
     /// Only vote amount which is not delegated can be withdrawn.
@@ -232,22 +228,15 @@ impl Contract {
         let mut dao = self.get_dao(&dao_id);
         dao.user_withdraw(&sender_id, amount.0);
         self.save_dao(&dao_id, &dao);
-        ext_fungible_token::ft_transfer(
-            sender_id.clone(),
-            amount,
-            None,
-            dao.vote_token_id.clone(),
-            1,
-            GAS_FOR_FT_TRANSFER,
-        )
-        .then(ext_self::exchange_callback_post_withdraw(
-            dao_id,
-            sender_id,
-            amount,
-            env::current_account_id(),
-            0,
-            GAS_FOR_FT_TRANSFER,
-        ))
+        ext_fungible_token::ext(dao.vote_token_id.clone())
+            .with_static_gas(GAS_FOR_FT_TRANSFER)
+            .with_attached_deposit(1)
+            .ft_transfer(sender_id.clone(), amount, None)
+            .then(
+                ext_self::ext(env::current_account_id())
+                    .with_static_gas(GAS_FOR_FT_TRANSFER)
+                    .exchange_callback_post_withdraw(dao_id, sender_id, amount),
+            )
     }
     /// Checks if withdraw was succesful.
     /// Reverts changes if not.
@@ -414,7 +403,7 @@ impl AccountStats {
 }
 
 #[ext_contract(ext_dao)]
-pub trait Contract {
+pub trait ExtDao {
     fn register_delegation(&mut self, account_id: AccountId);
     fn delegate_owned(&mut self, account_id: AccountId, amount: U128);
     fn undelegate(&mut self, account_id: AccountId, amount: U128);
@@ -427,13 +416,19 @@ pub trait Contract {
 }
 
 #[ext_contract(ext_self)]
-pub trait Contract {
+pub trait ExtSelf {
     fn exchange_callback_post_withdraw(
         &mut self,
         dao_id: AccountId,
         sender_id: AccountId,
         amount: U128,
     );
+    fn return_deposit(&self, account_id: AccountId, amount: u128);
+}
+
+#[ext_contract(ext_fungible_token)]
+pub trait ExtFungibleToken {
+    fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>);
     fn return_deposit(&self, account_id: AccountId, amount: u128);
 }
 

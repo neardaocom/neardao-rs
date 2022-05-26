@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use near_sdk::serde::Deserialize;
-
-#[cfg(not(target_arch = "wasm32"))]
-use near_sdk::serde::Serialize;
+use near_sdk::serde::{Deserialize, Serialize};
 
 use super::datatype::Value;
 /// Trait representing user input values for an activity.
@@ -17,8 +14,7 @@ pub trait ActivityInput {
 }
 
 // TODO: Remove Debug and Clone in production.
-#[derive(Deserialize, Debug, Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Serialize))]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 pub enum UserInput {

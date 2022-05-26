@@ -3,6 +3,7 @@ mod check;
 mod init;
 mod proposal;
 mod reward;
+pub mod upgrade;
 mod view;
 
 pub use activity_input::*;
