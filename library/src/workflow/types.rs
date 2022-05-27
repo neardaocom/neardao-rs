@@ -27,13 +27,16 @@ pub enum DaoActionIdent {
     GroupRemoveMemberRoles,
     SettingsUpdate,
     TagAdd,
-    TagEdit,
+    TagUpdate,
     TagRemove,
     FtDistribute,
     WorkflowAdd,
     TreasuryAddPartition,
     RewardAdd,
     Event,
+    MediaAdd,
+    MediaUpdate,
+    MediaRemove,
 }
 
 // TODO: Remove Debug in production.

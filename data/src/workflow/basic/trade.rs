@@ -7,7 +7,7 @@ use library::{
     interpreter::expression::{EExpr, EOp, ExprTerm, LogOp, Op, RelOp, TExpr},
     types::{datatype::Value, source::SourceDataVariant},
     workflow::{
-        action::{ActionData, TemplateAction},
+        action::{ActionData, InputSource, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         settings::{ProposeSettings, TemplateSettings},
@@ -64,6 +64,7 @@ impl Trade1 {
                         ),
                         optional: false,
                         postprocessing: None,
+                        input_source: InputSource::User,
                     }],
                     automatic: true,
                     terminal: Terminality::Automatic,

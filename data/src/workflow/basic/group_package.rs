@@ -4,7 +4,7 @@ use crate::TemplateData;
 use library::{
     types::source::SourceDataVariant,
     workflow::{
-        action::{ActionData, DaoActionData, TemplateAction},
+        action::{ActionData, DaoActionData, InputSource, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
@@ -15,15 +15,15 @@ use near_sdk::{ONE_NEAR, ONE_YOCTO};
 
 pub const DEFAULT_VOTING_DURATION: u32 = 10;
 
-pub const ADMINPACKAGE1_SETTINGS_DEPOSIT_PROPOSE: u128 = ONE_NEAR;
-pub const ADMINPACKAGE1_SETTINGS_DEPOSIT_VOTE: u128 = ONE_YOCTO;
+pub const GROUP_PACKAGE1_SETTINGS_DEPOSIT_PROPOSE: u128 = ONE_NEAR;
+pub const GROUP_PACKAGE1_SETTINGS_DEPOSIT_VOTE: u128 = ONE_YOCTO;
 
 /// TODO: Workflow description.
-pub struct AdminPackage1;
-impl AdminPackage1 {
+pub struct GroupPackage1;
+impl GroupPackage1 {
     pub fn template() -> TemplateData {
         let template = Template {
-            code: "admin_package".into(),
+            code: "group_package1".into(),
             version: "1".into(),
             auto_exec: false,
             need_storage: false,
@@ -44,6 +44,7 @@ impl AdminPackage1 {
                         }),
                         postprocessing: None,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: false,
                     terminal: Terminality::User,
@@ -64,6 +65,7 @@ impl AdminPackage1 {
                         }),
                         postprocessing: None,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: false,
                     terminal: Terminality::User,
@@ -84,6 +86,7 @@ impl AdminPackage1 {
                         }),
                         postprocessing: None,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: false,
                     terminal: Terminality::User,
@@ -104,6 +107,7 @@ impl AdminPackage1 {
                         }),
                         postprocessing: None,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: false,
                     terminal: Terminality::User,
@@ -124,6 +128,7 @@ impl AdminPackage1 {
                         }),
                         postprocessing: None,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: false,
                     terminal: Terminality::User,
@@ -144,6 +149,7 @@ impl AdminPackage1 {
                         }),
                         postprocessing: None,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: false,
                     terminal: Terminality::User,
@@ -566,9 +572,9 @@ impl AdminPackage1 {
         }
     }
     pub fn deposit_propose() -> u128 {
-        ADMINPACKAGE1_SETTINGS_DEPOSIT_PROPOSE
+        GROUP_PACKAGE1_SETTINGS_DEPOSIT_PROPOSE
     }
     pub fn deposit_vote() -> u128 {
-        ADMINPACKAGE1_SETTINGS_DEPOSIT_VOTE
+        GROUP_PACKAGE1_SETTINGS_DEPOSIT_VOTE
     }
 }

@@ -8,6 +8,7 @@ use library::MethodName;
 use library::storage::StorageBucket;
 use library::types::activity_input::ActivityInput;
 use library::types::source::{DefaultSource, Source};
+use library::workflow::action::InputSource::{PropSettings, User};
 use library::workflow::action::{ActionData, ActionInput, FnCallIdType, TemplateAction};
 use library::workflow::activity::{TemplateActivity, Terminality};
 use library::workflow::instance::InstanceState;
@@ -20,8 +21,8 @@ use near_sdk::{
 };
 
 use super::deserialize::{
-    deser_account_ids, deser_group_input, deser_group_members, deser_id, deser_member_roles,
-    deser_partition, deser_reward, deser_roles_ids,
+    deser_account_ids, deser_group_input, deser_group_members, deser_id, deser_media,
+    deser_member_roles, deser_partition, deser_reward, deser_roles_ids,
 };
 use super::error::{ActionError, ActivityError};
 use crate::constants::GLOBAL_BUCKET_IDENT;
@@ -343,7 +344,7 @@ impl Contract {
         for idx in 0..input.len() {
             // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
             let tpl_action = ctx.actions.get_mut(idx + last_action_done).unwrap();
-            let mut action_input = match input.get_mut(idx).unwrap().take() {
+            let action_input = match input.get_mut(idx).unwrap().take() {
                 Some(a) => a.values.into_activity_input(),
                 None => {
                     ctx.set_next_action_done();
@@ -387,6 +388,17 @@ impl Contract {
                 .ok_or(ActionError::InvalidWfStructure(
                     "missing action data".into(),
                 ))?;
+
+            let mut action_input = match tpl_action.input_source {
+                User => action_input,
+                PropSettings => sources
+                    .unset_prop_action()
+                    .ok_or(ActionError::InvalidWfStructure(
+                        "missing action inputs".into(),
+                    ))?
+                    .into_activity_input(),
+            };
+
             // Check input validators.
             if !validate(
                 sources,
@@ -452,7 +464,7 @@ impl Contract {
         for idx in 0..input.len() {
             // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
             let tpl_action = ctx.actions.get_mut(idx + last_action_done).unwrap();
-            let mut action_input = match input.get_mut(idx).unwrap().take() {
+            let action_input = match input.get_mut(idx).unwrap().take() {
                 Some(a) => {
                     if !tpl_action.optional {
                         required_promise_dispatched = true;
@@ -498,6 +510,16 @@ impl Contract {
             } else {
                 sources.unset_prop_action();
             }
+
+            let mut action_input = match tpl_action.input_source {
+                User => action_input,
+                PropSettings => sources
+                    .unset_prop_action()
+                    .ok_or(ActionError::InvalidWfStructure(
+                        "missing action inputs".into(),
+                    ))?
+                    .into_activity_input(),
+            };
 
             let user_inputs = action_input.to_vec();
 
@@ -853,6 +875,15 @@ impl Contract {
                 let id = deser_id("id", inputs)? as u16;
                 let member_roles = deser_member_roles("member_roles", inputs)?;
                 self.group_remove_member_roles(id, member_roles);
+            }
+            DaoActionIdent::MediaAdd => {
+                let media = deser_media("", inputs)?;
+                self.media_add(&media);
+            }
+            DaoActionIdent::MediaUpdate => {
+                let id = deser_id("id", inputs)? as u32;
+                let media = deser_media("media", inputs)?;
+                self.media_update(id, &media);
             }
             DaoActionIdent::TagAdd => {
                 todo!();

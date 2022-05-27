@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use data::{
     workflow::{
         basic::{
-            admin_package::AdminPackage1, bounty::Bounty1, reward::Reward1, trade::Trade1,
-            wf_add::WfAdd1,
+            bounty::Bounty1, group::Group1, group_package::GroupPackage1, lock::Lock1,
+            media::Media1, reward::Reward1, trade::Trade1, wf_add::WfAdd1,
         },
         integration::skyward::{Skyward1, Skyward1TemplateOptions},
     },
@@ -89,7 +89,6 @@ fn wf_templates(
 ) -> Vec<(String, TemplateData, Option<TemplateHelp>)> {
     let mut templates = vec![];
     templates.push(("wf_add".into(), WfAdd1::template(provider_id), None));
-    // Skyward1 is always pos 1.
     if wnear_id.is_some() && skyward_id.is_some() {
         templates.push((
             "skyward1".into(),
@@ -105,12 +104,15 @@ fn wf_templates(
     templates.push(("trade1".into(), Trade1::template(), None));
     templates.push(("bounty1".into(), Bounty1::template(), None));
     templates.push(("reward1".into(), Reward1::template(), None));
-    templates.push(("admin_package1".into(), AdminPackage1::template(), None));
+    templates.push(("group_package1".into(), GroupPackage1::template(), None));
     templates.push((
         "test_optional_actions".into(),
         WfOptionalActions::template(),
         None,
     ));
+    templates.push(("media1".into(), Media1::template(), None));
+    templates.push(("lock1".into(), Lock1::template(), None));
+    templates.push(("group1".into(), Group1::template(), None));
     templates
 }
 

@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use library::{
     types::activity_input::UserInput,
     workflow::{
-        action::{ActionData, ActionInput, ActionInputType, DaoActionData, TemplateAction},
+        action::{
+            ActionData, ActionInput, ActionInputType, DaoActionData, InputSource::User,
+            TemplateAction,
+        },
         postprocessing::Postprocessing,
         types::DaoActionIdent,
     },
@@ -26,6 +29,7 @@ fn test_event_action(optional: bool) -> TemplateAction {
         }),
         postprocessing: None,
         optional,
+        input_source: User,
     }
 }
 

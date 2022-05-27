@@ -13,9 +13,9 @@
 - Dao
 - Dao factory
 - Workflow provider
-- Staking (TBD)
-- Media (TBD)
-- FT (TBD)
+- Staking
+- Fungible token factory
+- Fungible token
 ## Library
 Contains shared definitions/types/functions used by NearDAO contracts. For more information, checkout [README](library/README.md)
 ## Building
@@ -32,8 +32,8 @@ Contains shared definitions/types/functions used by NearDAO contracts. For more 
     - run by `. tests/near_cli_test/<script-name>`
     - free the testnets's resources used by running `. clean.sh`
 
-3. [Near workpaces](https://github.com/near/workspaces-rs)
-    - TBD
+3. Integration tests
+    - via[Near workpaces](https://github.com/near/workspaces-rs)
 
 ## Contributing
 - TBD

@@ -24,6 +24,7 @@ use crate::{
     tags::TagInput,
     treasury::{Asset, PartitionAssetInput, TreasuryPartitionInput},
     wallet::{ClaimableReward, Wallet, WithdrawStats},
+    RewardId, RoleId,
 };
 
 //mod dao; // Require refactoring to match new structure
@@ -427,7 +428,6 @@ fn assert_user_roles(
     account_id: AccountId,
     mut expected_roles: Option<UserRoles>,
 ) {
-    dbg!(account_id.clone());
     let mut user_roles = contract.user_roles(account_id);
     let user_roles = user_roles.as_ref().map(|r| r.to_owned().sort());
     let expected_roles = expected_roles.as_ref().map(|r| r.to_owned().sort());
@@ -445,4 +445,16 @@ fn assert_group_role_members(
     actual_members.sort();
     expected_members.sort();
     assert_eq!(actual_members, expected_members);
+}
+
+fn assert_group_rewards(
+    contract: &Contract,
+    group_id: u16,
+    mut expected_reward_ids: Vec<(RewardId, RoleId)>,
+) {
+    let group = contract.group(group_id).expect("group not found");
+    let mut reward_ids = group.group_reward_ids();
+    reward_ids.sort();
+    expected_reward_ids.sort();
+    assert_eq!(reward_ids, expected_reward_ids);
 }

@@ -10,7 +10,7 @@ use library::{
 
 use crate::types::RewardActivity;
 
-/// Activity inputs for `Trade1`.
+/// Activity inputs for `Reward1`.
 pub struct ActivityInputReward1;
 impl ActivityInputReward1 {
     /// Inputs to create partition with rewards.
@@ -78,6 +78,33 @@ impl ActivityInputReward1 {
         map.insert("reward_amounts.0.1".into(), Value::U128(ft_amount.into()));
         map.insert("reward_amounts.1.0.near".into(), Value::Null);
         map.insert("reward_amounts.1.1".into(), Value::U128(near_amount.into()));
+        vec![Some(ActionInput {
+            action: ActionInputType::DaoAction(DaoActionIdent::RewardAdd),
+            values: UserInput::Map(map),
+        })]
+    }
+    /// Inputs to create wage reward with NEAR only.
+    pub fn activity_2_only_near_wage(
+        wage_unit_seconds: u64,
+        group_id: u64,
+        role_id: u64,
+        partition_id: u64,
+        timestamp_from: u64,
+        timestamp_to: u64,
+        near_amount: u128,
+    ) -> Vec<Option<ActionInput>> {
+        let mut map = HashMap::new();
+        map.insert("group_id".into(), Value::U64(group_id));
+        map.insert("role_id".into(), Value::U64(role_id));
+        map.insert("partition_id".into(), Value::U64(partition_id));
+        map.insert("time_valid_from".into(), Value::U64(timestamp_from));
+        map.insert("time_valid_to".into(), Value::U64(timestamp_to));
+        map.insert(
+            "type.wage.unit_seconds".into(),
+            Value::U64(wage_unit_seconds),
+        );
+        map.insert("reward_amounts.0.0.near".into(), Value::Null);
+        map.insert("reward_amounts.0.1".into(), Value::U128(near_amount.into()));
         vec![Some(ActionInput {
             action: ActionInputType::DaoAction(DaoActionIdent::RewardAdd),
             values: UserInput::Map(map),

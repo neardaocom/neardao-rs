@@ -8,7 +8,7 @@ use library::{
         source::SourceDataVariant,
     },
     workflow::{
-        action::{ActionData, FnCallData, FnCallIdType, TemplateAction},
+        action::{ActionData, FnCallData, FnCallIdType, InputSource, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         postprocessing::Postprocessing,
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
@@ -73,6 +73,7 @@ impl WfAdd1 {
                             instructions: vec![Instruction::StoreWorkflow],
                         }),
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: true,
                     terminal: Terminality::Automatic,

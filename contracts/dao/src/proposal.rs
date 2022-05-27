@@ -182,7 +182,7 @@ impl Contract {
             .insert(&self.proposal_last_id, &propose_settings);
         if let Some(mut media) = description {
             media.proposal_id = Some(self.proposal_last_id);
-            self.add_media(&media);
+            self.media_add(&media);
         }
         if let Some(_) = scheduler_msg {
             // TODO: Croncat registration to finish proposal.

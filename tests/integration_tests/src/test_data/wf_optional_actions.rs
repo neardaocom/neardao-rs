@@ -6,7 +6,7 @@ use near_sdk::{ONE_NEAR, ONE_YOCTO};
 use library::{
     types::{datatype::Value, source::SourceDataVariant},
     workflow::{
-        action::{ActionData, DaoActionData, TemplateAction},
+        action::{ActionData, DaoActionData, InputSource, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         postprocessing::Postprocessing,
         settings::{ProposeSettings, TemplateSettings},
@@ -52,6 +52,7 @@ impl WfOptionalActions {
                                 )],
                             }),
                             optional: false,
+                            input_source: InputSource::User,
                         },
                         TemplateAction {
                             exec_condition: None,
@@ -70,6 +71,7 @@ impl WfOptionalActions {
                                 )],
                             }),
                             optional: true,
+                            input_source: InputSource::User,
                         },
                         TemplateAction {
                             exec_condition: None,
@@ -88,6 +90,7 @@ impl WfOptionalActions {
                                 )],
                             }),
                             optional: true,
+                            input_source: InputSource::User,
                         },
                         TemplateAction {
                             exec_condition: None,
@@ -106,6 +109,7 @@ impl WfOptionalActions {
                                 )],
                             }),
                             optional: false,
+                            input_source: InputSource::User,
                         },
                     ],
                     automatic: false,
@@ -130,6 +134,7 @@ impl WfOptionalActions {
                                 )],
                             }),
                             optional: false,
+                            input_source: InputSource::User,
                         },
                         TemplateAction {
                             exec_condition: None,
@@ -145,6 +150,7 @@ impl WfOptionalActions {
                                 )],
                             }),
                             optional: true,
+                            input_source: InputSource::User,
                         },
                         TemplateAction {
                             exec_condition: None,
@@ -160,6 +166,7 @@ impl WfOptionalActions {
                                 )],
                             }),
                             optional: true,
+                            input_source: InputSource::User,
                         },
                         TemplateAction {
                             exec_condition: None,
@@ -175,6 +182,7 @@ impl WfOptionalActions {
                                 )],
                             }),
                             optional: false,
+                            input_source: InputSource::User,
                         },
                     ],
                     automatic: false,

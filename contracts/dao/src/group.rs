@@ -145,6 +145,14 @@ impl Group {
     pub fn group_reward_ids(&self) -> Vec<(RewardId, RoleId)> {
         self.rewards.to_owned()
     }
+    pub fn remove_group_reward_id(&mut self, reward_id: RewardId) -> bool {
+        if let Some(pos) = self.rewards.iter().position(|(r1, _)| *r1 == reward_id) {
+            self.rewards.swap_remove(pos);
+            true
+        } else {
+            false
+        }
+    }
     pub fn add_new_reward(&mut self, reward_id: u16, role_id: u16) {
         self.rewards.push((reward_id, role_id))
     }
@@ -289,7 +297,7 @@ impl Contract {
     /// Include removal of rewards for the removed roles.
     /// Role id with value == 0 is ignored.
     pub fn group_remove_roles(&mut self, id: GroupId, roles: Vec<RoleId>) -> bool {
-        if let Some(group) = self.groups.get(&id) {
+        if let Some(mut group) = self.groups.get(&id) {
             let mut group_roles = self
                 .group_roles
                 .get(&id)
@@ -307,6 +315,9 @@ impl Contract {
                         .into_iter()
                         .filter(|(_, r)| *r == role_id)
                         .collect();
+                    for (reward_id, _) in rewards_to_remove.iter() {
+                        group.remove_group_reward_id(*reward_id);
+                    }
                     let members_with_the_role =
                         self.get_group_members_with_role(id, &group, role_id);
                     for account_id in members_with_the_role {
@@ -319,7 +330,7 @@ impl Contract {
                                 .get(&account_id)
                                 .expect("internal - user roles not found");
                             user_role.remove_group_role(id, role_id);
-                            user_cache.insert(account_id, (user_role, Vec::with_capacity(2)));
+                            user_cache.insert(account_id, (user_role, rewards_to_remove.clone()));
                         }
                     }
                 }
@@ -332,6 +343,7 @@ impl Contract {
                     current_timestamp,
                 );
             }
+            self.groups.insert(&id, &group);
             self.group_roles.insert(&id, &group_roles);
             true
         } else {
@@ -370,7 +382,7 @@ impl Contract {
                                 .get(&account_id)
                                 .expect("internal - user roles not found");
                             user_role.remove_group_role(id, role_id);
-                            user_cache.insert(account_id, (user_role, Vec::with_capacity(2)));
+                            user_cache.insert(account_id, (user_role, rewards_to_remove.clone()));
                         }
                     }
                 }

@@ -1,5 +1,10 @@
-mod admin_package;
+//! Activity inputs for all tested DAO workflows.
+
 mod bounty;
+mod group;
+mod group_package;
+mod lock;
+mod media;
 mod reward;
 mod skyward;
 mod test_optional_actions;
@@ -12,8 +17,11 @@ use workspaces::{Account, AccountId, DevNetwork, Worker};
 
 use crate::utils::outcome_pretty;
 
-pub use admin_package::*;
 pub use bounty::*;
+pub use group::*;
+pub use group_package::*;
+pub use lock::*;
+pub use media::*;
 pub use reward::*;
 pub use skyward::*;
 pub use test_optional_actions::*;

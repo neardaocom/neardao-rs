@@ -1,10 +1,14 @@
+//! Check functions for DAO workflows.
+
 use library::{types::datatype::Value, workflow::instance::InstanceState};
 use serde_json::json;
 use workspaces::{AccountId, DevNetwork, Worker};
 
 use crate::{
     types::{Group, GroupMembers, GroupSettings, Roles, UserRoles},
-    utils::{parse_view_result, view_group_roles, view_outcome_pretty},
+    utils::{
+        parse_view_result, view_group_roles, view_media, view_outcome_pretty, view_partitions,
+    },
 };
 
 use super::view::{
@@ -59,9 +63,9 @@ where
     .to_string()
     .into_bytes();
     let outcome = worker.view(&dao, "group", args).await?;
-    view_outcome_pretty::<Group>("dao check_group", &outcome);
+    view_outcome_pretty::<Group>("dao check group", &outcome);
     let actual = parse_view_result::<Group>(&outcome).expect("Group not found");
-    assert_eq!(group.1, actual, "check_group: groups are not equal");
+    assert_eq!(actual, group.1, "check group: groups are not equal");
     Ok(())
 }
 
@@ -232,5 +236,49 @@ where
 {
     let roles = view_group_roles(worker, dao, group_id).await?;
     assert_eq!(roles, *expected_group_roles, "Roles do not match");
+    Ok(())
+}
+
+pub async fn check_media<T>(
+    worker: &Worker<T>,
+    dao: &AccountId,
+    expected_media_names: Vec<&str>,
+) -> anyhow::Result<()>
+where
+    T: DevNetwork,
+{
+    let media_list = view_media(worker, dao).await?;
+    let mut found = true;
+    for expected in expected_media_names {
+        if media_list.iter().any(|(_, m)| m.name == expected) {
+            continue;
+        } else {
+            found = false;
+            break;
+        }
+    }
+    assert!(found, "Not all medias found in dao");
+    Ok(())
+}
+
+pub async fn check_partitions<T>(
+    worker: &Worker<T>,
+    dao: &AccountId,
+    expected_partition_names: Vec<&str>,
+) -> anyhow::Result<()>
+where
+    T: DevNetwork,
+{
+    let partitions = view_partitions(worker, dao).await?;
+    let mut found = true;
+    for expected in expected_partition_names {
+        if partitions.iter().any(|(_, m)| m.name == expected) {
+            continue;
+        } else {
+            found = false;
+            break;
+        }
+    }
+    assert!(found, "Not all partitions found in dao");
     Ok(())
 }

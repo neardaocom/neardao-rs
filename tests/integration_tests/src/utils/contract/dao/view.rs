@@ -2,7 +2,7 @@ use library::workflow::instance::Instance;
 use serde_json::json;
 use workspaces::{AccountId, DevNetwork, Worker};
 
-use crate::types::ActionLog;
+use crate::types::{ActionLog, Media};
 use crate::utils::{parse_view_result, view_outcome_pretty};
 
 use crate::constants::{DAO_VIEW_INSTANCE, DAO_VIEW_TEMPLATES, DAO_VIEW_WORKFLOW_STORAGE};
@@ -259,4 +259,16 @@ where
     let groups =
         parse_view_result::<Vec<(u16, Group)>>(&outcome).expect("failed to parse group list");
     Ok(groups)
+}
+
+pub async fn view_media<T>(worker: &Worker<T>, dao: &AccountId) -> anyhow::Result<Vec<(u32, Media)>>
+where
+    T: DevNetwork,
+{
+    let args = json!({"from_id": 0, "limit": 100}).to_string().into_bytes();
+    let outcome = worker.view(&dao, "media_list", args).await?;
+    view_outcome_pretty::<Vec<(u32, Media)>>("view dao media list", &outcome);
+    let media_list =
+        parse_view_result::<Vec<(u32, Media)>>(&outcome).expect("failed to parse media list");
+    Ok(media_list)
 }

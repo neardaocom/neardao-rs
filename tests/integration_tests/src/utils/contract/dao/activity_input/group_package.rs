@@ -15,9 +15,9 @@ pub const ADMINPACKAGE1_REMOVE_GROUP_MEMBERS: u8 = 4;
 pub const ADMINPACKAGE1_REMOVE_GROUP_ROLES: u8 = 5;
 pub const ADMINPACKAGE1_REMOVE_GROUP_MEMBER_ROLES: u8 = 6;
 
-/// Activity inputs for `AdminPackage1`.
-pub struct ActivityInputAdminPkg1;
-impl ActivityInputAdminPkg1 {
+/// Activity inputs for `GroupPackage1`.
+pub struct ActivityInputGroupPkg1;
+impl ActivityInputGroupPkg1 {
     pub fn activity_group_add(
         group_name: &str,
         group_leader: &str,

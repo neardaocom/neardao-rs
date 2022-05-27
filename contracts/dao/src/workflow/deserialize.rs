@@ -10,6 +10,7 @@ use near_sdk::{env, AccountId};
 
 use crate::{
     group::{GroupInput, GroupMember, GroupSettings},
+    media::{CIDInfo, Media, ResourceType},
     reward::{Reward, RewardType, RewardUserActivity, RewardWage},
     role::MemberRoles,
     treasury::{Asset, PartitionAssetInput, TreasuryPartition, TreasuryPartitionInput},
@@ -18,7 +19,7 @@ use crate::{
 
 use super::error::DeserializeError;
 
-pub fn bind_asset(
+pub fn deser_asset(
     prefix: &str,
     action_input: &mut dyn ActivityInput,
 ) -> Result<Option<Asset>, DeserializeError> {
@@ -72,7 +73,7 @@ pub fn deser_partition_assets(
     let mut i = 0;
     loop {
         let key_asset = format!("{}.{}.asset_id", prefix, i);
-        if let Some(asset_id) = bind_asset(key_asset.as_str(), action_input)? {
+        if let Some(asset_id) = deser_asset(key_asset.as_str(), action_input)? {
             let key_init_amount = format!("{}.{}.unlocking.amount_init_unlock", prefix, i);
             let amount_init_unlock = action_input
                 .get(&key_init_amount)
@@ -157,7 +158,7 @@ fn deser_reward_amounts(
     let mut i = 0;
     loop {
         let key_asset = format!("{}.{}.0", prefix, i);
-        if let Some(asset) = bind_asset(key_asset.as_str(), action_input)? {
+        if let Some(asset) = deser_asset(key_asset.as_str(), action_input)? {
             let key_amount = format!("{}.{}.1", prefix, i);
             let amount = action_input
                 .get(&key_amount)
@@ -389,4 +390,135 @@ pub fn deser_id(
         .ok_or(DeserializeError::MissingUserInputKey(prefix.into()))?
         .try_into_u64()?;
     Ok(id)
+}
+
+pub fn deser_media(
+    prefix: &str,
+    action_input: &mut dyn ActivityInput,
+) -> Result<Media, DeserializeError> {
+    let mut key = String::with_capacity(prefix.len() + 16);
+    key.push_str(prefix);
+    if prefix.len() > 0 {
+        key.push('.');
+    }
+    key.push_str("name");
+    let name = action_input
+        .get(&key)
+        .ok_or(DeserializeError::MissingUserInputKey(key.to_string()))?
+        .clone()
+        .try_into_string()?;
+    key.clear();
+    key.push_str(prefix);
+    if prefix.len() > 0 {
+        key.push('.');
+    }
+    key.push_str("category");
+    let category = action_input
+        .get(&key)
+        .ok_or(DeserializeError::MissingUserInputKey(key.to_string()))?
+        .clone()
+        .try_into_string()?;
+    key.clear();
+    key.push_str(prefix);
+    if prefix.len() > 0 {
+        key.push('.');
+    }
+    key.push_str("type");
+    let r#type = deser_media_type(key.as_str(), action_input)?;
+    key.clear();
+    key.push_str(prefix);
+    if prefix.len() > 0 {
+        key.push('.');
+    }
+    key.push_str("tags");
+    let tags = action_input
+        .get(&key)
+        .ok_or(DeserializeError::MissingUserInputKey(key.to_string()))?
+        .clone()
+        .try_into_vec_u64()?
+        .into_iter()
+        .map(|e| e as u16)
+        .collect();
+    key.clear();
+    key.push_str(prefix);
+    if prefix.len() > 0 {
+        key.push('.');
+    }
+    key.push_str("version");
+    let version = action_input
+        .get(&key)
+        .ok_or(DeserializeError::MissingUserInputKey(key.to_string()))?
+        .clone()
+        .try_into_string()?;
+    key.clear();
+    key.push_str(prefix);
+    if prefix.len() > 0 {
+        key.push('.');
+    }
+    key.push_str("valid");
+    let valid = action_input
+        .get(&key)
+        .ok_or(DeserializeError::MissingUserInputKey(key.to_string()))?
+        .clone()
+        .try_into_bool()?;
+    Ok(Media {
+        proposal_id: None,
+        name,
+        category,
+        r#type,
+        tags,
+        version,
+        valid,
+    })
+}
+
+pub fn deser_media_type(
+    prefix: &str,
+    action_input: &mut dyn ActivityInput,
+) -> Result<ResourceType, DeserializeError> {
+    let mut key = String::with_capacity(prefix.len() + 24);
+    key.push_str(prefix);
+    key.push_str(".text.0");
+    if let Some(v) = action_input.get(&key) {
+        let text = v.clone().try_into_string()?;
+        let resource_type = ResourceType::Text(text);
+        return Ok(resource_type);
+    }
+    key.clear();
+    key.push_str(prefix);
+    key.push_str(".link.0");
+    if let Some(v) = action_input.get(&key) {
+        let link = v.clone().try_into_string()?;
+        let resource_type = ResourceType::Link(link);
+        return Ok(resource_type);
+    }
+    key.clear();
+    key.push_str(prefix);
+    key.push_str(".cid.ipfs");
+    if let Some(v) = action_input.get(&key) {
+        let ipfs = v.clone().try_into_string()?;
+        key.clear();
+        key.push_str(prefix);
+        key.push_str(".cid.cid");
+        let cid = action_input
+            .get(&key)
+            .ok_or(DeserializeError::MissingUserInputKey("cid.cid".into()))?
+            .clone()
+            .try_into_string()?;
+        key.clear();
+        key.push_str(prefix);
+        key.push_str(".cid.mimetype");
+        let mimetype = action_input
+            .get(&key)
+            .ok_or(DeserializeError::MissingUserInputKey("cid.mimetype".into()))?
+            .clone()
+            .try_into_string()?;
+        let resource_type = ResourceType::CID(CIDInfo {
+            ipfs,
+            cid,
+            mimetype,
+        });
+        return Ok(resource_type);
+    }
+    return Err(DeserializeError::MissingUserInputKey("media type".into()));
 }

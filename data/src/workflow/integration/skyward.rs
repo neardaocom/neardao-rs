@@ -14,7 +14,7 @@ use library::{
         source::SourceDataVariant,
     },
     workflow::{
-        action::{ActionData, FnCallData, FnCallIdType, TemplateAction},
+        action::{ActionData, FnCallData, FnCallIdType, InputSource, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         postprocessing::Postprocessing,
@@ -166,8 +166,8 @@ impl Skyward1 {
                             must_succeed: true,
                         }),
                         postprocessing: pp_register_tokens,
-
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: true,
                     terminal: Terminality::NonTerminal,
@@ -196,6 +196,7 @@ impl Skyward1 {
                             }),
                             postprocessing: pp_storage_deposit_1,
                             optional: true,
+                            input_source: InputSource::User,
                         },
                         TemplateAction {
                             exec_condition: None,
@@ -217,6 +218,7 @@ impl Skyward1 {
                             postprocessing: pp_storage_deposit_2,
 
                             optional: true,
+                            input_source: InputSource::User,
                         },
                     ],
                     automatic: true,
@@ -267,6 +269,7 @@ impl Skyward1 {
                         }),
                         postprocessing: pp_ft_transfer_call,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: true,
                     terminal: Terminality::NonTerminal,
@@ -345,6 +348,7 @@ impl Skyward1 {
                         }),
                         postprocessing: pp_sale_create,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: false,
                     terminal: Terminality::Automatic,
@@ -502,10 +506,7 @@ impl Skyward1 {
 
         // Sale create action
         let mut sale_create_map: HashMap<String, Value> = HashMap::new();
-        sale_create_map.insert(
-            "start_time".into(),
-            Value::U128(auction_start.into()), // TODO: U128 might not work
-        );
+        sale_create_map.insert("start_time".into(), Value::U128(auction_start.into()));
         sale_create_map.insert("duration".into(), Value::U64(auction_duration as u64));
 
         // User proposed settings type
@@ -663,6 +664,7 @@ impl Skyward2 {
                         }),
                         postprocessing: pp_register_tokens,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: true,
                     terminal: Terminality::NonTerminal,
@@ -691,6 +693,7 @@ impl Skyward2 {
                             }),
                             postprocessing: pp_storage_deposit_1,
                             optional: true,
+                            input_source: InputSource::User,
                         },
                         TemplateAction {
                             exec_condition: None,
@@ -711,6 +714,7 @@ impl Skyward2 {
                             }),
                             postprocessing: pp_storage_deposit_2,
                             optional: true,
+                            input_source: InputSource::User,
                         },
                     ],
                     automatic: true,
@@ -761,6 +765,7 @@ impl Skyward2 {
                         }),
                         postprocessing: pp_ft_transfer_call,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: true,
                     terminal: Terminality::NonTerminal,
@@ -839,6 +844,7 @@ impl Skyward2 {
                         }),
                         postprocessing: pp_sale_create,
                         optional: false,
+                        input_source: InputSource::User,
                     }],
                     automatic: false,
                     terminal: Terminality::User,

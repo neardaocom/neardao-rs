@@ -116,7 +116,7 @@ impl Contract {
     #[inline]
     pub fn init_media(&mut self, media: Vec<Media>) {
         for m in media.iter() {
-            self.add_media(m);
+            self.media_add(m);
         }
     }
 

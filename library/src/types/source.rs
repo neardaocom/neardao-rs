@@ -8,7 +8,7 @@ use near_sdk::{
 
 use crate::storage::StorageBucket;
 
-use super::{consts::RuntimeConstantProvider, datatype::Value};
+use super::{activity_input::ActivityInput, consts::RuntimeConstantProvider, datatype::Value};
 
 pub trait Source: SourceProvider + MutableSource {}
 /// Trait representing possible `Value` sources for workflow.
@@ -42,6 +42,14 @@ pub trait MutableSource {
 #[serde(rename_all = "snake_case")]
 pub enum SourceDataVariant {
     Map(HashMap<String, Value>),
+}
+
+impl SourceDataVariant {
+    pub fn into_activity_input(self) -> Box<dyn ActivityInput> {
+        match self {
+            SourceDataVariant::Map(m) => Box::new(m),
+        }
+    }
 }
 
 impl SourceData for SourceDataVariant {

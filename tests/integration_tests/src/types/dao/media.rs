@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
 pub enum ResourceType {
     Text(String),
     Link(String),
@@ -23,7 +24,7 @@ pub struct Media {
     pub name: String,
     pub category: String,
     pub r#type: ResourceType,
-    pub tags: Vec<usize>,
+    pub tags: Vec<u16>,
     pub version: String,
     pub valid: bool,
 }

@@ -1,24 +1,19 @@
+use data::workflow::basic::group::Group1;
 use near_sdk::ONE_NEAR;
 
-use crate::constants::{
-    DAO_TPL_ID_OF_FIRST_ADDED, DAO_TPL_ID_WF_ADD, PROVIDER_TPL_ID_ADMIN_PACKAGE1,
-};
+use crate::constants::{DAO_TPL_ID_OF_FIRST_ADDED, DAO_TPL_ID_WF_ADD, PROVIDER_TPL_ID_GROUP1};
 use crate::types::{ProposalState, Roles, UserRoles};
 use crate::utils::{
     check_group, check_group_exists, check_group_roles, check_instance, check_user_roles,
     check_wf_templates, create_dao_via_factory, create_ft_via_factory, init_dao_factory,
     init_ft_factory, init_staking, init_workflow_provider, load_workflow_templates,
     proposal_to_finish, run_activity, storage_deposit, view_groups, view_partitions,
-    ActivityInputAdminPkg1, ActivityInputWfAdd1, Wait, ADMINPACKAGE1_ADD_GROUP,
-    ADMINPACKAGE1_ADD_GROUP_MEMBERS, ADMINPACKAGE1_REMOVE_GROUP,
-    ADMINPACKAGE1_REMOVE_GROUP_MEMBERS, ADMINPACKAGE1_REMOVE_GROUP_MEMBER_ROLES,
-    ADMINPACKAGE1_REMOVE_GROUP_ROLES,
+    ActivityInputGroup1, ActivityInputWfAdd1, Wait, GROUP1_ADD_GROUP, GROUP1_ADD_GROUP_MEMBERS,
+    GROUP1_REMOVE_GROUP, GROUP1_REMOVE_GROUP_MEMBERS, GROUP1_REMOVE_GROUP_MEMBER_ROLES,
+    GROUP1_REMOVE_GROUP_ROLES,
 };
 
-use data::workflow::basic::{
-    admin_package::AdminPackage1,
-    wf_add::{WfAdd1, WfAdd1ProposeOptions},
-};
+use data::workflow::basic::wf_add::{WfAdd1, WfAdd1ProposeOptions};
 use library::workflow::instance::InstanceState;
 use workspaces::{network::DevAccountDeployer, AccountId};
 
@@ -26,7 +21,7 @@ const DAO_FT_TOTAL_SUPPLY: u128 = 1_000_000_000;
 const DEFAULT_DECIMALS: u128 = 10u128.pow(24);
 
 #[tokio::test]
-async fn workflow_admin_package() -> anyhow::Result<()> {
+async fn workflow_group1_scenario() -> anyhow::Result<()> {
     let ft_name = "dao_token";
     let dao_name = "test_dao";
     let worker = workspaces::sandbox().await?;
@@ -89,10 +84,10 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
         WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
-            template_id: PROVIDER_TPL_ID_ADMIN_PACKAGE1,
+            template_id: PROVIDER_TPL_ID_GROUP1,
             provider_id: wf_provider.id().to_string(),
         })),
-        Some(vec![AdminPackage1::template_settings(Some(20))]),
+        Some(vec![Group1::template_settings(Some(20))]),
         vec![(&member, 1)],
         100,
         WfAdd1::deposit_propose(),
@@ -101,14 +96,14 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
     )
     .await?;
 
-    // Execute AddWorkflow by DAO member to add AdminPackage1 template.
+    // Execute AddWorkflow by DAO member to add Group1 template.
     run_activity(
         &worker,
         &member,
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_ADMIN_PACKAGE1),
+        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_GROUP1),
         true,
     )
     .await?;
@@ -124,38 +119,38 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
     )
     .await?;
 
-    // Propose AdminPackage1.
+    // Propose Group1.
     let proposal_id = proposal_to_finish(
         &worker,
         &member,
         &dao_account_id,
         DAO_TPL_ID_OF_FIRST_ADDED,
-        AdminPackage1::propose_settings(),
+        Group1::propose_settings(vec![ActivityInputGroup1::propose_settings_group_add(
+            "artists",
+            "macho.near",
+            vec!["macho.near", "pica.near"],
+            Some("alpha"),
+            vec!["macho.near"],
+        )]),
         None,
         vec![(&member, 1)],
         100,
-        AdminPackage1::deposit_propose(),
-        AdminPackage1::deposit_vote(),
+        Group1::deposit_propose(),
+        Group1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
     view_partitions(&worker, &dao_account_id).await?;
 
-    // Execute Workflow AdminPackage1.
+    // Execute Workflow Group1.
     // GroupAdd - artists
     run_activity(
         &worker,
         &member,
         &dao_account_id,
         proposal_id,
-        ADMINPACKAGE1_ADD_GROUP,
-        ActivityInputAdminPkg1::activity_group_add(
-            "artists",
-            "macho.near",
-            vec!["macho.near", "pica.near"],
-            Some("alpha"),
-            vec!["macho.near"],
-        ),
+        GROUP1_ADD_GROUP,
+        ActivityInputGroup1::activity_group_add(),
         true,
     )
     .await?;
@@ -192,21 +187,39 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
     check_group_roles(&worker, &dao_account_id, 2, &artists_roles).await?;
 
     // GroupAddMembers (and roles)
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao_account_id,
+        DAO_TPL_ID_OF_FIRST_ADDED,
+        Group1::propose_settings(vec![
+            None,
+            None,
+            ActivityInputGroup1::propose_settings_group_add_members(
+                2,
+                vec!["abc.near", "def.near"],
+                vec![
+                    ("some_role", vec!["no_one_gets_this_role.near"]),
+                    ("alpha", vec!["abc.near"]),
+                    ("omega", vec!["pica.near"]),
+                ],
+            ),
+        ]),
+        None,
+        vec![(&member, 1)],
+        100,
+        Group1::deposit_propose(),
+        Group1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
     run_activity(
         &worker,
         &member,
         &dao_account_id,
         proposal_id,
-        ADMINPACKAGE1_ADD_GROUP_MEMBERS,
-        ActivityInputAdminPkg1::activity_group_add_members(
-            2,
-            vec!["abc.near", "def.near"],
-            vec![
-                ("some_role", vec!["no_one_gets_this_role.near"]),
-                ("alpha", vec!["abc.near"]),
-                ("omega", vec!["pica.near"]),
-            ],
-        ),
+        GROUP1_ADD_GROUP_MEMBERS,
+        ActivityInputGroup1::activity_group_add_members(),
         true,
     )
     .await?;
@@ -241,14 +254,33 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
     let artists_roles = artists_roles.add_role("some_role").add_role("omega");
     check_group_roles(&worker, &dao_account_id, 2, &artists_roles).await?;
 
-    // GroupRemoveMember
+    // GroupRemoveMembers
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao_account_id,
+        DAO_TPL_ID_OF_FIRST_ADDED,
+        Group1::propose_settings(vec![
+            None,
+            None,
+            None,
+            ActivityInputGroup1::propose_settings_group_remove_members(2, vec!["def.near"]),
+        ]),
+        None,
+        vec![(&member, 1)],
+        100,
+        Group1::deposit_propose(),
+        Group1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
     run_activity(
         &worker,
         &member,
         &dao_account_id,
         proposal_id,
-        ADMINPACKAGE1_REMOVE_GROUP_MEMBERS,
-        ActivityInputAdminPkg1::activity_group_remove_members(2, vec!["def.near"]),
+        GROUP1_REMOVE_GROUP_MEMBERS,
+        ActivityInputGroup1::activity_group_remove_members(),
         true,
     )
     .await?;
@@ -279,14 +311,34 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
     check_user_roles(&worker, &dao_account_id, "def.near", None).await?;
 
     // GroupRemoveRole - alpha
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao_account_id,
+        DAO_TPL_ID_OF_FIRST_ADDED,
+        Group1::propose_settings(vec![
+            None,
+            None,
+            None,
+            None,
+            ActivityInputGroup1::propose_settings_group_remove_roles(2, vec![1, 4, 5, 6]),
+        ]),
+        None,
+        vec![(&member, 1)],
+        100,
+        Group1::deposit_propose(),
+        Group1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
     let artists_roles = artists_roles.remove_role("alpha");
     run_activity(
         &worker,
         &member,
         &dao_account_id,
         proposal_id,
-        ADMINPACKAGE1_REMOVE_GROUP_ROLES,
-        ActivityInputAdminPkg1::activity_group_remove_roles(2, vec![1, 4, 5, 6]),
+        GROUP1_REMOVE_GROUP_ROLES,
+        ActivityInputGroup1::activity_group_remove_roles(),
         true,
     )
     .await?;
@@ -316,16 +368,37 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
     check_user_roles(&worker, &dao_account_id, "def.near", None).await?;
 
     // GroupRemoveMemberRoles - gamma
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao_account_id,
+        DAO_TPL_ID_OF_FIRST_ADDED,
+        Group1::propose_settings(vec![
+            None,
+            None,
+            None,
+            None,
+            None,
+            ActivityInputGroup1::propose_settings_group_remove_member_roles(
+                2,
+                vec![("omega", vec![]), ("some_role", vec![])],
+            ),
+        ]),
+        None,
+        vec![(&member, 1)],
+        100,
+        Group1::deposit_propose(),
+        Group1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
     run_activity(
         &worker,
         &member,
         &dao_account_id,
         proposal_id,
-        ADMINPACKAGE1_REMOVE_GROUP_MEMBER_ROLES,
-        ActivityInputAdminPkg1::activity_group_remove_member_roles(
-            2,
-            vec![("omega", vec![]), ("some_role", vec![])],
-        ),
+        GROUP1_REMOVE_GROUP_MEMBER_ROLES,
+        ActivityInputGroup1::activity_group_remove_member_roles(),
         true,
     )
     .await?;
@@ -355,13 +428,30 @@ async fn workflow_admin_package() -> anyhow::Result<()> {
     check_user_roles(&worker, &dao_account_id, "def.near", None).await?;
 
     // GroupRemove - artists
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao_account_id,
+        DAO_TPL_ID_OF_FIRST_ADDED,
+        Group1::propose_settings(vec![
+            None,
+            ActivityInputGroup1::propose_settings_group_remove(2),
+        ]),
+        None,
+        vec![(&member, 1)],
+        100,
+        Group1::deposit_propose(),
+        Group1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
     run_activity(
         &worker,
         &member,
         &dao_account_id,
         proposal_id,
-        ADMINPACKAGE1_REMOVE_GROUP,
-        ActivityInputAdminPkg1::activity_group_remove(2),
+        GROUP1_REMOVE_GROUP,
+        ActivityInputGroup1::activity_group_remove(),
         true,
     )
     .await?;

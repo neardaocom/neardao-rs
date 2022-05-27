@@ -15,6 +15,21 @@ use super::{
     validator::Validator,
 };
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
+pub enum InputSource {
+    /// User inputs.
+    User,
+    ///// Template constants.
+    //Tpl,
+    ///// Template settings constants.
+    //TplSettings,
+    /// Action constants.
+    PropSettings,
+}
+
 // TODO: Remove Debug in production.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
@@ -23,6 +38,7 @@ pub struct TemplateAction {
     pub exec_condition: Option<ValueSrc>,
     pub validators: Vec<Validator>,
     pub action_data: ActionData,
+    pub input_source: InputSource,
     pub postprocessing: Option<Postprocessing>,
     pub optional: bool,
 }
