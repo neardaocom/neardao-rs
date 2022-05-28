@@ -3,8 +3,14 @@ use std::collections::HashMap;
 use data::{
     workflow::{
         basic::{
-            bounty::Bounty1, group::Group1, group_package::GroupPackage1, lock::Lock1,
-            media::Media1, reward::Reward1, trade::Trade1, wf_add::WfAdd1,
+            bounty::Bounty1,
+            group::Group1,
+            group_package::GroupPackage1,
+            lock::Lock1,
+            media::Media1,
+            reward::{Reward1, Reward2},
+            trade::Trade1,
+            wf_add::WfAdd1,
         },
         integration::skyward::{Skyward1, Skyward1TemplateOptions},
     },
@@ -113,6 +119,7 @@ fn wf_templates(
     templates.push(("media1".into(), Media1::template(), None));
     templates.push(("lock1".into(), Lock1::template(), None));
     templates.push(("group1".into(), Group1::template(), None));
+    templates.push(("reward2".into(), Reward2::template(), None));
     templates
 }
 
@@ -149,6 +156,7 @@ fn dummy_template_data() -> (String, TemplateData, Option<TemplateHelp>) {
                 version: "1.0".into(),
                 auto_exec: false,
                 need_storage: false,
+                receiver_storage_keys: vec![],
                 activities: vec![],
                 expressions: vec![],
                 transitions: vec![],

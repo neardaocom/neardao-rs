@@ -17,7 +17,6 @@ use super::{
 pub struct TemplateSettings {
     pub allowed_proposers: Vec<ActivityRight>,
     pub allowed_voters: ActivityRight,
-    /// TODO: Fix. Currently requires pading one vec![] coz Init activity.
     pub activity_rights: Vec<Vec<ActivityRight>>,
     pub transition_limits: Vec<Vec<TransitionLimit>>,
     pub scenario: VoteScenario,

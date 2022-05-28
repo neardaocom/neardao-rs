@@ -12,8 +12,14 @@ use crate::{
     object_metadata::standard_fn_calls::{standard_fn_call_metadatas, standard_fn_call_methods},
     workflow::{
         basic::{
-            bounty::Bounty1, group::Group1, group_package::GroupPackage1, lock::Lock1,
-            media::Media1, reward::Reward1, trade::Trade1, wf_add::WfAdd1,
+            bounty::Bounty1,
+            group::Group1,
+            group_package::GroupPackage1,
+            lock::Lock1,
+            media::Media1,
+            reward::{Reward1, Reward2},
+            trade::Trade1,
+            wf_add::WfAdd1,
         },
         integration::skyward::{Skyward1, Skyward1TemplateOptions},
     },
@@ -74,6 +80,7 @@ fn output_workflows_basic() {
     pretty_print_template_data("LOCK1", (Lock1::template(), None));
     pretty_print_template_data("GROUP1", (Group1::template(), None));
     pretty_print_template_data("GROUP_PACKAGE1", (GroupPackage1::template(), None));
+    pretty_print_template_data("REWARD2", (Reward2::template(), None));
 }
 
 #[test]

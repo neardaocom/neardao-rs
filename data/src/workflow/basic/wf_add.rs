@@ -45,6 +45,7 @@ impl WfAdd1 {
             version: "1".into(),
             auto_exec: true,
             need_storage: false, // TODO: Not sure if true is true.
+            receiver_storage_keys: vec![],
             activities: vec![
                 Activity::Init,
                 Activity::Activity(TemplateActivity {

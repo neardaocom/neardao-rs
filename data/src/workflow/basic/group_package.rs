@@ -27,6 +27,7 @@ impl GroupPackage1 {
             version: "1".into(),
             auto_exec: false,
             need_storage: false,
+            receiver_storage_keys: vec![],
             activities: vec![
                 Activity::Init,
                 Activity::Activity(TemplateActivity {

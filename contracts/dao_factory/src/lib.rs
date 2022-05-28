@@ -8,8 +8,8 @@ use near_sdk::{
 use near_sdk::{Gas, IntoStorageKey};
 
 ///include binary code of dao contract
-const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../../res/dao_opt_size_max.wasm");
-const MIGRATION_BLOB: &[u8] = include_bytes!("../../../res/dao_opt_size_max.wasm");
+const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../../res/dao_opt.wasm");
+const MIGRATION_BLOB: &[u8] = include_bytes!("../../../res/dummy.wasm");
 
 /// Gas spent on the call & account creation.
 const CREATE_CALL_GAS: Gas = Gas(150_000_000_000_000);
@@ -62,8 +62,8 @@ pub enum StorageKeys {
 pub struct Contract {
     pub daos: UnorderedMap<AccountId, DaoInfo>,
     pub tags: Vec<String>,
-    pub latest_upgrade_version_idx: u8,
     pub latest_migration_version_idx: u8,
+    pub latest_upgrade_version_idx: u8,
     pub version_count: u8,
 }
 
@@ -87,12 +87,8 @@ impl Contract {
     #[private]
     #[init(ignore_state)]
     pub fn migrate(r#type: MigrationType) -> Self {
-        let mut factory: Contract = env::state_read().expect("Failed to migrate");
-
+        let mut factory: Contract = env::state_read().expect("Failed to read contract state.");
         if r#type != MigrationType::OnlyMigration {
-            // Check if we dont upload same version
-            //assert_ne!(dao.version_hash(dao.latest_dao_version_idx).unwrap(), Base64VecU8::from(env::sha256(&NEWEST_DAO_VERSION.to_vec())), "Uploaded existing DAO bin as next version");
-
             let is_upgrade = r#type == MigrationType::NewUpgradeBin;
             let key = factory.update_version_and_get_slot(is_upgrade);
             if is_upgrade {
@@ -127,38 +123,6 @@ impl Contract {
             latest_dao_version: self.version_count,
         }
     }
-
-    /*     /// Returns sha256 of requested dao binary version as base64.
-    /// Argument with value 0 means newest version.
-    pub fn version_hash(&self, version: u8) -> Option<Base64VecU8> {
-        // Check it was already uploaded or we still keep this version
-        if version > self.version_count
-            || self.version_count - version >= MAX_DAO_VERSIONS && version != 0
-        {
-            return None;
-        }
-
-        let mut key = None;
-
-        // Assume caller meant specific version
-        if version > 0 {
-            key = match version % 5 {
-                1 => Some(StorageKeys::V1),
-                2 => Some(StorageKeys::V2),
-                3 => Some(StorageKeys::V3),
-                4 => Some(StorageKeys::V4),
-                0 => Some(StorageKeys::V5),
-                _ => unreachable!(),
-            };
-        }
-
-        let code = match key {
-            Some(k) => env::storage_read(&k.into_storage_key()).unwrap(),
-            None => NEWEST_DAO_VERSION.to_vec(),
-        };
-
-        Some(Base64VecU8::from(env::sha256(&code)))
-    } */
 
     #[payable]
     pub fn create(&mut self, name: String, info: DaoInfo, args: Base64VecU8) -> Promise {

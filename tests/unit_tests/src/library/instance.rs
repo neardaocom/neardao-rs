@@ -1,4 +1,4 @@
-use data::workflow::integration::skyward::Skyward1;
+use data::workflow::{basic::reward::Reward2, integration::skyward::Skyward1};
 use library::workflow::{
     activity::{Activity, Transition, TransitionLimit},
     instance::{Instance, InstanceState},
@@ -260,4 +260,12 @@ fn async_promises_out_of_order() {
     assert_eq!(instance.get_current_activity_id(), 0);
     assert_eq!(instance.actions_done_count(), 0);
     assert_eq!(instance.actions_remaining(), 0);
+}
+
+#[test]
+fn init_instance() {
+    let settings_trans = Reward2::template_settings(None).transition_limits;
+    let tpls_trans = Reward2::template().0.transitions;
+    let mut instance = Instance::new(TEMPLATE_ID, 4, vec![1, 2, 3]);
+    instance.init_running(tpls_trans.as_slice(), settings_trans.as_slice());
 }

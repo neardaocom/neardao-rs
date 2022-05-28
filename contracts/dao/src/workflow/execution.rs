@@ -21,8 +21,8 @@ use near_sdk::{
 };
 
 use super::deserialize::{
-    deser_account_ids, deser_group_input, deser_group_members, deser_id, deser_media,
-    deser_member_roles, deser_partition, deser_reward, deser_roles_ids,
+    deser_account_ids, deser_group_input, deser_group_members, deser_media, deser_member_roles,
+    deser_partition, deser_reward, deser_roles_ids, deser_u64,
 };
 use super::error::{ActionError, ActivityError};
 use crate::constants::GLOBAL_BUCKET_IDENT;
@@ -814,7 +814,7 @@ impl Contract {
         actions_done: usize,
     ) -> bool {
         assert!(
-            inputs.len() + actions_done <= actions.len(),
+            inputs.len() > 0 && inputs.len() + actions_done <= actions.len(),
             "Action input has invalid length."
         );
         for (idx, action) in inputs.iter().enumerate() {
@@ -847,32 +847,37 @@ impl Contract {
                 let reward = deser_reward(inputs)?;
                 self.reward_add(reward)?;
             }
+            DaoActionIdent::RewardUpdate => {
+                let id = deser_u64("id", inputs)? as u16;
+                let time_valid_to = deser_u64("time_valid_to", inputs)? as u64;
+                self.reward_update(id, time_valid_to);
+            }
             DaoActionIdent::GroupAdd => {
                 let group = deser_group_input(inputs)?;
                 self.group_add(group);
             }
             DaoActionIdent::GroupRemove => {
-                let id = deser_id("id", inputs)? as u16;
+                let id = deser_u64("id", inputs)? as u16;
                 self.group_remove(id);
             }
             DaoActionIdent::GroupAddMembers => {
-                let id = deser_id("id", inputs)? as u16;
+                let id = deser_u64("id", inputs)? as u16;
                 let members = deser_group_members("members", inputs)?;
                 let member_roles = deser_member_roles("member_roles", inputs)?;
                 self.group_add_members(id, members, member_roles);
             }
             DaoActionIdent::GroupRemoveMembers => {
-                let id = deser_id("id", inputs)? as u16;
+                let id = deser_u64("id", inputs)? as u16;
                 let members = deser_account_ids("members", inputs)?;
                 self.group_remove_members(id, members);
             }
             DaoActionIdent::GroupRemoveRoles => {
-                let id = deser_id("id", inputs)? as u16;
+                let id = deser_u64("id", inputs)? as u16;
                 let roles = deser_roles_ids("role_ids", inputs)?;
                 self.group_remove_roles(id, roles);
             }
             DaoActionIdent::GroupRemoveMemberRoles => {
-                let id = deser_id("id", inputs)? as u16;
+                let id = deser_u64("id", inputs)? as u16;
                 let member_roles = deser_member_roles("member_roles", inputs)?;
                 self.group_remove_member_roles(id, member_roles);
             }
@@ -881,7 +886,7 @@ impl Contract {
                 self.media_add(&media);
             }
             DaoActionIdent::MediaUpdate => {
-                let id = deser_id("id", inputs)? as u32;
+                let id = deser_u64("id", inputs)? as u32;
                 let media = deser_media("media", inputs)?;
                 self.media_update(id, &media);
             }

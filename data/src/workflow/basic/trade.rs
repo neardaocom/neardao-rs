@@ -11,7 +11,7 @@ use library::{
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         settings::{ProposeSettings, TemplateSettings},
-        template::Template,
+        template::{ReceiverKeys, Template},
         types::{ActivityRight, Src, ValueSrc, VoteScenario},
     },
 };
@@ -42,6 +42,12 @@ impl Trade1 {
             version: "1".into(),
             auto_exec: false,
             need_storage: true,
+            receiver_storage_keys: vec![ReceiverKeys {
+                id: "trade".into(),
+                sender_id: "sender_id".into(),
+                token_id: "token_id".into(),
+                amount: "received_token_amount".into(),
+            }],
             activities: vec![
                 Activity::Init,
                 Activity::Activity(TemplateActivity {
@@ -53,7 +59,7 @@ impl Trade1 {
                                 Src::PropSettings(TRADE1_REQUIRED_TOKEN_KEY.into()),
                                 Src::Storage("token_id".into()),
                                 Src::PropSettings(TRADE1_REQUIRED_AMOUNT_KEY.into()),
-                                Src::Storage("amount".into()),
+                                Src::Storage("received_token_amount".into()),
                             ],
                             expr_id: 0,
                         })),

@@ -2,15 +2,17 @@ use std::collections::HashMap;
 
 use near_sdk::{ONE_NEAR, ONE_YOCTO};
 
-use crate::TemplateData;
+use crate::{object_metadata::standard_fn_calls::NEP_141_FT_TRANSFER_CALL, TemplateData};
 use library::{
     types::{datatype::Value, source::SourceDataVariant},
     workflow::{
-        action::{ActionData, DaoActionData, InputSource, TemplateAction},
+        action::{
+            ActionData, DaoActionData, FnCallData, FnCallIdType, InputSource, TemplateAction,
+        },
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, DaoActionIdent, VoteScenario},
+        types::{ActivityRight, DaoActionIdent, Src, ValueSrc, VoteScenario},
     },
 };
 
@@ -28,6 +30,7 @@ impl Lock1 {
             version: "1".into(),
             auto_exec: false,
             need_storage: false,
+            receiver_storage_keys: vec![],
             activities: vec![
                 Activity::Init,
                 Activity::Activity(TemplateActivity {
@@ -51,16 +54,106 @@ impl Lock1 {
                     terminal: Terminality::Automatic,
                     is_sync: true,
                 }),
+                Activity::Activity(TemplateActivity {
+                    code: "partition_add_near".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionData::Action(DaoActionData {
+                            name: DaoActionIdent::PartitionAddNear,
+                            required_deposit: None,
+                            binds: vec![],
+                            code: None,
+                            expected_input: None,
+                        }),
+                        optional: false,
+                        postprocessing: None,
+                        input_source: InputSource::PropSettings,
+                    }],
+                    automatic: false,
+                    terminal: Terminality::User,
+                    is_sync: true,
+                }),
+                Activity::Activity(TemplateActivity {
+                    code: "partition_add_ft".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionData::FnCall(FnCallData {
+                            id: FnCallIdType::StandardDynamic(
+                                ValueSrc::Src(Src::PropSettings("token_id".into())),
+                                NEP_141_FT_TRANSFER_CALL.into(),
+                            ),
+                            tgas: 15,
+                            deposit: Some(ValueSrc::Value(Value::U64(1))),
+                            binds: vec![],
+                            must_succeed: true,
+                        }),
+                        optional: false,
+                        postprocessing: None,
+                        input_source: InputSource::PropSettings,
+                    }],
+                    automatic: false,
+                    terminal: Terminality::User,
+                    is_sync: false,
+                }),
             ],
             expressions: vec![],
-            transitions: vec![vec![Transition {
-                activity_id: 1,
-                cond: None,
-                time_from_cond: None,
-                time_to_cond: None,
-            }]],
+            transitions: vec![
+                vec![
+                    Transition {
+                        activity_id: 1,
+                        cond: None,
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
+                    Transition {
+                        activity_id: 2,
+                        cond: None,
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
+                    Transition {
+                        activity_id: 3,
+                        cond: None,
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
+                ],
+                vec![],
+                vec![
+                    Transition {
+                        activity_id: 2,
+                        cond: None,
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
+                    Transition {
+                        activity_id: 3,
+                        cond: None,
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
+                ],
+                vec![
+                    Transition {
+                        activity_id: 2,
+                        cond: None,
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
+                    Transition {
+                        activity_id: 3,
+                        cond: None,
+                        time_from_cond: None,
+                        time_to_cond: None,
+                    },
+                ],
+            ],
             constants: SourceDataVariant::Map(HashMap::new()),
-            end: vec![1],
+            end: vec![1, 2, 3],
         };
 
         (template, vec![], vec![], vec![])
@@ -78,6 +171,8 @@ impl Lock1 {
                     constants: None,
                     actions_constants: vec![Some(SourceDataVariant::Map(inputs_activity_1))],
                 }),
+                None,
+                None,
             ],
             storage_key: storage_key.map(|k| k.to_string()),
         };
@@ -88,8 +183,28 @@ impl Lock1 {
         TemplateSettings {
             allowed_proposers: vec![ActivityRight::Group(1)],
             allowed_voters: ActivityRight::Group(1),
-            activity_rights: vec![vec![], vec![ActivityRight::Group(1)]],
-            transition_limits: vec![vec![TransitionLimit { to: 1, limit: 1 }]],
+            activity_rights: vec![
+                vec![],
+                vec![ActivityRight::Group(1)],
+                vec![ActivityRight::Group(1)],
+                vec![ActivityRight::Group(1)],
+            ],
+            transition_limits: vec![
+                vec![
+                    TransitionLimit { to: 1, limit: 1 },
+                    TransitionLimit { to: 2, limit: 1 },
+                    TransitionLimit { to: 3, limit: 1 },
+                ],
+                vec![],
+                vec![
+                    TransitionLimit { to: 2, limit: 10 },
+                    TransitionLimit { to: 3, limit: 10 },
+                ],
+                vec![
+                    TransitionLimit { to: 2, limit: 10 },
+                    TransitionLimit { to: 3, limit: 10 },
+                ],
+            ],
             scenario: VoteScenario::Democratic,
             duration: duration.unwrap_or(DEFAULT_VOTING_DURATION),
             quorum: 51,

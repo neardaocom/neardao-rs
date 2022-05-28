@@ -1,7 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::env::panic_str;
 use near_sdk::serde::Serialize;
-use near_sdk::{require, AccountId};
+use near_sdk::AccountId;
 
 use crate::internal::utils::current_timestamp_sec;
 use crate::wallet::Wallet;
@@ -36,9 +36,9 @@ pub struct Reward {
     r#type: RewardType,
     /// Defines unique asset per unit.
     reward_amounts: Vec<(Asset, u128)>,
-    /// TODO: Unimplemented.
+    /// Timestamp reward is valid from.
     time_valid_from: u64,
-    /// TODO: Unimplemented.
+    /// Timestamp reward is valid to.
     time_valid_to: u64,
 }
 
@@ -70,7 +70,7 @@ impl Reward {
     pub fn available_wage_amount(
         &self,
         asset: &Asset,
-        current_timestamp: TimestampSec,
+        timestamp_now: TimestampSec,
         timestamp_from: TimestampSec,
     ) -> u128 {
         let amount = if let Some((_, amount)) = self.reward_amounts.iter().find(|(r, _)| r == asset)
@@ -81,7 +81,7 @@ impl Reward {
         };
         let amount = match self.r#type {
             RewardType::Wage(ref wage) => {
-                let seconds_passed = std::cmp::min(current_timestamp, self.time_valid_to)
+                let seconds_passed = std::cmp::min(timestamp_now, self.time_valid_to)
                     - std::cmp::max(self.time_valid_from, timestamp_from);
                 let units = seconds_passed / wage.unit_seconds as u64;
                 amount.checked_mul(units as u128).unwrap_or(u128::MAX)
@@ -120,6 +120,9 @@ impl Reward {
             }
         };
         amount
+    }
+    pub fn set_time_valid_to(&mut self, time_valid_to: TimestampSec) {
+        self.time_valid_to = time_valid_to;
     }
 }
 
@@ -273,6 +276,16 @@ impl Contract {
         Ok(self.reward_last_id)
     }
 
+    /// Update Reward.
+    /// Currently only updates valid to param.
+    pub fn reward_update(&mut self, id: u16, time_valid_to: u64) {
+        if let Some(reward) = self.rewards.get(&id) {
+            let mut reward: Reward = reward.into();
+            reward.set_time_valid_to(time_valid_to);
+            self.rewards.insert(&id, &reward.into());
+        }
+    }
+
     /// Validate that defined assets in rewards are defined in treasury partition.
     pub fn validate_reward_assets(&self, reward: &Reward, partition: &TreasuryPartition) -> bool {
         let partition_assets = partition.assets();
@@ -353,6 +366,7 @@ impl Contract {
         }
     }
 
+    /// TODO: Optimalize.
     /// Return list of valid reward ids that reward `activity_id`.
     pub fn valid_reward_list_for_activity(&self, activity_id: u8) -> Vec<u16> {
         let mut rewards = Vec::with_capacity(self.reward_last_id as usize / 2);

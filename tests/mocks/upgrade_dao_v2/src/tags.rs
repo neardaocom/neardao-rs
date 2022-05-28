@@ -77,67 +77,6 @@ impl Default for Tags {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn tags_crud_scenario() {
-        let new_input: Vec<String> = vec!["tag1".into(), "tag2".into(), "tag3".into()];
-        let mut tags = Tags::new();
-        let result = tags.insert(new_input);
-
-        assert_eq!(result, Some((1, 3)));
-
-        let mut expected_hm = HashMap::new();
-        expected_hm.insert(1, "tag1".into());
-        expected_hm.insert(2, "tag2".into());
-        expected_hm.insert(3, "tag3".into());
-        let expected_tags = Tags {
-            last_id: 3,
-            map: expected_hm.clone(),
-        };
-
-        assert_eq!(tags, expected_tags);
-
-        let insert_input = vec!["tag4".into(), "tag5".into(), "tag6".into()];
-        let result = tags.insert(insert_input);
-
-        assert_eq!(result, Some((4, 6)));
-
-        expected_hm.insert(4, "tag4".into());
-        expected_hm.insert(5, "tag5".into());
-        expected_hm.insert(6, "tag6".into());
-        let expected_tags = Tags {
-            last_id: 6,
-            map: expected_hm.clone(),
-        };
-
-        assert_eq!(tags, expected_tags);
-
-        tags.rename(2, "yolo tag".into());
-
-        expected_hm.insert(2, "yolo tag".into());
-        let expected_tags = Tags {
-            last_id: 6,
-            map: expected_hm.clone(),
-        };
-
-        assert_eq!(tags, expected_tags);
-
-        tags.remove(1);
-        expected_hm.remove(&1);
-
-        let expected_tags = Tags {
-            last_id: 6,
-            map: expected_hm,
-        };
-
-        assert_eq!(tags, expected_tags);
-        assert_eq!(tags.map.len(), expected_tags.map.len());
-    }
-}
-
 impl Contract {
     pub fn tag_add(&mut self, category: String, tags: Vec<String>) -> Option<(TagId, TagId)> {
         let mut t = self.tags.get(&category).unwrap_or_else(Tags::new);

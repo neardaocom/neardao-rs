@@ -1,74 +1,88 @@
 use crate::core::*;
+use crate::proposal::Proposal;
+use crate::treasury::{Asset, TreasuryPartition};
 use library::types::datatype::Value;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
-use near_contract_standards::non_fungible_token::approval::NonFungibleTokenApprovalReceiver;
-use near_contract_standards::non_fungible_token::core::NonFungibleTokenReceiver;
 use near_sdk::json_types::U128;
 use near_sdk::serde::Deserialize;
 use near_sdk::{env, near_bindgen, serde_json, AccountId, PromiseOrValue};
 
 #[derive(Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct ReceiverMessage {
+pub struct WorkflowMessage {
     pub proposal_id: u32,
+    pub storage_key: String,
+}
+
+#[derive(Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct TreasuryMessage {
+    pub partition_id: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub enum ReceiverMessage {
+    Workflow(WorkflowMessage),
+    Treasury(TreasuryMessage),
 }
 
 #[near_bindgen]
 impl FungibleTokenReceiver for Contract {
-    /// TODO: Implement.
-    /// TODO: Figure out how to assign storage keys.
-    /// Required for some workflow scenarios.
     fn ft_on_transfer(
         &mut self,
         sender_id: AccountId,
         amount: U128,
         msg: String,
     ) -> PromiseOrValue<U128> {
-        let msg: ReceiverMessage = serde_json::from_str(&msg).expect("invalid receiver msg");
-        let prop_settings = self
-            .workflow_propose_settings
-            .get(&msg.proposal_id)
-            .expect("proposal id does not exist");
-        let storage_key = prop_settings
-            .storage_key
-            .expect("workflow does not have storage");
-        let mut storage = self.storage.get(&storage_key).unwrap();
-        storage.add_data(
-            &"sender_id".to_string(),
-            &Value::String(sender_id.to_string()),
-        );
-        storage.add_data(
-            &"token_id".to_string(),
-            &Value::String(env::predecessor_account_id().to_string()),
-        );
-        storage.add_data(&"amount".to_string(), &Value::U128(amount));
-        self.storage.insert(&storage_key, &storage);
+        let msg: ReceiverMessage = serde_json::from_str(&msg).expect("Invalid receiver msg");
+        match msg {
+            ReceiverMessage::Workflow(msg) => {
+                if let Some(proposal) = self.proposals.get(&msg.proposal_id) {
+                    let proposal: Proposal = proposal.into();
+                    if let Some((tpl, _)) = self.workflow_template.get(&proposal.workflow_id) {
+                        let keys = tpl.receiver_storage_keys;
+                        if let Some(receiver) = keys.into_iter().find(|k| *k.id == msg.storage_key)
+                        {
+                            let prop_settings = self
+                                .workflow_propose_settings
+                                .get(&msg.proposal_id)
+                                .unwrap();
+                            let storage_key = prop_settings.storage_key.unwrap();
+                            let mut storage = self.storage.get(&storage_key).unwrap();
+                            if let Some(value) = storage.get_data(&receiver.amount) {
+                                let mut storage_amount = value
+                                    .try_into_u128()
+                                    .expect("Invalid value stored in storage");
+                                storage_amount += amount.0;
+                                storage
+                                    .add_data(&receiver.amount, &Value::U128(U128(storage_amount)));
+                            } else {
+                                storage.add_data(&receiver.amount, &Value::U128(U128(amount.0)));
+                                storage.add_data(
+                                    &receiver.token_id,
+                                    &Value::String(env::predecessor_account_id().to_string()),
+                                );
+                                storage.add_data(
+                                    &receiver.sender_id,
+                                    &Value::String(sender_id.to_string()),
+                                );
+                            }
+                            self.storage.insert(&storage_key, &storage);
+                        }
+                    }
+                }
+            }
+            ReceiverMessage::Treasury(msg) => {
+                if let Some(partition) = self.treasury_partition.get(&msg.partition_id) {
+                    let mut partition: TreasuryPartition = partition.into();
+                    let asset = Asset::new_ft(env::predecessor_account_id(), 24);
+                    partition.add_amount(&asset, amount.0);
+                    self.treasury_partition
+                        .insert(&msg.partition_id, &partition.into());
+                }
+            }
+        }
         PromiseOrValue::Value(U128(0))
-    }
-}
-
-#[near_bindgen]
-impl NonFungibleTokenReceiver for Contract {
-    fn nft_on_transfer(
-        &mut self,
-        sender_id: AccountId,
-        previous_owner_id: AccountId,
-        token_id: near_contract_standards::non_fungible_token::TokenId,
-        msg: String,
-    ) -> PromiseOrValue<bool> {
-        todo!()
-    }
-}
-
-#[near_bindgen]
-impl NonFungibleTokenApprovalReceiver for Contract {
-    fn nft_on_approve(
-        &mut self,
-        token_id: near_contract_standards::non_fungible_token::TokenId,
-        owner_id: AccountId,
-        approval_id: u64,
-        msg: String,
-    ) -> near_sdk::PromiseOrValue<String> {
-        todo!()
     }
 }

@@ -181,7 +181,7 @@ async fn workflow_trade1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         1_000,
         None,
-        serialized_dao_ft_receiver_msg(2),
+        serialized_dao_ft_receiver_msg(2, "trade"),
     )
     .await?;
     debug_log(&worker, &dao_account_id).await?;
@@ -401,7 +401,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
         &dao_account_id,
         1_000 * DEFAULT_DECIMALS,
         None,
-        serialized_dao_ft_receiver_msg(proposal_id),
+        serialized_dao_ft_receiver_msg(proposal_id, "trade"),
     )
     .await?;
     debug_log(&worker, &dao_account_id).await?;

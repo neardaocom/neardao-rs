@@ -381,7 +381,7 @@ pub fn deser_roles_ids(
     }
 }
 
-pub fn deser_id(
+pub fn deser_u64(
     prefix: &str,
     action_input: &mut dyn ActivityInput,
 ) -> Result<u64, DeserializeError> {

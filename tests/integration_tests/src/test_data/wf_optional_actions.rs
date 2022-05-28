@@ -29,6 +29,7 @@ impl WfOptionalActions {
             version: "1".into(),
             auto_exec: false,
             need_storage: true,
+            receiver_storage_keys: vec![],
             activities: vec![
                 Activity::Init,
                 Activity::Activity(TemplateActivity {

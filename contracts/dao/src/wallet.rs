@@ -393,7 +393,6 @@ pub struct ClaimableRewards {
 
 #[near_bindgen]
 impl Contract {
-    // TODO: Allow to define max withdraw amount per reward?
     /// Withdraw all `asset` rewards defined by reward_ids from caller's wallet.
     /// Panics if any provided reward_id is invalid.
     /// Return actually withdrawn amount.
@@ -406,7 +405,7 @@ impl Contract {
         total_withdrawn.into()
     }
     #[private]
-    pub fn withdraw_rollback(&mut self, account_id: AccountId, asset: Asset, amount: u128) {
+    pub fn withdraw_check(&mut self, account_id: AccountId, asset: Asset, amount: u128) {
         assert_eq!(
             env::promise_results_count(),
             1,
@@ -414,19 +413,8 @@ impl Contract {
         );
         match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),
-            PromiseResult::Successful(_) => {
-                self.debug_log.push(format!(
-                    "{} withdraw {} amount success; ",
-                    account_id.as_str(),
-                    amount
-                ));
-            }
+            PromiseResult::Successful(_) => {}
             PromiseResult::Failed => {
-                self.debug_log.push(format!(
-                    "{} withdraw {} amount failed; ",
-                    account_id.as_str(),
-                    amount
-                ));
                 let mut wallet = self.get_wallet(&account_id);
                 wallet.withdraw_reward_failed(asset, amount);
                 self.wallets.insert(&account_id, &wallet.into());

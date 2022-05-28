@@ -10,7 +10,7 @@ NC='\033[0m'
 # ------------ SETTINGS ------------ #
 
 WFSTART=1
-WFCOUNT=9
+WFCOUNT=10
 WID=$1
 
 if [ -z $WID ]; then
@@ -58,7 +58,7 @@ WF6FNMETA='[]'
 WF6STDFNS='[]'
 
 # WFT - Lock1
-WF7='{"code":"lock1","version":"1","auto_exec":false,"need_storage":false,"activities":["init",{"activity":{"code":"treasury_add_partition","actions":[{"exec_condition":null,"validators":[],"action_data":{"action":{"name":"treasury_add_partition","code":null,"expected_input":null,"required_deposit":null,"binds":[]}},"input_source":"prop_settings","postprocessing":null,"optional":false}],"automatic":false,"terminal":"automatic","postprocessing":null,"is_sync":true}}],"expressions":[],"transitions":[[{"activity_id":1,"cond":null,"time_from_cond":null,"time_to_cond":null}],[]],"constants":{"map":{}},"end":[1]}'
+WF7='{"code":"lock1","version":"1","auto_exec":false,"need_storage":false,"activities":["init",{"activity":{"code":"treasury_add_partition","actions":[{"exec_condition":null,"validators":[],"action_data":{"action":{"name":"treasury_add_partition","code":null,"expected_input":null,"required_deposit":null,"binds":[]}},"input_source":"prop_settings","postprocessing":null,"optional":false}],"automatic":false,"terminal":"automatic","postprocessing":null,"is_sync":true}},{"activity":{"code":"partition_add_near","actions":[{"exec_condition":null,"validators":[],"action_data":{"action":{"name":"partition_add_near","code":null,"expected_input":null,"required_deposit":null,"binds":[]}},"input_source":"prop_settings","postprocessing":null,"optional":false}],"automatic":false,"terminal":"user","postprocessing":null,"is_sync":true}},{"activity":{"code":"partition_add_ft","actions":[{"exec_condition":null,"validators":[],"action_data":{"fn_call":{"id":{"standard_dynamic":[{"src":{"prop_settings":"token_id"}},"ft_transfer_call"]},"tgas":15,"deposit":{"value":{"u64":1}},"binds":[],"must_succeed":true}},"input_source":"prop_settings","postprocessing":null,"optional":false}],"automatic":false,"terminal":"user","postprocessing":null,"is_sync":false}}],"expressions":[],"transitions":[[{"activity_id":1,"cond":null,"time_from_cond":null,"time_to_cond":null},{"activity_id":2,"cond":null,"time_from_cond":null,"time_to_cond":null},{"activity_id":3,"cond":null,"time_from_cond":null,"time_to_cond":null}],[],[{"activity_id":2,"cond":null,"time_from_cond":null,"time_to_cond":null},{"activity_id":3,"cond":null,"time_from_cond":null,"time_to_cond":null}],[{"activity_id":2,"cond":null,"time_from_cond":null,"time_to_cond":null},{"activity_id":3,"cond":null,"time_from_cond":null,"time_to_cond":null}]],"constants":{"map":{}},"end":[1,2,3]}'
 WF7FNS='[]'
 WF7FNMETA='[]'
 WF7STDFNS='[]'
@@ -74,6 +74,12 @@ WF9='{"code":"group_package1","version":"1","auto_exec":false,"need_storage":fal
 WF9FNS='[]'
 WF9FNMETA='[]'
 WF9STDFNS='[]'
+
+# WFT - Reward2
+WF10='{"code":"reward2","version":"1","auto_exec":false,"need_storage":false,"activities":["init",{"activity":{"code":"reward_add_wage","actions":[{"exec_condition":null,"validators":[],"action_data":{"action":{"name":"reward_add","code":null,"expected_input":null,"required_deposit":null,"binds":[]}},"input_source":"prop_settings","postprocessing":null,"optional":false}],"automatic":false,"terminal":"automatic","postprocessing":null,"is_sync":true}},{"activity":{"code":"reward_add_user_activity","actions":[{"exec_condition":null,"validators":[],"action_data":{"action":{"name":"reward_add","code":null,"expected_input":null,"required_deposit":null,"binds":[]}},"input_source":"prop_settings","postprocessing":null,"optional":false}],"automatic":false,"terminal":"automatic","postprocessing":null,"is_sync":true}},{"activity":{"code":"reward_update","actions":[{"exec_condition":null,"validators":[],"action_data":{"action":{"name":"reward_update","code":null,"expected_input":null,"required_deposit":null,"binds":[]}},"input_source":"prop_settings","postprocessing":null,"optional":false}],"automatic":false,"terminal":"automatic","postprocessing":null,"is_sync":true}}],"expressions":[],"transitions":[[{"activity_id":1,"cond":null,"time_from_cond":null,"time_to_cond":null},{"activity_id":2,"cond":null,"time_from_cond":null,"time_to_cond":null},{"activity_id":3,"cond":null,"time_from_cond":null,"time_to_cond":null}]],"constants":{"map":{}},"end":[1,2,3]}'
+WF10FNS='[]'
+WF10FNMETA='[]'
+WF10STDFNS='[]'
 
 ## ------------ LOAD ------------ #
 
