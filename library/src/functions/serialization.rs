@@ -159,18 +159,18 @@ fn primitive_to_json(
         buf.push_str(JSON_NULL);
         return Ok(());
     } else {
-        return Err(ProcessingError::MissingUserInputKey(key.into()));
+        return Err(ProcessingError::MissingInputKey(key.into()));
     };
 
     match datatype_def {
         Datatype::U64(opt) => match (opt, value.is_null()) {
             (true, true) => buf.push_str(JSON_NULL),
-            (false, true) => return Err(ProcessingError::MissingUserInputKey(key.into())),
+            (false, true) => return Err(ProcessingError::MissingInputKey(key.into())),
             _ => buf.push_str(value.try_into_u64()?.to_string().as_str()),
         },
         Datatype::U128(opt) => match (opt, value.is_null()) {
             (true, true) => buf.push_str(JSON_NULL),
-            (false, true) => return Err(ProcessingError::MissingUserInputKey(key.into())),
+            (false, true) => return Err(ProcessingError::MissingInputKey(key.into())),
             _ => {
                 buf.push('"');
                 buf.push_str(value.try_into_u128()?.to_string().as_str());
@@ -179,7 +179,7 @@ fn primitive_to_json(
         },
         Datatype::String(opt) => match (opt, value.is_null()) {
             (true, true) => buf.push_str(JSON_NULL),
-            (false, true) => return Err(ProcessingError::MissingUserInputKey(key.into())),
+            (false, true) => return Err(ProcessingError::MissingInputKey(key.into())),
             _ => {
                 let x = value.try_into_str()?;
                 buf.push('"');
@@ -199,7 +199,7 @@ fn primitive_to_json(
         }
         Datatype::Bool(opt) => match (opt, value.is_null()) {
             (true, true) => buf.push_str(JSON_NULL),
-            (false, true) => return Err(ProcessingError::MissingUserInputKey(key.into())),
+            (false, true) => return Err(ProcessingError::MissingInputKey(key.into())),
             _ => match value.try_into_bool()? {
                 true => buf.push_str("true"),
                 false => buf.push_str("false"),

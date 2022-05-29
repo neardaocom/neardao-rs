@@ -7,8 +7,8 @@ use near_sdk::{
 };
 
 use crate::{
-    core::*, derive_from_versioned, derive_into_versioned, internal::utils::current_timestamp_sec,
-    ApprovalId, TimestampSec, TokenId,
+    contract::*, derive_from_versioned, derive_into_versioned,
+    internal::utils::current_timestamp_sec, ApprovalId, TimestampSec, TokenId,
 };
 
 derive_into_versioned!(TreasuryPartition, VersionedTreasuryPartition);
@@ -298,5 +298,21 @@ impl Contract {
     }
     pub fn remove_partition(&mut self, partition_id: u16) -> Option<VersionedTreasuryPartition> {
         self.treasury_partition.remove(&partition_id)
+    }
+    pub fn partition_add_asset_amount(
+        &mut self,
+        partition_id: u16,
+        asset: &Asset,
+        amount: u128,
+    ) -> bool {
+        if let Some(partition) = self.treasury_partition.get(&partition_id) {
+            let mut partition: TreasuryPartition = partition.into();
+            let result = partition.add_amount(&asset, amount);
+            self.treasury_partition
+                .insert(&partition_id, &partition.into());
+            result > 0
+        } else {
+            false
+        }
     }
 }

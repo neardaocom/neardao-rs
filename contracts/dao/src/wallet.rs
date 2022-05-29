@@ -9,7 +9,7 @@ use near_sdk::{
 
 use crate::{
     constants::TGAS,
-    core::*,
+    contract::*,
     derive_from_versioned, derive_into_versioned,
     internal::utils::current_timestamp_sec,
     reward::{Reward, RewardTypeIdent},
@@ -446,11 +446,21 @@ impl Contract {
             let amount_available_reward =
                 reward.available_wage_amount(&asset, timestamp_removed, timestamp_added);
             let amount_already_claimed = wallet.amount_wage_withdrawn(reward_id, &asset);
-            (amount_available_reward - amount_already_claimed, 0)
+            (
+                amount_available_reward
+                    .checked_sub(amount_already_claimed)
+                    .unwrap_or(0),
+                0,
+            )
         } else {
             let generated_amount = wallet.user_activity_executed_count(reward_id, &asset) as u128;
             let amount_per_activity = reward.reward_per_one_execution(&asset);
-            (generated_amount * amount_per_activity, amount_per_activity)
+            (
+                generated_amount
+                    .checked_mul(amount_per_activity)
+                    .unwrap_or_else(|| u128::MAX - u128::MAX % amount_per_activity),
+                amount_per_activity,
+            )
         }
     }
     pub fn internal_withdraw_reward(

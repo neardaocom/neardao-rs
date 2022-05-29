@@ -104,7 +104,7 @@ pub fn get_value_from_source(
                 .to_owned();
             Ok(value)
         }
-        Src::User(_) => Err(SourceError::InvalidSourceVariant("user".into())),
+        Src::Input(_) => Err(SourceError::InvalidSourceVariant("user".into())),
     }
 }
 

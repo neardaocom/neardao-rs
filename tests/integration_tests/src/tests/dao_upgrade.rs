@@ -21,6 +21,7 @@ const DAO_FT_TOTAL_SUPPLY: u128 = 1_000_000_000;
 const DEFAULT_DECIMALS: u128 = 10u128.pow(24);
 
 /// Test upgrade process for DAO.
+#[ignore = "Test only when something with upgrade process change."]
 #[tokio::test]
 async fn dao_upgrade_process() -> anyhow::Result<()> {
     let dao_name = "test_dao";

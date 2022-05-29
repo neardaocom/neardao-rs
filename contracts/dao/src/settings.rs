@@ -4,7 +4,7 @@ use near_sdk::{
     AccountId,
 };
 
-use crate::{core::Contract, derive_from_versioned, derive_into_versioned, TagId};
+use crate::{contract::Contract, derive_from_versioned, derive_into_versioned, TagId};
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub enum VersionedSettings {

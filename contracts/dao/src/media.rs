@@ -1,7 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 
-use crate::core::Contract;
+use crate::contract::Contract;
 use crate::ProposalId;
 
 // TODO: Remove all Debug in production.

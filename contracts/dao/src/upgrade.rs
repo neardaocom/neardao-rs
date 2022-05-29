@@ -4,7 +4,7 @@
 pub extern "C" fn download_migration_and_upgrade() {
     use crate::{
         constants::{GAS_DOWNLOAD_NEW_VERSION, VERSION},
-        core::Contract,
+        contract::Contract,
         settings::Settings,
     };
     use library::workflow::types::ActivityRight;
@@ -36,7 +36,7 @@ pub extern "C" fn download_migration_and_upgrade() {
 #[no_mangle]
 pub extern "C" fn store_migration_bin() {
     use crate::{
-        core::{Contract, StorageKeys},
+        contract::{Contract, StorageKeys},
         settings::Settings,
     };
     use library::workflow::types::ActivityRight;
@@ -63,7 +63,7 @@ pub extern "C" fn store_migration_bin() {
 #[no_mangle]
 pub extern "C" fn store_upgrade_bin() {
     use crate::{
-        core::{Contract, StorageKeys},
+        contract::{Contract, StorageKeys},
         settings::Settings,
     };
     use library::workflow::types::ActivityRight;
@@ -89,7 +89,7 @@ pub extern "C" fn store_upgrade_bin() {
 pub extern "C" fn start_migration() {
     use crate::{
         constants::GAS_UPGRADE,
-        core::{Contract, StorageKeys},
+        contract::{Contract, StorageKeys},
         settings::Settings,
     };
     use library::workflow::types::ActivityRight;

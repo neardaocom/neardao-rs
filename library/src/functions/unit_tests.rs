@@ -169,7 +169,7 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
             expression_id: 0,
             value: vec![
                 ValueSrc::Src(Src::Tpl("sale.permissions_contract_id".into())),
-                ValueSrc::Src(Src::User("sale.permissions_contract_id".into())),
+                ValueSrc::Src(Src::Input("sale.permissions_contract_id".into())),
             ],
         }),
         Validator::Collection(CollectionValidator {
@@ -177,7 +177,7 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
             expression_id: 1,
             value: vec![
                 ValueSrc::Src(Src::Tpl("sale.out_tokens.balance".into())),
-                ValueSrc::Src(Src::User("balance".into())),
+                ValueSrc::Src(Src::Input("balance".into())),
             ],
         }),
         Validator::Collection(CollectionValidator {
@@ -185,7 +185,7 @@ fn full_scenario_skyward_validation_binding_serialization_complex() {
             expression_id: 1,
             value: vec![
                 ValueSrc::Src(Src::Tpl("sale.out_tokens.shares.amount".into())),
-                ValueSrc::Src(Src::User("shares.amount".into())),
+                ValueSrc::Src(Src::Input("shares.amount".into())),
             ],
         }),
     ];

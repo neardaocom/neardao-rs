@@ -10,7 +10,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::{core::Contract, TagId};
+use crate::{contract::Contract, TagId};
 
 #[derive(Deserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]

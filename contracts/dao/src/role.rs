@@ -6,7 +6,7 @@ use near_sdk::{
     AccountId,
 };
 
-use crate::{core::Contract, GroupId, RoleId};
+use crate::{contract::Contract, GroupId, RoleId};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq, Clone))]

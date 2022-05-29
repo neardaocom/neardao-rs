@@ -195,6 +195,18 @@ impl Contract {
         wf_add_settings.remove(id);
         self.wf_add_settings.set(&wf_add_settings);
     }
+    #[private]
+    pub fn clear_data(&mut self) {
+        self.workflows.clear();
+        self.workflow_help.clear();
+        for i in 0..self.last_wf_id {
+            self.workflow_fncalls.remove(&i);
+        }
+        self.last_wf_id = 0;
+        self.fncall_metadata.clear();
+        self.standard_fncall_metadata.clear();
+        self.wf_add_settings.remove();
+    }
 }
 
 impl Default for Contract {

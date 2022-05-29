@@ -39,14 +39,14 @@ where {
 
         for src in self.args.iter() {
             let value = match src {
-                Src::User(key) => {
+                Src::Input(key) => {
                     if let Some(user_input) = input {
                         user_input
                             .get(key.as_str())
-                            .ok_or(ProcessingError::MissingUserInputKey(key.into()))?
+                            .ok_or(ProcessingError::MissingInputKey(key.into()))?
                             .clone()
                     } else {
-                        return Err(ProcessingError::UserInputNotProvided);
+                        return Err(ProcessingError::InputNotProvided);
                     }
                 }
                 _ => get_value_from_source(sources, src)?,

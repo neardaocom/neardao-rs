@@ -15,18 +15,18 @@ use library::workflow::instance::InstanceState;
 use library::workflow::postprocessing::Postprocessing;
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
-use library::workflow::types::{ActivityResult, ActivityRight, DaoActionIdent, ObjectMetadata};
+use library::workflow::types::{ActivityRight, DaoActionIdent, ObjectMetadata};
 use near_sdk::{
     env, ext_contract, log, near_bindgen, require, AccountId, Gas, Promise, PromiseResult,
 };
 
 use super::deserialize::{
-    deser_account_ids, deser_group_input, deser_group_members, deser_media, deser_member_roles,
-    deser_partition, deser_reward, deser_roles_ids, deser_u64,
+    deser_account_ids, deser_asset, deser_group_input, deser_group_members, deser_media,
+    deser_member_roles, deser_partition, deser_reward, deser_roles_ids, deser_u128, deser_u64,
 };
-use super::error::{ActionError, ActivityError};
+use super::error::{ActionError, ActivityError, DeserializeError};
 use crate::constants::GLOBAL_BUCKET_IDENT;
-use crate::core::*;
+use crate::contract::*;
 use crate::internal::utils::current_timestamp_sec;
 use crate::internal::ActivityContext;
 use crate::proposal::ProposalState;
@@ -41,7 +41,7 @@ trait ExtActivity {
         must_succeed: bool,
         storage_key: Option<String>,
         postprocessing: Option<Postprocessing>,
-    ) -> ActivityResult;
+    );
 }
 
 #[near_bindgen]
@@ -343,15 +343,23 @@ impl Contract {
         let last_action_done = ctx.actions_done_before as usize;
         for idx in 0..input.len() {
             // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
+            set_action_propose_binds(idx + last_action_done, sources, ctx)?;
             let tpl_action = ctx.actions.get_mut(idx + last_action_done).unwrap();
-            let action_input = match input.get_mut(idx).unwrap().take() {
-                Some(a) => a.values.into_activity_input(),
-                None => {
-                    ctx.set_next_action_done();
-                    continue;
-                }
+            let mut action_input = match tpl_action.input_source {
+                User => match input.get_mut(idx).unwrap().take() {
+                    Some(a) => a.values.into_activity_input(),
+                    None => {
+                        ctx.set_next_action_done();
+                        continue;
+                    }
+                },
+                PropSettings => sources
+                    .unset_prop_action()
+                    .ok_or(ActionError::InvalidWfStructure(
+                        "missing action inputs".into(),
+                    ))?
+                    .into_activity_input(),
             };
-
             // Check exec condition.
             if let Some(cond) = tpl_action.exec_condition.as_ref() {
                 if !eval(cond, sources, expressions, Some(action_input.as_ref()))?
@@ -362,42 +370,12 @@ impl Contract {
             };
 
             // Assign current action proposal binds to source if there's defined one.
-            if let Some(mut binds) = ctx
-                .proposal_settings
-                .activity_constants
-                .get_mut(ctx.activity_id)
-                .unwrap()
-                .take()
-            {
-                if let Some(prop_binds) = binds
-                    .actions_constants
-                    .get_mut(idx)
-                    .ok_or(ActionError::InvalidWfStructure(
-                        "missing activity propose bind".into(),
-                    ))?
-                    .take()
-                {
-                    sources.set_prop_action(prop_binds);
-                }
-            } else {
-                sources.unset_prop_action();
-            }
             let user_inputs = action_input.to_vec();
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                 .try_into_action_data()
                 .ok_or(ActionError::InvalidWfStructure(
                     "missing action data".into(),
                 ))?;
-
-            let mut action_input = match tpl_action.input_source {
-                User => action_input,
-                PropSettings => sources
-                    .unset_prop_action()
-                    .ok_or(ActionError::InvalidWfStructure(
-                        "missing action inputs".into(),
-                    ))?
-                    .into_activity_input(),
-            };
 
             // Check input validators.
             if !validate(
@@ -463,22 +441,31 @@ impl Contract {
         let mut promise: Option<Promise> = None;
         for idx in 0..input.len() {
             // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
+            set_action_propose_binds(idx + last_action_done, sources, ctx)?;
             let tpl_action = ctx.actions.get_mut(idx + last_action_done).unwrap();
-            let action_input = match input.get_mut(idx).unwrap().take() {
-                Some(a) => {
-                    if !tpl_action.optional {
-                        required_promise_dispatched = true;
+            let mut action_input = match tpl_action.input_source {
+                User => match input.get_mut(idx).unwrap().take() {
+                    Some(a) => {
+                        if !tpl_action.optional {
+                            required_promise_dispatched = true;
+                        }
+                        a.values.into_activity_input()
                     }
-                    a.values.into_activity_input()
-                }
-                None => {
-                    if required_promise_dispatched {
-                        break;
+                    None => {
+                        if required_promise_dispatched {
+                            break;
+                        }
+                        ctx.set_next_optional_action_done();
+                        ctx.set_next_action_done();
+                        continue;
                     }
-                    ctx.set_next_optional_action_done();
-                    ctx.set_next_action_done();
-                    continue;
-                }
+                },
+                PropSettings => sources
+                    .unset_prop_action()
+                    .ok_or(ActionError::InvalidWfStructure(
+                        "missing action inputs".into(),
+                    ))?
+                    .into_activity_input(),
             };
             // Check exec condition.
             if let Some(cond) = tpl_action.exec_condition.as_ref() {
@@ -488,51 +475,15 @@ impl Contract {
                     return Err(ActionError::Condition(idx as u8));
                 }
             };
-
-            // Assign current action proposal binds to source if there's defined one.
-            if let Some(mut binds) = ctx
-                .proposal_settings
-                .activity_constants
-                .get_mut(ctx.activity_id)
-                .unwrap()
-                .take()
-            {
-                if let Some(prop_binds) = binds
-                    .actions_constants
-                    .get_mut(idx)
-                    .ok_or(ActionError::InvalidWfStructure(
-                        "missing activity propose bind".into(),
-                    ))?
-                    .take()
-                {
-                    sources.set_prop_action(prop_binds);
-                }
-            } else {
-                sources.unset_prop_action();
-            }
-
-            let mut action_input = match tpl_action.input_source {
-                User => action_input,
-                PropSettings => sources
-                    .unset_prop_action()
-                    .ok_or(ActionError::InvalidWfStructure(
-                        "missing action inputs".into(),
-                    ))?
-                    .into_activity_input(),
-            };
-
             let user_inputs = action_input.to_vec();
-
             let new_promise;
             if tpl_action.action_data.is_fncall() {
                 let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                     .try_into_fncall_data()
                     .ok_or(ActionError::InvalidWfStructure(
-                        "missing action data".into(),
+                        "missing fncall action data".into(),
                     ))?;
 
-                // Metadata are provided by workflow provider when workflow is added.
-                // Missing metadata are fault of the workflow provider and are considered as fatal runtime error.
                 let (name, method, metadata) = self.load_fncall_id_with_metadata(
                     action_data.id,
                     sources,
@@ -592,7 +543,7 @@ impl Contract {
                     std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                         .try_into_send_near_sources()
                         .ok_or(ActionError::InvalidWfStructure(
-                            "send near invalid data".into(),
+                            "expected send near data".into(),
                         ))?;
                 let name = eval(
                     &sender_src,
@@ -843,6 +794,13 @@ impl Contract {
                 let partition = deser_partition(inputs)?;
                 self.partition_add(partition);
             }
+            DaoActionIdent::PartitionAddAssetAmount => {
+                let id = deser_u64("id", inputs)? as u16;
+                let asset = deser_asset("asset", inputs)?
+                    .ok_or(DeserializeError::MissingInputKey("Asset is empty.".into()))?;
+                let amount = deser_u128("amount", inputs)?;
+                self.partition_add_asset_amount(id, &asset, amount);
+            }
             DaoActionIdent::RewardAdd => {
                 let reward = deser_reward(inputs)?;
                 self.reward_add(reward)?;
@@ -850,7 +808,7 @@ impl Contract {
             DaoActionIdent::RewardUpdate => {
                 let id = deser_u64("id", inputs)? as u16;
                 let time_valid_to = deser_u64("time_valid_to", inputs)? as u64;
-                self.reward_update(id, time_valid_to);
+                self.reward_update(id, time_valid_to)?;
             }
             DaoActionIdent::GroupAdd => {
                 let group = deser_group_input(inputs)?;
@@ -957,4 +915,34 @@ impl Contract {
         };
         Ok(data)
     }
+}
+
+/// Set action propose binds to the sources if exist.
+/// Unset previous.
+fn set_action_propose_binds(
+    action_id: usize,
+    sources: &mut dyn Source,
+    ctx: &mut ActivityContext,
+) -> Result<(), ActionError> {
+    if let Some(mut binds) = ctx
+        .proposal_settings
+        .activity_constants
+        .get_mut(ctx.activity_id)
+        .unwrap()
+        .take()
+    {
+        if let Some(prop_binds) = binds
+            .actions_constants
+            .get_mut(action_id)
+            .ok_or(ActionError::InvalidWfStructure(
+                "missing activity propose bind".into(),
+            ))?
+            .take()
+        {
+            sources.set_prop_action(prop_binds);
+        }
+    } else {
+        sources.unset_prop_action();
+    }
+    Ok(())
 }

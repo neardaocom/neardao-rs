@@ -4,7 +4,7 @@ use library::workflow::types::{ActivityRight, VoteScenario};
 use near_sdk::{test_utils::accounts, testing_env, AccountId, MockedBlockchain};
 
 use crate::{
-    core::Contract,
+    contract::Contract,
     group::{Group, GroupInput, GroupMember, GroupSettings},
     reward::{Reward, RewardType},
     role::{MemberRoles, Roles, UserRoles},

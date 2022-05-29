@@ -2,7 +2,7 @@
 //! Only staking contract is allowed to call methods in this module.
 //! Forked and modified code from https://github.com/near-daos/sputnik-dao-contract/blob/main/sputnikdao2/src/delegation.rs
 
-use crate::{core::*, reward::RewardActivity, settings::Settings};
+use crate::{contract::*, reward::RewardActivity, settings::Settings};
 use near_sdk::{env, json_types::U128, log, near_bindgen, require, AccountId};
 
 impl Contract {

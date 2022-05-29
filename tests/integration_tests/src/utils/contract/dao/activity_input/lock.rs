@@ -64,4 +64,23 @@ impl ActivityInputLock1 {
         );
         map
     }
+
+    pub fn activity_2_add_ft(
+        partition_id: u64,
+        token_account_id: &str,
+        amount: u128,
+    ) -> Vec<Option<ActionInput>> {
+        let mut map = HashMap::new();
+        map.insert("id".into(), Value::U64(partition_id));
+        map.insert(
+            "asset.ft.account_id".into(),
+            Value::String(token_account_id.into()),
+        );
+        map.insert("asset.ft.decimals".into(), Value::U64(24));
+        map.insert("amount".into(), Value::U128(amount.into()));
+        vec![Some(ActionInput {
+            action: ActionInputType::DaoAction(DaoActionIdent::PartitionAddAssetAmount),
+            values: UserInput::Map(map),
+        })]
+    }
 }

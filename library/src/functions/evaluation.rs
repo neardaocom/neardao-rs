@@ -17,14 +17,14 @@ pub fn eval(
 ) -> Result<Value, ProcessingError> {
     match src {
         ValueSrc::Src(arg_src) => match arg_src {
-            Src::User(key) => {
+            Src::Input(key) => {
                 if let Some(input) = input {
                     Ok(input
                         .get(key)
-                        .ok_or(ProcessingError::MissingUserInputKey(key.into()))?
+                        .ok_or(ProcessingError::MissingInputKey(key.into()))?
                         .clone())
                 } else {
-                    return Err(ProcessingError::UserInputNotProvided);
+                    return Err(ProcessingError::InputNotProvided);
                 }
             }
             _ => Ok(get_value_from_source(sources, arg_src)?),

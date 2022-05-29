@@ -19,7 +19,7 @@ use crate::tags::Tags;
 use crate::treasury::TreasuryPartition;
 use crate::wallet::{ClaimableReward, ClaimableRewards, Wallet};
 use crate::TagCategory;
-use crate::{core::*, StorageKey};
+use crate::{contract::*, StorageKey};
 
 #[near_bindgen]
 impl Contract {

@@ -6,7 +6,7 @@ use near_sdk::AccountId;
 use crate::internal::utils::current_timestamp_sec;
 use crate::wallet::Wallet;
 use crate::workflow::InternalDaoActionError;
-use crate::{core::*, derive_from_versioned, derive_into_versioned, RewardId, RoleId};
+use crate::{contract::*, derive_from_versioned, derive_into_versioned, RewardId, RoleId};
 use crate::{
     treasury::{Asset, TreasuryPartition},
     TimestampSec,
@@ -233,6 +233,11 @@ impl Contract {
                 "partion does not have all required assets".into(),
             ));
         }
+        if reward.time_valid_from >= reward.time_valid_to {
+            return Err(InternalDaoActionError(
+                "reward's time valid from must be smaller than time valid to".into(),
+            ));
+        }
         let mut group = self
             .groups
             .get(&reward.group_id)
@@ -248,7 +253,6 @@ impl Contract {
             .into_iter()
             .map(|(a, _)| a.to_owned())
             .collect();
-        // Check for duplicates.
         reward_assets.sort();
         let len_before = reward_assets.len();
         reward_assets.dedup();
@@ -256,7 +260,6 @@ impl Contract {
             return Err(InternalDaoActionError("duplicate assets".into()));
         }
         let current_timestamp = current_timestamp_sec();
-        // Add reward to role members wallets.
         for user in rewarded_users {
             if !self.add_wallet_reward(
                 self.reward_last_id,
@@ -278,12 +281,22 @@ impl Contract {
 
     /// Update Reward.
     /// Currently only updates valid to param.
-    pub fn reward_update(&mut self, id: u16, time_valid_to: u64) {
+    pub fn reward_update(
+        &mut self,
+        id: u16,
+        time_valid_to: u64,
+    ) -> Result<(), InternalDaoActionError> {
         if let Some(reward) = self.rewards.get(&id) {
             let mut reward: Reward = reward.into();
+            if reward.time_valid_from >= reward.time_valid_to {
+                return Err(InternalDaoActionError(
+                    "reward's time valid from must be smaller than time valid to".into(),
+                ));
+            }
             reward.set_time_valid_to(time_valid_to);
             self.rewards.insert(&id, &reward.into());
         }
+        Ok(())
     }
 
     /// Validate that defined assets in rewards are defined in treasury partition.

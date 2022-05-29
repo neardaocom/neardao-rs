@@ -7,7 +7,7 @@ use near_sdk::{
 };
 
 use crate::{
-    core::Contract,
+    contract::Contract,
     internal::utils::current_timestamp_sec,
     reward::Reward,
     role::{MemberRoles, Roles, UserRoles},

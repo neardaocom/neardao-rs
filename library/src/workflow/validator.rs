@@ -74,7 +74,7 @@ impl Validator {
                 loop {
                     for src in o.value.iter() {
                         let mapped_src = if let ValueSrc::Src(src) = src {
-                            if let Src::User(key_suffix) = src {
+                            if let Src::Input(key_suffix) = src {
                                 let key = object_key(
                                     o.prefixes
                                         .get(0)

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use data::workflow::basic::lock::Lock1;
 use data::workflow::basic::wf_add::{WfAdd1, WfAdd1ProposeOptions};
 use near_sdk::ONE_NEAR;
@@ -154,6 +156,9 @@ async fn workflow_lock1_scenario() -> anyhow::Result<()> {
     )
     .await?;
     worker.wait(5).await?;
+    debug_log(&worker, &dao_account_id).await?;
+    statistics(&worker, &dao_account_id).await?;
+    check_partitions(&worker, &dao_account_id, vec!["treasury partition name"]).await?;
     check_instance(
         &worker,
         &dao_account_id,
@@ -163,9 +168,46 @@ async fn workflow_lock1_scenario() -> anyhow::Result<()> {
         InstanceState::Finished,
     )
     .await?;
+
+    let proposal_id = proposal_to_finish(
+        &worker,
+        &member,
+        &dao_account_id,
+        DAO_TPL_ID_OF_FIRST_ADDED,
+        Lock1::propose_settings(None, HashMap::new()),
+        None,
+        vec![(&member, 1)],
+        100,
+        Lock1::deposit_propose(),
+        Lock1::deposit_vote(),
+        ProposalState::Accepted,
+    )
+    .await?;
+    check_partitions(&worker, &dao_account_id, vec!["treasury partition name"]).await?;
+
+    // Add new FT to the created lock.
+    run_activity(
+        &worker,
+        &member,
+        &dao_account_id,
+        proposal_id,
+        2,
+        ActivityInputLock1::activity_2_add_ft(3, token_account_id.as_str(), 9_999_999),
+        true,
+    )
+    .await?;
+    worker.wait(5).await?;
     debug_log(&worker, &dao_account_id).await?;
     statistics(&worker, &dao_account_id).await?;
     check_partitions(&worker, &dao_account_id, vec!["treasury partition name"]).await?;
-
+    check_instance(
+        &worker,
+        &dao_account_id,
+        proposal_id,
+        2,
+        1,
+        InstanceState::Running,
+    )
+    .await?;
     Ok(())
 }

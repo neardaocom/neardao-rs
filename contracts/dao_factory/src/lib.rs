@@ -9,7 +9,7 @@ use near_sdk::{Gas, IntoStorageKey};
 
 ///include binary code of dao contract
 const NEWEST_DAO_VERSION: &[u8] = include_bytes!("../../../res/dao_opt.wasm");
-const MIGRATION_BLOB: &[u8] = include_bytes!("../../../res/dummy.wasm");
+const MIGRATION_BLOB: &[u8] = &[];
 
 /// Gas spent on the call & account creation.
 const CREATE_CALL_GAS: Gas = Gas(150_000_000_000_000);

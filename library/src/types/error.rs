@@ -69,10 +69,10 @@ pub enum ValidationError {
 
 #[derive(Error, Debug)]
 pub enum ProcessingError {
-    #[error("missing user input for key: `{0}`")]
-    MissingUserInputKey(String),
-    #[error("source required user input which was not provided")]
-    UserInputNotProvided,
+    #[error("missing input for key: `{0}`")]
+    MissingInputKey(String),
+    #[error("source required input which was not provided")]
+    InputNotProvided,
     #[error("cast failed: `{0}`")]
     Cast(#[from] CastError),
     #[error("binding failed: `{0}`")]

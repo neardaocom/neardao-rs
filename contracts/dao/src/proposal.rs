@@ -5,13 +5,13 @@ use library::workflow::types::{ActivityRight, VoteScenario};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::env::panic_str;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{env, log, near_bindgen, AccountId};
+use near_sdk::{env, log, near_bindgen, require, AccountId};
 use std::collections::HashMap;
 
 use crate::internal::utils::current_timestamp_sec;
 use crate::media::Media;
 use crate::reward::RewardActivity;
-use crate::{core::*, CalculatedVoteResults, VoteTotalPossible, Votes};
+use crate::{contract::*, CalculatedVoteResults, VoteTotalPossible, Votes};
 use crate::{ResourceId, TimestampSec};
 
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
@@ -109,6 +109,7 @@ impl Contract {
     /// - `template_settings_id` does not refer to valid TemplateSetting for `template_id`
     /// - `template_settings_id` refer to valid TemplateSettings
     ///  but caller do not have rights to propose them
+    /// - `propose_settings.activity_constants` length does not match proposed template activities length.
     /// - `template_id` == 1 (aka "wf_add") but `template_settings` is None
     /// - `propose_settings` contain no storage key but Template requires it or the storage_key already exists
     /// Caller is responsible to provide valid `propose_settings`. This is not checked.
@@ -130,10 +131,15 @@ impl Contract {
         let settings = wfs
             .get(template_settings_id as usize)
             .expect("Settings for template_settings_id not found.");
-        assert!(env::attached_deposit() >= settings.deposit_propose.unwrap_or_else(|| 0.into()).0);
-        if !self.check_rights(&settings.allowed_proposers, &caller) {
-            panic_str("No right to propose with the provided template_settings_id.");
-        }
+        require!(env::attached_deposit() >= settings.deposit_propose.unwrap_or_else(|| 0.into()).0);
+        require!(
+            self.check_rights(&settings.allowed_proposers, &caller),
+            "No right to propose with the provided template_settings_id."
+        );
+        require!(
+            propose_settings.activity_constants.len() == wft.activities.len(),
+            "ProposeSettings activity_constants does not match template activites."
+        );
         if matches!(settings.allowed_voters, ActivityRight::Member)
             && matches!(settings.scenario, VoteScenario::TokenWeighted)
         {
@@ -143,18 +149,16 @@ impl Contract {
         }
         self.proposal_last_id += 1;
         if template_id == 1 {
-            assert!(
+            require!(
                 !template_settings
                     .as_ref()
                     .expect("Expected template settings for 'WorkflowAdd' proposal.")
                     .is_empty(),
-                "{}",
                 "Provided `template_settings` do not contain TemplateSettings."
             );
             self.proposed_workflow_settings
                 .insert(&self.proposal_last_id, &template_settings.unwrap());
         }
-        // Rounded up to minutes
         let created = env::block_timestamp() / 10u64.pow(9) / 60 * 60 + 60;
         let proposal = Proposal::new(
             0,
@@ -166,7 +170,7 @@ impl Contract {
         );
         if wft.need_storage {
             if let Some(ref key) = propose_settings.storage_key {
-                assert!(
+                require!(
                     self.storage.get(key).is_none(),
                     "Storage key already exists."
                 );

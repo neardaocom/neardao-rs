@@ -18,9 +18,11 @@ use super::expression::Expression;
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 pub enum DaoActionIdent {
+    WorkflowAdd,
+    Event,
     GroupAdd,
-    GroupRemove,
     GroupUpdate,
+    GroupRemove,
     GroupAddMembers,
     GroupRemoveMembers,
     GroupRemoveRoles,
@@ -29,16 +31,14 @@ pub enum DaoActionIdent {
     TagAdd,
     TagUpdate,
     TagRemove,
-    FtDistribute,
-    WorkflowAdd,
     TreasuryAddPartition,
-    PartitionAddNear,
+    PartitionAddAssetAmount,
     RewardAdd,
     RewardUpdate,
-    Event,
     MediaAdd,
     MediaUpdate,
     MediaRemove,
+    FtDistribute,
 }
 
 // TODO: Remove Debug in production.
@@ -75,27 +75,6 @@ pub enum ActivityRight {
     Member,
 }
 
-// TODO: Refactor.
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug))]
-#[serde(crate = "near_sdk::serde")]
-#[serde(rename_all = "snake_case")]
-pub enum ActivityResult {
-    Ok,
-    Finished,
-    NoRights,
-    NotEnoughDeposit,
-    TransitionNotPossible,
-    ProposalNotAccepted,
-    Postprocessing,
-    MaxTransitionLimitReached,
-    TransitionCondFailed,
-    ActivityCondFailed,
-    ErrValidation,
-    ErrPostprocessing,
-    ErrTimeLimit,
-}
-
 // TODO: Remove Debug in production.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(PartialEq))]
@@ -103,8 +82,8 @@ pub enum ActivityResult {
 #[serde(rename_all = "snake_case")]
 /// Defines source of value.
 pub enum Src {
-    /// User's input key name.
-    User(String),
+    /// Activity's input key name.
+    Input(String),
     /// Bind from template.
     Tpl(String),
     /// Bind from template settings.
@@ -125,7 +104,7 @@ pub enum Src {
 impl Src {
     pub fn with_new_user_key(&self, key: String) -> Result<Self, &'static str> {
         match self {
-            Src::User(_) => Ok(Src::User(key)),
+            Src::Input(_) => Ok(Src::Input(key)),
             _ => Err("Invalid variant of self."),
         }
     }
@@ -149,7 +128,7 @@ impl ValueSrc {
     pub fn is_user_input(&self) -> bool {
         match self {
             ValueSrc::Src(src) => match src {
-                Src::User(_) => true,
+                Src::Input(_) => true,
                 _ => false,
             },
             _ => false,

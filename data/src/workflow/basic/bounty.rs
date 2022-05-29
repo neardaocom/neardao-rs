@@ -124,7 +124,7 @@ impl Bounty1 {
                                 ),
                                 Instruction::StoreDynValue(
                                     "checkin_accepted".into(),
-                                    ValueSrc::Src(Src::User("checkin_accepted".into())),
+                                    ValueSrc::Src(Src::Input("checkin_accepted".into())),
                                 ),
                             ],
                         }),
@@ -151,7 +151,7 @@ impl Bounty1 {
                         postprocessing: Some(Postprocessing {
                             instructions: vec![Instruction::StoreDynValue(
                                 "event_done_result".into(),
-                                ValueSrc::Src(Src::User("result".into())),
+                                ValueSrc::Src(Src::Input("result".into())),
                             )],
                         }),
                         optional: false,
@@ -185,7 +185,7 @@ impl Bounty1 {
                                 ),
                                 Instruction::StoreDynValue(
                                     "event_done_result_evaluation".into(),
-                                    ValueSrc::Src(Src::User("result_evaluation".into())),
+                                    ValueSrc::Src(Src::Input("result_evaluation".into())),
                                 ),
                             ],
                         }),
@@ -205,7 +205,7 @@ impl Bounty1 {
                             Validator::Object(ObjectValidator {
                                 expression_id: 0,
                                 value: vec![
-                                    ValueSrc::Src(Src::User("amount_near".into())),
+                                    ValueSrc::Src(Src::Input("amount_near".into())),
                                     ValueSrc::Src(Src::PropSettings(
                                         BOUNTY1_OFFERED_AMOUNT_KEY.into(),
                                     )),
@@ -214,14 +214,14 @@ impl Bounty1 {
                             Validator::Object(ObjectValidator {
                                 expression_id: 1,
                                 value: vec![
-                                    ValueSrc::Src(Src::User("receiver_id".into())),
+                                    ValueSrc::Src(Src::Input("receiver_id".into())),
                                     ValueSrc::Src(Src::Storage("account_id_applied".into())),
                                 ],
                             }),
                         ],
                         action_data: ActionData::SendNear(
                             ValueSrc::Src(Src::Storage("account_id_applied".into())),
-                            ValueSrc::Src(Src::User("amount_near".into())),
+                            ValueSrc::Src(Src::Input("amount_near".into())),
                         ),
                         optional: false,
                         postprocessing: None, // Could be stored amount of sent NEARs.

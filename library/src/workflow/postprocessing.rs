@@ -330,7 +330,7 @@ mod test {
                 ),
                 Instruction::StoreExpressionGlobal(
                     "skey_1".into(),
-                    vec![ValueSrc::Src(Src::User("key_2".into()))],
+                    vec![ValueSrc::Src(Src::Input("key_2".into()))],
                     EExpr::Aritmetic(TExpr {
                         operators: vec![Op {
                             operands_ids: [0, 1],

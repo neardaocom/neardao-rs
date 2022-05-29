@@ -15,7 +15,7 @@ impl From<ActionError> for ActivityError {
     fn from(a: ActionError) -> Self {
         match a {
             ActionError::WorkflowInternal(e) => {
-                if let ProcessingError::MissingUserInputKey(key) = e {
+                if let ProcessingError::MissingInputKey(key) = e {
                     Self::Input(format!("missing user input key: {}", key))
                 } else {
                     Self::Fatal(e.to_string())
@@ -69,7 +69,7 @@ pub enum DeserializeError {
     #[error("invalid datatype: `{0}`")]
     Cast(#[from] CastError),
     #[error("missing key: `{0}`")]
-    MissingUserInputKey(String),
+    MissingInputKey(String),
     #[error("failed to convert input to: `{0}`")]
     Conversion(String),
     #[error("failed to parse account id: `{0}`")]

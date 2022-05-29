@@ -15,7 +15,7 @@ impl From<ActionError> for ActivityError {
     fn from(a: ActionError) -> Self {
         match a {
             ActionError::WorkflowInternal(e) => {
-                if let ProcessingError::MissingUserInputKey(key) = e {
+                if let ProcessingError::MissingInputKey(key) = e {
                     Self::Input(format!("missing user input key: {}", key))
                 } else {
                     Self::Fatal(e.to_string())

@@ -16,7 +16,7 @@ use library::{
 use near_sdk::{test_utils::VMContextBuilder, AccountId};
 
 use crate::{
-    core::Contract,
+    contract::Contract,
     group::{GroupInput, GroupMember, GroupSettings},
     media::Media,
     role::{MemberRoles, Roles, UserRoles},

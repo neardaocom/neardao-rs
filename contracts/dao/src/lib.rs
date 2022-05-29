@@ -20,7 +20,7 @@ pub mod role;
 pub mod settings;
 pub mod workflow;
 
-pub mod core;
+pub mod contract;
 pub mod receiver;
 pub mod reward;
 pub mod treasury;

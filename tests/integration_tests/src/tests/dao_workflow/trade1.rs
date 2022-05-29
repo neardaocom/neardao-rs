@@ -7,7 +7,7 @@ use crate::{
         check_instance, check_wf_storage_values, check_wf_templates, create_dao_via_factory,
         create_ft_via_factory, debug_log, ft_balance_of, ft_transfer_call, init_dao_factory,
         init_ft_factory, init_staking, init_workflow_provider, load_workflow_templates,
-        proposal_to_finish, run_activity, serialized_dao_ft_receiver_msg, storage_deposit,
+        proposal_to_finish, run_activity, serialized_dao_ft_receiver_workflow_msg, storage_deposit,
         ActivityInputTrade1, ActivityInputWfAdd1, Wait,
     },
 };
@@ -181,7 +181,7 @@ async fn workflow_trade1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         1_000,
         None,
-        serialized_dao_ft_receiver_msg(2, "trade"),
+        serialized_dao_ft_receiver_workflow_msg(2, "trade"),
     )
     .await?;
     debug_log(&worker, &dao_account_id).await?;
@@ -401,7 +401,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
         &dao_account_id,
         1_000 * DEFAULT_DECIMALS,
         None,
-        serialized_dao_ft_receiver_msg(proposal_id, "trade"),
+        serialized_dao_ft_receiver_workflow_msg(proposal_id, "trade"),
     )
     .await?;
     debug_log(&worker, &dao_account_id).await?;

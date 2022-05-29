@@ -19,7 +19,7 @@ use library::{FnCallId, MethodName};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
 use near_sdk::serde::Serialize;
-use near_sdk::{env, near_bindgen, AccountId, Balance, BorshStorageKey, PanicOnDefault};
+use near_sdk::{near_bindgen, AccountId, Balance, BorshStorageKey, PanicOnDefault};
 
 use crate::group::{Group, GroupInput};
 
@@ -192,31 +192,5 @@ impl Contract {
         contract.init_treasury_partitions(treasury_partitions);
         contract.init_media(media);
         contract
-    }
-
-    /// For dev/testing purposes only
-    #[cfg(feature = "testnet")]
-    #[private]
-    pub fn clean_self(&mut self) {
-        self.workflow_template.clear();
-        self.workflow_instance.clear();
-        self.function_call_metadata.clear();
-
-        self.proposals.clear();
-        self.groups.clear();
-        self.storage.clear();
-        self.tags.clear();
-        self.function_call_metadata.clear();
-        self.workflow_template.clear();
-        self.workflow_instance.clear();
-        self.ft_metadata.remove();
-        self.settings.remove();
-    }
-
-    /// For dev/testing purposes only
-    #[cfg(feature = "testnet")]
-    #[private]
-    pub fn delete_self(&mut self) -> Promise {
-        Promise::new(env::current_account_id()).delete_account("neardao.testnet".into())
     }
 }

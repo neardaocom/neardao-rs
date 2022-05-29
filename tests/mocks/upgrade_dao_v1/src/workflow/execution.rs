@@ -14,7 +14,7 @@ use library::workflow::instance::InstanceState;
 use library::workflow::postprocessing::Postprocessing;
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
-use library::workflow::types::{ActivityResult, ActivityRight, DaoActionIdent, ObjectMetadata};
+use library::workflow::types::{ActivityRight, DaoActionIdent, ObjectMetadata};
 use near_sdk::{
     env, ext_contract, log, near_bindgen, require, AccountId, Gas, Promise, PromiseResult,
 };
@@ -40,7 +40,7 @@ trait ExtActivity {
         must_succeed: bool,
         storage_key: Option<String>,
         postprocessing: Option<Postprocessing>,
-    ) -> ActivityResult;
+    );
 }
 
 #[near_bindgen]

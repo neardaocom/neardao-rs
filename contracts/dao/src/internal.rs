@@ -2,7 +2,7 @@ use near_sdk::{env, require, AccountId, Balance};
 
 use crate::{
     constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, C_PREDECESSOR},
-    core::{ActionLog, Contract},
+    contract::{ActionLog, Contract},
     group::GroupInput,
     internal::utils::current_timestamp_sec,
     media::Media,

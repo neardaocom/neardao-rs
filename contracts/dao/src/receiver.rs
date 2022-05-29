@@ -1,4 +1,4 @@
-use crate::core::*;
+use crate::contract::*;
 use crate::proposal::Proposal;
 use crate::treasury::{Asset, TreasuryPartition};
 use library::types::datatype::Value;
