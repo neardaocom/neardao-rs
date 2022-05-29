@@ -10,8 +10,8 @@
 </div>
 
 ## Smart contracts
-- Dao
 - Dao factory
+- Dao
 - Workflow provider
 - Staking
 - Fungible token factory
@@ -25,15 +25,9 @@ Contains shared definitions/types/functions used by NearDAO contracts. For more 
 ## Testing
 1. Unit tests
     - located in unit_tests modules
-    - run by `cargo test` all tests
 
-2. Via [NEAR CLI](https://docs.near.org/docs/tools/near-cli)
-    - set of bash scripts located in near_cli_tests that utilises NEAR CLI tool
-    - run by `. tests/near_cli_test/<script-name>`
-    - free the testnets's resources used by running `. clean.sh`
-
-3. Integration tests
-    - via[Near workpaces](https://github.com/near/workspaces-rs)
+2. Integration tests
+    - via [Near workpaces](https://github.com/near/workspaces-rs)
 
 ## Contributing
 - TBD
