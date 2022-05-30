@@ -92,7 +92,7 @@ for ((i=$WFSTART;i<$WFSTART+$WFCOUNT;i++))
     wf_fnmeta="WF"$i"FNMETA"
     if [ ! -z "${!wf_val}" ]; then
       echo "${GREEN}------ Adding WF $i ------${NC}\n"
-      near call $WID workflow_add '{"workflow": '${!wf_val}', "fncalls": '${!wf_fns}',"standard_fncalls": '${!wf_std_fns}', "fncall_metadata": '${!wf_fnmeta}',"help":null}' --accountId=$WID
+      near call $WID workflow_add '{"workflow": '${!wf_val}', "fncalls": '${!wf_fns}',"standard_fncalls": '${!wf_std_fns}', "fncall_metadata": '${!wf_fnmeta}'}' --accountId=$WID
     fi
  done
 

@@ -16,11 +16,7 @@ use data::{
     },
     TemplateData,
 };
-use library::{
-    types::source::SourceDataVariant,
-    workflow::{help::TemplateHelp, template::Template},
-    Version,
-};
+use library::{types::source::SourceDataVariant, workflow::template::Template, Version};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use workspaces::{network::DevAccountDeployer, AccountId, Contract, DevNetwork, Worker};
@@ -55,14 +51,13 @@ where
 {
     let tpls = wf_templates(provider.id().to_string(), wnear_id, skyward_id);
     let templates_len = tpls.len();
-    for (name, tpl, help) in tpls {
+    for (name, tpl) in tpls {
         let (wf, fncalls, meta, std_fncalls) = tpl;
         let args = json!({
             "workflow": wf,
             "fncalls": fncalls,
             "standard_fncalls": std_fncalls,
             "fncall_metadata": meta,
-            "help": help,
         })
         .to_string()
         .into_bytes();
@@ -92,9 +87,9 @@ fn wf_templates(
     provider_id: String,
     wnear_id: Option<&AccountId>,
     skyward_id: Option<&AccountId>,
-) -> Vec<(String, TemplateData, Option<TemplateHelp>)> {
+) -> Vec<(String, TemplateData)> {
     let mut templates = vec![];
-    templates.push(("wf_add".into(), WfAdd1::template(provider_id), None));
+    templates.push(("wf_add".into(), WfAdd1::template(provider_id)));
     if wnear_id.is_some() && skyward_id.is_some() {
         templates.push((
             "skyward1".into(),
@@ -102,24 +97,22 @@ fn wf_templates(
                 skyward_account_id: skyward_id.unwrap().to_string(),
                 wnear_account_id: wnear_id.unwrap().to_string(),
             })),
-            None,
         ));
     } else {
         templates.push(dummy_template_data());
     }
-    templates.push(("trade1".into(), Trade1::template(), None));
-    templates.push(("bounty1".into(), Bounty1::template(), None));
-    templates.push(("reward1".into(), Reward1::template(), None));
-    templates.push(("group_package1".into(), GroupPackage1::template(), None));
+    templates.push(("trade1".into(), Trade1::template()));
+    templates.push(("bounty1".into(), Bounty1::template()));
+    templates.push(("reward1".into(), Reward1::template()));
+    templates.push(("group_package1".into(), GroupPackage1::template()));
     templates.push((
         "test_optional_actions".into(),
         WfOptionalActions::template(),
-        None,
     ));
-    templates.push(("media1".into(), Media1::template(), None));
-    templates.push(("lock1".into(), Lock1::template(), None));
-    templates.push(("group1".into(), Group1::template(), None));
-    templates.push(("reward2".into(), Reward2::template(), None));
+    templates.push(("media1".into(), Media1::template()));
+    templates.push(("lock1".into(), Lock1::template()));
+    templates.push(("group1".into(), Group1::template()));
+    templates.push(("reward2".into(), Reward2::template()));
     templates
 }
 
@@ -143,11 +136,10 @@ pub struct Metadata {
     pub version: Version,
     pub fncalls: Vec<FnCallId>,
     pub standard_fncalls: Vec<MethodName>,
-    pub help: bool,
 }
 
 /// Makes padding so templates always have same id on provider.
-fn dummy_template_data() -> (String, TemplateData, Option<TemplateHelp>) {
+fn dummy_template_data() -> (String, TemplateData) {
     (
         "dummy".into(),
         (
@@ -167,6 +159,5 @@ fn dummy_template_data() -> (String, TemplateData, Option<TemplateHelp>) {
             vec![],
             vec![],
         ),
-        None,
     )
 }

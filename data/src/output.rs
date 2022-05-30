@@ -2,7 +2,7 @@
 //! TODO: Missing automation.
 
 use library::{
-    workflow::{help::TemplateHelp, template::Template, types::ObjectMetadata},
+    workflow::{template::Template, types::ObjectMetadata},
     FnCallId, MethodName,
 };
 
@@ -32,23 +32,19 @@ pub const WNEAR: &str = "wnear.v1.neardao.testnet";
 fn pretty_print_template_data(
     name: &str,
     data: (
-        (
-            Template,
-            Vec<FnCallId>,
-            Vec<Vec<ObjectMetadata>>,
-            Vec<MethodName>,
-        ),
-        Option<TemplateHelp>,
+        Template,
+        Vec<FnCallId>,
+        Vec<Vec<ObjectMetadata>>,
+        Vec<MethodName>,
     ),
 ) {
     println!(
-        "------------------------------ WF: {} ------------------------------\n{{\"workflow\":\n{},\n\"fncalls\":{},\n\"fncall_metadata\":{},\n\"standard_fncalls\":{},\n\"help\":{}}}",
+        "------------------------------ WF: {} ------------------------------\n{{\"workflow\":\n{},\n\"fncalls\":{},\n\"fncall_metadata\":{},\n\"standard_fncalls\":{}}}",
         name,
-        serde_json::to_string(&data.0.0).expect(name),
-        serde_json::to_string(&data.0.1).expect(name),
-        serde_json::to_string(&data.0.2).expect(name),
-        serde_json::to_string(&data.0.3).expect(name),
+        serde_json::to_string(&data.0).expect(name),
         serde_json::to_string(&data.1).expect(name),
+        serde_json::to_string(&data.2).expect(name),
+        serde_json::to_string(&data.3).expect(name),
     );
 }
 
@@ -62,25 +58,22 @@ fn pretty_print_standards(functions: Vec<MethodName>, metadata: Vec<Vec<ObjectMe
 
 #[test]
 fn output_workflows_basic() {
-    pretty_print_template_data("WFADD1", (WfAdd1::template(WF_PROVIDER.into()), None));
+    pretty_print_template_data("WFADD1", WfAdd1::template(WF_PROVIDER.into()));
     pretty_print_template_data(
         "SKYWARD1",
-        (
-            Skyward1::template(Some(Skyward1TemplateOptions {
-                skyward_account_id: SKYWARD.into(),
-                wnear_account_id: WNEAR.into(),
-            })),
-            None,
-        ),
+        Skyward1::template(Some(Skyward1TemplateOptions {
+            skyward_account_id: SKYWARD.into(),
+            wnear_account_id: WNEAR.into(),
+        })),
     );
-    pretty_print_template_data("BOUNTY1", (Bounty1::template(), None));
-    pretty_print_template_data("REWARD1", (Reward1::template(), None));
-    pretty_print_template_data("TRADE1", (Trade1::template(), None));
-    pretty_print_template_data("MEDIA", (Media1::template(), None));
-    pretty_print_template_data("LOCK1", (Lock1::template(), None));
-    pretty_print_template_data("GROUP1", (Group1::template(), None));
-    pretty_print_template_data("GROUP_PACKAGE1", (GroupPackage1::template(), None));
-    pretty_print_template_data("REWARD2", (Reward2::template(), None));
+    pretty_print_template_data("BOUNTY1", Bounty1::template());
+    pretty_print_template_data("REWARD1", Reward1::template());
+    pretty_print_template_data("TRADE1", Trade1::template());
+    pretty_print_template_data("MEDIA", Media1::template());
+    pretty_print_template_data("LOCK1", Lock1::template());
+    pretty_print_template_data("GROUP1", Group1::template());
+    pretty_print_template_data("GROUP_PACKAGE1", GroupPackage1::template());
+    pretty_print_template_data("REWARD2", Reward2::template());
 }
 
 #[test]

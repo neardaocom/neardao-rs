@@ -1,22 +1,19 @@
 //! Workflow provider contract
-//! Providers workflow templates with necessary object metadata for them to work.
+//! Provide workflow templates with necessary object metadata for them to work.
 
-#![allow(unused_imports, unused_mut)]
-use library::workflow::help::TemplateHelp;
+#![allow(unused_mut)]
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
 use library::workflow::types::ObjectMetadata;
 use library::{FnCallId, MethodName, Version};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
-use near_sdk::env;
 use near_sdk::serde::Serialize;
 use near_sdk::{near_bindgen, BorshStorageKey};
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
     WorkflowTemplate,
-    WorkflowHelp,
     FnCallMetadata,
     StandardFnCallMetadata,
     WorkflowFnCalls,
@@ -29,7 +26,6 @@ pub struct Contract {
     // Id 0 is reserved for "wf_add".
     last_wf_id: u16,
     workflows: UnorderedMap<u16, Template>,
-    workflow_help: UnorderedMap<u16, TemplateHelp>,
     /// Function calls for workflow template.
     workflow_fncalls: LookupMap<u16, (Vec<FnCallId>, Vec<MethodName>)>,
     /// Object metadata for fn_call id.
@@ -47,7 +43,6 @@ impl Contract {
         fncalls: Vec<FnCallId>,
         standard_fncalls: Vec<MethodName>,
         mut fncall_metadata: Vec<Vec<ObjectMetadata>>,
-        help: Option<TemplateHelp>,
     ) {
         if self.last_wf_id == 0 {
             assert!(
@@ -60,9 +55,6 @@ impl Contract {
         for fncall in fncalls.iter().rev() {
             self.fncall_metadata
                 .insert(fncall, &(fncall_metadata.pop().unwrap()));
-        }
-        if let Some(help) = help {
-            self.workflow_help.insert(&self.last_wf_id, &help);
         }
         self.workflow_fncalls
             .insert(&self.last_wf_id, &(fncalls, standard_fncalls));
@@ -85,17 +77,12 @@ impl Contract {
     }
 
     #[private]
-    pub fn workflow_add_help(&mut self, id: u16, wf_help: TemplateHelp) -> Option<TemplateHelp> {
-        self.workflow_help.insert(&id, &wf_help)
-    }
-
-    #[private]
     pub fn workflow_remove(&mut self, id: u16) -> bool {
         self.workflow_fncalls.remove(&id);
         self.workflows.remove(&id).is_some()
     }
 
-    /// Returns Workflow with corresponding FnCalls and their metadata
+    /// Returns Workflow with corresponding FnCalls and their metadata.
     #[allow(clippy::type_complexity)]
     pub fn wf_template(
         self,
@@ -122,21 +109,15 @@ impl Contract {
             .into_iter()
             .map(|(id, t)| {
                 let (fncalls, standard_fncalls) = self.workflow_fncalls.get(&id).unwrap();
-                let help = self.workflow_help.get(&id).is_some();
                 Metadata {
                     id,
                     code: t.code,
                     version: t.version,
                     fncalls,
                     standard_fncalls,
-                    help,
                 }
             })
             .collect()
-    }
-
-    pub fn wf_conditions_help(self, id: u16) -> Option<TemplateHelp> {
-        self.workflow_help.get(&id)
     }
 
     pub fn wf_template_fncalls(self, id: u16) -> Vec<FnCallId> {
@@ -196,9 +177,8 @@ impl Contract {
         self.wf_add_settings.set(&wf_add_settings);
     }
     #[private]
-    pub fn clear_data(&mut self) {
+    pub fn clear_state(&mut self) {
         self.workflows.clear();
-        self.workflow_help.clear();
         for i in 0..self.last_wf_id {
             self.workflow_fncalls.remove(&i);
         }
@@ -214,7 +194,6 @@ impl Default for Contract {
         Self {
             last_wf_id: 0,
             workflows: UnorderedMap::new(StorageKeys::WorkflowTemplate),
-            workflow_help: UnorderedMap::new(StorageKeys::WorkflowHelp),
             fncall_metadata: UnorderedMap::new(StorageKeys::FnCallMetadata),
             standard_fncall_metadata: UnorderedMap::new(StorageKeys::StandardFnCallMetadata),
             workflow_fncalls: LookupMap::new(StorageKeys::WorkflowFnCalls),
@@ -231,5 +210,4 @@ pub struct Metadata {
     pub version: Version,
     pub fncalls: Vec<FnCallId>,
     pub standard_fncalls: Vec<MethodName>,
-    pub help: bool,
 }
