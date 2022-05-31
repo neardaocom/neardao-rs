@@ -46,8 +46,8 @@ impl Contract {
     ) {
         if self.last_wf_id == 0 {
             assert!(
-                workflow.code.contains("wf_add"),
-                "0th template must be valid wf_add"
+                workflow.code.contains("basic_pkg"),
+                "0th template must be valid basic_pkg*"
             );
         }
         assert_eq!(fncalls.len(), fncall_metadata.len());
@@ -148,8 +148,8 @@ impl Contract {
         self.standard_fncall_metadata.iter().collect()
     }
 
-    /// Returns workflow add with its default template settings.
-    pub fn default_wf_add(
+    /// Return basic workflow package with its default template settings.
+    pub fn wf_basic_package(
         self,
     ) -> (
         Template,
@@ -165,13 +165,13 @@ impl Contract {
     }
 
     #[private]
-    pub fn add_wf_add_settings(&mut self, settings: TemplateSettings) {
+    pub fn wf_basic_package_add_settings(&mut self, settings: TemplateSettings) {
         let mut wf_add_settings = self.wf_add_settings.get().unwrap();
         wf_add_settings.push(settings);
         self.wf_add_settings.set(&wf_add_settings);
     }
     #[private]
-    pub fn add_wf_remove_settings(&mut self, id: usize) {
+    pub fn wf_basic_package_remove_settings(&mut self, id: usize) {
         let mut wf_add_settings = self.wf_add_settings.get().unwrap();
         wf_add_settings.remove(id);
         self.wf_add_settings.set(&wf_add_settings);

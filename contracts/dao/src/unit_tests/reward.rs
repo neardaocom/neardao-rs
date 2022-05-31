@@ -1,4 +1,4 @@
-use data::workflow::basic::wf_add::WfAdd1;
+use data::workflow::basic::basic_package::WfBasicPkg1;
 use library::locking::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingDB, UnlockingInput};
 use near_sdk::{testing_env, AccountId, ONE_NEAR};
 
@@ -50,6 +50,7 @@ fn reward_wage_one_asset() {
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR);
     let reward = Reward::new(
+        "test".into(),
         1,
         role_id,
         partition_id,
@@ -190,6 +191,7 @@ fn reward_activity_one_asset() {
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR);
     let reward = Reward::new(
+        "test".into(),
         1,
         role_id,
         partition_id,
@@ -423,6 +425,7 @@ fn reward_wage_one_asset_reward_updated() {
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR);
     let reward = Reward::new(
+        "test".into(),
         1,
         role_id,
         partition_id,
@@ -560,6 +563,7 @@ fn reward_wage_one_asset_reward_updated_2() {
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR);
     let reward = Reward::new(
+        "test".into(),
         1,
         role_id,
         partition_id,
@@ -728,6 +732,7 @@ fn reward_multiple_wage_rewards() {
     assert_eq!(partition_asset_2.available_amount(), 2000 * ONE_NEAR);
     assert_eq!(partition_asset_3.available_amount(), 3000 * ONE_NEAR);
     let reward_only_near = Reward::new(
+        "test".into(),
         1,
         role_id,
         partition_id,
@@ -737,6 +742,7 @@ fn reward_multiple_wage_rewards() {
         1000,
     );
     let reward_only_fts = Reward::new(
+        "test".into(),
         1,
         role_id,
         partition_id,
@@ -746,6 +752,7 @@ fn reward_multiple_wage_rewards() {
         1000,
     );
     let reward_all_tokens = Reward::new(
+        "test".into(),
         1,
         role_id,
         partition_id,
@@ -1048,6 +1055,7 @@ fn reward_one_asset_scenario() {
     assert_eq!(partition_asset.available_amount(), 1 * ONE_NEAR);
     let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
     let reward = Reward::new(
+        "test".into(),
         1,
         role_id,
         partition_id,

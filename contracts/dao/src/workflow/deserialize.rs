@@ -99,6 +99,10 @@ pub fn deser_partition_assets(
 }
 
 pub fn deser_reward(action_input: &mut dyn ActivityInput) -> Result<Reward, DeserializeError> {
+    let name = action_input
+        .take(&"name")
+        .ok_or(DeserializeError::MissingInputKey("name".into()))?
+        .try_into_string()?;
     let group_id = action_input
         .take(&"group_id")
         .ok_or(DeserializeError::MissingInputKey("group_id".into()))?
@@ -135,6 +139,7 @@ pub fn deser_reward(action_input: &mut dyn ActivityInput) -> Result<Reward, Dese
         .try_into_u64()? as u64;
     let reward_amounts = deser_reward_amounts("reward_amounts", action_input)?;
     let reward = Reward::new(
+        name,
         group_id,
         role_id,
         partition_id,

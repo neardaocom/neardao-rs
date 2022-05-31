@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use data::{
     object_metadata::standard_fn_calls::{standard_fn_call_metadatas, standard_fn_call_methods},
-    workflow::basic::wf_add::WfAdd1,
+    workflow::basic::basic_package::WfBasicPkg1,
 };
 use library::{
     locking::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingInput},
@@ -185,7 +185,7 @@ fn standard_function_calls() -> Vec<MethodName> {
 }
 
 fn function_calls(provider_id: String) -> Vec<FnCallId> {
-    WfAdd1::template(provider_id.to_string()).1
+    WfBasicPkg1::template(provider_id.to_string()).1
 }
 
 fn standard_function_call_metadata() -> Vec<Vec<ObjectMetadata>> {
@@ -193,16 +193,16 @@ fn standard_function_call_metadata() -> Vec<Vec<ObjectMetadata>> {
 }
 
 fn function_call_metadata(provider_id: String) -> Vec<Vec<ObjectMetadata>> {
-    WfAdd1::template(provider_id).2
+    WfBasicPkg1::template(provider_id).2
 }
 
 fn workflow_templates(provider_id: String) -> Vec<Template> {
-    let tpls = vec![WfAdd1::template(provider_id).0];
+    let tpls = vec![WfBasicPkg1::template(provider_id).0];
     tpls
 }
 
 fn workflow_template_settings() -> Vec<Vec<TemplateSettings>> {
-    let settings = vec![vec![WfAdd1::template_settings(Some(10))]];
+    let settings = vec![vec![WfBasicPkg1::template_settings(Some(10))]];
     settings
 }
 fn treasury_partitions(

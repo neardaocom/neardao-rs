@@ -12,6 +12,7 @@ use crate::{
     object_metadata::standard_fn_calls::{standard_fn_call_metadatas, standard_fn_call_methods},
     workflow::{
         basic::{
+            basic_package::WfBasicPkg1,
             bounty::Bounty1,
             group::Group1,
             group_package::GroupPackage1,
@@ -19,7 +20,6 @@ use crate::{
             media::Media1,
             reward::{Reward1, Reward2},
             trade::Trade1,
-            wf_add::WfAdd1,
         },
         integration::skyward::{Skyward1, Skyward1TemplateOptions},
     },
@@ -58,7 +58,7 @@ fn pretty_print_standards(functions: Vec<MethodName>, metadata: Vec<Vec<ObjectMe
 
 #[test]
 fn output_workflows_basic() {
-    pretty_print_template_data("WFADD1", WfAdd1::template(WF_PROVIDER.into()));
+    pretty_print_template_data("WFADD1", WfBasicPkg1::template(WF_PROVIDER.into()));
     pretty_print_template_data(
         "SKYWARD1",
         Skyward1::template(Some(Skyward1TemplateOptions {
@@ -87,6 +87,6 @@ fn output_standard_fn_calls() {
 fn output_wf_add_template_settings() {
     println!(
         "------------------------------ WFADD1 - TEMPLATE SETTINGS ------------------------------\n{}",
-        serde_json::to_string(&vec![WfAdd1::template_settings(Some(60))]).unwrap(),
+        serde_json::to_string(&vec![WfBasicPkg1::template_settings(Some(60))]).unwrap(),
     );
 }

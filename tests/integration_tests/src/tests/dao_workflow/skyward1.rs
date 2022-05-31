@@ -9,10 +9,10 @@ use crate::utils::{
     init_dao_factory, init_ft_factory, init_skyward, init_staking, init_wnear,
     init_workflow_provider, load_workflow_templates, proposal_to_finish,
     proposal_to_finish_testnet, run_activity, statistics, storage_deposit, wf_log,
-    ActivityInputSkyward1, ActivityInputWfAdd1, Wait,
+    ActivityInputSkyward1, ActivityInputWfBasicPkg1, Wait,
 };
 use data::workflow::{
-    basic::wf_add::{WfAdd1, WfAdd1ProposeOptions},
+    basic::basic_package::{WfBasicPkg1, WfBasicPkg1ProposeOptions},
     integration::skyward::{Skyward1, Skyward1ProposeOptions, AUCTION_DURATION, AUCTION_START},
 };
 use library::{types::datatype::Value, workflow::instance::InstanceState};
@@ -92,15 +92,15 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_SKYWARD1,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![Skyward1::template_settings()]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -112,7 +112,7 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_SKYWARD1),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_SKYWARD1),
         true,
     )
     .await?;

@@ -7,12 +7,12 @@ use crate::utils::{
     ft_balance_of, get_timestamp, init_dao_factory, init_ft_factory, init_staking,
     init_workflow_provider, load_workflow_templates, proposal_to_finish, run_activity, statistics,
     storage_deposit, view_partitions, view_reward, view_user_roles, view_user_wallet,
-    withdraw_rewards, ActivityInputReward1, ActivityInputWfAdd1, Wait,
+    withdraw_rewards, ActivityInputReward1, ActivityInputWfBasicPkg1, Wait,
 };
 
 use data::workflow::basic::{
+    basic_package::{WfBasicPkg1, WfBasicPkg1ProposeOptions},
     reward::Reward1,
-    wf_add::{WfAdd1, WfAdd1ProposeOptions},
 };
 use library::workflow::instance::InstanceState;
 use workspaces::{network::DevAccountDeployer, AccountId};
@@ -99,15 +99,15 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_REWARD1,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![Reward1::template_settings(Some(20))]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -119,7 +119,7 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_REWARD1),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_REWARD1),
         true,
     )
     .await?;
@@ -338,15 +338,15 @@ async fn workflow_reward1_wage_withdraw_more_near_than_on_dao_account() -> anyho
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_REWARD1,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![Reward1::template_settings(Some(20))]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -358,7 +358,7 @@ async fn workflow_reward1_wage_withdraw_more_near_than_on_dao_account() -> anyho
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_REWARD1),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_REWARD1),
         true,
     )
     .await?;
@@ -539,15 +539,15 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_REWARD1,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![Reward1::template_settings(Some(20))]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -559,7 +559,7 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_REWARD1),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_REWARD1),
         true,
     )
     .await?;
@@ -834,15 +834,15 @@ async fn workflow_reward1_skip_partition_creation_wage_scenario() -> anyhow::Res
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_REWARD1,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![Reward1::template_settings(Some(20))]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -854,7 +854,7 @@ async fn workflow_reward1_skip_partition_creation_wage_scenario() -> anyhow::Res
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_REWARD1),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_REWARD1),
         true,
     )
     .await?;

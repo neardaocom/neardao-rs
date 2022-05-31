@@ -396,7 +396,7 @@ impl Contract {
     /// Withdraw all `asset` rewards defined by reward_ids from caller's wallet.
     /// Panics if any provided reward_id is invalid.
     /// Return actually withdrawn amount.
-    pub fn withdraw_rewards(&mut self, reward_ids: Vec<u16>, asset: Asset) -> U128 {
+    pub fn claim_rewards(&mut self, reward_ids: Vec<u16>, asset: Asset) -> U128 {
         let caller = env::predecessor_account_id();
         let total_withdrawn: u128 = self.internal_withdraw_reward(&caller, reward_ids, &asset);
         if total_withdrawn > 0 {

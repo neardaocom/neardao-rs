@@ -733,6 +733,7 @@ fn group_scenario() {
     assert!(contract.wallet(founder_account.clone()).is_none());
     let reward_asset = Asset::Near;
     let reward = Reward::new(
+        "test".into(),
         3,
         0,
         1,
@@ -1156,6 +1157,7 @@ fn group_scenario() {
     // 7. Reward is defined for role "alpha".
     testing_env!(ctx.block_timestamp(tm(25)).build());
     let reward = Reward::new(
+        "test".into(),
         3,
         2,
         1,

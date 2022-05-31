@@ -86,11 +86,10 @@ impl Contract {
         mut workflows: Vec<Template>,
         mut workflow_template_settings: Vec<Vec<TemplateSettings>>,
     ) {
-        assert!(workflows.len() > 0);
-        assert!(
-            workflows.get(0).unwrap().code == "wf_add",
-            "{}",
-            "First workflow must be WfAdd (code: wf_add)"
+        require!(workflows.len() > 0);
+        require!(
+            workflows.get(0).unwrap().code.contains("basic_pkg"),
+            "First workflow must be Wf Basic Package (code: basic_pkg*)"
         );
 
         let len = workflows.len();

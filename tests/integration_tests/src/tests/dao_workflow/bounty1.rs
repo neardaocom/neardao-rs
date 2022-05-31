@@ -6,12 +6,12 @@ use crate::utils::{
     check_instance, check_wf_storage_values, check_wf_templates, create_dao_via_factory,
     create_ft_via_factory, debug_log, init_dao_factory, init_ft_factory, init_staking,
     init_workflow_provider, load_workflow_templates, proposal_to_finish, run_activity,
-    storage_deposit, ActivityInputBounty1, ActivityInputWfAdd1, Wait,
+    storage_deposit, ActivityInputBounty1, ActivityInputWfBasicPkg1, Wait,
 };
 use near_sdk::ONE_NEAR;
 
+use data::workflow::basic::basic_package::{WfBasicPkg1, WfBasicPkg1ProposeOptions};
 use data::workflow::basic::bounty::{Bounty1, Bounty1ProposeOptions};
-use data::workflow::basic::wf_add::{WfAdd1, WfAdd1ProposeOptions};
 use library::workflow::instance::InstanceState;
 use workspaces::{network::DevAccountDeployer, AccountId};
 
@@ -79,15 +79,15 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_BOUNTY1,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![Bounty1::template_settings(Some(20))]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -99,7 +99,7 @@ async fn workflow_bounty1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_BOUNTY1),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_BOUNTY1),
         true,
     )
     .await?;

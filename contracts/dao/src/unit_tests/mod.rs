@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, convert::TryFrom};
 
-use data::workflow::basic::wf_add::WfAdd1;
+use data::workflow::basic::basic_package::WfBasicPkg1;
 use library::{
     locking::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingInput},
     workflow::{
@@ -270,7 +270,7 @@ pub(crate) fn get_default_tags() -> Vec<TagInput> {
     vec![]
 }
 pub(crate) fn get_default_fncalls() -> Vec<FnCallId> {
-    WfAdd1::template(WF_PROVIDER_ACC.into()).1
+    WfBasicPkg1::template(WF_PROVIDER_ACC.into()).1
 }
 pub(crate) fn get_default_standard_fncalls() -> Vec<MethodName> {
     vec![]
@@ -281,13 +281,13 @@ pub(crate) fn get_default_standard_fncall_metadata() -> Vec<Vec<ObjectMetadata>>
 }
 
 pub(crate) fn get_default_fncall_metadata() -> Vec<Vec<ObjectMetadata>> {
-    WfAdd1::template(WF_PROVIDER_ACC.into()).2
+    WfBasicPkg1::template(WF_PROVIDER_ACC.into()).2
 }
 pub(crate) fn get_default_templates() -> Vec<Template> {
-    vec![WfAdd1::template(WF_PROVIDER_ACC.into()).0]
+    vec![WfBasicPkg1::template(WF_PROVIDER_ACC.into()).0]
 }
 pub(crate) fn get_default_template_settings() -> Vec<Vec<TemplateSettings>> {
-    vec![vec![WfAdd1::template_settings(None)]]
+    vec![vec![WfBasicPkg1::template_settings(None)]]
 }
 
 pub(crate) fn as_account_id(name: &str) -> AccountId {
@@ -297,7 +297,7 @@ pub(crate) fn as_account_id(name: &str) -> AccountId {
 pub(crate) fn dummy_propose_settings() -> ProposeSettings {
     ProposeSettings {
         constants: None,
-        activity_constants: vec![None, None],
+        activity_constants: vec![None, None, None, None],
         storage_key: None,
     }
 }

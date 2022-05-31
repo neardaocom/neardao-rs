@@ -10,10 +10,10 @@ use crate::utils::{
     create_ft_via_factory, debug_log, init_dao_factory, init_ft_factory, init_skyward,
     init_staking, init_wnear, init_workflow_provider, load_workflow_templates, proposal_to_finish,
     run_activity, statistics, storage_deposit, wf_log, workflow_finish, workflow_storage_buckets,
-    ActivityInputTestOptionalActions as ActivityInput, ActivityInputWfAdd1, Wait,
+    ActivityInputTestOptionalActions as ActivityInput, ActivityInputWfBasicPkg1, Wait,
 };
 
-use data::workflow::basic::wf_add::{WfAdd1, WfAdd1ProposeOptions};
+use data::workflow::basic::basic_package::{WfBasicPkg1, WfBasicPkg1ProposeOptions};
 use library::{types::datatype::Value, workflow::instance::InstanceState};
 use workspaces::{network::DevAccountDeployer, AccountId};
 
@@ -84,15 +84,15 @@ async fn test_workflow_optional_actions() -> anyhow::Result<()> {
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![WfOptionalActions::template_settings(None)]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -104,7 +104,7 @@ async fn test_workflow_optional_actions() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS),
         true,
     )
     .await?;
@@ -317,15 +317,15 @@ async fn test_workflow_optional_actions_cannot_leave_activity() -> anyhow::Resul
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![WfOptionalActions::template_settings(None)]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -337,7 +337,7 @@ async fn test_workflow_optional_actions_cannot_leave_activity() -> anyhow::Resul
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS),
         true,
     )
     .await?;
@@ -573,15 +573,15 @@ async fn test_workflow_optional_actions_execute_activity_1_without_3rd_action() 
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![WfOptionalActions::template_settings(None)]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -593,7 +593,7 @@ async fn test_workflow_optional_actions_execute_activity_1_without_3rd_action() 
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS),
         true,
     )
     .await?;

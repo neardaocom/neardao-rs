@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use data::{
     workflow::{
         basic::{
+            basic_package::WfBasicPkg1,
             bounty::Bounty1,
             group::Group1,
             group_package::GroupPackage1,
@@ -10,7 +11,6 @@ use data::{
             media::Media1,
             reward::{Reward1, Reward2},
             trade::Trade1,
-            wf_add::WfAdd1,
         },
         integration::skyward::{Skyward1, Skyward1TemplateOptions},
     },
@@ -89,7 +89,7 @@ fn wf_templates(
     skyward_id: Option<&AccountId>,
 ) -> Vec<(String, TemplateData)> {
     let mut templates = vec![];
-    templates.push(("wf_add".into(), WfAdd1::template(provider_id)));
+    templates.push(("basic_pkg1".into(), WfBasicPkg1::template(provider_id)));
     if wnear_id.is_some() && skyward_id.is_some() {
         templates.push((
             "skyward1".into(),

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use data::workflow::basic::basic_package::{WfBasicPkg1, WfBasicPkg1ProposeOptions};
 use data::workflow::basic::lock::Lock1;
-use data::workflow::basic::wf_add::{WfAdd1, WfAdd1ProposeOptions};
 use near_sdk::ONE_NEAR;
 
 use crate::constants::{DAO_TPL_ID_OF_FIRST_ADDED, DAO_TPL_ID_WF_ADD, PROVIDER_TPL_ID_LOCK1};
@@ -12,7 +12,7 @@ use crate::utils::{
     init_dao_factory, init_ft_factory, init_skyward, init_staking, init_wnear,
     init_workflow_provider, load_workflow_templates, proposal_to_finish,
     proposal_to_finish_testnet, run_activity, statistics, storage_deposit, wf_log,
-    ActivityInputWfAdd1, Wait,
+    ActivityInputWfBasicPkg1, Wait,
 };
 use crate::{
     types::ProposalState,
@@ -89,15 +89,15 @@ async fn workflow_lock1_scenario() -> anyhow::Result<()> {
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_LOCK1,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![Lock1::template_settings(None)]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -109,7 +109,7 @@ async fn workflow_lock1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_LOCK1),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_LOCK1),
         true,
     )
     .await?;

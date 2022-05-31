@@ -5,7 +5,7 @@ use crate::utils::{
     init_dao_factory, init_ft_factory, init_skyward, init_staking, init_wnear,
     init_workflow_provider, load_workflow_templates, proposal_to_finish,
     proposal_to_finish_testnet, run_activity, statistics, storage_deposit, wf_log,
-    ActivityInputSkyward1, ActivityInputWfAdd1, Wait,
+    ActivityInputSkyward1, ActivityInputWfBasicPkg1, Wait,
 };
 use crate::utils::{
     deploy_upgrade_dao_factory,

@@ -58,6 +58,7 @@ impl ActivityInputReward1 {
         near_amount: u128,
     ) -> Vec<Option<ActionInput>> {
         let mut map = HashMap::new();
+        map.insert("name".into(), Value::String("test".into()));
         map.insert("group_id".into(), Value::U64(group_id));
         map.insert("role_id".into(), Value::U64(role_id));
         map.insert("partition_id".into(), Value::U64(partition_id));
@@ -94,6 +95,7 @@ impl ActivityInputReward1 {
         near_amount: u128,
     ) -> Vec<Option<ActionInput>> {
         let mut map = HashMap::new();
+        map.insert("name".into(), Value::String("test".into()));
         map.insert("group_id".into(), Value::U64(group_id));
         map.insert("role_id".into(), Value::U64(role_id));
         map.insert("partition_id".into(), Value::U64(partition_id));
@@ -128,6 +130,7 @@ impl ActivityInputReward1 {
         activity_ids.sort();
         activity_ids.dedup();
         let mut map = HashMap::new();
+        map.insert("name".into(), Value::String("test".into()));
         map.insert("group_id".into(), Value::U64(group_id));
         map.insert("role_id".into(), Value::U64(role_id));
         map.insert("partition_id".into(), Value::U64(partition_id));

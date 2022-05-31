@@ -10,13 +10,13 @@ use crate::utils::{
     check_wf_templates, create_dao_via_factory, create_ft_via_factory, init_dao_factory,
     init_ft_factory, init_staking, init_workflow_provider, load_workflow_templates,
     proposal_to_finish, run_activity, storage_deposit, view_groups, view_partitions,
-    ActivityInputGroupPkg1, ActivityInputWfAdd1, Wait, ADMINPACKAGE1_ADD_GROUP,
+    ActivityInputGroupPkg1, ActivityInputWfBasicPkg1, Wait, ADMINPACKAGE1_ADD_GROUP,
     ADMINPACKAGE1_ADD_GROUP_MEMBERS, ADMINPACKAGE1_REMOVE_GROUP,
     ADMINPACKAGE1_REMOVE_GROUP_MEMBERS, ADMINPACKAGE1_REMOVE_GROUP_MEMBER_ROLES,
     ADMINPACKAGE1_REMOVE_GROUP_ROLES,
 };
 
-use data::workflow::basic::wf_add::{WfAdd1, WfAdd1ProposeOptions};
+use data::workflow::basic::basic_package::{WfBasicPkg1, WfBasicPkg1ProposeOptions};
 use library::workflow::instance::InstanceState;
 use workspaces::{network::DevAccountDeployer, AccountId};
 
@@ -86,15 +86,15 @@ async fn workflow_group_package1() -> anyhow::Result<()> {
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_GROUP_PACKAGE1,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![GroupPackage1::template_settings(Some(20))]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -106,7 +106,7 @@ async fn workflow_group_package1() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_GROUP_PACKAGE1),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_GROUP_PACKAGE1),
         true,
     )
     .await?;

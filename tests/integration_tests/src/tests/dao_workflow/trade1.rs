@@ -8,13 +8,13 @@ use crate::{
         create_ft_via_factory, debug_log, ft_balance_of, ft_transfer_call, init_dao_factory,
         init_ft_factory, init_staking, init_workflow_provider, load_workflow_templates,
         proposal_to_finish, run_activity, serialized_dao_ft_receiver_workflow_msg, storage_deposit,
-        ActivityInputTrade1, ActivityInputWfAdd1, Wait,
+        ActivityInputTrade1, ActivityInputWfBasicPkg1, Wait,
     },
 };
 
 use data::workflow::basic::{
+    basic_package::{WfBasicPkg1, WfBasicPkg1ProposeOptions},
     trade::{Trade1, Trade1ProposeOptions},
-    wf_add::{WfAdd1, WfAdd1ProposeOptions},
 };
 use library::workflow::instance::InstanceState;
 use workspaces::{network::DevAccountDeployer, AccountId};
@@ -104,15 +104,15 @@ async fn workflow_trade1_scenario() -> anyhow::Result<()> {
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_TRADE1,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![Trade1::template_settings(Some(20))]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -124,7 +124,7 @@ async fn workflow_trade1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TRADE1),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TRADE1),
         true,
     )
     .await?;
@@ -324,15 +324,15 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
         &member,
         &dao_account_id,
         DAO_TPL_ID_WF_ADD,
-        WfAdd1::propose_settings(Some(WfAdd1ProposeOptions {
+        WfBasicPkg1::propose_settings(Some(WfBasicPkg1ProposeOptions {
             template_id: PROVIDER_TPL_ID_TRADE1,
             provider_id: wf_provider.id().to_string(),
         })),
         Some(vec![Trade1::template_settings(Some(20))]),
         vec![(&member, 1)],
         100,
-        WfAdd1::deposit_propose(),
-        WfAdd1::deposit_vote(),
+        WfBasicPkg1::deposit_propose(),
+        WfBasicPkg1::deposit_vote(),
         ProposalState::Accepted,
     )
     .await?;
@@ -344,7 +344,7 @@ async fn workflow_trade1_invalid_token() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfAdd1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TRADE1),
+        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TRADE1),
         true,
     )
     .await?;

@@ -163,19 +163,8 @@ impl Contract {
         delegate_id: AccountId,
         amount: U128,
     ) -> Promise {
-        let storage_before = env::storage_usage();
         let sender_id = env::predecessor_account_id();
-        let mut dao = self.get_dao(&dao_id);
-        dao.delegate_owned(sender_id.clone(), delegate_id.clone(), amount.0);
-        let mut account_stats = self.get_account_stats(&dao_id);
-        self.save_dao(&dao_id, &dao);
-        let storage_after = env::storage_usage();
-        account_stats.add_storage_used(storage_after - storage_before);
-        self.save_account_stats(&dao_id, &account_stats);
-        account_stats.assert_enough_deposit();
-        ext_dao::ext(dao.account_id)
-            .with_static_gas(GAS_FOR_DELEGATE)
-            .delegate_owned(delegate_id, amount)
+        self.internal_delegate_owned(dao_id, sender_id, delegate_id, amount.0)
     }
 
     /// Undelegates `amount` tokens from `delegate_id`.
@@ -257,7 +246,7 @@ impl Contract {
             PromiseResult::Failed => {
                 let mut dao = self.get_dao(&dao_id);
                 // This reverts the changes from withdraw function.
-                dao.user_deposit(sender_id, amount.0);
+                dao.user_deposit(&sender_id, amount.0);
                 self.save_dao(&dao_id, &dao);
             }
         };
@@ -306,11 +295,12 @@ impl Contract {
 impl FungibleTokenReceiver for Contract {
     /// Method called by FT contract which adds `amount` of vote tokens
     /// to `sender_id` account in dao specified in `msg` as deserialized `TransferMsgInfo` object.
+    /// If msg has `delegate_id` key, then all deposited tokens are transfered to it.
     /// Fails if:
     /// - malformed/missing `TransferMsgInfo` object in `msg`
     /// - dao is not registered
     /// - dao does not have caller's account registered as vote token
-    /// - user is not registered in dao
+    /// - sender_id or delegate_id is not registered in dao
     fn ft_on_transfer(
         &mut self,
         sender_id: AccountId,
@@ -318,17 +308,17 @@ impl FungibleTokenReceiver for Contract {
         msg: String,
     ) -> PromiseOrValue<U128> {
         let dao_transfer: TransferMsgInfo =
-            serde_json::from_str(msg.as_str()).expect("missing dao info");
-
+            serde_json::from_str(msg.as_str()).expect("invalid msg format");
         let mut dao = self.get_dao(&dao_transfer.dao_id);
-
         require!(
             dao.vote_token_id == env::predecessor_account_id(),
             "invalid token"
         );
-
-        dao.user_deposit(sender_id, amount.0);
+        dao.user_deposit(&sender_id, amount.0);
         self.save_dao(&dao_transfer.dao_id, &dao);
+        if let Some(delegate_id) = dao_transfer.delegate_id {
+            self.internal_delegate_owned(dao_transfer.dao_id, sender_id, delegate_id, amount.0);
+        }
         PromiseOrValue::Value(U128(0))
     }
 }
@@ -337,6 +327,7 @@ impl FungibleTokenReceiver for Contract {
 #[serde(crate = "near_sdk::serde")]
 struct TransferMsgInfo {
     pub dao_id: AccountId,
+    pub delegate_id: Option<AccountId>,
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug)]
@@ -454,69 +445,18 @@ impl Contract {
     pub fn save_account_stats(&mut self, account_id: &AccountId, stats: &AccountStats) {
         self.dao_storage_balance.insert(account_id, stats);
     }
-}
-
-#[cfg(test)]
-mod tests {
-    /* use near_contract_standards::storage_management::StorageManagement;
-    use near_sdk::json_types::U64;
-    use near_sdk::test_utils::{accounts, VMContextBuilder};
-    use near_sdk::testing_env;
-
-    use near_sdk_sim::to_yocto;
-
-    use super::*;
-
-    #[test]
-    fn test_basics() {
-        const UNSTAKE_PERIOD: u64 = 1000;
-        let contract_owner: AccountId = accounts(0);
-        let voting_token: AccountId = accounts(1);
-        let delegate_from_user: AccountId = accounts(2);
-        let delegate_to_user: AccountId = accounts(3);
-
-        let mut context = VMContextBuilder::new();
-
-        testing_env!(context
-            .predecessor_account_id(contract_owner.clone())
-            .build());
-        let mut contract = Contract::new(contract_owner, voting_token.clone(), U64(UNSTAKE_PERIOD));
-
-        testing_env!(context.attached_deposit(to_yocto("1")).build());
-        contract.storage_deposit(Some(delegate_from_user.clone()), None);
-
-        testing_env!(context.predecessor_account_id(voting_token.clone()).build());
-        contract.ft_on_transfer(
-            delegate_from_user.clone(),
-            U128(to_yocto("100")),
-            "".to_string(),
-        );
-        assert_eq!(contract.ft_total_supply().0, to_yocto("100"));
-        assert_eq!(
-            contract.ft_balance_of(delegate_from_user.clone()).0,
-            to_yocto("100")
-        );
-
-        testing_env!(context
-            .predecessor_account_id(delegate_from_user.clone())
-            .build());
-        contract.withdraw(U128(to_yocto("50")));
-        assert_eq!(contract.ft_total_supply().0, to_yocto("50"));
-        assert_eq!(
-            contract.ft_balance_of(delegate_from_user.clone()).0,
-            to_yocto("50")
-        );
-
-        testing_env!(context.attached_deposit(to_yocto("1")).build());
-        contract.storage_deposit(Some(delegate_to_user.clone()), None);
-
-        contract.delegate(delegate_to_user.clone(), U128(to_yocto("10")));
-        let user = contract.get_user(delegate_from_user.clone());
-        assert_eq!(user.delegated_amount(), to_yocto("10"));
-
-        contract.undelegate(delegate_to_user, U128(to_yocto("10")));
-        let user = contract.get_user(delegate_from_user);
-        assert_eq!(user.delegated_amount(), 0);
-        assert_eq!(user.next_action_timestamp, U64(UNSTAKE_PERIOD));
-    } */
+    pub fn internal_delegate_owned(&mut self, dao_id: AccountId, sender_id: AccountId, delegate_id: AccountId, amount: u128) -> Promise {
+        let storage_before = env::storage_usage();
+        let mut dao = self.get_dao(&dao_id);
+        dao.delegate_owned(sender_id.clone(), delegate_id.clone(), amount);
+        let mut account_stats = self.get_account_stats(&dao_id);
+        self.save_dao(&dao_id, &dao);
+        let storage_after = env::storage_usage();
+        account_stats.add_storage_used(storage_after - storage_before);
+        self.save_account_stats(&dao_id, &account_stats);
+        account_stats.assert_enough_deposit();
+        ext_dao::ext(dao.account_id)
+            .with_static_gas(GAS_FOR_DELEGATE)
+            .delegate_owned(delegate_id, amount.into())
+    }
 }

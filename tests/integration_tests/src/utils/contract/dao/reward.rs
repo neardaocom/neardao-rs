@@ -21,13 +21,12 @@ where
     .to_string()
     .into_bytes();
     let outcome = caller
-        .call(&worker, dao, "withdraw_rewards")
+        .call(&worker, dao, "claim_rewards")
         .args(args)
         .max_gas()
         .transact()
         .await?;
-    outcome_pretty::<U128>("dao withdraw_rewards", &outcome);
-    assert!(outcome.is_success(), "dao withdraw_rewards");
-
+    outcome_pretty::<U128>("dao claim_rewards", &outcome);
+    assert!(outcome.is_success(), "dao claim_rewards");
     Ok(())
 }

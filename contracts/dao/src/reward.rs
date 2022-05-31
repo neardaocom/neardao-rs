@@ -23,6 +23,7 @@ pub enum VersionedReward {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Reward {
+    pub name: String,
     pub group_id: u16,
     /// Role id in the group.
     pub role_id: u16,
@@ -44,6 +45,7 @@ pub struct Reward {
 
 impl Reward {
     pub fn new(
+        name: String,
         group_id: u16,
         role_id: u16,
         partition_id: u16,
@@ -53,6 +55,7 @@ impl Reward {
         time_valid_to: TimestampSec,
     ) -> Self {
         Self {
+            name,
             group_id,
             role_id,
             partition_id,

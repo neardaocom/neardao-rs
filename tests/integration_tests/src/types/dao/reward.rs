@@ -87,6 +87,7 @@ impl Display for RewardTypeIdent {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Reward {
+    pub name: String,
     pub group_id: u16,
     /// Role id in the group.
     pub role_id: u16,

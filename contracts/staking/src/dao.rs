@@ -18,7 +18,6 @@ pub struct Dao {
     pub total_amount: Balance,
 }
 
-// Maybe v1.0 TODO: Cooldown period settings.
 impl Dao {
     fn save_user(&mut self, account_id: &AccountId, user: User) {
         self.users.insert(account_id, &VersionedUser::Current(user));
@@ -92,7 +91,7 @@ impl Dao {
     }
 
     /// Deposit voting token.
-    pub fn user_deposit(&mut self, sender_id: AccountId, amount: u128) {
+    pub fn user_deposit(&mut self, sender_id: &AccountId, amount: u128) {
         let mut sender = self.get_user(&sender_id);
         sender.deposit(amount);
         self.save_user(&sender_id, sender);

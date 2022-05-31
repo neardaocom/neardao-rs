@@ -9,9 +9,9 @@ use workspaces::AccountId as WorkspaceAccountId;
 
 use crate::constants::PROVIDER_VIEW_TEMPLATE;
 
-/// Activity inputs for `WfAdd1`.
-pub struct ActivityInputWfAdd1;
-impl ActivityInputWfAdd1 {
+/// Activity inputs for `WfBasicPkg1`.
+pub struct ActivityInputWfBasicPkg1;
+impl ActivityInputWfBasicPkg1 {
     pub fn activity_1(
         provider_id: &WorkspaceAccountId,
         wf_template_id: u16,
