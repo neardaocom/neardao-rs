@@ -104,7 +104,6 @@ impl Validator {
                         return Err(ProcessingError::Validation(
                             ValidationError::InvalidDefinition,
                         ));
-                    // TODO: add other variant
                     } else {
                         counter += 1;
                         if !expr.eval(binded_args.as_slice())?.try_into_bool()? {

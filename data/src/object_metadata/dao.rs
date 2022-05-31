@@ -18,6 +18,19 @@ pub fn group_member_metadata() -> ObjectMetadata {
         arg_types: vec![Datatype::String(false), Datatype::VecU64],
     }
 }
+pub fn asset_near() -> ObjectMetadata {
+    ObjectMetadata {
+        arg_names: vec!["near".into()],
+        arg_types: vec![Datatype::String(true)],
+    }
+}
+
+pub fn asset_ft() -> ObjectMetadata {
+    ObjectMetadata {
+        arg_names: vec!["ft.account_id".into(), "ft.decimals".into()],
+        arg_types: vec![Datatype::String(false), Datatype::U64(false)],
+    }
+}
 
 pub fn action_idents_with_metadata() -> Vec<(DaoActionIdent, Vec<ObjectMetadata>)> {
     vec![
@@ -30,20 +43,13 @@ pub fn action_idents_with_metadata() -> Vec<(DaoActionIdent, Vec<ObjectMetadata>
                 },
                 ObjectMetadata {
                     arg_names: vec!["asset_id".into(), "unlocking".into()],
-                    arg_types: vec![Datatype::Object(2), Datatype::Object(3)],
+                    arg_types: vec![Datatype::Enum(vec![2, 3]), Datatype::Object(4)],
                 },
-                // TODO: Maybe define new Datatype::Enum ??
-                ObjectMetadata {
-                    arg_names: vec!["near".into(), "ft.account_id".into(), "ft.decimals".into()],
-                    arg_types: vec![
-                        Datatype::String(false),
-                        Datatype::String(false),
-                        Datatype::U64(false),
-                    ],
-                },
+                asset_near(),
+                asset_ft(),
                 ObjectMetadata {
                     arg_names: vec!["amount_init_unlock".into(), "lock".into()],
-                    arg_types: vec![Datatype::U64(false), Datatype::NullableObject(4)],
+                    arg_types: vec![Datatype::U64(false), Datatype::OptionalObject(5)],
                 },
                 ObjectMetadata {
                     arg_names: vec![
@@ -56,7 +62,7 @@ pub fn action_idents_with_metadata() -> Vec<(DaoActionIdent, Vec<ObjectMetadata>
                         Datatype::U64(false),
                         Datatype::U64(false),
                         Datatype::U64(false),
-                        Datatype::VecObject(5),
+                        Datatype::VecObject(6),
                     ],
                 },
                 ObjectMetadata {
@@ -70,7 +76,6 @@ pub fn action_idents_with_metadata() -> Vec<(DaoActionIdent, Vec<ObjectMetadata>
             ],
         ),
         (
-            // TODO: Solve structure.
             DaoActionIdent::RewardAdd,
             vec![
                 ObjectMetadata {
@@ -87,22 +92,26 @@ pub fn action_idents_with_metadata() -> Vec<(DaoActionIdent, Vec<ObjectMetadata>
                         Datatype::U64(false),
                         Datatype::U64(false),
                         Datatype::U64(false),
-                        Datatype::Object(1),
+                        Datatype::Enum(vec![1, 2]),
+                        Datatype::U64(false),
+                        Datatype::U64(false),
+                        Datatype::VecTuple(3),
                     ],
                 },
-                // Enum
                 ObjectMetadata {
-                    arg_names: vec![
-                        "wage.unit_seconds".into(),
-                        "user_activity.activity_ids".into(),
-                    ],
-                    arg_types: vec![Datatype::U64(false), Datatype::VecU64],
+                    arg_names: vec!["wage.unit_seconds".into()],
+                    arg_types: vec![Datatype::U64(false)],
                 },
-                // TODO: Solve as its Vec<(Asset, u128)>
+                ObjectMetadata {
+                    arg_names: vec!["user_activity.activity_ids".into()],
+                    arg_types: vec![Datatype::VecU64],
+                },
                 ObjectMetadata {
                     arg_names: vec![],
-                    arg_types: vec![],
+                    arg_types: vec![Datatype::Enum(vec![4, 5]), Datatype::U128(false)],
                 },
+                asset_near(),
+                asset_ft(),
             ],
         ),
         (

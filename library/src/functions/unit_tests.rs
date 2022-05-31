@@ -507,8 +507,8 @@ fn serialize_complex() {
                 Datatype::U64(false),
                 Datatype::Object(1),
                 Datatype::VecObject(2),
-                Datatype::NullableObject(3),
-                Datatype::NullableObject(4),
+                Datatype::OptionalObject(3),
+                Datatype::OptionalObject(4),
                 Datatype::String(true),
             ],
         },
@@ -521,7 +521,7 @@ fn serialize_complex() {
             arg_types: vec![
                 Datatype::String(false),
                 Datatype::U64(true),
-                Datatype::NullableObject(6),
+                Datatype::OptionalObject(6),
             ],
         },
         ObjectMetadata {
@@ -586,7 +586,613 @@ fn serialize_complex() {
 
     let json = serialize_to_json(input, metadata.as_slice()).unwrap();
 
-    dbg!(json.clone());
     let _: PersonInfo =
         serde_json::from_str(&json).expect("Failed to deserialize person from string");
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
+enum TestEnum {
+    First(FirstStruct),
+    Second(SecondStruct),
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct TestStruct {
+    name: String,
+    r#type: Option<TestEnum>,
+    info: String,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct FirstStruct {
+    name: String,
+}
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct SecondStruct {
+    name: String,
+}
+
+#[test]
+fn serialize_enum_1() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "type".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::OptionalEnum(vec![1, 2]),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec!["first.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+        ObjectMetadata {
+            arg_names: vec!["second.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test".into()));
+    input.insert("info".into(), Value::String("info".into()));
+    input.insert(
+        "type.first.name".into(),
+        Value::String("first_struct_name".into()),
+    );
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: TestStruct =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestStruct {
+        name: "test".into(),
+        info: "info".into(),
+        r#type: Some(TestEnum::First(FirstStruct {
+            name: "first_struct_name".into(),
+        })),
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[test]
+fn serialize_enum_2() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "type".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::OptionalEnum(vec![1, 2]),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec!["first.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+        ObjectMetadata {
+            arg_names: vec!["second.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test".into()));
+    input.insert("info".into(), Value::String("info".into()));
+    input.insert(
+        "type.second.name".into(),
+        Value::String("second_struct_name".into()),
+    );
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: TestStruct =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestStruct {
+        name: "test".into(),
+        info: "info".into(),
+        r#type: Some(TestEnum::Second(SecondStruct {
+            name: "second_struct_name".into(),
+        })),
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct MixedStruct {
+    name: String,
+    r#type: MixedEnum,
+    info: String,
+}
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
+enum MixedEnum {
+    Near,
+    Ft(FirstStruct),
+}
+
+#[test]
+fn serialize_enum_3() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "type".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::OptionalEnum(vec![1, 2]),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec!["near".into()],
+            arg_types: vec![],
+        },
+        ObjectMetadata {
+            arg_names: vec!["ft.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test".into()));
+    input.insert("info".into(), Value::String("info".into()));
+    input.insert(
+        "type.near".into(),
+        Value::String("first_struct_name".into()),
+    );
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: MixedStruct =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = MixedStruct {
+        name: "test".into(),
+        info: "info".into(),
+        r#type: MixedEnum::Near,
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test".into()));
+    input.insert("info".into(), Value::String("info".into()));
+    input.insert(
+        "type.ft.name".into(),
+        Value::String("first_struct_name".into()),
+    );
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: MixedStruct =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = MixedStruct {
+        name: "test".into(),
+        info: "info".into(),
+        r#type: MixedEnum::Ft(FirstStruct {
+            name: "first_struct_name".into(),
+        }),
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[test]
+fn serialize_enum_opional_missing() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "type".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::OptionalEnum(vec![1, 2]),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec!["first.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+        ObjectMetadata {
+            arg_names: vec!["second.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test".into()));
+    input.insert("info".into(), Value::String("info".into()));
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: TestStruct =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestStruct {
+        name: "test".into(),
+        info: "info".into(),
+        r#type: None,
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct TestEnumVec {
+    name: String,
+    values: Vec<TestEnum>,
+    info: String,
+}
+
+#[test]
+fn serialize_vec_enum() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "values".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::VecEnum(vec![1, 2]),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec!["first.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+        ObjectMetadata {
+            arg_names: vec!["second.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test1".into()));
+    input.insert("info".into(), Value::String("info1".into()));
+    input.insert(
+        "values.0.first.name".into(),
+        Value::String("first_string".into()),
+    );
+    input.insert(
+        "values.1.second.name".into(),
+        Value::String("second_string".into()),
+    );
+    input.insert("values.2.second".into(), Value::String("invalid".into()));
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: TestEnumVec =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestEnumVec {
+        name: "test1".into(),
+        info: "info1".into(),
+        values: vec![
+            TestEnum::First(FirstStruct {
+                name: "first_string".into(),
+            }),
+            TestEnum::Second(SecondStruct {
+                name: "second_string".into(),
+            }),
+        ],
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct MixedStruct2 {
+    name: String,
+    r#type: Vec<MixedEnum>,
+    info: String,
+}
+
+#[test]
+fn serialize_vec_enum_2() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "type".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::VecEnum(vec![1, 2]),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec!["near".into()],
+            arg_types: vec![],
+        },
+        ObjectMetadata {
+            arg_names: vec!["ft.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test1".into()));
+    input.insert("info".into(), Value::String("info1".into()));
+    input.insert(
+        "type.0.ft.name".into(),
+        Value::String("first_string".into()),
+    );
+    input.insert("type.1.near".into(), Value::Null);
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: MixedStruct2 =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = MixedStruct2 {
+        name: "test1".into(),
+        info: "info1".into(),
+        r#type: vec![
+            MixedEnum::Ft(FirstStruct {
+                name: "first_string".into(),
+            }),
+            MixedEnum::Near,
+        ],
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[test]
+fn serialize_vec_enum_empty() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "values".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::VecEnum(vec![1, 2]),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec!["first.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+        ObjectMetadata {
+            arg_names: vec!["second.name".into()],
+            arg_types: vec![Datatype::String(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test1".into()));
+    input.insert("info".into(), Value::String("info1".into()));
+    input.insert(
+        "values.0.first".into(),
+        Value::String("does_not_count_as_valid".into()),
+    );
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: TestEnumVec =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestEnumVec {
+        name: "test1".into(),
+        info: "info1".into(),
+        values: vec![],
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct TestStruct2 {
+    name: String,
+    obj: Vec<(String, u64)>,
+    info: String,
+}
+
+#[test]
+fn serialize_vec_tuple() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "obj".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::VecTuple(1),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec![],
+            arg_types: vec![Datatype::String(false), Datatype::U64(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test".into()));
+    input.insert("info".into(), Value::String("info".into()));
+    input.insert("obj.0.0".into(), Value::String("string1".into()));
+    input.insert("obj.0.1".into(), Value::U64(1));
+    input.insert("obj.1.0".into(), Value::String("string2".into()));
+    input.insert("obj.1.1".into(), Value::U64(2));
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: TestStruct2 =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestStruct2 {
+        name: "test".into(),
+        obj: vec![("string1".into(), 1), ("string2".into(), 2)],
+        info: "info".into(),
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[test]
+fn serialize_vec_tuple_empty() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "obj".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::VecTuple(1),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec![],
+            arg_types: vec![Datatype::String(false), Datatype::U64(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test".into()));
+    input.insert("info".into(), Value::String("info".into()));
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: TestStruct2 =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestStruct2 {
+        name: "test".into(),
+        obj: vec![],
+        info: "info".into(),
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[test]
+fn serialize_vec_tuple_empty_2() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "obj".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::VecTuple(1),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec![],
+            arg_types: vec![Datatype::String(false), Datatype::U64(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test".into()));
+    input.insert("info".into(), Value::String("info".into()));
+    input.insert("obj".into(), Value::Null);
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: TestStruct2 =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestStruct2 {
+        name: "test".into(),
+        obj: vec![],
+        info: "info".into(),
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct TestStruct3 {
+    name: String,
+    obj: Option<(String, u64)>,
+    info: String,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+struct TestStruct4 {
+    name: String,
+    obj: (String, u64),
+    info: String,
+}
+
+#[test]
+fn serialize_tuple() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "obj".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::OptionalTuple(1),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec![],
+            arg_types: vec![Datatype::String(false), Datatype::U64(false)],
+        },
+    ];
+    let metadata_2 = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "obj".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::Tuple(1),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec![],
+            arg_types: vec![Datatype::String(false), Datatype::U64(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test".into()));
+    input.insert("info".into(), Value::String("info".into()));
+    input.insert("obj.0".into(), Value::String("string1".into()));
+    input.insert("obj.1".into(), Value::U64(1));
+    let input = Box::new(input);
+    let input_2 = input.clone();
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: TestStruct3 =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestStruct3 {
+        name: "test".into(),
+        obj: Some(("string1".into(), 1)),
+        info: "info".into(),
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+    let actual_json = serialize_to_json(input_2, metadata_2.as_slice()).unwrap();
+    let actual_obj: TestStruct4 =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestStruct4 {
+        name: "test".into(),
+        obj: ("string1".into(), 1),
+        info: "info".into(),
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
+}
+
+#[test]
+fn serialize_tuple_optional_missing() {
+    let metadata = vec![
+        ObjectMetadata {
+            arg_names: vec!["name".into(), "obj".into(), "info".into()],
+            arg_types: vec![
+                Datatype::String(false),
+                Datatype::OptionalTuple(1),
+                Datatype::String(false),
+            ],
+        },
+        ObjectMetadata {
+            arg_names: vec![],
+            arg_types: vec![Datatype::String(false), Datatype::U64(false)],
+        },
+    ];
+    let mut input: HashMap<String, Value> = HashMap::new();
+    input.insert("name".into(), Value::String("test".into()));
+    input.insert("info".into(), Value::String("info".into()));
+    let input = Box::new(input);
+    let actual_json = serialize_to_json(input, metadata.as_slice()).unwrap();
+    let actual_obj: TestStruct3 =
+        serde_json::from_str(&actual_json).expect("Failed to deserialize enum from string");
+    let expected_obj = TestStruct3 {
+        name: "test".into(),
+        obj: None,
+        info: "info".into(),
+    };
+    let expected_json = serde_json::to_string(&expected_obj).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(actual_obj, expected_obj);
 }

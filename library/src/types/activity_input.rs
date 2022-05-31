@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use near_sdk::serde::{Deserialize, Serialize};
 
 use super::datatype::Value;
-/// Trait representing user input values for an activity.
+/// Trait representing input values for an activity.
 pub trait ActivityInput {
     fn has_key(&self, key: &str) -> bool;
     fn get(&self, key: &str) -> Option<&Value>;

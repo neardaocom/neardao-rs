@@ -87,4 +87,6 @@ pub enum ProcessingError {
     Eval(#[from] EvalError),
     #[error("postprocessing failed: `{0}`")]
     Postprocessing(#[from] PostprocessingError),
+    #[error("invalid metadata: `{0}`")]
+    InvalidMetadata(String),
 }

@@ -104,7 +104,6 @@ impl Value {
     }
 }
 
-// TODO: Maybe define new Datatype::Enum ??
 /// Definition of expected datatype.
 /// Bool in primitive datatypes denotes if its optional.
 /// ObjectId references Metadata Object by pos.
@@ -121,15 +120,21 @@ pub enum Datatype {
     VecU128,
     VecString,
     Object(ObjectId),
-    NullableObject(ObjectId),
+    OptionalObject(ObjectId),
     VecObject(ObjectId),
+    Enum(Vec<ObjectId>),
+    OptionalEnum(Vec<ObjectId>),
+    VecEnum(Vec<ObjectId>),
+    Tuple(ObjectId),
+    OptionalTuple(ObjectId),
+    VecTuple(ObjectId),
 }
 
 impl Datatype {
     pub fn is_optional(&self) -> bool {
         match self {
             Self::Bool(v) | Self::U64(v) | Self::U128(v) | Self::String(v) => *v,
-            Self::NullableObject(_) => true,
+            Self::OptionalObject(_) => true,
             _ => false,
         }
     }
