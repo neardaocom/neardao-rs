@@ -104,7 +104,10 @@ async fn test_workflow_optional_actions() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS),
+        ActivityInputWfBasicPkg1::activity_1(
+            wf_provider.id(),
+            PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS,
+        ),
         true,
     )
     .await?;
@@ -337,7 +340,10 @@ async fn test_workflow_optional_actions_cannot_leave_activity() -> anyhow::Resul
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS),
+        ActivityInputWfBasicPkg1::activity_1(
+            wf_provider.id(),
+            PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS,
+        ),
         true,
     )
     .await?;
@@ -593,7 +599,10 @@ async fn test_workflow_optional_actions_execute_activity_1_without_3rd_action() 
         &dao_account_id,
         proposal_id,
         1,
-        ActivityInputWfBasicPkg1::activity_1(wf_provider.id(), PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS),
+        ActivityInputWfBasicPkg1::activity_1(
+            wf_provider.id(),
+            PROVIDER_TPL_ID_TEST_OPTIONAL_ACTIONS,
+        ),
         true,
     )
     .await?;

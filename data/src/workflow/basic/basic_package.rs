@@ -16,8 +16,7 @@ use library::{
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
         template::Template,
         types::{
-            ActivityRight, DaoActionIdent, Instruction, ObjectMetadata, Src,
-            ValueSrc, VoteScenario,
+            ActivityRight, DaoActionIdent, Instruction, ObjectMetadata, Src, ValueSrc, VoteScenario,
         },
     },
 };
@@ -59,9 +58,7 @@ impl WfBasicPkg1 {
                         validators: vec![],
                         action_data: ActionData::FnCall(FnCallData {
                             id: FnCallIdType::Dynamic(
-                                ValueSrc::Src(Src::Input(
-                                    WF_BASIC_PKG1_PROVIDER_ID_KEY.into(),
-                                )),
+                                ValueSrc::Src(Src::Input(WF_BASIC_PKG1_PROVIDER_ID_KEY.into())),
                                 "wf_template".into(),
                             ),
                             tgas: 30,
@@ -164,8 +161,6 @@ impl WfBasicPkg1 {
             WF_BASIC_PKG1_TEMPLATE_ID_KEY.into(),
             Value::U64(template_id as u64),
         );
-
-        // User proposed settings type
         let settings = ProposeSettings {
             constants: None,
             activity_constants: vec![

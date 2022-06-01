@@ -25,7 +25,7 @@ impl Condition {
                 false => Ok(self.false_path),
             }
         } else {
-            Err(EvalError::InvalidType)
+            Err(EvalError::InvalidDatatype)
         }
     }
 }

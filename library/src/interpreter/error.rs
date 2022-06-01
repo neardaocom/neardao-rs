@@ -1,19 +1,19 @@
-use std::error::Error;
-use std::fmt::{self, Display};
+use thiserror::Error;
 
-#[derive(Debug)]
+use crate::types::error::CastError;
+
+#[derive(Error, Debug)]
 pub enum EvalError {
-    InvalidType,
+    #[error("Invalid datatype")]
+    InvalidDatatype,
+    #[error("Operation is not implemented")]
     Unimplemented,
+    #[error("Cast error: `{0}`")]
+    Cast(#[from] CastError),
+    #[error("Expression expects min: `{0}` args")]
+    InvalidArgCount(u64),
+    #[error("Invalid operands: `{0}`")]
+    InvalidOperands(String),
+    #[error("Missing arg atpos: `{0}`")]
+    MissingArg(u64),
 }
-
-impl Display for EvalError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            EvalError::InvalidType => write!(f, "Invalid datatype"),
-            EvalError::Unimplemented => write!(f, "Unimplemented"),
-        }
-    }
-}
-
-impl Error for EvalError {}

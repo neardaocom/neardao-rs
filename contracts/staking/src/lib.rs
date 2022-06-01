@@ -445,7 +445,13 @@ impl Contract {
     pub fn save_account_stats(&mut self, account_id: &AccountId, stats: &AccountStats) {
         self.dao_storage_balance.insert(account_id, stats);
     }
-    pub fn internal_delegate_owned(&mut self, dao_id: AccountId, sender_id: AccountId, delegate_id: AccountId, amount: u128) -> Promise {
+    pub fn internal_delegate_owned(
+        &mut self,
+        dao_id: AccountId,
+        sender_id: AccountId,
+        delegate_id: AccountId,
+        amount: u128,
+    ) -> Promise {
         let storage_before = env::storage_usage();
         let mut dao = self.get_dao(&dao_id);
         dao.delegate_owned(sender_id.clone(), delegate_id.clone(), amount);

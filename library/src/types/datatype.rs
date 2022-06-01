@@ -84,6 +84,12 @@ impl Value {
             _ => Err(CastError::new(self.datatype(), "vec_string")),
         }
     }
+    pub fn try_into_vec_u128(self) -> Result<Vec<U128>, CastError> {
+        match self {
+            Value::VecU128(v) => Ok(v),
+            _ => Err(CastError::new(self.datatype(), "vec_u128")),
+        }
+    }
 
     pub fn try_into_vec_u64(self) -> Result<Vec<u64>, CastError> {
         match self {

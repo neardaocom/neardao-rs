@@ -23,7 +23,7 @@ pub enum StorageKeys {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    // Id 0 is reserved for "wf_add".
+    // Id 0 is reserved for "basic_pkg".
     last_wf_id: u16,
     workflows: UnorderedMap<u16, Template>,
     /// Function calls for workflow template.

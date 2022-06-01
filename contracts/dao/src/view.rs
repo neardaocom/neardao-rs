@@ -5,7 +5,7 @@ use library::workflow::template::Template;
 use library::MethodName;
 use near_sdk::json_types::U128;
 use near_sdk::serde::Serialize;
-use near_sdk::{env, log, near_bindgen, AccountId};
+use near_sdk::{env, near_bindgen, AccountId};
 
 use crate::constants::VERSION;
 use crate::group::Group;

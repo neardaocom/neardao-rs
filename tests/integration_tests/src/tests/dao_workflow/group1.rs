@@ -8,9 +8,9 @@ use crate::utils::{
     check_wf_templates, create_dao_via_factory, create_ft_via_factory, init_dao_factory,
     init_ft_factory, init_staking, init_workflow_provider, load_workflow_templates,
     proposal_to_finish, run_activity, storage_deposit, view_groups, view_partitions,
-    ActivityInputGroup1, ActivityInputWfBasicPkg1, Wait, GROUP1_ADD_GROUP, GROUP1_ADD_GROUP_MEMBERS,
-    GROUP1_REMOVE_GROUP, GROUP1_REMOVE_GROUP_MEMBERS, GROUP1_REMOVE_GROUP_MEMBER_ROLES,
-    GROUP1_REMOVE_GROUP_ROLES,
+    ActivityInputGroup1, ActivityInputWfBasicPkg1, Wait, GROUP1_ADD_GROUP,
+    GROUP1_ADD_GROUP_MEMBERS, GROUP1_REMOVE_GROUP, GROUP1_REMOVE_GROUP_MEMBERS,
+    GROUP1_REMOVE_GROUP_MEMBER_ROLES, GROUP1_REMOVE_GROUP_ROLES,
 };
 
 use data::workflow::basic::basic_package::{WfBasicPkg1, WfBasicPkg1ProposeOptions};
