@@ -21,7 +21,7 @@ use library::{
     },
 };
 
-use crate::TemplateData;
+use crate::{object_metadata::standard_fn_calls::NEP_141_FT_TRANSFER, TemplateData};
 
 pub const DEFAULT_VOTING_DURATION: u32 = 10;
 
@@ -115,6 +115,30 @@ impl WfBasicPkg1 {
                     terminal: Terminality::Automatic,
                     is_sync: false,
                 }),
+                Activity::Activity(TemplateActivity {
+                    code: "ft_send".into(),
+                    postprocessing: None,
+                    actions: vec![TemplateAction {
+                        exec_condition: None,
+                        validators: vec![],
+                        action_data: ActionData::FnCall(FnCallData {
+                            id: FnCallIdType::StandardDynamic(
+                                ValueSrc::Src(Src::Input("token_id".into())),
+                                NEP_141_FT_TRANSFER.into(),
+                            ),
+                            tgas: 15,
+                            deposit: Some(ValueSrc::Value(Value::U64(1))),
+                            binds: vec![],
+                            must_succeed: true,
+                        }),
+                        optional: false,
+                        postprocessing: None,
+                        input_source: InputSource::PropSettings,
+                    }],
+                    automatic: true,
+                    terminal: Terminality::Automatic,
+                    is_sync: false,
+                }),
             ],
             expressions: vec![],
             transitions: vec![vec![
@@ -136,16 +160,23 @@ impl WfBasicPkg1 {
                     time_from_cond: None,
                     time_to_cond: None,
                 },
+                Transition {
+                    activity_id: 4,
+                    cond: None,
+                    time_from_cond: None,
+                    time_to_cond: None,
+                },
             ]],
             constants: SourceDataVariant::Map(map),
-            end: vec![1, 2, 3],
+            end: vec![1, 2, 3, 4],
         };
         let fn_calls = vec![(provider_id, "wf_template".to_string())];
         let metadata = vec![vec![ObjectMetadata {
             arg_names: vec!["id".into()],
             arg_types: vec![Datatype::U64(false)],
         }]];
-        (tpl, fn_calls, metadata, vec![])
+        let std_fn_calls = vec![NEP_141_FT_TRANSFER.into()];
+        (tpl, fn_calls, metadata, std_fn_calls)
     }
     pub fn propose_settings(options: Option<WfBasicPkg1ProposeOptions>) -> ProposeSettings {
         let WfBasicPkg1ProposeOptions {
@@ -171,6 +202,7 @@ impl WfBasicPkg1 {
                 }),
                 None,
                 None,
+                None,
             ],
             storage_key: None,
         };
@@ -187,11 +219,13 @@ impl WfBasicPkg1 {
                 vec![ActivityRight::Group(1)],
                 vec![ActivityRight::Group(1)],
                 vec![ActivityRight::Group(1)],
+                vec![ActivityRight::Group(1)],
             ],
             transition_limits: vec![vec![
                 TransitionLimit { to: 1, limit: 1 },
                 TransitionLimit { to: 2, limit: 1 },
                 TransitionLimit { to: 3, limit: 1 },
+                TransitionLimit { to: 4, limit: 1 },
             ]],
             scenario: VoteScenario::Democratic,
             duration: duration.unwrap_or(DEFAULT_VOTING_DURATION),

@@ -297,7 +297,7 @@ pub(crate) fn as_account_id(name: &str) -> AccountId {
 pub(crate) fn dummy_propose_settings() -> ProposeSettings {
     ProposeSettings {
         constants: None,
-        activity_constants: vec![None, None, None, None],
+        activity_constants: vec![None, None, None, None, None],
         storage_key: None,
     }
 }

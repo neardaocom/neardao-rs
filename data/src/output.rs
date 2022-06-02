@@ -58,7 +58,7 @@ fn pretty_print_standards(functions: Vec<MethodName>, metadata: Vec<Vec<ObjectMe
 
 #[test]
 fn output_workflows_basic() {
-    pretty_print_template_data("WFADD1", WfBasicPkg1::template(WF_PROVIDER.into()));
+    pretty_print_template_data("BASIC_PACKAGE1", WfBasicPkg1::template(WF_PROVIDER.into()));
     pretty_print_template_data(
         "SKYWARD1",
         Skyward1::template(Some(Skyward1TemplateOptions {
@@ -84,9 +84,9 @@ fn output_standard_fn_calls() {
 }
 
 #[test]
-fn output_wf_add_template_settings() {
+fn output_basic_package_1_template_settings() {
     println!(
-        "------------------------------ WFADD1 - TEMPLATE SETTINGS ------------------------------\n{}",
+        "------------------------------ BASIC_PACKAGE1 - TEMPLATE SETTINGS ------------------------------\n{}",
         serde_json::to_string(&vec![WfBasicPkg1::template_settings(Some(60))]).unwrap(),
     );
 }

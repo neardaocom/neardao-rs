@@ -371,7 +371,7 @@ impl EExpr {
                             result.push(v);
                         }
                         Ok(Value::VecString(result))
-                    },
+                    }
                     Value::U64(_) => {
                         let mut result: Vec<u64> = Vec::with_capacity(32);
                         for arg in args.iter() {
@@ -379,7 +379,7 @@ impl EExpr {
                             result.push(v);
                         }
                         Ok(Value::VecU64(result))
-                    },
+                    }
                     Value::U128(_) => {
                         let mut result: Vec<U128> = Vec::with_capacity(32);
                         for arg in args.iter() {
@@ -387,7 +387,7 @@ impl EExpr {
                             result.push(v.into());
                         }
                         Ok(Value::VecU128(result))
-                    },
+                    }
                     Value::VecString(_) => {
                         let mut result: Vec<String> = Vec::with_capacity(32);
                         for arg in args.iter() {
@@ -775,11 +775,7 @@ mod test {
         let val_3 = Value::String("abc_group".into());
         let args = vec![val_1, val_2, val_3];
         let result = expr.eval(&args).unwrap();
-        let expected = Value::VecString(vec![
-            "4abc".into(),
-            "group".into(),
-            "abc_group".into(),
-        ]);
+        let expected = Value::VecString(vec!["4abc".into(), "group".into(), "abc_group".into()]);
         assert_eq!(result, expected);
     }
     #[test]

@@ -1,5 +1,6 @@
 //! Activity inputs for all tested DAO workflows.
 
+mod basic_package;
 mod bounty;
 mod group;
 mod group_package;
@@ -9,7 +10,6 @@ mod reward;
 mod skyward;
 mod test_optional_actions;
 mod trade;
-mod wf_add;
 
 use library::workflow::action::ActionInput;
 use serde_json::json;
@@ -17,6 +17,7 @@ use workspaces::{Account, AccountId, DevNetwork, Worker};
 
 use crate::utils::outcome_pretty;
 
+pub use basic_package::*;
 pub use bounty::*;
 pub use group::*;
 pub use group_package::*;
@@ -26,7 +27,6 @@ pub use reward::*;
 pub use skyward::*;
 pub use test_optional_actions::*;
 pub use trade::*;
-pub use wf_add::*;
 
 pub async fn run_activity<T>(
     worker: &Worker<T>,
