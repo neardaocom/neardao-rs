@@ -1,3 +1,4 @@
+pub mod basic_package1;
 pub mod bounty1;
 pub mod group1;
 pub mod group_package1;

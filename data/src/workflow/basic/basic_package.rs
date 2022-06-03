@@ -46,7 +46,7 @@ impl WfBasicPkg1 {
             code: "basic_pkg1".into(),
             version: "1".into(),
             auto_exec: true,
-            need_storage: false, // TODO: Not sure if true is true.
+            need_storage: false,
             receiver_storage_keys: vec![],
             activities: vec![
                 Activity::Init,
@@ -179,31 +179,30 @@ impl WfBasicPkg1 {
         (tpl, fn_calls, metadata, std_fn_calls)
     }
     pub fn propose_settings(options: Option<WfBasicPkg1ProposeOptions>) -> ProposeSettings {
-        let WfBasicPkg1ProposeOptions {
-            template_id,
-            provider_id,
-        } = options.expect("WfBasicPkg1ProposeOptions default options are not supported yet");
-        let mut wf_add_constants = HashMap::new();
-        wf_add_constants.insert(
-            WF_BASIC_PKG1_PROVIDER_ID_KEY.into(),
-            Value::String(provider_id.clone()),
-        );
-        wf_add_constants.insert(
-            WF_BASIC_PKG1_TEMPLATE_ID_KEY.into(),
-            Value::U64(template_id as u64),
-        );
+        let wf_add_constants: Option<ActivityBind> = if let Some(options) = options {
+            let WfBasicPkg1ProposeOptions {
+                template_id,
+                provider_id,
+            } = options;
+            let mut wf_add_constants = HashMap::new();
+            wf_add_constants.insert(
+                WF_BASIC_PKG1_PROVIDER_ID_KEY.into(),
+                Value::String(provider_id.clone()),
+            );
+            wf_add_constants.insert(
+                WF_BASIC_PKG1_TEMPLATE_ID_KEY.into(),
+                Value::U64(template_id as u64),
+            );
+            Some(ActivityBind {
+                constants: None,
+                actions_constants: vec![Some(SourceDataVariant::Map(wf_add_constants))],
+            })
+        } else {
+            None
+        };
         let settings = ProposeSettings {
             constants: None,
-            activity_constants: vec![
-                None,
-                Some(ActivityBind {
-                    constants: None,
-                    actions_constants: vec![Some(SourceDataVariant::Map(wf_add_constants))],
-                }),
-                None,
-                None,
-                None,
-            ],
+            activity_constants: vec![None, wf_add_constants, None, None, None],
             storage_key: None,
         };
         settings

@@ -1,6 +1,8 @@
 use library::functions::utils::calculate_percent_u128;
+use library::workflow::action::InputSource;
 use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
+use library::workflow::template::Template;
 use library::workflow::types::{ActivityRight, VoteScenario};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::env::panic_str;
@@ -148,11 +150,11 @@ impl Contract {
             );
         }
         self.proposal_last_id += 1;
-        if template_id == 1 {
+        if is_wf_add_scenario(&wft, &propose_settings) {
             require!(
                 !template_settings
                     .as_ref()
-                    .expect("Expected template settings for 'WorkflowAdd' proposal.")
+                    .expect("Expected template settings for 'wf_add' proposal.")
                     .is_empty(),
                 "Provided `template_settings` do not contain TemplateSettings."
             );
@@ -460,4 +462,36 @@ impl Contract {
             ProposalState::Accepted
         }
     }
+}
+
+/// Check if proposal with referenced template and provided propose_settings
+/// requires TemplateSettings for the workflow "wf_add" scenario.
+/// Assumptions this function uses:
+/// - "wf_add" activity is only 1 activity its kind in the workflow and it has only 1 action.
+/// - all activities have non-empty actions
+/// - propose_settings have defined activity_constants for all activities.
+fn is_wf_add_scenario(template: &Template, propose_settings: &ProposeSettings) -> bool {
+    for (idx, a) in template.activities.iter().enumerate().skip(1) {
+        let activity = a.activity_as_ref().unwrap();
+        if activity.code.as_str() == "wf_add" {
+            if matches!(
+                activity
+                    .actions
+                    .get(0)
+                    .expect("Invalid wf - empty actions in activity 0")
+                    .input_source,
+                InputSource::PropSettings
+            ) && propose_settings
+                .activity_constants
+                .get(idx)
+                .expect("Invalid ProposeSettings - missing constants for action")
+                .is_none()
+            {
+                return false;
+            } else {
+                return true;
+            }
+        }
+    }
+    false
 }

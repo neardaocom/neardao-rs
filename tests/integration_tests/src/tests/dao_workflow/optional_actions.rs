@@ -63,8 +63,6 @@ async fn test_workflow_optional_actions() -> anyhow::Result<()> {
         0,
     )
     .await?;
-    let wnear = init_wnear(&worker).await?;
-    let skyward = init_skyward(&worker, &wnear, None).await?;
     statistics(&worker, &dao_account_id).await?;
 
     // Storage deposit staking in fungible_token.
@@ -77,7 +75,7 @@ async fn test_workflow_optional_actions() -> anyhow::Result<()> {
     )
     .await?;
     // Load workflows to provider.
-    load_workflow_templates(&worker, &wf_provider, Some(wnear.id()), Some(skyward.id())).await?;
+    load_workflow_templates(&worker, &wf_provider, None, None).await?;
 
     let proposal_id = proposal_to_finish(
         &worker,
@@ -299,8 +297,6 @@ async fn test_workflow_optional_actions_cannot_leave_activity() -> anyhow::Resul
         0,
     )
     .await?;
-    let wnear = init_wnear(&worker).await?;
-    let skyward = init_skyward(&worker, &wnear, None).await?;
     statistics(&worker, &dao_account_id).await?;
 
     // Storage deposit staking in fungible_token.
@@ -313,7 +309,7 @@ async fn test_workflow_optional_actions_cannot_leave_activity() -> anyhow::Resul
     )
     .await?;
     // Load workflows to provider.
-    load_workflow_templates(&worker, &wf_provider, Some(wnear.id()), Some(skyward.id())).await?;
+    load_workflow_templates(&worker, &wf_provider, None, None).await?;
 
     let proposal_id = proposal_to_finish(
         &worker,
@@ -558,8 +554,6 @@ async fn test_workflow_optional_actions_execute_activity_1_without_3rd_action() 
         0,
     )
     .await?;
-    let wnear = init_wnear(&worker).await?;
-    let skyward = init_skyward(&worker, &wnear, None).await?;
     statistics(&worker, &dao_account_id).await?;
 
     // Storage deposit staking in fungible_token.
@@ -572,7 +566,7 @@ async fn test_workflow_optional_actions_execute_activity_1_without_3rd_action() 
     )
     .await?;
     // Load workflows to provider.
-    load_workflow_templates(&worker, &wf_provider, Some(wnear.id()), Some(skyward.id())).await?;
+    load_workflow_templates(&worker, &wf_provider, None, None).await?;
 
     let proposal_id = proposal_to_finish(
         &worker,
