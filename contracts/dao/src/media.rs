@@ -13,7 +13,7 @@ use crate::ProposalId;
 pub enum ResourceType {
     Text(String),
     Link(String),
-    CID(CIDInfo),
+    Cid(CIDInfo),
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]

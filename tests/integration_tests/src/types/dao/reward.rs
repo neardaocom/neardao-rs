@@ -14,8 +14,8 @@ pub type ApprovalId = Option<u64>;
 #[serde(rename_all = "snake_case")]
 pub enum Asset {
     Near,
-    FT(AssetFT),
-    NFT(AssetNFT),
+    Ft(AssetFT),
+    Nft(AssetNFT),
 }
 
 impl Asset {
@@ -23,15 +23,15 @@ impl Asset {
         Self::Near
     }
     pub fn new_ft(account_id: AccountId, decimals: u8) -> Self {
-        Self::FT(AssetFT::new(account_id, decimals))
+        Self::Ft(AssetFT::new(account_id, decimals))
     }
     pub fn new_nft(account_id: AccountId, token_id: String, approval_id: Option<u64>) -> Self {
-        Self::NFT(AssetNFT::new(account_id, token_id, approval_id))
+        Self::Nft(AssetNFT::new(account_id, token_id, approval_id))
     }
     pub fn decimals(&self) -> u8 {
         match &self {
             Self::Near => 24,
-            Self::FT(a) => a.decimals,
+            Self::Ft(a) => a.decimals,
             _ => 0,
         }
     }

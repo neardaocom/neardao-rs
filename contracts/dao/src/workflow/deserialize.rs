@@ -481,7 +481,7 @@ pub fn deser_media_type(
 ) -> Result<ResourceType, DeserializeError> {
     let mut key = String::with_capacity(prefix.len() + 24);
     key.push_str(prefix);
-    key.push_str(".text.0");
+    key.push_str(".text");
     if let Some(v) = action_input.take(&key) {
         let text = v.try_into_string()?;
         let resource_type = ResourceType::Text(text);
@@ -489,7 +489,7 @@ pub fn deser_media_type(
     }
     key.clear();
     key.push_str(prefix);
-    key.push_str(".link.0");
+    key.push_str(".link");
     if let Some(v) = action_input.take(&key) {
         let link = v.try_into_string()?;
         let resource_type = ResourceType::Link(link);
@@ -514,7 +514,7 @@ pub fn deser_media_type(
             .take(&key)
             .ok_or(DeserializeError::MissingInputKey("cid.mimetype".into()))?
             .try_into_string()?;
-        let resource_type = ResourceType::CID(CIDInfo {
+        let resource_type = ResourceType::Cid(CIDInfo {
             ipfs,
             cid,
             mimetype,

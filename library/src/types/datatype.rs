@@ -66,6 +66,9 @@ impl Value {
         match self {
             Value::U64(n) => Ok(*n as u128),
             Value::U128(n) => Ok(n.0),
+            Value::String(v) => Ok(v
+                .parse::<u128>()
+                .map_err(|_| CastError::new("string", "u128"))?),
             _ => Err(CastError::new(self.datatype(), "u128")),
         }
     }
@@ -74,6 +77,9 @@ impl Value {
         match self {
             Value::U64(n) => Ok(*n),
             Value::U128(n) => Ok(n.0 as u64),
+            Value::String(v) => Ok(v
+                .parse::<u64>()
+                .map_err(|_| CastError::new("string", "u64"))?),
             _ => Err(CastError::new(self.datatype(), "u64")),
         }
     }

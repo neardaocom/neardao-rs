@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub enum ResourceType {
     Text(String),
     Link(String),
-    CID(CIDInfo),
+    Cid(CIDInfo),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
