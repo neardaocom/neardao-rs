@@ -12,12 +12,12 @@ use crate::{
     TimestampSec,
 };
 
-derive_into_versioned!(Reward, VersionedReward);
-derive_from_versioned!(VersionedReward, Reward);
+derive_into_versioned!(Reward, VersionedReward, V1);
+derive_from_versioned!(VersionedReward, Reward, V1);
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub enum VersionedReward {
-    Current(Reward),
+    V1(Reward),
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Clone)]

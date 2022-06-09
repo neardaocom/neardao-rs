@@ -1,10 +1,6 @@
 #![allow(unreachable_patterns)]
 
-use library::workflow::{
-    instance::Instance,
-    settings::{ProposeSettings, TemplateSettings},
-    template::Template,
-};
+use library::workflow::{settings::TemplateSettings, template::Template};
 use proposal::Proposal;
 mod unit_tests;
 
@@ -40,8 +36,6 @@ pub(crate) type VoteTotalPossible = u128;
 pub(crate) type Votes = [u128; 3];
 pub(crate) type CalculatedVoteResults = (VoteTotalPossible, Votes);
 pub(crate) type ProposalWf = (Proposal, Template, TemplateSettings);
-#[allow(dead_code)]
-pub(crate) type InstanceWf = (Instance, ProposeSettings);
 pub(crate) type RoleId = u16;
 pub(crate) type RewardId = u16;
 /// Id of the resource on the resource provider.
@@ -51,10 +45,10 @@ pub type ApprovalId = Option<u64>;
 
 #[macro_export]
 macro_rules! derive_into_versioned {
-    ($from:ident, $for:ident) => {
+    ($from:ident, $for:ident, $version:ident) => {
         impl From<$from> for $for {
             fn from(input: $from) -> Self {
-                $for::Current(input)
+                $for::$version(input)
             }
         }
     };
@@ -62,11 +56,11 @@ macro_rules! derive_into_versioned {
 
 #[macro_export]
 macro_rules! derive_from_versioned {
-    ($from:ident, $for:ident) => {
+    ($from:ident, $for:ident, $version:ident) => {
         impl From<$from> for $for {
             fn from(input: $from) -> Self {
                 match input {
-                    $from::Current(c) => c,
+                    $from::$version(c) => c,
                     _ => unreachable!(),
                 }
             }

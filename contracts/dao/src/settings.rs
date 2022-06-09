@@ -8,7 +8,7 @@ use crate::{contract::Contract, derive_from_versioned, derive_into_versioned, Ta
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub enum VersionedSettings {
-    Current(Settings),
+    V1(Settings),
 }
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
@@ -36,8 +36,8 @@ pub enum AdminRight {
     Upgrade,
 }
 
-derive_from_versioned!(VersionedSettings, Settings);
-derive_into_versioned!(Settings, VersionedSettings);
+derive_from_versioned!(VersionedSettings, Settings, V1);
+derive_into_versioned!(Settings, VersionedSettings, V1);
 
 pub(crate) fn assert_valid_dao_settings(settings: &Settings) {
     assert!(!settings.name.is_empty());

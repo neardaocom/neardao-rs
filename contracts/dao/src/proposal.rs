@@ -6,6 +6,7 @@ use library::workflow::template::Template;
 use library::workflow::types::{ActivityRight, VoteScenario};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::env::panic_str;
+use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{env, log, near_bindgen, require, AccountId};
 use std::collections::HashMap;
@@ -13,7 +14,10 @@ use std::collections::HashMap;
 use crate::internal::utils::current_timestamp_sec;
 use crate::media::Media;
 use crate::reward::RewardActivity;
-use crate::{contract::*, CalculatedVoteResults, VoteTotalPossible, Votes};
+use crate::{
+    contract::*, derive_from_versioned, derive_into_versioned, CalculatedVoteResults,
+    VoteTotalPossible, Votes,
+};
 use crate::{ResourceId, TimestampSec};
 
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
@@ -21,21 +25,15 @@ pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;
 #[derive(BorshSerialize, BorshDeserialize, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "lowercase")]
 pub enum VersionedProposal {
-    Current(Proposal),
+    V1(Proposal),
 }
 
-impl From<VersionedProposal> for Proposal {
-    fn from(fm: VersionedProposal) -> Self {
-        match fm {
-            VersionedProposal::Current(p) => p,
-            _ => unimplemented!(),
-        }
-    }
-}
+derive_into_versioned!(Proposal, VersionedProposal, V1);
+derive_from_versioned!(VersionedProposal, Proposal, V1);
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Clone, Copy)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug))]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
@@ -74,6 +72,7 @@ pub struct Proposal {
     pub state: ProposalState,
     pub workflow_id: u16,
     pub workflow_settings_id: u8,
+    pub voting_results: Vec<U128>,
 }
 
 impl Proposal {
@@ -95,6 +94,7 @@ impl Proposal {
             state: ProposalState::InProgress,
             workflow_id,
             workflow_settings_id,
+            voting_results: vec![],
         }
     }
 }
@@ -180,10 +180,8 @@ impl Contract {
                 panic_str("Template requires storage, but no key was provided.");
             }
         }
-        self.proposals.insert(
-            &self.proposal_last_id,
-            &VersionedProposal::Current(proposal),
-        );
+        self.proposals
+            .insert(&self.proposal_last_id, &proposal.into());
         self.workflow_propose_settings
             .insert(&self.proposal_last_id, &propose_settings);
         if let Some(mut media) = description {
@@ -228,8 +226,7 @@ impl Contract {
         }
         self.register_executed_activity(&caller, RewardActivity::Vote.into());
         proposal.votes.insert(caller, vote);
-        self.proposals
-            .insert(&id, &VersionedProposal::Current(proposal));
+        self.proposals.insert(&id, &VersionedProposal::V1(proposal));
         VoteResult::Ok
     }
 
@@ -243,8 +240,8 @@ impl Contract {
                 if proposal.created + wfs.duration as u64 > current_timestamp_sec() {
                     None
                 } else {
-                    let vote_result = self.eval_votes(&proposal.votes, &wfs);
-                    if matches!(vote_result, ProposalState::Accepted) {
+                    let (result_state, vote_results) = self.eval_votes(&proposal.votes, &wfs);
+                    if matches!(result_state, ProposalState::Accepted) {
                         instance.init_running(
                             wft.transitions.as_slice(),
                             wfs.transition_limits.as_slice(),
@@ -257,23 +254,26 @@ impl Contract {
                         &proposal.created_by,
                         RewardActivity::AcceptedProposal.into(),
                     );
-                    Some(vote_result)
+                    Some((result_state, vote_results))
                 }
             }
             _ => None,
         };
-
         match new_state {
-            Some(state) => {
+            Some((state, vote_results)) => {
                 self.workflow_instance.insert(&id, &instance);
-                proposal.state = state.clone();
-                self.proposals
-                    .insert(&id, &VersionedProposal::Current(proposal));
+                proposal.state = state;
+                proposal.voting_results = vec![
+                    vote_results.0.into(),
+                    vote_results.1[0].into(),
+                    vote_results.1[1].into(),
+                    vote_results.1[2].into(),
+                ];
+                self.proposals.insert(&id, &proposal.into());
 
                 if wft.auto_exec {
-                    //TODO: Dispatch wf execution with Croncat.
+                    //TODO: Dispatch wf execution with dao scheduler.
                 }
-
                 state
             }
             None => proposal.state,
@@ -346,7 +346,7 @@ impl Contract {
                     }
                 }
                 ActivityRight::Member => {
-                    todo!()
+                    unreachable!()
                 }
                 ActivityRight::Group(g) => {
                     match self.groups.get(g) {
@@ -429,12 +429,14 @@ impl Contract {
         &self,
         proposal_votes: &HashMap<AccountId, u8>,
         settings: &TemplateSettings,
-    ) -> ProposalState {
+    ) -> (ProposalState, CalculatedVoteResults) {
         let (max_possible_amount, vote_results) =
             self.calculate_votes(proposal_votes, &settings.scenario, &settings.allowed_voters);
         let votes_sum = vote_results.iter().sum::<u128>();
         log!("Votes: {}, {:?}", max_possible_amount, vote_results);
-        if calculate_percent_u128(vote_results[0], max_possible_amount) >= settings.spam_threshold {
+        let state = if calculate_percent_u128(vote_results[0], max_possible_amount)
+            >= settings.spam_threshold
+        {
             log!(
                 "spam th: {}, max_possible: {}, current: {}",
                 settings.spam_threshold,
@@ -460,7 +462,8 @@ impl Contract {
             ProposalState::Rejected
         } else {
             ProposalState::Accepted
-        }
+        };
+        return (state, (max_possible_amount, vote_results));
     }
 }
 

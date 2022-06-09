@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
+use near_sdk::json_types::U128;
 use serde::{Deserialize, Serialize};
 use workspaces::AccountId;
 
@@ -70,18 +71,6 @@ impl ProposalCreateInput {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
-pub enum ResourceType {
-    Text(String),
-}
-
-impl Default for ResourceType {
-    fn default() -> Self {
-        Self::Text("default".into())
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
 pub struct Proposal {
     pub desc: u32,
     pub created: TimestampSec,
@@ -91,6 +80,7 @@ pub struct Proposal {
     pub state: ProposalState,
     pub workflow_id: u16,
     pub workflow_settings_id: u8,
+    pub voting_results: Vec<U128>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -108,13 +98,13 @@ pub enum ProposalState {
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 pub enum VersionedProposal {
-    Current(Proposal),
+    V1(Proposal),
 }
 
 impl From<VersionedProposal> for Proposal {
     fn from(v: VersionedProposal) -> Self {
         match v {
-            VersionedProposal::Current(v) => v,
+            VersionedProposal::V1(v) => v,
         }
     }
 }

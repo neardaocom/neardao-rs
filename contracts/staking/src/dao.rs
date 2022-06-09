@@ -20,7 +20,7 @@ pub struct Dao {
 
 impl Dao {
     fn save_user(&mut self, account_id: &AccountId, user: User) {
-        self.users.insert(account_id, &VersionedUser::Current(user));
+        self.users.insert(account_id, &VersionedUser::V1(user));
     }
 
     /// Delegate `amount` of votes from `sender_id` to `delegate_id` account.
@@ -142,7 +142,7 @@ impl Dao {
         self.users
             .get(account_id)
             .map(|versioned_user| match versioned_user {
-                VersionedUser::Current(user) => user,
+                VersionedUser::V1(user) => user,
             })
             .expect("account not registered in dao")
     }

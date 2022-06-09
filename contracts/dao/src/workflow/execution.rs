@@ -33,7 +33,7 @@ use crate::proposal::ProposalState;
 use crate::reward::RewardActivity;
 
 #[ext_contract(ext_self)]
-trait ExtActivity {
+trait CbActivity {
     fn postprocess(
         &mut self,
         instance_id: u32,
@@ -919,6 +919,8 @@ impl Contract {
 
 /// Set action propose binds to the sources if exist.
 /// Unset previous.
+/// NOTE: Unwrapping is OK as these values are checked
+/// when proposal is being created.
 fn set_action_propose_binds(
     action_id: usize,
     sources: &mut dyn Source,

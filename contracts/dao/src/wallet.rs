@@ -18,16 +18,16 @@ use crate::{
 };
 
 #[ext_contract(ext_self)]
-trait ExtWallet {
+trait CbWallet {
     fn withdraw_check(account_id: AccountId, asset: Asset, amount: u128);
 }
 
-derive_into_versioned!(Wallet, VersionedWallet);
-derive_from_versioned!(VersionedWallet, Wallet);
+derive_into_versioned!(Wallet, VersionedWallet, V1);
+derive_from_versioned!(VersionedWallet, Wallet, V1);
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub enum VersionedWallet {
-    Current(Wallet),
+    V1(Wallet),
 }
 
 /// Wallet keep info about owner's rewards.
@@ -427,7 +427,8 @@ impl Contract {
     pub fn get_wallet(&self, account_id: &AccountId) -> Wallet {
         self.wallets
             .get(account_id)
-            .unwrap_or_else(|| VersionedWallet::Current(Wallet::new()))
+            .map(|w| w.into())
+            .unwrap_or_else(|| Wallet::new())
             .into()
     }
     /// Return (claimable amount, amount per activity)

@@ -11,12 +11,12 @@ use crate::{
     internal::utils::current_timestamp_sec, ApprovalId, TimestampSec, TokenId,
 };
 
-derive_into_versioned!(TreasuryPartition, VersionedTreasuryPartition);
-derive_from_versioned!(VersionedTreasuryPartition, TreasuryPartition);
+derive_into_versioned!(TreasuryPartition, VersionedTreasuryPartition, V1);
+derive_from_versioned!(VersionedTreasuryPartition, TreasuryPartition, V1);
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub enum VersionedTreasuryPartition {
-    Current(TreasuryPartition),
+    V1(TreasuryPartition),
 }
 
 #[derive(Deserialize, Serialize)]

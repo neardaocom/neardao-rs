@@ -34,7 +34,7 @@ pub fn deser_asset(
         key.push_str(prefix);
         key.push_str(".ft.account_id");
         if let Some(v) = action_input.take(&key) {
-            let account_string = v.to_owned().try_into_string()?;
+            let account_string = v.try_into_string()?;
             let account_id = AccountId::try_from(account_string)?;
             key.clear();
             key.push_str(prefix);
@@ -119,12 +119,7 @@ pub fn deser_reward(action_input: &mut dyn ActivityInput) -> Result<Reward, Dese
         let unit_seconds = v.try_into_u64()? as u16;
         RewardType::Wage(RewardWage { unit_seconds })
     } else if let Some(v) = action_input.take(&"type.user_activity.activity_ids") {
-        let activity_ids = v
-            .to_owned()
-            .try_into_vec_u64()?
-            .into_iter()
-            .map(|e| e as u8)
-            .collect();
+        let activity_ids = v.try_into_vec_u64()?.into_iter().map(|e| e as u8).collect();
         RewardType::UserActivity(RewardUserActivity { activity_ids })
     } else {
         env::panic_str("try_bind_reward - invalid reward type");
