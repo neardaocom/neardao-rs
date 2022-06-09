@@ -96,10 +96,10 @@ impl Reward {
     pub fn is_valid(&self, current_timestamp: TimestampSec) -> bool {
         self.time_valid_from <= current_timestamp && current_timestamp <= self.time_valid_to
     }
-    pub fn is_defined_for_activity(&self, activity_id: u8) -> bool {
+    pub fn rewarded_activities(&self) -> Vec<u8> {
         match &self.r#type {
-            RewardType::UserActivity(reward) => reward.activity_ids.contains(&activity_id),
-            _ => false,
+            RewardType::UserActivity(reward) => reward.activity_ids.clone(),
+            _ => panic_str("fatal - invalid reward type"),
         }
     }
     pub fn get_reward_type(&self) -> RewardTypeIdent {
@@ -276,6 +276,14 @@ impl Contract {
                 ));
             }
         }
+        if reward.get_reward_type() == RewardTypeIdent::UserActivity {
+            for activity_id in reward.rewarded_activities() {
+                if let Some(mut rewards) = self.cache_reward_activity.get(&activity_id) {
+                    rewards.push(self.reward_last_id);
+                    self.cache_reward_activity.insert(&activity_id, &rewards);
+                }
+            }
+        }
         group.add_new_reward(self.reward_last_id, reward.role_id);
         self.groups.insert(&reward.group_id, &group);
         self.rewards.insert(&self.reward_last_id, &reward.into());
@@ -382,20 +390,35 @@ impl Contract {
         }
     }
 
-    /// TODO: Optimalize.
     /// Return list of valid reward ids that reward `activity_id`.
-    pub fn valid_reward_list_for_activity(&self, activity_id: u8) -> Vec<u16> {
-        let mut rewards = Vec::with_capacity(self.reward_last_id as usize / 2);
+    /// Also update cache - remove expired rewards.
+    pub fn valid_reward_list_for_activity(&mut self, activity_id: u8) -> Vec<u16> {
+        let mut reward_list = vec![];
+        let mut expired_reward_ids = vec![];
+        let mut rewards = self
+            .cache_reward_activity
+            .get(&activity_id)
+            .expect("fatal - activity not defined");
         let current_timestamp = current_timestamp_sec();
-        for i in 1..=self.reward_last_id {
-            if let Some(reward) = self.rewards.get(&i) {
-                let reward: Reward = reward.into();
-                if reward.is_valid(current_timestamp) && reward.is_defined_for_activity(activity_id)
-                {
-                    rewards.push(i);
-                }
+        for id in rewards.iter() {
+            let reward: Reward = self
+                .rewards
+                .get(&id)
+                .expect("fatal - reward not defined")
+                .into();
+            if reward.is_valid(current_timestamp) {
+                reward_list.push(*id);
+            } else {
+                expired_reward_ids.push(*id);
             }
         }
-        rewards
+        if !expired_reward_ids.is_empty() {
+            for id in expired_reward_ids {
+                let pos = rewards.iter().position(|e| *e == id).unwrap();
+                rewards.swap_remove(pos);
+            }
+            self.cache_reward_activity.insert(&activity_id, &rewards);
+        }
+        reward_list
     }
 }

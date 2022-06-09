@@ -1,7 +1,7 @@
 use near_sdk::{env, require, AccountId, Balance};
 
 use crate::{
-    constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, C_PREDECESSOR},
+    constants::{C_CURRENT_TIMESTAMP_SECS, C_DAO_ID, C_PREDECESSOR, LATEST_REWARD_ACTIVITY_ID},
     contract::{ActionLog, Contract},
     group::GroupInput,
     internal::utils::current_timestamp_sec,
@@ -116,6 +116,12 @@ impl Contract {
     pub fn init_media(&mut self, media: Vec<Media>) {
         for m in media.iter() {
             self.media_add(m);
+        }
+    }
+    #[inline]
+    pub fn init_reward_cache(&mut self) {
+        for i in 0..=LATEST_REWARD_ACTIVITY_ID {
+            self.cache_reward_activity.insert(&i, &vec![]);
         }
     }
 

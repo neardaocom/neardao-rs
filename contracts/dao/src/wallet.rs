@@ -146,7 +146,7 @@ impl Wallet {
             self.failed_withdraws.push((asset, amount));
         }
     }
-    /// Add one to execution counter for `reward_id`.
+    /// Add one to execution counter for `reward_id` if exist in self.
     pub fn add_executed_activity(&mut self, reward_id: u16) {
         if let Some(pos) = self.find_reward_pos(reward_id) {
             self.rewards[pos].activity_executed();

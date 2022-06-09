@@ -16,6 +16,7 @@ use library::{
 use near_sdk::{test_utils::VMContextBuilder, AccountId};
 
 use crate::{
+    constants::LATEST_REWARD_ACTIVITY_ID,
     contract::Contract,
     group::{GroupInput, GroupMember, GroupSettings},
     media::Media,
@@ -457,4 +458,16 @@ fn assert_group_rewards(
     reward_ids.sort();
     expected_reward_ids.sort();
     assert_eq!(reward_ids, expected_reward_ids);
+}
+
+fn assert_cache_reward_activity(contract: &Contract, expected_cache: Vec<(u8, Vec<u16>)>) {
+    for id in 0..=LATEST_REWARD_ACTIVITY_ID {
+        if let Some(pos) = expected_cache.iter().position(|(idx, _)| *idx == id) {
+            let mut expected = expected_cache[pos].clone().1;
+            expected.sort();
+            let mut actual = contract.cache_reward_activity.get(&id).unwrap();
+            actual.sort();
+            assert_eq!(actual, expected);
+        }
+    }
 }

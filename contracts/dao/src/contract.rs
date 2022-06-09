@@ -67,6 +67,7 @@ pub enum StorageKeys {
     Wallet,
     Rewards,
     Media,
+    CacheRewardActivity,
 }
 
 #[near_bindgen]
@@ -119,6 +120,8 @@ pub struct Contract {
     pub debug_log: Vec<String>,
     pub media_last_id: u32,
     pub media: LookupMap<u32, Media>,
+    /// Cache: activity -> reward ids.
+    pub cache_reward_activity: LookupMap<u8, Vec<u16>>,
 }
 
 #[near_bindgen]
@@ -180,6 +183,7 @@ impl Contract {
             wallets: LookupMap::new(StorageKeys::Wallet),
             media_last_id: 0,
             media: LookupMap::new(StorageKeys::Media),
+            cache_reward_activity: LookupMap::new(StorageKeys::CacheRewardActivity),
         };
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
@@ -191,6 +195,7 @@ impl Contract {
         contract.storage_bucket_add(GLOBAL_BUCKET_IDENT);
         contract.init_treasury_partitions(treasury_partitions);
         contract.init_media(media);
+        contract.init_reward_cache();
         contract
     }
 }

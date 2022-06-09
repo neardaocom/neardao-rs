@@ -3,14 +3,15 @@ use library::locking::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingDB, 
 use near_sdk::{testing_env, AccountId, ONE_NEAR};
 
 use crate::{
+    constants::LATEST_REWARD_ACTIVITY_ID,
     contract::Contract,
     proposal::{Proposal, ProposalState},
     reward::{Reward, RewardType, RewardTypeIdent, RewardWage},
     treasury::{Asset, PartitionAsset, PartitionAssetInput, TreasuryPartition},
     unit_tests::{
-        as_account_id, claimable_rewards_sum, dummy_propose_settings, dummy_template_settings,
-        get_context_builder, get_default_contract, get_role_id, get_wallet,
-        get_wallet_withdraw_stat, tm, ACC_1, ACC_2, FOUNDER_1, FOUNDER_2, FOUNDER_3,
+        as_account_id, assert_cache_reward_activity, claimable_rewards_sum, dummy_propose_settings,
+        dummy_template_settings, get_context_builder, get_default_contract, get_role_id,
+        get_wallet, get_wallet_withdraw_stat, tm, ACC_1, ACC_2, FOUNDER_1, FOUNDER_2, FOUNDER_3,
         GROUP_1_ROLE_1, TOKEN_TOTAL_SUPPLY, VOTE_TOKEN_ACC,
     },
     wallet::{ClaimableReward, Wallet, WithdrawStats},
@@ -1235,4 +1236,161 @@ fn reward_one_asset_scenario() {
     );
     let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
     assert_eq!(withdraw_amount, 0);
+}
+
+#[test]
+fn cache_reward_activity_management() {
+    let mut ctx = get_context_builder();
+    testing_env!(ctx.build());
+    let mut contract = get_default_contract();
+    assert!(contract.valid_reward_list_for_activity(0).is_empty());
+    assert_cache_reward_activity(
+        &contract,
+        vec![
+            (0, vec![]),
+            (1, vec![]),
+            (2, vec![]),
+            (3, vec![]),
+            (4, vec![]),
+        ],
+    );
+    let reward = Reward::new(
+        "test".into(),
+        1,
+        0,
+        1,
+        RewardType::new_user_activity(vec![0, 1]),
+        vec![(Asset::new_near(), 100)],
+        0,
+        10,
+    );
+    let reward_id_1 = contract.reward_add(reward).unwrap();
+    assert_eq!(
+        contract.valid_reward_list_for_activity(0),
+        vec![reward_id_1]
+    );
+    assert_eq!(
+        contract.valid_reward_list_for_activity(1),
+        vec![reward_id_1]
+    );
+    assert_cache_reward_activity(
+        &contract,
+        vec![
+            (0, vec![reward_id_1]),
+            (1, vec![reward_id_1]),
+            (2, vec![]),
+            (3, vec![]),
+            (4, vec![]),
+        ],
+    );
+
+    let reward = Reward::new(
+        "test".into(),
+        1,
+        0,
+        1,
+        RewardType::new_user_activity(vec![0, 2]),
+        vec![(Asset::new_near(), 100)],
+        0,
+        100,
+    );
+    let reward_id_2 = contract.reward_add(reward).unwrap();
+    assert_eq!(
+        contract.valid_reward_list_for_activity(0),
+        vec![reward_id_1, reward_id_2]
+    );
+    assert_eq!(
+        contract.valid_reward_list_for_activity(1),
+        vec![reward_id_1]
+    );
+    assert_eq!(
+        contract.valid_reward_list_for_activity(2),
+        vec![reward_id_2]
+    );
+    assert_cache_reward_activity(
+        &contract,
+        vec![
+            (0, vec![reward_id_1, reward_id_2]),
+            (1, vec![reward_id_1]),
+            (2, vec![reward_id_2]),
+            (3, vec![]),
+            (4, vec![]),
+        ],
+    );
+    testing_env!(ctx.block_timestamp(tm(10)).build());
+    assert_eq!(
+        contract.valid_reward_list_for_activity(0),
+        vec![reward_id_1, reward_id_2]
+    );
+    assert_eq!(
+        contract.valid_reward_list_for_activity(1),
+        vec![reward_id_1]
+    );
+    assert_eq!(
+        contract.valid_reward_list_for_activity(2),
+        vec![reward_id_2]
+    );
+    assert_cache_reward_activity(
+        &contract,
+        vec![
+            (0, vec![reward_id_1, reward_id_2]),
+            (1, vec![reward_id_1]),
+            (2, vec![reward_id_2]),
+            (3, vec![]),
+            (4, vec![]),
+        ],
+    );
+    testing_env!(ctx.block_timestamp(tm(11)).build());
+    assert_eq!(
+        contract.valid_reward_list_for_activity(0),
+        vec![reward_id_2]
+    );
+    assert!(contract.valid_reward_list_for_activity(1).is_empty());
+    assert_eq!(
+        contract.valid_reward_list_for_activity(2),
+        vec![reward_id_2]
+    );
+    assert_cache_reward_activity(
+        &contract,
+        vec![
+            (0, vec![reward_id_2]),
+            (1, vec![]),
+            (2, vec![reward_id_2]),
+            (3, vec![]),
+            (4, vec![]),
+        ],
+    );
+    testing_env!(ctx.block_timestamp(tm(4001)).build());
+    assert_cache_reward_activity(
+        &contract,
+        vec![
+            (0, vec![reward_id_2]),
+            (1, vec![]),
+            (2, vec![reward_id_2]),
+            (3, vec![]),
+            (4, vec![]),
+        ],
+    );
+    assert!(contract.valid_reward_list_for_activity(0).is_empty());
+    assert_cache_reward_activity(
+        &contract,
+        vec![
+            (0, vec![]),
+            (1, vec![]),
+            (2, vec![reward_id_2]),
+            (3, vec![]),
+            (4, vec![]),
+        ],
+    );
+    assert!(contract.valid_reward_list_for_activity(2).is_empty());
+    assert_cache_reward_activity(
+        &contract,
+        vec![
+            (0, vec![]),
+            (1, vec![]),
+            (2, vec![]),
+            (3, vec![]),
+            (4, vec![]),
+        ],
+    );
 }
