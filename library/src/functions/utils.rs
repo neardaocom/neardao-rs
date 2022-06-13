@@ -73,7 +73,7 @@ pub fn get_value_from_source(
         }
         Src::Activity(key) => {
             let value = sources
-                .props_shared(key)
+                .props_activity(key)
                 .ok_or(SourceError::ActivityValueMissing(key.into()))?
                 .to_owned();
             Ok(value)

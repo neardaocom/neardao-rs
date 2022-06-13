@@ -17,7 +17,7 @@ pub trait SourceProvider {
     fn tpl_settings(&self, key: &str) -> Option<&Value>;
     fn props_global(&self, key: &str) -> Option<&Value>;
     fn props_action(&self, key: &str) -> Option<&Value>;
-    fn props_shared(&self, key: &str) -> Option<&Value>;
+    fn props_activity(&self, key: &str) -> Option<&Value>;
     fn storage(&self, key: &str) -> Option<Value>;
     fn global_storage(&self, key: &str) -> Option<Value>;
     fn dao_const(&self, key: u8) -> Option<Value>;
@@ -31,7 +31,6 @@ pub trait MutableSource {
     fn set_prop_shared(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
     fn unset_prop_action(&mut self) -> Option<SourceDataVariant>;
     fn set_prop_action(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
-    fn replace_settings(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
     fn take_storage(&mut self) -> Option<StorageBucket>;
     fn take_global_storage(&mut self) -> Option<StorageBucket>;
 }
@@ -58,13 +57,6 @@ impl SourceData for SourceDataVariant {
             SourceDataVariant::Map(m) => m.get(key),
         }
     }
-
-    fn set(&mut self, key: String, val: Value) -> Option<Value> {
-        match self {
-            SourceDataVariant::Map(m) => m.insert(key, val),
-        }
-    }
-
     fn take(&mut self, key: &str) -> Option<Value> {
         match self {
             SourceDataVariant::Map(m) => m.remove(key),
@@ -74,7 +66,6 @@ impl SourceData for SourceDataVariant {
 
 pub trait SourceData {
     fn get(&self, key: &str) -> Option<&Value>;
-    fn set(&mut self, key: String, val: Value) -> Option<Value>;
     fn take(&mut self, key: &str) -> Option<Value>;
 }
 
@@ -136,7 +127,7 @@ where
         }
     }
 
-    fn props_shared(&self, key: &str) -> Option<&Value> {
+    fn props_activity(&self, key: &str) -> Option<&Value> {
         if let Some(prop) = &self.prop_shared {
             prop.get(key)
         } else {
@@ -184,15 +175,6 @@ where
 
     fn set_prop_shared(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
         std::mem::replace(&mut self.prop_shared, Some(new))
-    }
-
-    fn replace_settings(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
-        if let Some(mut settings) = self.settings.as_mut() {
-            Some(std::mem::replace(&mut settings, new))
-        } else {
-            self.settings = Some(new);
-            None
-        }
     }
 
     fn take_storage(&mut self) -> Option<StorageBucket> {
@@ -270,7 +252,7 @@ impl SourceProvider for SourceMock {
     fn props_action(&self, key: &str) -> Option<&Value> {
         todo!()
     }
-    fn props_shared(&self, key: &str) -> Option<&Value> {
+    fn props_activity(&self, key: &str) -> Option<&Value> {
         todo!()
     }
 
@@ -299,9 +281,7 @@ impl MutableSource for SourceMock {
     fn set_prop_shared(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
         todo!()
     }
-    fn replace_settings(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
-        todo!()
-    }
+
     fn take_storage(&mut self) -> Option<StorageBucket> {
         todo!()
     }

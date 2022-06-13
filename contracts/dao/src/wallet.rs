@@ -499,6 +499,10 @@ impl Contract {
                 .into();
             let currently_available_amount =
                 partition.remove_amount(&asset, amount_per_activity, claimable_reward);
+            // Nothing available - check next reward.
+            if currently_available_amount == 0 {
+                continue;
+            }
             self.treasury_partition
                 .insert(&reward.partition_id, &partition.into());
             // Update caller's wallet with actually withdrawn amounts.

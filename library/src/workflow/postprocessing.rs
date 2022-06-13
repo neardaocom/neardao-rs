@@ -79,7 +79,6 @@ impl Postprocessing {
                         let value = eval(src, sources, expressions, Some(user_input))?;
                         values.push(value);
                     }
-
                     *ins = Instruction::StoreExpressionGlobalBinded(
                         key.clone(),
                         values,
@@ -163,7 +162,6 @@ impl Postprocessing {
                         )?;
                         values.push(result);
                     }
-
                     let next_ins = cond.eval(values.as_slice())? as usize;
                     // In case this condition is evaluated again we want to restore it back.
                     values.pop();
@@ -213,7 +211,6 @@ impl Postprocessing {
                         )?;
                         values.push(result);
                     }
-
                     let result = expr.eval(values.as_slice())?;
                     global_storage.add_data(key, &result);
                     values.pop();

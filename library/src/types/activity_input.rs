@@ -5,7 +5,6 @@ use near_sdk::serde::{Deserialize, Serialize};
 use super::datatype::Value;
 /// Trait representing input values for an activity.
 pub trait ActivityInput {
-    fn has_key(&self, key: &str) -> bool;
     fn get(&self, key: &str) -> Option<&Value>;
     fn set(&mut self, key: &str, val: Value);
     fn take(&mut self, key: &str) -> Option<Value>;
@@ -33,23 +32,15 @@ impl ActivityInput for HashMap<String, Value> {
     fn get(&self, key: &str) -> Option<&Value> {
         self.get(key)
     }
-
     fn set(&mut self, key: &str, val: Value) {
         self.insert(key.to_string(), val);
     }
-
     fn take(&mut self, key: &str) -> Option<Value> {
         self.insert(key.to_owned(), Value::default())
     }
-
     fn remove(&mut self, key: &str) -> Option<Value> {
         self.remove(key)
     }
-
-    fn has_key(&self, key: &str) -> bool {
-        self.contains_key(key)
-    }
-
     fn to_vec(&self) -> Vec<(String, Value)> {
         self.clone().into_iter().collect()
     }

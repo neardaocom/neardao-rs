@@ -36,7 +36,7 @@ impl SourceProvider for SourceMock {
         todo!()
     }
 
-    fn props_shared(&self, key: &str) -> Option<&Value> {
+    fn props_activity(&self, key: &str) -> Option<&Value> {
         todo!()
     }
 
@@ -59,10 +59,6 @@ impl MutableSource for SourceMock {
     }
 
     fn set_prop_action(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
-        todo!()
-    }
-
-    fn replace_settings(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
         todo!()
     }
 

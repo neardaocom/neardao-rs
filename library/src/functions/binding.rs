@@ -33,11 +33,13 @@ pub fn bind_input(
                 let mut key = object_key(prefix, counter.to_string().as_str(), def.key.as_str());
                 match data.collection_binding_type {
                     Overwrite => {
-                        while input.has_key(key.as_str()) {
+                        let mut has_key = input.get(key.as_str()).is_some();
+                        while has_key {
                             input.set(key.as_str(), value.clone());
                             counter += 1;
                             key =
                                 object_key(prefix, counter.to_string().as_str(), def.key.as_str());
+                            has_key = input.get(key.as_str()).is_some();
                         }
                     }
                     ForceSame(number) => {

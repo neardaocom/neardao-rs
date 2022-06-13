@@ -230,7 +230,7 @@ fn collection_to_json(
             counter.to_string().as_str(),
             metadata[meta_pos].arg_names[0].as_str(),
         );
-        while input.has_key(key.as_str()) {
+        while let Some(_) = input.get(key.as_str()) {
             key.clear();
             key.push_str(obj_prefix);
             key.push('.');
@@ -263,7 +263,7 @@ fn collection_tuple_to_json(
     if input.get(obj_prefix).is_none() {
         let mut counter: u8 = 0;
         let mut key = object_key(obj_prefix, counter.to_string().as_str(), "0");
-        while input.has_key(key.as_str()) {
+        while let Some(_) = input.get(key.as_str()) {
             key.clear();
             key.push_str(obj_prefix);
             key.push('.');
@@ -295,9 +295,9 @@ fn tuple_to_json(
     let mut key = String::with_capacity(obj_prefix.len() + 2);
     key.push_str(obj_prefix);
     key.push_str(".0");
-    if !optional && !input.has_key(&key) {
+    if !optional && input.get(&key).is_none() {
         return Err(ProcessingError::MissingInputKey("missing tuple key".into()));
-    } else if optional && !input.has_key(&key) {
+    } else if optional && input.get(&key).is_none() {
         buf.push_str(JSON_NULL);
         return Ok(());
     }
@@ -329,7 +329,7 @@ fn enum_to_json(
     for id in meta_pos {
         let enum_first_key = metadata[*id as usize].arg_names[0].as_str();
         let key = object_key(obj_prefix, enum_first_key, "");
-        if input.has_key(&key) {
+        if input.get(&key).is_some() {
             let dot_pos = enum_first_key
                 .find(|c| c == '.')
                 .unwrap_or_else(|| enum_first_key.len());
@@ -425,7 +425,7 @@ fn exist_next_variant(
         tmp_key.push_str(prefix);
         tmp_key.push('.');
         tmp_key.push_str(first_key);
-        if input.has_key(&tmp_key) {
+        if input.get(&tmp_key).is_some() {
             return true;
         }
     }
