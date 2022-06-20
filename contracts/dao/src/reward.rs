@@ -291,7 +291,7 @@ impl Contract {
     }
 
     /// Update Reward.
-    /// Currently only updates valid to param.
+    /// Currently only updates valid to time.
     pub fn reward_update(
         &mut self,
         id: u16,
@@ -299,7 +299,7 @@ impl Contract {
     ) -> Result<(), InternalDaoActionError> {
         if let Some(reward) = self.rewards.get(&id) {
             let mut reward: Reward = reward.into();
-            if reward.time_valid_from >= reward.time_valid_to {
+            if reward.time_valid_from >= time_valid_to {
                 return Err(InternalDaoActionError(
                     "reward's time valid from must be smaller than time valid to".into(),
                 ));

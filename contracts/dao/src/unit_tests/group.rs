@@ -1487,3 +1487,213 @@ fn group_scenario() {
     let withdraw_amount = contract.internal_withdraw_reward(&accounts(5), vec![1], &reward_asset);
     assert_eq!(withdraw_amount, 8);
 }
+
+#[test]
+fn group_add_remove_add_role_with_reward() {
+    let mut ctx = get_context_builder();
+    testing_env!(ctx.build());
+    let mut contract = get_default_contract();
+    assert_eq!(contract.total_members_count, 6);
+    assert_eq!(contract.group_last_id, 2);
+    let founder_account = as_account_id(FOUNDER_1);
+    let mut expected_founder_roles = founder_1_roles();
+    let expected_group_1_roles = default_group_1_roles();
+    assert_eq!(
+        contract.group_roles.get(&1).unwrap(),
+        expected_group_1_roles.clone()
+    );
+    assert_user_roles(
+        &contract,
+        as_account_id(FOUNDER_1),
+        Some(expected_founder_roles.clone()),
+    );
+    assert_group_rewards(&contract, 1, vec![]);
+    assert!(contract.wallet(founder_account.clone()).is_none());
+    // Add reward.
+    let reward_asset = Asset::Near;
+    let reward = Reward::new(
+        "test".into(),
+        1,
+        1,
+        1,
+        RewardType::new_wage(1),
+        vec![(reward_asset.clone(), 1)],
+        0,
+        1000,
+    );
+    let reward_id = contract.reward_add(reward).unwrap();
+    assert_eq!(contract.reward_last_id, reward_id);
+    assert_user_roles(
+        &contract,
+        as_account_id(FOUNDER_1),
+        Some(expected_founder_roles.clone()),
+    );
+    assert_group_rewards(&contract, 1, vec![(1, 1)]);
+    let founder_wallet = contract.get_wallet(&founder_account);
+    assert_wallet(
+        &founder_wallet,
+        reward_id,
+        vec![reward_asset.clone()],
+        0,
+        None,
+    );
+    testing_env!(ctx.block_timestamp(tm(10)).build());
+    let claimable_rewards = contract.claimable_rewards(founder_account.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        10
+    );
+    assert_eq!(
+        contract.group_roles.get(&1).unwrap(),
+        expected_group_1_roles.clone()
+    );
+    // Remove founder_1 from founder role.
+    contract.group_remove_member_roles(
+        1,
+        vec![MemberRoles {
+            name: GROUP_1_ROLE_1.into(),
+            members: vec![founder_account.clone()],
+        }],
+    );
+    expected_founder_roles = expected_founder_roles.remove_role(1, 1);
+    assert_user_roles(
+        &contract,
+        founder_account.clone(),
+        Some(expected_founder_roles.clone()),
+    );
+    assert_group_rewards(&contract, 1, vec![(1, 1)]);
+    let founder_wallet = contract.get_wallet(&founder_account);
+    assert_wallet(
+        &founder_wallet,
+        reward_id,
+        vec![reward_asset.clone()],
+        0,
+        Some(10),
+    );
+    testing_env!(ctx.block_timestamp(tm(50)).build());
+    let claimable_rewards = contract.claimable_rewards(founder_account.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        10
+    );
+    // Give founder_1 back his founder role.
+    let member_roles = vec![MemberRoles {
+        name: GROUP_1_ROLE_1.into(),
+        members: vec![founder_account.clone()],
+    }];
+    contract.group_add_members(1, vec![], member_roles);
+    expected_founder_roles.add_group_role(1, 1);
+    assert_user_roles(
+        &contract,
+        founder_account.clone(),
+        Some(expected_founder_roles.clone()),
+    );
+    assert_group_rewards(&contract, 1, vec![(1, 1)]);
+    let founder_wallet = contract.get_wallet(&founder_account);
+    assert_wallet(
+        &founder_wallet,
+        reward_id,
+        vec![reward_asset.clone()],
+        40,
+        None,
+    );
+    let claimable_rewards = contract.claimable_rewards(founder_account.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        10
+    );
+    testing_env!(ctx.block_timestamp(tm(100)).build());
+    let claimable_rewards = contract.claimable_rewards(founder_account.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        60
+    );
+    // Remove founder_1 from founder role again.
+    contract.group_remove_member_roles(
+        1,
+        vec![MemberRoles {
+            name: GROUP_1_ROLE_1.into(),
+            members: vec![founder_account.clone()],
+        }],
+    );
+    expected_founder_roles = expected_founder_roles.remove_role(1, 1);
+    assert_user_roles(
+        &contract,
+        founder_account.clone(),
+        Some(expected_founder_roles.clone()),
+    );
+    assert_group_rewards(&contract, 1, vec![(1, 1)]);
+    let founder_wallet = contract.get_wallet(&founder_account);
+    assert_wallet(
+        &founder_wallet,
+        reward_id,
+        vec![reward_asset.clone()],
+        40,
+        Some(100),
+    );
+    let claimable_rewards = contract.claimable_rewards(founder_account.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        60
+    );
+    let withdraw_amount =
+        contract.internal_withdraw_reward(&founder_account, vec![1], &reward_asset);
+    assert_eq!(withdraw_amount, 60);
+    // Give founder_1 back his founder role again.
+    testing_env!(ctx.block_timestamp(tm(300)).build());
+    let member_roles = vec![MemberRoles {
+        name: GROUP_1_ROLE_1.into(),
+        members: vec![founder_account.clone()],
+    }];
+    contract.group_add_members(1, vec![], member_roles);
+    expected_founder_roles.add_group_role(1, 1);
+    assert_user_roles(
+        &contract,
+        founder_account.clone(),
+        Some(expected_founder_roles.clone()),
+    );
+    assert_group_rewards(&contract, 1, vec![(1, 1)]);
+    let founder_wallet = contract.get_wallet(&founder_account);
+    assert_wallet(
+        &founder_wallet,
+        reward_id,
+        vec![reward_asset.clone()],
+        240,
+        None,
+    );
+    let claimable_rewards = contract.claimable_rewards(founder_account.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        0
+    );
+    testing_env!(ctx.block_timestamp(tm(1000)).build());
+    let claimable_rewards = contract.claimable_rewards(founder_account.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        700
+    );
+    let withdraw_amount =
+        contract.internal_withdraw_reward(&founder_account, vec![1], &reward_asset);
+    assert_eq!(withdraw_amount, 700);
+}

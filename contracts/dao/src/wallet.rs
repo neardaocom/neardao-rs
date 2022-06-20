@@ -49,8 +49,8 @@ impl Wallet {
             failed_withdraws: Vec::default(),
         }
     }
-    /// Add reward only if reward_id is unique.
-    /// Return true if sucessful.
+    /// Add `reward_id` to self.
+    /// If `reward_id` was already present, then timestamps are changed accordingly.
     /// Caller is responsible to:
     /// - provide unique assets.
     /// - provide correct `assets` values for `reward_id`, that means referenced reward has all provided assets.
@@ -62,11 +62,13 @@ impl Wallet {
         current_timestamp: TimestampSec,
         assets: Vec<Asset>,
     ) -> bool {
-        if self.find_reward_pos(reward_id).is_some() {
-            return false;
+        if let Some(pos) = self.find_reward_pos(reward_id) {
+            let reward = &mut self.rewards[pos];
+            reward.add_again(current_timestamp);
+        } else {
+            let reward = WalletReward::new(reward_id, reward_type, current_timestamp, assets);
+            self.rewards.push(reward);
         }
-        let reward = WalletReward::new(reward_id, reward_type, current_timestamp, assets);
-        self.rewards.push(reward);
         true
     }
     /// Return total sum of withdrawn `asset` from Wage `reward_id` reward.
@@ -188,6 +190,7 @@ impl Wallet {
 
 /// Reference to a Reward defined in contract.
 /// Store data about when was added/removed and withdraw stats.
+/// NOTE: Under current implementation when `WalletReward` is added again, then time stats are not precise anymore.
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct WalletReward {
@@ -265,6 +268,14 @@ impl WalletReward {
     pub fn reward_type(&self) -> RewardTypeIdent {
         let stat = &self.withdraw_stats[0];
         stat.get_reward_type()
+    }
+    /// Add stats again.
+    /// That means it currently subtract `current_timestamp` from time added and unsets time removed.
+    pub fn add_again(&mut self, current_timestamp: TimestampSec) {
+        if let Some(time_removed) = self.time_removed {
+            self.time_added = current_timestamp - (time_removed - self.time_added);
+            self.time_removed = None;
+        }
     }
     pub fn set_removed_timestamp(&mut self, timestamp: TimestampSec) {
         self.time_removed = Some(timestamp);

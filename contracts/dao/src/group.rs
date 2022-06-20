@@ -206,7 +206,6 @@ impl Contract {
     /// - Add all member roles to the group and to the members defined.
     /// NOTE: Accounts defined in `member_roles` but not in defined `members` nor in the existing group members,
     /// will be ignored.
-    /// TODO: Refactor maybe.
     pub fn group_add_members(
         &mut self,
         id: GroupId,
