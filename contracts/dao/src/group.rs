@@ -73,7 +73,6 @@ pub struct Group {
 }
 
 impl Group {
-    // TODO: Remove panic.
     pub fn new(settings: GroupSettings, members: Vec<GroupMember>) -> Self {
         if let Some(ref leader) = settings.leader {
             assert!(
@@ -98,7 +97,6 @@ impl Group {
     pub fn members_count(&self) -> usize {
         self.members.len()
     }
-
     /// Add member to the group.
     /// Return true if member was overwriten.
     pub fn add_member(&mut self, member: GroupMember) -> bool {
@@ -106,7 +104,6 @@ impl Group {
             .insert(member.account_id, member.tags)
             .is_some()
     }
-
     /// Removes member from group.
     /// Return true if actually removed.
     /// If the member is leader, then group leader is removed from it's settings.
@@ -121,7 +118,6 @@ impl Group {
     pub fn get_members_accounts_refs(&self) -> Vec<&AccountId> {
         self.members.iter().map(|member| member.0).collect()
     }
-
     pub fn get_members_accounts(&self) -> Vec<AccountId> {
         self.members
             .clone()
@@ -161,8 +157,7 @@ impl Group {
 impl Contract {
     /// Add `group` to the contract.
     /// Also add defined roles to all group users.
-    /// Update internal statistics.
-    /// TODO: Refactoring maybe.
+    /// Update fatal statistics.
     pub fn group_add(&mut self, group: GroupInput) {
         self.group_last_id += 1;
         self.internal_add_group_roles(
@@ -175,7 +170,6 @@ impl Contract {
             &Group::new(group.settings, group.members),
         );
     }
-
     pub fn get_group_members_with_role(
         &self,
         group_id: u16,
@@ -197,7 +191,6 @@ impl Contract {
         }
         result_members
     }
-
     /// Add members to the group if the group exist.
     /// It does following:
     /// - Add all `members` to the group, add them group role and assign all existing group member rewards.
@@ -218,7 +211,7 @@ impl Contract {
                 let mut group_roles = self
                     .group_roles
                     .get(&id)
-                    .expect("internal - group roles not found");
+                    .expect("fatal - group roles not found");
                 for role in member_roles {
                     let role_id =
                         if let Some(role_id) = group_roles.find_role_by_name(role.name.as_str()) {
@@ -262,7 +255,7 @@ impl Contract {
                     let mut user_roles = self
                         .user_roles
                         .get(&account_id)
-                        .expect("internal - user roles not found");
+                        .expect("fatal - user roles not found");
                     for role_id in roles {
                         user_roles.add_group_role(id, role_id);
                     }
@@ -300,7 +293,7 @@ impl Contract {
             let mut group_roles = self
                 .group_roles
                 .get(&id)
-                .expect("internal - group roles not found");
+                .expect("fatal - group roles not found");
             let rewards: Vec<(u16, u16)> = group.group_reward_ids();
             let current_timestamp = current_timestamp_sec();
             let mut user_cache: HashMap<AccountId, (UserRoles, Vec<(u16, u16)>)> = HashMap::new();
@@ -327,7 +320,7 @@ impl Contract {
                             let mut user_role = self
                                 .user_roles
                                 .get(&account_id)
-                                .expect("internal - user roles not found");
+                                .expect("fatal - user roles not found");
                             user_role.remove_group_role(id, role_id);
                             user_cache.insert(account_id, (user_role, rewards_to_remove.clone()));
                         }
@@ -360,7 +353,7 @@ impl Contract {
             let group_roles = self
                 .group_roles
                 .get(&id)
-                .expect("internal - group roles not found");
+                .expect("fatal - group roles not found");
             let rewards: Vec<(u16, u16)> = group.group_reward_ids();
             let current_timestamp = current_timestamp_sec();
             let mut user_cache: HashMap<AccountId, (UserRoles, Vec<(u16, u16)>)> = HashMap::new();
@@ -379,7 +372,7 @@ impl Contract {
                             let mut user_role = self
                                 .user_roles
                                 .get(&account_id)
-                                .expect("internal - user roles not found");
+                                .expect("fatal - user roles not found");
                             user_role.remove_group_role(id, role_id);
                             user_cache.insert(account_id, (user_role, rewards_to_remove.clone()));
                         }
@@ -399,7 +392,6 @@ impl Contract {
             false
         }
     }
-
     pub fn group_remove(&mut self, id: GroupId) {
         if let Some(group) = self.groups.get(&id) {
             let rewards: Vec<(u16, u16)> = group.group_reward_ids();
@@ -412,9 +404,8 @@ impl Contract {
             self.groups.remove(&id);
         }
     }
-    /// TODO: Refactor.
-    /// Add group roles and user roles to self.
-    /// Return Err if user roles do not match.
+    /// Add group roles to the group and user roles to its members
+    /// when group is created.
     pub fn internal_add_group_roles(
         &mut self,
         group_id: u16,
@@ -433,7 +424,7 @@ impl Contract {
         for member_role in group_member_roles.into_iter() {
             if let Some(role_id) = group_roles.insert(member_role.name) {
                 for member in member_role.members {
-                    let user_roles = cache.get_mut(&member).expect("User roles do not match.");
+                    let user_roles = cache.get_mut(&member).expect("user roles do not match");
                     user_roles.add_group_role(self.group_last_id, role_id);
                 }
             }

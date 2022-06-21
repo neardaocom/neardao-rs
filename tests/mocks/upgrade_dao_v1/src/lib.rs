@@ -1,4 +1,5 @@
 #![allow(unreachable_patterns)]
+#![allow(unused)]
 
 use library::workflow::{
     instance::Instance,

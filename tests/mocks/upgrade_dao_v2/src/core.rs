@@ -231,17 +231,11 @@ impl Contract {
     #[private]
     #[init(ignore_state)]
     pub fn deploy_upgrade_bin() -> Self {
-        assert!(
-            !env::storage_has_key(&StorageKeys::NewVersionMigrationBin.into_storage_key()),
-            "migrate data first"
-        );
-        assert!(
-            env::storage_remove(&StorageKeys::NewVersionUpgradeBin.into_storage_key()),
-            "internal - missing upgrade dao bin"
-        );
         let contract: Contract = env::state_read().unwrap();
         log!("{:?}", contract.test_data.to_vec());
         log!("{:?}", contract.non_migrable_test_data.to_vec());
+        env::storage_remove(&StorageKeys::NewVersionMigrationBin.into_storage_key());
+        env::storage_remove(&StorageKeys::NewVersionUpgradeBin.into_storage_key());
         contract
     }
 

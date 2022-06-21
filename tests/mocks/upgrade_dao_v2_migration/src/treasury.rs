@@ -56,8 +56,8 @@ pub struct PartitionAsset {
 #[serde(rename_all = "snake_case")]
 pub enum Asset {
     Near,
-    FT(AssetFT),
-    NFT(AssetNFT),
+    Ft(AssetFT),
+    Nft(AssetNFT),
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone)]

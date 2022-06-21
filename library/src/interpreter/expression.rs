@@ -1,4 +1,3 @@
-#[allow(unreachable_patterns)]
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::U128,

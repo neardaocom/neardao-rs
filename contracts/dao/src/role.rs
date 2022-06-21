@@ -150,9 +150,11 @@ pub struct MemberRoles {
 impl Contract {
     /// Save `roles` for `account_id`.
     /// If `roles` are empty, remove it from the contract.
+    /// Update internal member statistics.
     pub fn save_user_roles(&mut self, account_id: &AccountId, roles: &UserRoles) {
         if roles.is_empty() {
             self.user_roles.remove(account_id);
+            self.total_members_count -= 1;
         } else if self.user_roles.insert(account_id, roles).is_none() {
             self.total_members_count += 1;
         }
@@ -163,12 +165,7 @@ impl Contract {
     pub fn remove_user_role_group(&mut self, account_id: &AccountId, group_id: u16) {
         if let Some(mut roles) = self.user_roles.get(&account_id) {
             roles.remove_all_group_roles(group_id);
-            if !roles.is_empty() {
-                self.user_roles.insert(account_id, &roles);
-            } else {
-                self.user_roles.remove(account_id);
-                self.total_members_count -= 1;
-            }
+            self.save_user_roles(account_id, &roles);
         }
     }
 }

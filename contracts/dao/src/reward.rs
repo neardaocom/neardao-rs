@@ -264,17 +264,13 @@ impl Contract {
         }
         let current_timestamp = current_timestamp_sec();
         for user in rewarded_users {
-            if !self.add_wallet_reward(
+            self.add_wallet_reward(
                 self.reward_last_id,
                 reward.get_reward_type(),
                 &user,
                 reward_assets.clone(),
                 current_timestamp,
-            ) {
-                return Err(InternalDaoActionError(
-                    "failed to added reward to user wallet".into(),
-                ));
-            }
+            );
         }
         if reward.get_reward_type() == RewardTypeIdent::UserActivity {
             for activity_id in reward.rewarded_activities() {
@@ -324,7 +320,6 @@ impl Contract {
     }
 
     /// Add Reward data to the `account_id`'s wallet.
-    /// Return true if added.
     pub fn add_wallet_reward(
         &mut self,
         reward_id: u16,
@@ -332,11 +327,10 @@ impl Contract {
         account_id: &AccountId,
         assets: Vec<Asset>,
         current_timestamp: TimestampSec,
-    ) -> bool {
+    ) {
         let mut wallet = self.get_wallet(account_id);
-        let added = wallet.add_reward(reward_id, reward_type, current_timestamp, assets);
+        wallet.add_reward(reward_id, reward_type, current_timestamp, assets);
         self.wallets.insert(account_id, &wallet.into());
-        added
     }
     /// Add multiple Rewards to the `account_is` wallet.
     pub fn add_wallet_rewards(

@@ -3,7 +3,8 @@ use near_sdk::collections::UnorderedMap;
 use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, ext_contract, log, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise,
+    env, ext_contract, log, near_bindgen, require, AccountId, BorshStorageKey, PanicOnDefault,
+    Promise,
 };
 use near_sdk::{Gas, IntoStorageKey};
 
@@ -87,7 +88,7 @@ impl Contract {
     #[private]
     #[init(ignore_state)]
     pub fn migrate(r#type: MigrationType) -> Self {
-        let mut factory: Contract = env::state_read().expect("Failed to read contract state.");
+        let mut factory: Contract = env::state_read().expect("failed to read contract state");
         if r#type != MigrationType::OnlyMigration {
             let is_upgrade = r#type == MigrationType::NewUpgradeBin;
             let key = factory.update_version_and_get_slot(is_upgrade);
@@ -121,6 +122,9 @@ impl Contract {
     pub fn get_stats(self) -> FactoryStats {
         FactoryStats {
             latest_dao_version: self.version_count,
+            migration_versions: self.latest_migration_version_idx,
+            upgrade_versions: self.latest_upgrade_version_idx,
+            versions_stored: MAX_DAO_VERSIONS,
         }
     }
 
@@ -129,11 +133,10 @@ impl Contract {
         assert!(env::attached_deposit() >= DEPOSIT_CREATE);
         let account_id: AccountId = format!("{}.{}", name, env::current_account_id())
             .try_into()
-            .expect("Account is not valid.");
-        assert!(
+            .expect("account is invalid");
+        require!(
             self.get_dao_info(&account_id).is_none(),
-            "{}",
-            "Dao already exists"
+            "dao already exists"
         );
         let promise = Promise::new(account_id.clone())
             .create_account()
@@ -203,11 +206,6 @@ impl Contract {
 
 impl Contract {
     pub fn update_version_and_get_slot(&mut self, upgrade: bool) -> StorageKeys {
-        if self.latest_upgrade_version_idx == MAX_DAO_VERSIONS {
-            self.latest_upgrade_version_idx = 1;
-            self.latest_migration_version_idx = 1;
-        }
-
         if upgrade {
             self.latest_upgrade_version_idx += 1;
         } else {
@@ -217,37 +215,55 @@ impl Contract {
         if self.latest_migration_version_idx == self.latest_upgrade_version_idx {
             self.version_count += 1;
         }
-
-        assert!(
+        require!(
             self.latest_migration_version_idx
                 .checked_sub(self.latest_upgrade_version_idx)
                 .unwrap_or(2)
                 <= 1,
-            "Load next upgrade bin first."
+            "load next upgrade bin first"
         );
-
-        // Store new dao version to storage
         let key = if upgrade {
-            match self.latest_upgrade_version_idx {
+            match self.latest_upgrade_version_idx % 5 {
                 1 => StorageKeys::V1Upgrade,
                 2 => StorageKeys::V2Upgrade,
                 3 => StorageKeys::V3Upgrade,
                 4 => StorageKeys::V4Upgrade,
-                5 => StorageKeys::V5Upgrade,
+                0 => StorageKeys::V5Upgrade,
                 _ => unreachable!(),
             }
         } else {
-            match self.latest_migration_version_idx {
+            match self.latest_migration_version_idx % 5 {
                 1 => StorageKeys::V1Migration,
                 2 => StorageKeys::V2Migration,
                 3 => StorageKeys::V3Migration,
                 4 => StorageKeys::V4Migration,
-                5 => StorageKeys::V5Migration,
+                0 => StorageKeys::V5Migration,
                 _ => unreachable!(),
             }
         };
         key
     }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn get_next_version_keys(current_version: u8) -> (StorageKeys, StorageKeys) {
+    let key_migration = match current_version % 5 {
+        0 => StorageKeys::V1Migration,
+        1 => StorageKeys::V2Migration,
+        2 => StorageKeys::V3Migration,
+        3 => StorageKeys::V4Migration,
+        4 => StorageKeys::V5Migration,
+        _ => unreachable!(),
+    };
+    let key_upgrade = match current_version % 5 {
+        0 => StorageKeys::V1Upgrade,
+        1 => StorageKeys::V2Upgrade,
+        2 => StorageKeys::V3Upgrade,
+        3 => StorageKeys::V4Upgrade,
+        4 => StorageKeys::V5Upgrade,
+        _ => unreachable!(),
+    };
+    (key_migration, key_upgrade)
 }
 
 /// Sends wasm blobs back to caller (dao) based on provided dao version
@@ -265,40 +281,25 @@ pub extern "C" fn download_new_version() {
     let method_store_upgrade_bin = "store_upgrade_bin";
 
     log!("Got version: {:?}", version);
-
     let last_version_stored: u8 = u8::from_le(
         env::storage_read(&StorageKeys::LatestVersion.into_storage_key())
-            .expect("No upgrade stored yet.")[0],
+            .expect("no upgrade stored yet")[0],
     );
-    assert!(
+    require!(
         last_version_stored > version,
-        "Next version is not available."
+        "next version is not available"
+    );
+    require!(
+        last_version_stored - version <= MAX_DAO_VERSIONS,
+        "upgrade is not possible"
     );
 
-    let key_migration = match version % 5 {
-        0 => StorageKeys::V1Migration,
-        1 => StorageKeys::V2Migration,
-        2 => StorageKeys::V3Migration,
-        3 => StorageKeys::V4Migration,
-        4 => StorageKeys::V5Migration,
-        _ => unreachable!(),
-    }
-    .into_storage_key();
+    let (key_migration, key_upgrade) = get_next_version_keys(version);
 
-    let key_upgrade = match version % 5 {
-        0 => StorageKeys::V1Upgrade,
-        1 => StorageKeys::V2Upgrade,
-        2 => StorageKeys::V3Upgrade,
-        3 => StorageKeys::V4Upgrade,
-        4 => StorageKeys::V5Upgrade,
-        _ => unreachable!(),
-    }
-    .into_storage_key();
-
-    let migration_bin = env::storage_read(key_migration.as_slice())
-        .expect("Next version migration code not found.");
-    let upgrade_bin =
-        env::storage_read(key_upgrade.as_slice()).expect("Next version upgrade code not found.");
+    let migration_bin = env::storage_read(key_migration.into_storage_key().as_slice())
+        .expect("migration code not found");
+    let upgrade_bin = env::storage_read(key_upgrade.into_storage_key().as_slice())
+        .expect("upgrade code not found");
     let promise_id = env::promise_batch_create(&caller);
     env::promise_batch_action_function_call(
         promise_id,
@@ -333,6 +334,9 @@ pub struct DaoInfo {
 #[serde(crate = "near_sdk::serde")]
 pub struct FactoryStats {
     latest_dao_version: u8,
+    migration_versions: u8,
+    upgrade_versions: u8,
+    versions_stored: u8,
 }
 
 #[cfg(test)]
@@ -341,30 +345,141 @@ mod tests {
 
     use super::*;
     #[test]
-    pub fn rotate_slots() {
+    fn rotate_slots() {
         let context = VMContextBuilder::new();
         testing_env!(context.build());
 
         let mut factory = Contract::new(vec![]);
-        /*
         assert_eq!(factory.version_count, 1);
+        assert_eq!(factory.latest_migration_version_idx, 1);
+        assert_eq!(factory.latest_upgrade_version_idx, 1);
 
-        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V2);
+        assert_eq!(
+            factory.update_version_and_get_slot(false),
+            StorageKeys::V2Migration
+        );
+        assert_eq!(factory.version_count, 1);
+        assert_eq!(factory.latest_migration_version_idx, 2);
+        assert_eq!(factory.latest_upgrade_version_idx, 1);
+        assert_eq!(
+            factory.update_version_and_get_slot(true),
+            StorageKeys::V2Upgrade
+        );
         assert_eq!(factory.version_count, 2);
+        assert_eq!(factory.latest_migration_version_idx, 2);
+        assert_eq!(factory.latest_upgrade_version_idx, 2);
 
-        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V3);
+        assert_eq!(
+            factory.update_version_and_get_slot(false),
+            StorageKeys::V3Migration
+        );
+        assert_eq!(factory.version_count, 2);
+        assert_eq!(factory.latest_migration_version_idx, 3);
+        assert_eq!(factory.latest_upgrade_version_idx, 2);
+
+        assert_eq!(
+            factory.update_version_and_get_slot(true),
+            StorageKeys::V3Upgrade
+        );
         assert_eq!(factory.version_count, 3);
+        assert_eq!(factory.latest_migration_version_idx, 3);
+        assert_eq!(factory.latest_upgrade_version_idx, 3);
 
-        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V4);
+        assert_eq!(
+            factory.update_version_and_get_slot(false),
+            StorageKeys::V4Migration
+        );
+        assert_eq!(factory.version_count, 3);
+        assert_eq!(factory.latest_migration_version_idx, 4);
+        assert_eq!(factory.latest_upgrade_version_idx, 3);
+
+        assert_eq!(
+            factory.update_version_and_get_slot(true),
+            StorageKeys::V4Upgrade
+        );
         assert_eq!(factory.version_count, 4);
+        assert_eq!(factory.latest_migration_version_idx, 4);
+        assert_eq!(factory.latest_upgrade_version_idx, 4);
 
-        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V5);
+        assert_eq!(
+            factory.update_version_and_get_slot(false),
+            StorageKeys::V5Migration
+        );
+        assert_eq!(factory.version_count, 4);
+        assert_eq!(factory.latest_migration_version_idx, 5);
+        assert_eq!(factory.latest_upgrade_version_idx, 4);
+
+        assert_eq!(
+            factory.update_version_and_get_slot(true),
+            StorageKeys::V5Upgrade
+        );
         assert_eq!(factory.version_count, 5);
+        assert_eq!(factory.latest_migration_version_idx, 5);
+        assert_eq!(factory.latest_upgrade_version_idx, 5);
 
-        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V1);
+        assert_eq!(
+            factory.update_version_and_get_slot(false),
+            StorageKeys::V1Migration
+        );
+        assert_eq!(factory.version_count, 5);
+        assert_eq!(factory.latest_migration_version_idx, 6);
+        assert_eq!(factory.latest_upgrade_version_idx, 5);
+
+        assert_eq!(
+            factory.update_version_and_get_slot(true),
+            StorageKeys::V1Upgrade
+        );
         assert_eq!(factory.version_count, 6);
+        assert_eq!(factory.latest_migration_version_idx, 6);
+        assert_eq!(factory.latest_upgrade_version_idx, 6);
+    }
 
-        assert_eq!(factory.update_version_and_get_slot(), StorageKeys::V2);
-        assert_eq!(factory.version_count, 7); */
+    #[test]
+    #[should_panic]
+    fn rotate_slots_invalid_use() {
+        let context = VMContextBuilder::new();
+        testing_env!(context.build());
+
+        let mut factory = Contract::new(vec![]);
+        assert_eq!(factory.version_count, 1);
+        assert_eq!(factory.latest_migration_version_idx, 1);
+        assert_eq!(factory.latest_upgrade_version_idx, 1);
+
+        assert_eq!(
+            factory.update_version_and_get_slot(false),
+            StorageKeys::V2Migration
+        );
+        assert_eq!(factory.version_count, 1);
+        assert_eq!(factory.latest_migration_version_idx, 2);
+        assert_eq!(factory.latest_upgrade_version_idx, 1);
+        factory.update_version_and_get_slot(false);
+    }
+
+    #[test]
+    fn get_next_version() {
+        assert_eq!(
+            get_next_version_keys(1),
+            (StorageKeys::V2Migration, StorageKeys::V2Upgrade)
+        );
+        assert_eq!(
+            get_next_version_keys(2),
+            (StorageKeys::V3Migration, StorageKeys::V3Upgrade)
+        );
+        assert_eq!(
+            get_next_version_keys(3),
+            (StorageKeys::V4Migration, StorageKeys::V4Upgrade)
+        );
+        assert_eq!(
+            get_next_version_keys(4),
+            (StorageKeys::V5Migration, StorageKeys::V5Upgrade)
+        );
+        assert_eq!(
+            get_next_version_keys(5),
+            (StorageKeys::V1Migration, StorageKeys::V1Upgrade)
+        );
+        assert_eq!(
+            get_next_version_keys(6),
+            (StorageKeys::V2Migration, StorageKeys::V2Upgrade)
+        );
     }
 }

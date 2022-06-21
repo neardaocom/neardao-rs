@@ -61,7 +61,7 @@ impl Wallet {
         reward_type: RewardTypeIdent,
         current_timestamp: TimestampSec,
         assets: Vec<Asset>,
-    ) -> bool {
+    ) {
         if let Some(pos) = self.find_reward_pos(reward_id) {
             let reward = &mut self.rewards[pos];
             reward.add_again(current_timestamp);
@@ -69,7 +69,6 @@ impl Wallet {
             let reward = WalletReward::new(reward_id, reward_type, current_timestamp, assets);
             self.rewards.push(reward);
         }
-        true
     }
     /// Return total sum of withdrawn `asset` from Wage `reward_id` reward.
     /// Panic if `reward_id` is not found or is invalid type of reward.

@@ -529,7 +529,7 @@ impl Contract {
             Asset::Near => {
                 Promise::new(account_id).transfer(amount);
             }
-            Asset::FT(ft) => {
+            Asset::Ft(ft) => {
                 let args = format!(
                     "{{\"receiver_id\":\"{}\",\"amount\":\"{}\",\"memo\":null}}",
                     account_id, amount
@@ -546,7 +546,7 @@ impl Contract {
                             ),
                     );
             }
-            Asset::NFT(nft) => {
+            Asset::Nft(nft) => {
                 let approval_id_string = if let Some(approval_id) = nft.approval_id.clone() {
                     approval_id.to_string()
                 } else {
