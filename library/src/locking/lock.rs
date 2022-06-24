@@ -5,8 +5,6 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-// TODO: Integration tests.
-
 #[derive(Deserialize, Serialize, BorshDeserialize, BorshSerialize, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Debug, Copy, Clone))]
 #[serde(crate = "near_sdk::serde")]

@@ -7,9 +7,9 @@ use crate::test_data::WfOptionalActions;
 use crate::types::ProposalState;
 use crate::utils::{
     check_instance, check_wf_storage_values, check_wf_templates, create_dao_via_factory,
-    create_ft_via_factory, debug_log, init_dao_factory, init_ft_factory, init_skyward,
-    init_staking, init_wnear, init_workflow_provider, load_workflow_templates, proposal_to_finish,
-    run_activity, statistics, storage_deposit, wf_log, workflow_finish, workflow_storage_buckets,
+    create_ft_via_factory, debug_log, init_dao_factory, init_ft_factory, init_staking,
+    init_workflow_provider, load_workflow_templates, proposal_to_finish, run_activity, statistics,
+    storage_deposit, wf_log, workflow_finish, workflow_storage_buckets,
     ActivityInputTestOptionalActions as ActivityInput, ActivityInputWfBasicPkg1, Wait,
 };
 

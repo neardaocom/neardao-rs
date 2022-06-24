@@ -2,17 +2,15 @@ use std::collections::HashMap;
 
 use near_sdk::{ONE_NEAR, ONE_YOCTO};
 
-use crate::{object_metadata::standard_fn_calls::NEP_141_FT_TRANSFER_CALL, TemplateData};
+use crate::TemplateData;
 use library::{
     types::{datatype::Value, source::SourceDataVariant},
     workflow::{
-        action::{
-            ActionData, DaoActionData, FnCallData, FnCallIdType, InputSource, TemplateAction,
-        },
+        action::{ActionData, DaoActionData, InputSource, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
         template::Template,
-        types::{ActivityRight, DaoActionIdent, Src, ValueSrc, VoteScenario},
+        types::{ActivityRight, DaoActionIdent, VoteScenario},
     },
 };
 

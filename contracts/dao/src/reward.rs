@@ -21,6 +21,7 @@ pub enum VersionedReward {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct Reward {
     pub name: String,
@@ -130,6 +131,7 @@ impl Reward {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 pub enum RewardType {
@@ -141,6 +143,7 @@ pub enum RewardType {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct RewardWage {
     /// Amount of seconds define one unit.
@@ -149,6 +152,7 @@ pub struct RewardWage {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
 #[serde(crate = "near_sdk::serde")]
 pub struct RewardUserActivity {
     pub activity_ids: Vec<u8>,
@@ -241,36 +245,46 @@ impl Contract {
                 "reward's time valid from must be smaller than time valid to".into(),
             ));
         }
-        let mut group = self
-            .groups
-            .get(&reward.group_id)
-            .ok_or(InternalDaoActionError("group not found".into()))?;
-        let rewarded_users = if reward.role_id == 0 {
-            group.get_members_accounts()
-        } else {
-            self.get_group_members_with_role(reward.group_id, &group, reward.role_id)
-        };
         self.reward_last_id += 1;
-        let mut reward_assets: Vec<Asset> = reward
-            .reward_amounts()
-            .into_iter()
-            .map(|(a, _)| a.to_owned())
-            .collect();
-        reward_assets.sort();
-        let len_before = reward_assets.len();
-        reward_assets.dedup();
-        if len_before != reward_assets.len() {
-            return Err(InternalDaoActionError("duplicate assets".into()));
-        }
-        let current_timestamp = current_timestamp_sec();
-        for user in rewarded_users {
-            self.add_wallet_reward(
-                self.reward_last_id,
-                reward.get_reward_type(),
-                &user,
-                reward_assets.clone(),
-                current_timestamp,
-            );
+
+        // In case of group_id == 0 all wallet reward entries are created lazily.
+        if reward.group_id > 0 {
+            let mut group = self
+                .groups
+                .get(&reward.group_id)
+                .ok_or(InternalDaoActionError("group not found".into()))?;
+            let rewarded_users = if reward.role_id == 0 {
+                group.get_members_accounts()
+            } else {
+                self.get_group_members_with_role(reward.group_id, &group, reward.role_id)
+            };
+            let mut reward_assets: Vec<Asset> = reward
+                .reward_amounts()
+                .into_iter()
+                .map(|(a, _)| a.to_owned())
+                .collect();
+            reward_assets.sort();
+            let len_before = reward_assets.len();
+            reward_assets.dedup();
+            if len_before != reward_assets.len() {
+                return Err(InternalDaoActionError("duplicate assets".into()));
+            }
+            let current_timestamp = current_timestamp_sec();
+            for user in rewarded_users {
+                self.add_wallet_reward(
+                    self.reward_last_id,
+                    reward.get_reward_type(),
+                    &user,
+                    reward_assets.clone(),
+                    current_timestamp,
+                );
+            }
+            group.add_new_reward(self.reward_last_id, reward.role_id);
+            self.groups.insert(&reward.group_id, &group);
+        } else if reward.get_reward_type() != RewardTypeIdent::UserActivity {
+            return Err(InternalDaoActionError(
+                "only activity rewards can be defined for anyone".into(),
+            ));
         }
         if reward.get_reward_type() == RewardTypeIdent::UserActivity {
             for activity_id in reward.rewarded_activities() {
@@ -280,8 +294,6 @@ impl Contract {
                 }
             }
         }
-        group.add_new_reward(self.reward_last_id, reward.role_id);
-        self.groups.insert(&reward.group_id, &group);
         self.rewards.insert(&self.reward_last_id, &reward.into());
         Ok(self.reward_last_id)
     }
@@ -373,20 +385,34 @@ impl Contract {
     }
 
     /// Register executed activity to `account_id`'s Wallet for each reward.
+    /// Also register activity rewards for anyone in the `account_id` wallet.
     pub fn register_executed_activity(&mut self, account_id: &AccountId, activity_id: u8) {
-        if let Some(wallet) = self.wallets.get(account_id) {
-            let mut wallet: Wallet = wallet.into();
-            let valid_rewards = self.valid_reward_list_for_activity(activity_id);
-            for reward_id in valid_rewards {
-                wallet.add_executed_activity(reward_id);
+        let mut wallet: Wallet = self.get_wallet(account_id).into();
+        let valid_rewards = self.valid_reward_list_for_activity(activity_id);
+        let current_timestamp = current_timestamp_sec();
+        for (id, reward) in valid_rewards {
+            if reward.group_id == 0 && wallet.wallet_reward(id).is_none() {
+                wallet.add_reward(
+                    id,
+                    reward.get_reward_type(),
+                    current_timestamp,
+                    reward
+                        .reward_amounts()
+                        .into_iter()
+                        .map(|(a, _)| a.clone())
+                        .collect(),
+                );
             }
+            wallet.add_executed_activity(id);
+        }
+        if !wallet.rewards().is_empty() {
             self.wallets.insert(account_id, &wallet.into());
         }
     }
 
     /// Return list of valid reward ids that reward `activity_id`.
     /// Also update cache - remove expired rewards.
-    pub fn valid_reward_list_for_activity(&mut self, activity_id: u8) -> Vec<u16> {
+    pub fn valid_reward_list_for_activity(&mut self, activity_id: u8) -> Vec<(u16, Reward)> {
         let mut reward_list = vec![];
         let mut expired_reward_ids = vec![];
         let mut rewards = self
@@ -401,7 +427,7 @@ impl Contract {
                 .expect("fatal - reward not defined")
                 .into();
             if reward.is_valid(current_timestamp) {
-                reward_list.push(*id);
+                reward_list.push((*id, reward));
             } else {
                 expired_reward_ids.push(*id);
             }

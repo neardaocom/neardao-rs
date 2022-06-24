@@ -1,6 +1,9 @@
 use data::workflow::basic::basic_package::WfBasicPkg1;
-use library::locking::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingDB, UnlockingInput};
-use near_sdk::{testing_env, AccountId, ONE_NEAR};
+use library::{
+    locking::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingDB, UnlockingInput},
+    workflow::types::ActivityRight,
+};
+use near_sdk::{test_utils::accounts, testing_env, AccountId, ONE_NEAR};
 
 use crate::{
     constants::LATEST_REWARD_ACTIVITY_ID,
@@ -390,6 +393,131 @@ fn reward_activity_one_asset() {
         .asset(&reward_asset)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR - 200);
+}
+
+#[test]
+fn reward_activity_one_asset_for_anyone() {
+    let mut ctx = get_context_builder();
+    testing_env!(ctx.build());
+    let mut contract = get_default_contract();
+    let mut tpl_settings = contract.workflow_template.get(&1).unwrap();
+    tpl_settings.1[0].allowed_voters = ActivityRight::Anyone;
+    contract.workflow_template.insert(&1, &tpl_settings);
+    let reward_asset = Asset::Near;
+    let (founder_1, founder_2, founder_3) = (
+        as_account_id(FOUNDER_1),
+        as_account_id(FOUNDER_2),
+        as_account_id(FOUNDER_3),
+    );
+    let random_account = accounts(5);
+    let reward = Reward::new(
+        "test".into(),
+        0,
+        0,
+        1,
+        RewardType::new_user_activity(vec![0, 1]),
+        vec![(reward_asset.clone(), 100)],
+        0,
+        4000,
+    );
+    let reward_id = contract.reward_add(reward).unwrap();
+    assert!(contract.wallets.get(&founder_1).is_none());
+    assert!(contract.wallets.get(&founder_2).is_none());
+    assert!(contract.wallets.get(&founder_3).is_none());
+    assert!(contract.wallets.get(&random_account).is_none());
+
+    // Founder_1 adds new proposal and votes for it to get rewards for activities.
+    testing_env!(ctx
+        .predecessor_account_id(founder_1.clone())
+        .attached_deposit(ONE_NEAR)
+        .build());
+    let mut tpl_settings = dummy_template_settings();
+    tpl_settings.allowed_voters = ActivityRight::Anyone;
+    let proposal_id = contract.proposal_create(
+        None,
+        1,
+        0,
+        dummy_propose_settings(),
+        Some(vec![dummy_template_settings()]),
+        None,
+    );
+    testing_env!(ctx
+        .predecessor_account_id(founder_1.clone())
+        .attached_deposit(1)
+        .build());
+    contract.proposal_vote(proposal_id, 1);
+    assert!(contract.wallets.get(&founder_1).is_some());
+    assert!(contract.wallets.get(&founder_2).is_none());
+    assert!(contract.wallets.get(&founder_3).is_none());
+    assert!(contract.wallets.get(&random_account).is_none());
+    testing_env!(ctx
+        .predecessor_account_id(random_account.clone())
+        .attached_deposit(1)
+        .build());
+    contract.proposal_vote(proposal_id, 1);
+    assert!(contract.wallets.get(&founder_1).is_some());
+    assert!(contract.wallets.get(&founder_2).is_none());
+    assert!(contract.wallets.get(&founder_3).is_none());
+    assert!(contract.wallets.get(&random_account).is_some());
+    testing_env!(ctx.block_timestamp(tm(1000)).build());
+    contract.proposal_finish(proposal_id);
+    let proposal: Proposal = contract.proposals.get(&proposal_id).unwrap().into();
+    assert!(proposal.state == ProposalState::Accepted);
+    assert!(contract.wallets.get(&founder_2).is_none());
+    assert!(contract.wallets.get(&founder_3).is_none());
+    let wallet_1 = get_wallet(&contract, &founder_1);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet_1, reward_id, &reward_asset);
+    let activity_stats = withdraw_stats
+        .activity_as_ref()
+        .expect("reward is not activity");
+    assert_eq!(activity_stats.timestamp_last_withdraw, 0);
+    assert_eq!(activity_stats.executed_count, 2);
+    assert_eq!(activity_stats.total_withdrawn_count, 0);
+    let claimable_rewards = contract.claimable_rewards(founder_1.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        200
+    );
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    assert_eq!(withdraw_amount, 200);
+    let claimable_rewards = contract.claimable_rewards(founder_1.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        0
+    );
+    let wallet_2 = get_wallet(&contract, &random_account);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet_2, reward_id, &reward_asset);
+    let activity_stats = withdraw_stats
+        .activity_as_ref()
+        .expect("reward is not activity");
+    assert_eq!(activity_stats.timestamp_last_withdraw, 0);
+    assert_eq!(activity_stats.executed_count, 1);
+    assert_eq!(activity_stats.total_withdrawn_count, 0);
+    let claimable_rewards = contract.claimable_rewards(random_account.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        100
+    );
+    let withdraw_amount =
+        contract.internal_withdraw_reward(&random_account, vec![1], &reward_asset);
+    assert_eq!(withdraw_amount, 100);
+    let claimable_rewards = contract.claimable_rewards(random_account.clone());
+    assert_eq!(
+        claimable_rewards_sum(
+            claimable_rewards.claimable_rewards.as_slice(),
+            &reward_asset
+        ),
+        0
+    );
 }
 
 #[test]
@@ -1254,7 +1382,7 @@ fn cache_reward_activity_management() {
             (4, vec![]),
         ],
     );
-    let reward = Reward::new(
+    let reward_1 = Reward::new(
         "test".into(),
         1,
         0,
@@ -1264,14 +1392,14 @@ fn cache_reward_activity_management() {
         0,
         10,
     );
-    let reward_id_1 = contract.reward_add(reward).unwrap();
+    let reward_id_1 = contract.reward_add(reward_1.clone()).unwrap();
     assert_eq!(
         contract.valid_reward_list_for_activity(0),
-        vec![reward_id_1]
+        vec![(reward_id_1, reward_1.clone())]
     );
     assert_eq!(
         contract.valid_reward_list_for_activity(1),
-        vec![reward_id_1]
+        vec![(reward_id_1, reward_1.clone())]
     );
     assert_cache_reward_activity(
         &contract,
@@ -1284,7 +1412,7 @@ fn cache_reward_activity_management() {
         ],
     );
 
-    let reward = Reward::new(
+    let reward_2 = Reward::new(
         "test".into(),
         1,
         0,
@@ -1294,18 +1422,21 @@ fn cache_reward_activity_management() {
         0,
         100,
     );
-    let reward_id_2 = contract.reward_add(reward).unwrap();
+    let reward_id_2 = contract.reward_add(reward_2.clone()).unwrap();
     assert_eq!(
         contract.valid_reward_list_for_activity(0),
-        vec![reward_id_1, reward_id_2]
+        vec![
+            (reward_id_1, reward_1.clone()),
+            (reward_id_2, reward_2.clone())
+        ]
     );
     assert_eq!(
         contract.valid_reward_list_for_activity(1),
-        vec![reward_id_1]
+        vec![(reward_id_1, reward_1.clone())]
     );
     assert_eq!(
         contract.valid_reward_list_for_activity(2),
-        vec![reward_id_2]
+        vec![(reward_id_2, reward_2.clone())]
     );
     assert_cache_reward_activity(
         &contract,
@@ -1320,15 +1451,18 @@ fn cache_reward_activity_management() {
     testing_env!(ctx.block_timestamp(tm(10)).build());
     assert_eq!(
         contract.valid_reward_list_for_activity(0),
-        vec![reward_id_1, reward_id_2]
+        vec![
+            (reward_id_1, reward_1.clone()),
+            (reward_id_2, reward_2.clone())
+        ]
     );
     assert_eq!(
         contract.valid_reward_list_for_activity(1),
-        vec![reward_id_1]
+        vec![(reward_id_1, reward_1.clone())]
     );
     assert_eq!(
         contract.valid_reward_list_for_activity(2),
-        vec![reward_id_2]
+        vec![(reward_id_2, reward_2.clone())]
     );
     assert_cache_reward_activity(
         &contract,
@@ -1343,12 +1477,12 @@ fn cache_reward_activity_management() {
     testing_env!(ctx.block_timestamp(tm(11)).build());
     assert_eq!(
         contract.valid_reward_list_for_activity(0),
-        vec![reward_id_2]
+        vec![(reward_id_2, reward_2.clone())]
     );
     assert!(contract.valid_reward_list_for_activity(1).is_empty());
     assert_eq!(
         contract.valid_reward_list_for_activity(2),
-        vec![reward_id_2]
+        vec![(reward_id_2, reward_2.clone())]
     );
     assert_cache_reward_activity(
         &contract,

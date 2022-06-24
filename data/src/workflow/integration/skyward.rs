@@ -55,10 +55,12 @@ pub const SKYWARD_ACC: &str = "demo-skyward.petrstudynka.testnet";
 pub const WNEAR_ACC: &str = "wrap.testnet";
 pub const TOKEN_ACC: &str = "my_vote_token.testnet";
 pub const TOKEN_AMOUNT: u128 = 1_000_000_000;
+
+pub const ONE_WEEK: u128 = 604800000000000;
+pub const ONE_MONTH: u128 = 2629743000000000;
 /// Friday 1. July 2022 0:00:00 in nanos
 pub const AUCTION_START: u128 = 1656633600000000000;
-/// One week
-pub const AUCTION_DURATION: u128 = 604800000000000;
+
 
 pub const OFFERED_TOKEN_KEY: &str = "offered_token";
 pub const OFFERED_TOKEN_AMOUNT_KEY: &str = "offered_amount";
@@ -491,7 +493,7 @@ impl Skyward1 {
                 TOKEN_ACC.into(),
                 TOKEN_AMOUNT,
                 AUCTION_START.into(),
-                AUCTION_DURATION.into(),
+                ONE_WEEK.into(),
             ),
         };
 
@@ -988,7 +990,7 @@ impl Skyward2 {
                 TOKEN_ACC.into(),
                 TOKEN_AMOUNT,
                 AUCTION_START.into(),
-                AUCTION_DURATION.into(),
+                ONE_WEEK.into(),
             ),
         };
 

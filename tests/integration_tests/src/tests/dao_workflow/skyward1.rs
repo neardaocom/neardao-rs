@@ -1,3 +1,4 @@
+use data::workflow::integration::skyward::ONE_MONTH;
 use near_sdk::ONE_NEAR;
 
 use crate::constants::{DAO_TPL_ID_OF_FIRST_ADDED, DAO_TPL_ID_WF_ADD, PROVIDER_TPL_ID_SKYWARD1};
@@ -13,7 +14,7 @@ use crate::utils::{
 };
 use data::workflow::{
     basic::basic_package::{WfBasicPkg1, WfBasicPkg1ProposeOptions},
-    integration::skyward::{Skyward1, Skyward1ProposeOptions, AUCTION_DURATION, AUCTION_START},
+    integration::skyward::{Skyward1, Skyward1ProposeOptions, ONE_WEEK, AUCTION_START},
 };
 use library::{types::datatype::Value, workflow::instance::InstanceState};
 use workspaces::{network::DevAccountDeployer, AccountId};
@@ -138,8 +139,8 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
             Some(Skyward1ProposeOptions {
                 token_account_id: token_account_id.to_string(),
                 token_amount: 1_000,
-                auction_start: AUCTION_START,
-                auction_duration: AUCTION_DURATION,
+                auction_start: AUCTION_START + 5 * ONE_MONTH,
+                auction_duration: ONE_WEEK,
             }),
             Some("wf_skyward1"),
         ),
@@ -275,8 +276,8 @@ async fn workflow_skyward1_scenario() -> anyhow::Result<()> {
             Some(Skyward1ProposeOptions {
                 token_account_id: token_account_id.to_string(),
                 token_amount: 1_000,
-                auction_start: AUCTION_START,
-                auction_duration: AUCTION_DURATION,
+                auction_start: AUCTION_START + 5 * ONE_MONTH,
+                auction_duration: ONE_WEEK,
             }),
             Some("wf_skyward2"),
         ),
