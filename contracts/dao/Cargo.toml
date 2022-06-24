@@ -7,8 +7,8 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-near-sdk = {version = "4.0.0", features = ["unstable"]}
-near-contract-standards = "4.0.0-pre.8"
+near-sdk = { version = "4.0.0", features = ["unstable"] }
+near-contract-standards = "4.0.0"
 library = { path = "./../../library", version = "0.1.0" }
 thiserror = "1.0.31"
 

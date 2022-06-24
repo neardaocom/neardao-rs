@@ -6,19 +6,19 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-near-sdk = "4.0.0-pre.8"
-anyhow = "1.0.56"
+near-sdk = "4.0.0"
+anyhow = "1.0.58"
 near-units = "0.2.0"
-serde = { version = "1.0.136", default-features = false, features = ["derive"] }
-serde_json = "1.0.79"
-tokio = "1.17.0"
-workspaces = {version = "0.3", features = ["unstable"] }
+serde = { version = "1.0.137", default-features = false, features = ["derive"] }
+serde_json = "1.0.81"
+tokio = "1.19.2"
+workspaces = { version = "0.3.1", features = ["unstable"] }
 library = {path = "./../../library" }
 data = {path = "./../../data" }
 simple_dao = {path = "./../mocks/simple_dao" }
 rand = "0.8.5"
 claim = "0.5.0"
-async-trait = "0.1.53"
+async-trait = "0.1.56"
 types = { path = "./../mocks/types"}
 
 

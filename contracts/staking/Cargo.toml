@@ -9,8 +9,8 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-near-sdk = "4.0.0-pre.8"
-near-contract-standards = "4.0.0-pre.8"
+near-sdk = "4.0.0"
+near-contract-standards = "4.0.0"
 library = { path = "./../../library", version = "0.1.0" }
 
 [dev-dependencies]
