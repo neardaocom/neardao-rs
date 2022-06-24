@@ -28,7 +28,6 @@ use crate::{
     RewardId, RoleId,
 };
 
-//mod dao; // Require refactoring to match new structure
 mod group;
 mod reward;
 pub mod treasury;
