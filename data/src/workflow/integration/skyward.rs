@@ -61,7 +61,6 @@ pub const ONE_MONTH: u128 = 2629743000000000;
 /// Friday 1. July 2022 0:00:00 in nanos
 pub const AUCTION_START: u128 = 1656633600000000000;
 
-
 pub const OFFERED_TOKEN_KEY: &str = "offered_token";
 pub const OFFERED_TOKEN_AMOUNT_KEY: &str = "offered_amount";
 

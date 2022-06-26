@@ -17,7 +17,7 @@
 - Fungible token factory
 - Fungible token
 ## Library
-Contains shared definitions/types/functions used by NearDAO contracts. For more information, checkout [README](library/README.md)
+Contains shared definitions/types/functions used by NearDAO contracts. For more information, checkout [library crate](library/README.md)
 ## Building
 - standardized build via contract-builder
 - requires Docker
@@ -30,4 +30,4 @@ Contains shared definitions/types/functions used by NearDAO contracts. For more 
     - via [Near workpaces](https://github.com/near/workspaces-rs)
 
 ## Contributing
-- TBD
+For more information, checkout [Contributing guide](CONTRIBUTING.md)
