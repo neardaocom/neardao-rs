@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use library::types::datatype::Value;
 use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
@@ -16,10 +18,10 @@ use crate::reward::Reward;
 use crate::role::{Roles, UserRoles};
 use crate::settings::Settings;
 use crate::tags::Tags;
-use crate::treasury::TreasuryPartition;
+use crate::treasury::{Asset, TreasuryPartition};
 use crate::wallet::{ClaimableReward, ClaimableRewards, Wallet};
-use crate::TagCategory;
 use crate::{contract::*, StorageKey};
+use crate::{AssetId, TagCategory};
 
 #[near_bindgen]
 impl Contract {
@@ -194,19 +196,27 @@ impl Contract {
             .into();
         let mut claimable_rewards = Vec::with_capacity(4);
         let current_timestamp = current_timestamp_sec();
+        let mut asset_cache: HashMap<AssetId, Asset> = HashMap::new();
         for wallet_reward in wallet.rewards() {
             if let Some(versioned_reward) = self.rewards.get(&wallet_reward.reward_id()) {
                 let reward: Reward = versioned_reward.into();
-                for (asset, _) in reward.reward_amounts().into_iter() {
+                for (asset_id, _) in reward.reward_amounts().into_iter() {
                     let (amount, _) = Contract::internal_claimable_reward_asset(
                         &wallet,
                         wallet_reward.reward_id(),
                         &reward,
-                        &asset,
+                        *asset_id,
                         current_timestamp,
                     );
+                    let asset = if let Some(asset) = asset_cache.get(asset_id) {
+                        asset.clone()
+                    } else {
+                        let asset = self.cache_assets.get(asset_id).unwrap();
+                        asset_cache.insert(*asset_id, asset.clone());
+                        asset
+                    };
                     claimable_rewards.push(ClaimableReward {
-                        asset: asset.clone(),
+                        asset,
                         reward_id: wallet_reward.reward_id(),
                         amount: amount.into(),
                         partition_id: reward.partition_id,
@@ -220,7 +230,12 @@ impl Contract {
                 .failed_withdraws()
                 .to_vec()
                 .into_iter()
-                .map(|(a, v)| (a, v.into()))
+                .map(|(id, v)| {
+                    let asset = asset_cache.remove(&id).unwrap_or_else(|| {
+                        self.cache_assets.get(&id).expect("fatal - asset not found")
+                    });
+                    (asset, v.into())
+                })
                 .collect(),
         }
     }
@@ -236,6 +251,15 @@ impl Contract {
             }
         }
         media_list
+    }
+    pub fn registered_assets(&self) -> Vec<(u8, Asset)> {
+        let mut assets = vec![];
+        let mut i = 0;
+        while let Some(asset) = self.cache_assets.get(&i) {
+            assets.push((i, asset));
+            i += 1;
+        }
+        assets
     }
 }
 

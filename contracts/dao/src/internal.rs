@@ -9,7 +9,7 @@ use crate::{
     proposal::Proposal,
     settings::Settings,
     tags::{TagInput, Tags},
-    treasury::{TreasuryPartition, TreasuryPartitionInput},
+    treasury::{Asset, AssetRegistrar, TreasuryPartition, TreasuryPartitionInput},
     ProposalId, ProposalWf,
 };
 use library::{
@@ -107,8 +107,9 @@ impl Contract {
     #[inline]
     pub fn init_treasury_partitions(&mut self, partitions: Vec<TreasuryPartitionInput>) {
         for partition in partitions {
-            let treasury_partititon = TreasuryPartition::try_from(partition)
-                .expect("Invalid TreasuryPartitionInput object.");
+            let treasury_partititon =
+                TreasuryPartition::try_from(partition, self as &mut dyn AssetRegistrar)
+                    .expect("Invalid TreasuryPartitionInput object.");
             self.partition_add(treasury_partititon);
         }
     }
@@ -123,6 +124,14 @@ impl Contract {
         for i in 0..=LATEST_REWARD_ACTIVITY_ID {
             self.cache_reward_activity.insert(&i, &vec![]);
         }
+    }
+    /// Init asset cache when contract is inited.
+    /// Assign NEAR token id = 0 and dao's vote token id = 1.
+    #[inline]
+    pub fn init_asset_cache(&mut self, vote_token: AccountId, decimals: u8) {
+        self.cache_assets.insert(&0, &Asset::Near);
+        self.cache_assets
+            .insert(&1, &Asset::new_ft(vote_token, decimals));
     }
 
     pub fn get_workflow_and_proposal(&self, proposal_id: u32) -> ProposalWf {

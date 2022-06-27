@@ -58,42 +58,11 @@ pub struct PartitionAssetInput {
     pub unlocking: UnlockingInput,
 }
 
-impl TryFrom<TreasuryPartitionInput> for TreasuryPartition {
-    type Error = String;
-    fn try_from(v: TreasuryPartitionInput) -> Result<Self, Self::Error> {
-        let mut assets = Vec::with_capacity(v.assets.len());
-        for asset in v.assets {
-            assets.push(PartitionAsset::try_from(asset)?);
-        }
-        Ok(Self {
-            name: v.name,
-            assets,
-        })
-    }
-}
-
-impl TryFrom<PartitionAssetInput> for PartitionAsset {
-    type Error = String;
-    fn try_from(v: PartitionAssetInput) -> Result<Self, Self::Error> {
-        let unlocking_db = UnlockingDB::try_from(v.unlocking)?;
-        let amount = unlocking_db.available() as u128 * 10u128.pow(v.asset_id.decimals() as u32);
-        let lock = if unlocking_db.total_locked() > 0 {
-            Some(unlocking_db)
-        } else {
-            None
-        };
-        Ok(Self {
-            asset_id: v.asset_id,
-            amount,
-            lock,
-        })
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PartitionAsset {
-    asset_id: Asset,
+    asset_id: u8,
+    decimals: u8,
     /// Available amount of the asset with decimal zeroes.
     amount: u128,
     lock: Option<UnlockingDB>,

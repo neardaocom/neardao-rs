@@ -14,20 +14,22 @@ fn treasury_default_dao() {
     testing_env!(ctx.build());
     let mut contract = get_default_contract();
     let asset_near = Asset::new_near();
+    let asset_near_id = 0;
     let asset_ft = Asset::new_ft(as_account_id(VOTE_TOKEN_ACC), 24);
+    let asset_ft_id = 1;
     let mut partition_near: TreasuryPartition = contract.treasury_partition.get(&1).unwrap().into();
     let mut partition_vote_token: TreasuryPartition =
         contract.treasury_partition.get(&2).unwrap().into();
-    let asset_1 = partition_near.asset(&asset_near).unwrap();
-    let asset_2 = partition_vote_token.asset(&asset_ft).unwrap();
-    assert_eq!(asset_1.asset_id(), &asset_near);
+    let asset_1 = partition_near.asset(asset_near_id).unwrap();
+    let asset_2 = partition_vote_token.asset(asset_ft_id).unwrap();
+    assert_eq!(asset_1.asset_id(), asset_near_id);
     assert_eq!(asset_1.available_amount(), 100 * ONE_NEAR);
-    assert_eq!(asset_2.asset_id(), &asset_ft);
+    assert_eq!(asset_2.asset_id(), asset_ft_id);
     assert_eq!(asset_2.available_amount(), 0);
     partition_near.unlock_all(100);
     partition_vote_token.unlock_all(100);
-    let asset_1 = partition_near.asset(&asset_near).unwrap();
-    let asset_2 = partition_vote_token.asset(&asset_ft).unwrap();
+    let asset_1 = partition_near.asset(asset_near_id).unwrap();
+    let asset_2 = partition_vote_token.asset(asset_ft_id).unwrap();
     assert_eq!(asset_1.available_amount(), 100 * ONE_NEAR);
     assert_eq!(
         asset_2.available_amount(),
@@ -35,8 +37,8 @@ fn treasury_default_dao() {
     );
     partition_near.unlock_all(1000);
     partition_vote_token.unlock_all(1000);
-    let asset_1 = partition_near.asset(&asset_near).unwrap();
-    let asset_2 = partition_vote_token.asset(&asset_ft).unwrap();
+    let asset_1 = partition_near.asset(asset_near_id).unwrap();
+    let asset_2 = partition_vote_token.asset(asset_ft_id).unwrap();
     assert_eq!(asset_1.available_amount(), 100 * ONE_NEAR);
     assert_eq!(
         asset_2.available_amount(),
@@ -44,8 +46,8 @@ fn treasury_default_dao() {
     );
     partition_near.unlock_all(2000);
     partition_vote_token.unlock_all(2000);
-    let asset_1 = partition_near.asset(&asset_near).unwrap();
-    let asset_2 = partition_vote_token.asset(&asset_ft).unwrap();
+    let asset_1 = partition_near.asset(asset_near_id).unwrap();
+    let asset_2 = partition_vote_token.asset(asset_ft_id).unwrap();
     assert_eq!(asset_1.available_amount(), 100 * ONE_NEAR);
     assert_eq!(
         asset_2.available_amount(),
@@ -59,11 +61,12 @@ fn treasury_remove_more_than_available() {
     testing_env!(ctx.build());
     let mut contract = get_default_contract();
     let asset_near = Asset::new_near();
+    let asset_near_id = 0;
     let mut partition_near: TreasuryPartition = contract.treasury_partition.get(&1).unwrap().into();
-    let asset_1 = partition_near.asset(&asset_near).unwrap();
+    let asset_1 = partition_near.asset(asset_near_id).unwrap();
     assert_eq!(asset_1.available_amount(), 100 * ONE_NEAR);
-    let amount_removed = partition_near.remove_amount(&asset_near, 0, 1_000_000 * ONE_NEAR);
+    let amount_removed = partition_near.remove_amount(asset_near_id, 0, 1_000_000 * ONE_NEAR);
     assert_eq!(amount_removed, 100 * ONE_NEAR);
-    let asset_1 = partition_near.asset(&asset_near).unwrap();
+    let asset_1 = partition_near.asset(asset_near_id).unwrap();
     assert_eq!(asset_1.available_amount(), 0);
 }

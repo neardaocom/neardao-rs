@@ -13,8 +13,10 @@ use crate::{
     media::{CIDInfo, Media, ResourceType},
     reward::{Reward, RewardType, RewardUserActivity, RewardWage},
     role::MemberRoles,
-    treasury::{Asset, PartitionAssetInput, TreasuryPartition, TreasuryPartitionInput},
-    RoleId,
+    treasury::{
+        Asset, AssetRegistrar, PartitionAssetInput, TreasuryPartition, TreasuryPartitionInput,
+    },
+    AssetId, RoleId,
 };
 
 use super::error::DeserializeError;
@@ -53,14 +55,16 @@ pub fn deser_asset(
 
 pub fn deser_partition(
     action_input: &mut dyn ActivityInput,
+    asset_registrar: &mut dyn AssetRegistrar,
 ) -> Result<TreasuryPartition, DeserializeError> {
     let name = action_input
         .take(&"name")
         .ok_or(DeserializeError::MissingInputKey("name".into()))?
         .try_into_string()?;
     let assets = deser_partition_assets("assets", action_input)?;
-    let partition = TreasuryPartition::try_from(TreasuryPartitionInput { name, assets })
-        .map_err(|_| DeserializeError::Conversion("treasury partition".into()))?;
+    let partition =
+        TreasuryPartition::try_from(TreasuryPartitionInput { name, assets }, asset_registrar)
+            .map_err(|_| DeserializeError::Conversion("treasury partition".into()))?;
     Ok(partition)
 }
 
@@ -148,12 +152,12 @@ pub fn deser_reward(action_input: &mut dyn ActivityInput) -> Result<Reward, Dese
 fn deser_reward_amounts(
     prefix: &str,
     action_input: &mut dyn ActivityInput,
-) -> Result<Vec<(Asset, u128)>, DeserializeError> {
+) -> Result<Vec<(AssetId, u128)>, DeserializeError> {
     let mut reward_assets = vec![];
     let mut i = 0;
     loop {
         let key_asset = format!("{}.{}.0", prefix, i);
-        if let Some(asset) = deser_asset(key_asset.as_str(), action_input)? {
+        if let Ok(asset_id) = deser_u64(key_asset.as_str(), action_input) {
             let key_amount = format!("{}.{}.1", prefix, i);
             let amount = action_input
                 .take(&key_amount)
@@ -161,7 +165,7 @@ fn deser_reward_amounts(
                     "reward_amounts.amount".into(),
                 ))?
                 .try_into_u128()?;
-            reward_assets.push((asset, amount));
+            reward_assets.push((asset_id as u8, amount));
             i += 1;
         } else {
             break;

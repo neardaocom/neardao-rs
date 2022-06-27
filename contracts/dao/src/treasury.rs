@@ -8,7 +8,7 @@ use near_sdk::{
 
 use crate::{
     contract::*, derive_from_versioned, derive_into_versioned,
-    internal::utils::current_timestamp_sec, ApprovalId, TimestampSec, TokenId,
+    internal::utils::current_timestamp_sec, ApprovalId, AssetId, TimestampSec, TokenId,
 };
 
 derive_into_versioned!(TreasuryPartition, VersionedTreasuryPartition, V1);
@@ -47,7 +47,7 @@ impl TreasuryPartition {
     }
     /// Add new asset and returns true if succesfully added.
     pub fn add_asset(&mut self, asset: PartitionAsset) -> bool {
-        if self.find_asset_pos(&asset.asset_id()).is_none() {
+        if self.find_asset_pos(asset.asset_id()).is_none() {
             self.assets.push(asset);
             true
         } else {
@@ -55,15 +55,15 @@ impl TreasuryPartition {
         }
     }
     /// Remove asset if exists.
-    pub fn remove_asset(&mut self, asset_id: Asset) -> Option<PartitionAsset> {
-        if let Some(pos) = self.find_asset_pos(&asset_id) {
+    pub fn remove_asset(&mut self, asset_id: u8) -> Option<PartitionAsset> {
+        if let Some(pos) = self.find_asset_pos(asset_id) {
             Some(self.assets.swap_remove(pos))
         } else {
             None
         }
     }
     /// Return reference to the asset if exists.
-    pub fn asset(&self, asset_id: &Asset) -> Option<&PartitionAsset> {
+    pub fn asset(&self, asset_id: u8) -> Option<&PartitionAsset> {
         if let Some(pos) = self.find_asset_pos(asset_id) {
             self.assets.get(pos)
         } else {
@@ -71,8 +71,8 @@ impl TreasuryPartition {
         }
     }
     /// Add amount to the asset and returns new amount.
-    pub fn add_amount(&mut self, asset_id: &Asset, amount: u128) -> u128 {
-        if let Some(pos) = self.find_asset_pos(&asset_id) {
+    pub fn add_amount(&mut self, asset_id: u8, amount: u128) -> u128 {
+        if let Some(pos) = self.find_asset_pos(asset_id) {
             let asset = &mut self.assets[pos];
             asset.add_amount(amount);
             asset.amount
@@ -83,8 +83,8 @@ impl TreasuryPartition {
     /// Remove max possible `multiple` amount up to `amount` of the asset.
     /// If multiple is 0, up to `amount` is removed.
     /// Return actually removed amount.
-    pub fn remove_amount(&mut self, asset_id: &Asset, multiple: u128, max_amount: u128) -> u128 {
-        if let Some(pos) = self.find_asset_pos(&asset_id) {
+    pub fn remove_amount(&mut self, asset_id: u8, multiple: u128, max_amount: u128) -> u128 {
+        if let Some(pos) = self.find_asset_pos(asset_id) {
             let asset = &mut self.assets[pos];
             if multiple > 0 {
                 let count = std::cmp::min(asset.available_amount(), max_amount) / multiple;
@@ -103,17 +103,18 @@ impl TreasuryPartition {
         }
     }
     /// Internal search function.
-    fn find_asset_pos(&self, asset_id: &Asset) -> Option<usize> {
-        self.assets.iter().position(|el| el.asset_id == *asset_id)
+    fn find_asset_pos(&self, asset_id: u8) -> Option<usize> {
+        self.assets.iter().position(|el| el.asset_id == asset_id)
     }
-}
-
-impl TryFrom<TreasuryPartitionInput> for TreasuryPartition {
-    type Error = &'static str;
-    fn try_from(v: TreasuryPartitionInput) -> Result<Self, Self::Error> {
+    /// Try to create self.
+    /// Return Err if input is empty or contains duplicit assets.
+    pub fn try_from(
+        v: TreasuryPartitionInput,
+        registrar: &mut dyn AssetRegistrar,
+    ) -> Result<Self, &'static str> {
         let mut assets = Vec::with_capacity(v.assets.len());
         for asset_input in v.assets {
-            let asset = PartitionAsset::try_from(asset_input)?;
+            let asset = PartitionAsset::try_from(asset_input, registrar)?;
             if assets
                 .iter()
                 .find(|a: &&PartitionAsset| a.asset_id() == asset.asset_id())
@@ -135,7 +136,9 @@ impl TryFrom<TreasuryPartitionInput> for TreasuryPartition {
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PartitionAsset {
-    asset_id: Asset,
+    asset_id: u8,
+    /// Decimals of asset_id.
+    decimals: u8,
     /// Available amount of the asset with decimal zeroes.
     amount: u128,
     lock: Option<UnlockingDB>,
@@ -155,25 +158,24 @@ impl PartitionAsset {
     /// Unlock all possible tokens and returns new amount.
     pub fn unlock(&mut self, current_timestamp: TimestampSec) -> u128 {
         if let Some(lock) = &mut self.lock {
-            let unlocked = lock.unlock(current_timestamp) as u128
-                * 10u128.pow(self.asset_id.decimals() as u32);
+            let unlocked =
+                lock.unlock(current_timestamp) as u128 * 10u128.pow(self.decimals as u32);
             self.amount += unlocked;
             self.amount
         } else {
             self.amount
         }
     }
-    pub fn asset_id(&self) -> &Asset {
-        &self.asset_id
+    pub fn asset_id(&self) -> u8 {
+        self.asset_id
     }
     pub fn available_amount(&self) -> u128 {
         self.amount
     }
-}
-
-impl TryFrom<PartitionAssetInput> for PartitionAsset {
-    type Error = &'static str;
-    fn try_from(v: PartitionAssetInput) -> Result<Self, Self::Error> {
+    pub fn try_from(
+        v: PartitionAssetInput,
+        registrar: &mut dyn AssetRegistrar,
+    ) -> Result<Self, &'static str> {
         let unlocking_db = UnlockingDB::try_from(v.unlocking)?;
         let amount = unlocking_db.available() as u128 * 10u128.pow(v.asset_id.decimals() as u32);
         let lock = if unlocking_db.total_locked() > 0 {
@@ -182,7 +184,8 @@ impl TryFrom<PartitionAssetInput> for PartitionAsset {
             None
         };
         Ok(Self {
-            asset_id: v.asset_id,
+            decimals: v.asset_id.decimals(),
+            asset_id: registrar.register_asset(v.asset_id),
             amount,
             lock,
         })
@@ -289,7 +292,41 @@ impl Contract {
     }
 }
 
+pub trait AssetRegistrar {
+    fn register_asset(&mut self, asset: Asset) -> AssetId;
+}
+
+impl AssetRegistrar for Contract {
+    fn register_asset(&mut self, asset: Asset) -> AssetId {
+        self.get_or_add_asset(asset)
+    }
+}
+
+pub enum RegistryAssetId {
+    New(u8),
+    Existing(u8),
+}
+
 impl Contract {
+    /// Add asset into asset registry if does not exist.
+    /// Return asset id.
+    pub fn get_or_add_asset(&mut self, asset: Asset) -> u8 {
+        let mut found = false;
+        let mut id = 0;
+        while let Some(curr_asset) = self.cache_assets.get(&id) {
+            if curr_asset == asset {
+                found = true;
+                break;
+            }
+            id += 1;
+        }
+        if !found {
+            self.cache_assets.insert(&id, &asset);
+            id
+        } else {
+            id
+        }
+    }
     pub fn partition_add(&mut self, partition: TreasuryPartition) -> u16 {
         self.partition_last_id += 1;
         self.treasury_partition
@@ -302,12 +339,12 @@ impl Contract {
     pub fn partition_add_asset_amount(
         &mut self,
         partition_id: u16,
-        asset: &Asset,
+        asset_id: u8,
         amount: u128,
     ) -> bool {
         if let Some(partition) = self.treasury_partition.get(&partition_id) {
             let mut partition: TreasuryPartition = partition.into();
-            let result = partition.add_amount(&asset, amount);
+            let result = partition.add_amount(asset_id, amount);
             self.treasury_partition
                 .insert(&partition_id, &partition.into());
             result > 0

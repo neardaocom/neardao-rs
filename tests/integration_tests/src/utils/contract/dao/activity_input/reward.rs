@@ -8,7 +8,7 @@ use library::{
     },
 };
 
-use crate::types::RewardActivity;
+use crate::types::{AssetId, RewardActivity};
 
 /// Activity inputs for `Reward1`.
 pub struct ActivityInputReward1;
@@ -52,9 +52,8 @@ impl ActivityInputReward1 {
         partition_id: u64,
         timestamp_from: u64,
         timestamp_to: u64,
-        ft_account_id: String,
+        ft_asset_id: AssetId,
         ft_amount: u128,
-        ft_decimals: u64,
         near_amount: u128,
     ) -> Vec<Option<ActionInput>> {
         let mut map = HashMap::new();
@@ -68,16 +67,9 @@ impl ActivityInputReward1 {
             "type.wage.unit_seconds".into(),
             Value::U64(wage_unit_seconds),
         );
-        map.insert(
-            "reward_amounts.0.0.ft.account_id".into(),
-            Value::String(ft_account_id),
-        );
-        map.insert(
-            "reward_amounts.0.0.ft.decimals".into(),
-            Value::U64(ft_decimals),
-        );
+        map.insert("reward_amounts.0.0".into(), Value::U64(ft_asset_id as u64));
         map.insert("reward_amounts.0.1".into(), Value::U128(ft_amount.into()));
-        map.insert("reward_amounts.1.0.near".into(), Value::Null);
+        map.insert("reward_amounts.1.0".into(), Value::U64(0));
         map.insert("reward_amounts.1.1".into(), Value::U128(near_amount.into()));
         vec![Some(ActionInput {
             action: ActionInputType::DaoAction(DaoActionIdent::RewardAdd),
@@ -105,7 +97,7 @@ impl ActivityInputReward1 {
             "type.wage.unit_seconds".into(),
             Value::U64(wage_unit_seconds),
         );
-        map.insert("reward_amounts.0.0.near".into(), Value::Null);
+        map.insert("reward_amounts.0.0".into(), Value::U64(0));
         map.insert("reward_amounts.0.1".into(), Value::U128(near_amount.into()));
         vec![Some(ActionInput {
             action: ActionInputType::DaoAction(DaoActionIdent::RewardAdd),
@@ -121,9 +113,8 @@ impl ActivityInputReward1 {
         partition_id: u64,
         timestamp_from: u64,
         timestamp_to: u64,
-        ft_account_id: String,
+        ft_asset_id: AssetId,
         ft_amount: u128,
-        ft_decimals: u64,
         near_amount: u128,
     ) -> Vec<Option<ActionInput>> {
         let mut activity_ids: Vec<u64> = activity_ids.into_iter().map(|e| e.into()).collect();
@@ -140,16 +131,9 @@ impl ActivityInputReward1 {
             "type.user_activity.activity_ids".into(),
             Value::VecU64(activity_ids),
         );
-        map.insert(
-            "reward_amounts.0.0.ft.account_id".into(),
-            Value::String(ft_account_id),
-        );
-        map.insert(
-            "reward_amounts.0.0.ft.decimals".into(),
-            Value::U64(ft_decimals),
-        );
+        map.insert("reward_amounts.0.0".into(), Value::U64(ft_asset_id as u64));
         map.insert("reward_amounts.0.1".into(), Value::U128(ft_amount.into()));
-        map.insert("reward_amounts.1.0.near".into(), Value::Null);
+        map.insert("reward_amounts.1.0".into(), Value::U64(0));
         map.insert("reward_amounts.1.1".into(), Value::U128(near_amount.into()));
         vec![Some(ActionInput {
             action: ActionInputType::DaoAction(DaoActionIdent::RewardAdd),

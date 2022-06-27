@@ -5,7 +5,7 @@ use library::types::datatype::Value;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::json_types::U128;
 use near_sdk::serde::Deserialize;
-use near_sdk::{env, near_bindgen, serde_json, AccountId, PromiseOrValue};
+use near_sdk::{env, log, near_bindgen, serde_json, AccountId, PromiseOrValue};
 
 #[derive(Deserialize)]
 #[serde(crate = "near_sdk::serde")]
@@ -77,9 +77,22 @@ impl FungibleTokenReceiver for Contract {
                 if let Some(partition) = self.treasury_partition.get(&msg.partition_id) {
                     let mut partition: TreasuryPartition = partition.into();
                     let asset = Asset::new_ft(env::predecessor_account_id(), 24);
-                    partition.add_amount(&asset, amount.0);
-                    self.treasury_partition
-                        .insert(&msg.partition_id, &partition.into());
+                    let mut found = false;
+                    let mut id = 0;
+                    while let Some(ref curr_asset) = self.cache_assets.get(&id) {
+                        if curr_asset == &asset {
+                            found = true;
+                            break;
+                        }
+                        id += 1;
+                    }
+                    if found {
+                        partition.add_amount(id, amount.0);
+                        self.treasury_partition
+                            .insert(&msg.partition_id, &partition.into());
+                    } else {
+                        log!("Asset FT not found in the asset registry.");
+                    }
                 }
             }
         }

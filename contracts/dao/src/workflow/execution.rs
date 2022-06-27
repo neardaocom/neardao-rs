@@ -21,16 +21,17 @@ use near_sdk::{
 };
 
 use super::deserialize::{
-    deser_account_ids, deser_asset, deser_group_input, deser_group_members, deser_media,
-    deser_member_roles, deser_partition, deser_reward, deser_roles_ids, deser_u128, deser_u64,
+    deser_account_ids, deser_group_input, deser_group_members, deser_media, deser_member_roles,
+    deser_partition, deser_reward, deser_roles_ids, deser_u128, deser_u64,
 };
-use super::error::{ActionError, ActivityError, DeserializeError};
+use super::error::{ActionError, ActivityError};
 use crate::constants::GLOBAL_BUCKET_IDENT;
 use crate::contract::*;
 use crate::internal::utils::current_timestamp_sec;
 use crate::internal::ActivityContext;
 use crate::proposal::ProposalState;
 use crate::reward::RewardActivity;
+use crate::treasury::AssetRegistrar;
 
 #[ext_contract(ext_self)]
 trait CbActivity {
@@ -791,15 +792,14 @@ impl Contract {
     ) -> Result<(), ActionError> {
         match action_ident {
             DaoActionIdent::TreasuryAddPartition => {
-                let partition = deser_partition(inputs)?;
+                let partition = deser_partition(inputs, self as &mut dyn AssetRegistrar)?;
                 self.partition_add(partition);
             }
             DaoActionIdent::PartitionAddAssetAmount => {
                 let id = deser_u64("id", inputs)? as u16;
-                let asset = deser_asset("asset", inputs)?
-                    .ok_or(DeserializeError::MissingInputKey("Asset is empty.".into()))?;
+                let asset_id = deser_u64("asset_id", inputs)? as u8;
                 let amount = deser_u128("amount", inputs)?;
-                self.partition_add_asset_amount(id, &asset, amount);
+                self.partition_add_asset_amount(id, asset_id, amount);
             }
             DaoActionIdent::RewardAdd => {
                 let reward = deser_reward(inputs)?;

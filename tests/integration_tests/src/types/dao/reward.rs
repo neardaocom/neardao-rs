@@ -8,6 +8,7 @@ use crate::utils::TimestampSec;
 
 pub type TokenId = String;
 pub type ApprovalId = Option<u64>;
+pub type AssetId = u8;
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
@@ -99,7 +100,7 @@ pub struct Reward {
     /// - for `RewardType::UserActivity(activity_ids)` the unit is activity done.
     r#type: RewardType,
     /// Defines unique asset per unit.
-    reward_amounts: Vec<(Asset, u128)>,
+    reward_amounts: Vec<(AssetId, u128)>,
     /// TODO: Unimplemented.
     time_valid_from: u64,
     /// TODO: Unimplemented.
@@ -159,7 +160,7 @@ pub struct RewardUserActivity {
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ActivityStats {
-    pub asset_id: Asset,
+    pub asset_id: AssetId,
     /// Count of all executions that have not been withdrawn yet.
     pub executed_count: u16,
     /// Total count of withdrawn executions.
@@ -169,7 +170,7 @@ pub struct ActivityStats {
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct WageStats {
-    pub asset_id: Asset,
+    pub asset_id: AssetId,
     pub amount: u128,
     pub timestamp_last_withdraw: TimestampSec,
 }

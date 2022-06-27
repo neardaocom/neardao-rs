@@ -25,7 +25,7 @@ use crate::{
     tags::TagInput,
     treasury::{Asset, PartitionAssetInput, TreasuryPartitionInput},
     wallet::{ClaimableReward, Wallet, WithdrawStats},
-    RewardId, RoleId,
+    AssetId, RewardId, RoleId,
 };
 
 mod group;
@@ -44,7 +44,7 @@ pub const DURATION_1Y: u64 = 31_536_000_000_000_000;
 pub const DURATION_2Y: u64 = 63_072_000_000_000_000;
 pub const DURATION_3Y: u64 = 94_608_000_000_000_000;
 
-const TOKEN_ACC: &str = "some.token.neardao.testnet";
+const OTHER_TOKEN_ACC: &str = "some.token.neardao.testnet";
 const VOTE_TOKEN_ACC: &str = "dao-vote-token.neardao.testnet";
 const DAO_ADMIN_ACC: &str = "admin.neardao.testnet";
 const STAKING_ACC: &str = "staking.neardao.testnet";
@@ -158,6 +158,13 @@ pub(crate) fn get_default_contract() -> Contract {
     assert_user_roles(&contract, as_account_id(FOUNDER_2), Some(founder_2_roles()));
     assert_user_roles(&contract, as_account_id(FOUNDER_3), Some(founder_3_roles()));
     assert_group_role_members(&contract, 1, 1, vec![as_account_id(FOUNDER_1)]);
+    assert_eq!(
+        contract.registered_assets(),
+        vec![
+            (0, Asset::Near),
+            (1, Asset::new_ft(as_account_id(VOTE_TOKEN_ACC), 24))
+        ]
+    );
     contract
 }
 
@@ -175,7 +182,7 @@ pub(crate) fn get_default_dao_config() -> Settings {
         workflow_provider: as_account_id(WF_PROVIDER_ACC),
         resource_provider: Some(as_account_id(RESOURCE_PROVIDER_ACC)),
         scheduler: Some(as_account_id(SCHEDULER_ACC)),
-        token_id: as_account_id(TOKEN_ACC),
+        token_id: as_account_id(VOTE_TOKEN_ACC),
         staking_id: as_account_id(STAKING_ACC),
     }
 }
@@ -405,12 +412,12 @@ fn get_wallet(contract: &Contract, account_id: &AccountId) -> Wallet {
 fn get_wallet_withdraw_stat<'a>(
     wallet: &'a Wallet,
     reward_id: u16,
-    asset: &Asset,
+    asset_id: u8,
 ) -> &'a WithdrawStats {
     let wallet_reward = wallet
         .wallet_reward(reward_id)
         .expect("wallet reward nout found");
-    wallet_reward.withdraw_stat(asset)
+    wallet_reward.withdraw_stat(asset_id)
 }
 
 fn claimable_rewards_sum(claimable_rewards: &[ClaimableReward], asset: &Asset) -> u128 {
@@ -469,4 +476,38 @@ fn assert_cache_reward_activity(contract: &Contract, expected_cache: Vec<(u8, Ve
             assert_eq!(actual, expected);
         }
     }
+}
+
+fn assert_group_members(contract: &Contract, group_id: u16, mut expected_members: Vec<AccountId>) {
+    let group = contract.group(group_id).unwrap();
+    let mut actual_members = group.get_members_accounts();
+    actual_members.sort();
+    expected_members.sort();
+    assert_eq!(actual_members, expected_members);
+}
+
+fn assert_wallet(
+    wallet: &Wallet,
+    expected_reward_id: u16,
+    expected_assets: Vec<AssetId>,
+    expected_time_added: u64,
+    expected_time_removed: Option<u64>,
+) {
+    let wallet_reward = wallet
+        .wallet_reward(expected_reward_id)
+        .expect("wallet reward id not found");
+    assert_eq!(wallet_reward.time_added(), expected_time_added);
+    assert_eq!(wallet_reward.time_removed(), expected_time_removed);
+    assert_eq!(
+        wallet_reward
+            .withdraw_stats()
+            .into_iter()
+            .map(|s| s.reward_asset().clone())
+            .collect::<Vec<AssetId>>(),
+        expected_assets
+    );
+}
+
+fn assert_no_wallet_reward(wallet: &Wallet, expected_reward_id_missing: u16) {
+    assert!(wallet.wallet_reward(expected_reward_id_missing).is_none());
 }

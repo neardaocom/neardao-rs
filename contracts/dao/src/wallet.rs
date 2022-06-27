@@ -14,7 +14,7 @@ use crate::{
     internal::utils::current_timestamp_sec,
     reward::{Reward, RewardTypeIdent},
     treasury::{Asset, TreasuryPartition},
-    RewardId, TimestampSec,
+    AssetId, RewardId, TimestampSec,
 };
 
 #[ext_contract(ext_self)]
@@ -39,7 +39,7 @@ pub struct Wallet {
     /// Currently provided unique rewards.
     rewards: Vec<WalletReward>,
     /// Rewards that failed to be withdrawn. These are immediately available to be withdrawn again.
-    failed_withdraws: Vec<(Asset, u128)>,
+    failed_withdraws: Vec<(AssetId, u128)>,
 }
 
 impl Wallet {
@@ -60,7 +60,7 @@ impl Wallet {
         reward_id: u16,
         reward_type: RewardTypeIdent,
         current_timestamp: TimestampSec,
-        assets: Vec<Asset>,
+        assets: Vec<AssetId>,
     ) {
         if let Some(pos) = self.find_reward_pos(reward_id) {
             let reward = &mut self.rewards[pos];
@@ -73,10 +73,10 @@ impl Wallet {
     /// Return total sum of withdrawn `asset` from Wage `reward_id` reward.
     /// Panic if `reward_id` is not found or is invalid type of reward.
     /// Its up to the caller to verify what the reward type.
-    pub fn amount_wage_withdrawn(&self, reward_id: u16, asset: &Asset) -> u128 {
+    pub fn amount_wage_withdrawn(&self, reward_id: u16, asset_id: u8) -> u128 {
         let pos = self.find_reward_pos(reward_id).expect("reward not found");
         let reward = &self.rewards[pos];
-        let stat = reward.withdraw_stat(asset);
+        let stat = reward.withdraw_stat(asset_id);
         stat.wage_as_ref()
             .expect("fatal - invalid reward type")
             .amount
@@ -86,18 +86,18 @@ impl Wallet {
     /// Panics if:
     /// - reward is not found
     /// - reward type is not `RewardTypeIdent::UserActivity`
-    pub fn user_activity_executed_count(&self, reward_id: u16, asset: &Asset) -> u16 {
+    pub fn user_activity_executed_count(&self, reward_id: u16, asset_id: u8) -> u16 {
         let pos = self.find_reward_pos(reward_id).expect("reward not found");
         let reward = &self.rewards[pos];
-        let stat = reward.withdraw_stat(asset);
+        let stat = reward.withdraw_stat(asset_id);
         stat.activity_as_ref()
             .expect("fatal - invalid reward type")
             .executed_count
     }
     /// Remove previous amount that failed to be withdrawn and return it.
     /// This amount is already subtracted from the partition.
-    pub fn take_failed_withdraw_amount(&mut self, asset: &Asset) -> u128 {
-        if let Some(pos) = self.find_failed_withdraw_pos(asset) {
+    pub fn take_failed_withdraw_amount(&mut self, asset_id: u8) -> u128 {
+        if let Some(pos) = self.find_failed_withdraw_pos(asset_id) {
             self.failed_withdraws.swap_remove(pos).1
         } else {
             0
@@ -115,13 +115,13 @@ impl Wallet {
     pub fn withdraw_wage(
         &mut self,
         reward_id: u16,
-        asset: &Asset,
+        asset_id: u8,
         amount: u128,
         current_timestamp: TimestampSec,
     ) {
         let pos = self.find_reward_pos(reward_id).expect("reward not found");
         let reward = &mut self.rewards[pos];
-        reward.wage_withdraw_amount(asset, amount, current_timestamp);
+        reward.wage_withdraw_amount(asset_id, amount, current_timestamp);
     }
     /// Update withdraw stats for `reward_id`'s `asset` with `amount` withdrawn.
     /// Panic if:
@@ -131,20 +131,20 @@ impl Wallet {
     pub fn withdraw_activity(
         &mut self,
         reward_id: u16,
-        asset: &Asset,
+        asset_id: u8,
         amount: u16,
         current_timestamp: TimestampSec,
     ) {
         let pos = self.find_reward_pos(reward_id).expect("reward not found");
         let reward = &mut self.rewards[pos];
-        reward.activity_withdrawn(asset, amount, current_timestamp);
+        reward.activity_withdrawn(asset_id, amount, current_timestamp);
     }
     /// Add rewards which failed to be withdraw.
-    pub fn withdraw_reward_failed(&mut self, asset: Asset, amount: u128) {
-        if let Some(pos) = self.find_failed_withdraw_pos(&asset) {
+    pub fn withdraw_reward_failed(&mut self, asset_id: u8, amount: u128) {
+        if let Some(pos) = self.find_failed_withdraw_pos(asset_id) {
             self.failed_withdraws[pos].1 += amount;
         } else {
-            self.failed_withdraws.push((asset, amount));
+            self.failed_withdraws.push((asset_id, amount));
         }
     }
     /// Add one to execution counter for `reward_id` if exist in self.
@@ -164,7 +164,7 @@ impl Wallet {
         let pos = self.find_reward_pos(reward_id).expect("reward not found");
         self.rewards[pos].time_removed
     }
-    pub fn failed_withdraws(&self) -> &[(Asset, u128)] {
+    pub fn failed_withdraws(&self) -> &[(AssetId, u128)] {
         self.failed_withdraws.as_slice()
     }
     #[inline]
@@ -172,8 +172,10 @@ impl Wallet {
         self.rewards.iter().position(|r| r.reward_id == reward_id)
     }
     #[inline]
-    fn find_failed_withdraw_pos(&self, asset: &Asset) -> Option<usize> {
-        self.failed_withdraws.iter().position(|(a, _)| a == asset)
+    fn find_failed_withdraw_pos(&self, asset_id: u8) -> Option<usize> {
+        self.failed_withdraws
+            .iter()
+            .position(|(a, _)| *a == asset_id)
     }
     pub fn rewards(&self) -> &[WalletReward] {
         self.rewards.as_slice()
@@ -208,7 +210,7 @@ impl WalletReward {
         reward_id: u16,
         reward_type: RewardTypeIdent,
         time_added: TimestampSec,
-        assets: Vec<Asset>,
+        assets: Vec<AssetId>,
     ) -> Self {
         require!(assets.len() > 0, "empty assets as rewards");
         let withdraw_stats = assets
@@ -225,15 +227,15 @@ impl WalletReward {
     pub fn withdraw_stats(&self) -> &[WithdrawStats] {
         self.withdraw_stats.as_slice()
     }
-    fn find_asset_pos(&self, asset: &Asset) -> Option<usize> {
-        self.withdraw_stats.iter().position(|s| *s == *asset)
+    fn find_asset_pos(&self, asset_id: u8) -> Option<usize> {
+        self.withdraw_stats.iter().position(|s| *s == asset_id)
     }
-    pub fn withdraw_stat(&self, asset: &Asset) -> &WithdrawStats {
-        let pos = self.find_asset_pos(asset).expect("asset stat not found");
+    pub fn withdraw_stat(&self, asset_id: u8) -> &WithdrawStats {
+        let pos = self.find_asset_pos(asset_id).expect("asset stat not found");
         &self.withdraw_stats[pos]
     }
-    pub fn wage_withdraw_amount(&mut self, asset: &Asset, amount: u128, current_timestamp: u64) {
-        let pos = self.find_asset_pos(asset).expect("asset stat not found");
+    pub fn wage_withdraw_amount(&mut self, asset_id: u8, amount: u128, current_timestamp: u64) {
+        let pos = self.find_asset_pos(asset_id).expect("asset stat not found");
         let stats = self.withdraw_stats[pos]
             .wage_as_mut()
             .expect("fatal - valid reward type");
@@ -245,8 +247,8 @@ impl WalletReward {
     /// - `asset` is not found
     /// - reward is not type of activity
     /// - `amount` is greater than activity execution count
-    pub fn activity_withdrawn(&mut self, asset: &Asset, amount: u16, current_timestamp: u64) {
-        let pos = self.find_asset_pos(asset).expect("asset stat not found");
+    pub fn activity_withdrawn(&mut self, asset_id: u8, amount: u16, current_timestamp: u64) {
+        let pos = self.find_asset_pos(asset_id).expect("asset stat not found");
         let stats = self.withdraw_stats[pos]
             .activity_as_mut()
             .expect("fatal - valid reward type");
@@ -298,7 +300,7 @@ pub enum WithdrawStats {
 }
 
 impl WithdrawStats {
-    pub fn new(asset_id: Asset, reward_type: RewardTypeIdent) -> Self {
+    pub fn new(asset_id: u8, reward_type: RewardTypeIdent) -> Self {
         match reward_type {
             RewardTypeIdent::Wage => WithdrawStats::Wage(WageStats {
                 asset_id,
@@ -349,19 +351,19 @@ impl WithdrawStats {
             WithdrawStats::Activity(a) => a.timestamp_last_withdraw,
         }
     }
-    pub fn reward_asset(&self) -> &Asset {
+    pub fn reward_asset(&self) -> AssetId {
         match self {
-            WithdrawStats::Wage(s) => &s.asset_id,
-            WithdrawStats::Activity(a) => &a.asset_id,
+            WithdrawStats::Wage(s) => s.asset_id,
+            WithdrawStats::Activity(a) => a.asset_id,
         }
     }
 }
 
-impl PartialEq<Asset> for WithdrawStats {
-    fn eq(&self, asset: &Asset) -> bool {
+impl PartialEq<AssetId> for WithdrawStats {
+    fn eq(&self, asset_id: &u8) -> bool {
         match self {
-            Self::Wage(l0) => l0.asset_id == *asset,
-            Self::Activity(l0) => l0.asset_id == *asset,
+            Self::Wage(l0) => l0.asset_id == *asset_id,
+            Self::Activity(l0) => l0.asset_id == *asset_id,
         }
     }
 }
@@ -369,7 +371,7 @@ impl PartialEq<Asset> for WithdrawStats {
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct WageStats {
-    pub asset_id: Asset,
+    pub asset_id: u8,
     pub amount: u128,
     pub timestamp_last_withdraw: TimestampSec,
 }
@@ -377,7 +379,7 @@ pub struct WageStats {
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ActivityStats {
-    pub asset_id: Asset,
+    pub asset_id: u8,
     /// Count of all executions that have not been withdrawn yet.
     pub executed_count: u16,
     /// Total count of withdrawn executions.
@@ -406,16 +408,16 @@ impl Contract {
     /// Withdraw all `asset` rewards defined by reward_ids from caller's wallet.
     /// Panics if any provided reward_id is invalid.
     /// Return actually withdrawn amount.
-    pub fn claim_rewards(&mut self, reward_ids: Vec<u16>, asset: Asset) -> U128 {
+    pub fn claim_rewards(&mut self, reward_ids: Vec<u16>, asset_id: u8) -> U128 {
         let caller = env::predecessor_account_id();
-        let total_withdrawn: u128 = self.internal_withdraw_reward(&caller, reward_ids, &asset);
+        let total_withdrawn: u128 = self.internal_withdraw_reward(&caller, reward_ids, asset_id);
         if total_withdrawn > 0 {
-            self.send_reward(caller, asset, total_withdrawn);
+            self.send_reward(caller, asset_id, total_withdrawn);
         }
         total_withdrawn.into()
     }
     #[private]
-    pub fn withdraw_check(&mut self, account_id: AccountId, asset: Asset, amount: u128) {
+    pub fn withdraw_check(&mut self, account_id: AccountId, asset_id: u8, amount: u128) {
         assert_eq!(
             env::promise_results_count(),
             1,
@@ -426,7 +428,7 @@ impl Contract {
             PromiseResult::Successful(_) => {}
             PromiseResult::Failed => {
                 let mut wallet = self.get_wallet(&account_id);
-                wallet.withdraw_reward_failed(asset, amount);
+                wallet.withdraw_reward_failed(asset_id, amount);
                 self.wallets.insert(&account_id, &wallet.into());
             }
         }
@@ -447,7 +449,7 @@ impl Contract {
         wallet: &Wallet,
         reward_id: u16,
         reward: &Reward,
-        asset: &Asset,
+        asset_id: u8,
         current_timestamp: TimestampSec,
     ) -> (u128, u128) {
         if matches!(reward.get_reward_type(), RewardTypeIdent::Wage) {
@@ -455,8 +457,8 @@ impl Contract {
             let timestamp_removed = wallet_reward.time_removed().unwrap_or(current_timestamp);
             let timestamp_added = wallet_reward.time_added();
             let amount_available_reward =
-                reward.available_wage_amount(&asset, timestamp_removed, timestamp_added);
-            let amount_already_claimed = wallet.amount_wage_withdrawn(reward_id, &asset);
+                reward.available_wage_amount(asset_id, timestamp_removed, timestamp_added);
+            let amount_already_claimed = wallet.amount_wage_withdrawn(reward_id, asset_id);
             (
                 amount_available_reward
                     .checked_sub(amount_already_claimed)
@@ -464,8 +466,8 @@ impl Contract {
                 0,
             )
         } else {
-            let generated_amount = wallet.user_activity_executed_count(reward_id, &asset) as u128;
-            let amount_per_activity = reward.reward_per_one_execution(&asset);
+            let generated_amount = wallet.user_activity_executed_count(reward_id, asset_id) as u128;
+            let amount_per_activity = reward.reward_per_one_execution(asset_id);
             (
                 generated_amount
                     .checked_mul(amount_per_activity)
@@ -478,7 +480,7 @@ impl Contract {
         &mut self,
         account_id: &AccountId,
         reward_ids: Vec<u16>,
-        asset: &Asset,
+        asset_id: u8,
     ) -> u128 {
         let current_timestamp = current_timestamp_sec();
         let mut wallet = self.get_wallet(&account_id);
@@ -494,7 +496,7 @@ impl Contract {
                 &wallet,
                 reward_id,
                 &reward,
-                asset,
+                asset_id,
                 current_timestamp,
             );
             // Nothing to claim - check next reward.
@@ -508,7 +510,7 @@ impl Contract {
                 .unwrap()
                 .into();
             let currently_available_amount =
-                partition.remove_amount(&asset, amount_per_activity, claimable_reward);
+                partition.remove_amount(asset_id, amount_per_activity, claimable_reward);
             // Nothing available - check next reward.
             if currently_available_amount == 0 {
                 continue;
@@ -519,25 +521,26 @@ impl Contract {
             if amount_per_activity == 0 {
                 wallet.withdraw_wage(
                     reward_id,
-                    &asset,
+                    asset_id,
                     currently_available_amount,
                     current_timestamp,
                 );
             } else {
                 wallet.withdraw_activity(
                     reward_id,
-                    &asset,
+                    asset_id,
                     (currently_available_amount / amount_per_activity) as u16,
                     current_timestamp,
                 );
             }
             total_withdrawn += currently_available_amount;
         }
-        total_withdrawn += wallet.take_failed_withdraw_amount(&asset);
+        total_withdrawn += wallet.take_failed_withdraw_amount(asset_id);
         self.wallets.insert(&account_id, &wallet.into());
         total_withdrawn
     }
-    pub fn send_reward(&mut self, account_id: AccountId, asset: Asset, amount: u128) {
+    pub fn send_reward(&mut self, account_id: AccountId, asset_id: u8, amount: u128) {
+        let asset = self.cache_assets.get(&asset_id).expect("asset not found");
         match asset {
             Asset::Near => {
                 Promise::new(account_id).transfer(amount);

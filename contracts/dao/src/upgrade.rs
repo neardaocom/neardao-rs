@@ -39,7 +39,6 @@ pub extern "C" fn store_migration_bin() {
         contract::{Contract, StorageKeys},
         settings::Settings,
     };
-    use library::workflow::types::ActivityRight;
     use near_sdk::env;
     use near_sdk::{require, IntoStorageKey};
 
@@ -66,7 +65,6 @@ pub extern "C" fn store_upgrade_bin() {
         contract::{Contract, StorageKeys},
         settings::Settings,
     };
-    use library::workflow::types::ActivityRight;
     use near_sdk::env;
     use near_sdk::{require, IntoStorageKey};
 
@@ -90,7 +88,6 @@ pub extern "C" fn start_migration() {
     use crate::{
         constants::GAS_UPGRADE,
         contract::{Contract, StorageKeys},
-        settings::Settings,
     };
     use library::workflow::types::ActivityRight;
     use near_sdk::IntoStorageKey;
@@ -100,7 +97,6 @@ pub extern "C" fn start_migration() {
 
     let caller = env::predecessor_account_id();
     let contract: Contract = env::state_read().unwrap();
-    let settings: Settings = contract.settings.get().unwrap().into();
 
     require!(contract.check_rights(&[ActivityRight::Group(1)], &caller));
     require!(

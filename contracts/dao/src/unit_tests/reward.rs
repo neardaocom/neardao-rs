@@ -10,7 +10,7 @@ use crate::{
     contract::Contract,
     proposal::{Proposal, ProposalState},
     reward::{Reward, RewardType, RewardTypeIdent, RewardWage},
-    treasury::{Asset, PartitionAsset, PartitionAssetInput, TreasuryPartition},
+    treasury::{Asset, AssetRegistrar, PartitionAsset, PartitionAssetInput, TreasuryPartition},
     unit_tests::{
         as_account_id, assert_cache_reward_activity, claimable_rewards_sum, dummy_propose_settings,
         dummy_template_settings, get_context_builder, get_default_contract, get_role_id,
@@ -26,6 +26,7 @@ fn reward_wage_one_asset() {
     testing_env!(ctx.build());
     let mut contract = get_default_contract();
     let reward_asset = Asset::Near;
+    let reward_asset_id = 0;
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
@@ -33,13 +34,16 @@ fn reward_wage_one_asset() {
     );
     let partition = TreasuryPartition {
         name: "test".into(),
-        assets: vec![PartitionAsset::try_from(PartitionAssetInput {
-            asset_id: reward_asset.clone(),
-            unlocking: UnlockingInput {
-                amount_init_unlock: 1000,
-                lock: None,
+        assets: vec![PartitionAsset::try_from(
+            PartitionAssetInput {
+                asset_id: reward_asset.clone(),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 1000,
+                    lock: None,
+                },
             },
-        })
+            &mut contract as &mut dyn AssetRegistrar,
+        )
         .unwrap()],
     };
     let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
@@ -50,7 +54,7 @@ fn reward_wage_one_asset() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset)
+        .asset(reward_asset_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR);
     let reward = Reward::new(
@@ -59,7 +63,7 @@ fn reward_wage_one_asset() {
         role_id,
         partition_id,
         RewardType::new_wage(2),
-        vec![(reward_asset.clone(), 1)],
+        vec![(reward_asset_id, 1)],
         0,
         1000,
     );
@@ -75,7 +79,7 @@ fn reward_wage_one_asset() {
         ),
         0
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
         claimable_rewards_sum(
@@ -85,7 +89,7 @@ fn reward_wage_one_asset() {
         0
     );
     testing_env!(ctx.block_timestamp(tm(1)).build());
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
     testing_env!(ctx.block_timestamp(tm(2)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
@@ -96,7 +100,7 @@ fn reward_wage_one_asset() {
         ),
         1
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 1);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
@@ -107,9 +111,9 @@ fn reward_wage_one_asset() {
         0
     );
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let wage_stats = withdraw_stats.wage_as_ref().expect("reward is not wage");
-    assert!(wage_stats.asset_id == reward_asset);
+    assert!(wage_stats.asset_id == reward_asset_id);
     assert_eq!(wage_stats.timestamp_last_withdraw, 2);
     assert_eq!(wage_stats.amount, 1);
     testing_env!(ctx.block_timestamp(tm(1000)).build());
@@ -121,18 +125,18 @@ fn reward_wage_one_asset() {
         ),
         499
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 499);
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let wage_stats = withdraw_stats.wage_as_ref().expect("reward is not wage");
     assert_eq!(wage_stats.timestamp_last_withdraw, 1000);
     assert_eq!(wage_stats.amount, 500);
     testing_env!(ctx.block_timestamp(tm(2000)).build());
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let wage_stats = withdraw_stats.wage_as_ref().expect("reward is not wage");
     assert_eq!(wage_stats.timestamp_last_withdraw, 1000);
     assert_eq!(wage_stats.amount, 500);
@@ -142,23 +146,23 @@ fn reward_wage_one_asset() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset)
+        .asset(reward_asset_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR - 500);
-    assert!(contract.partition_add_asset_amount(partition_id, &Asset::new_near(), 100));
+    assert!(contract.partition_add_asset_amount(partition_id, reward_asset_id, 100));
     let partition: TreasuryPartition = contract
         .treasury_partition
         .get(&partition_id)
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset)
+        .asset(reward_asset_id)
         .expect("partition asset not found");
     assert_eq!(
         partition_asset.available_amount(),
         1000 * ONE_NEAR - 500 + 100
     );
-    assert!(!contract.partition_add_asset_amount(2, &Asset::new_near(), 100));
+    assert!(!contract.partition_add_asset_amount(2, reward_asset_id, 100));
 }
 
 #[test]
@@ -167,6 +171,7 @@ fn reward_activity_one_asset() {
     testing_env!(ctx.build());
     let mut contract = get_default_contract();
     let reward_asset = Asset::Near;
+    let reward_asset_id = 0;
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
@@ -174,13 +179,16 @@ fn reward_activity_one_asset() {
     );
     let partition = TreasuryPartition {
         name: "test".into(),
-        assets: vec![PartitionAsset::try_from(PartitionAssetInput {
-            asset_id: reward_asset.clone(),
-            unlocking: UnlockingInput {
-                amount_init_unlock: 1000,
-                lock: None,
+        assets: vec![PartitionAsset::try_from(
+            PartitionAssetInput {
+                asset_id: reward_asset.clone(),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 1000,
+                    lock: None,
+                },
             },
-        })
+            &mut contract as &mut dyn AssetRegistrar,
+        )
         .unwrap()],
     };
     let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
@@ -191,7 +199,7 @@ fn reward_activity_one_asset() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset)
+        .asset(reward_asset_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR);
     let reward = Reward::new(
@@ -200,7 +208,7 @@ fn reward_activity_one_asset() {
         role_id,
         partition_id,
         RewardType::new_user_activity(vec![0, 1]),
-        vec![(reward_asset.clone(), 100)],
+        vec![(reward_asset_id, 100)],
         0,
         4000,
     );
@@ -216,7 +224,7 @@ fn reward_activity_one_asset() {
         ),
         0
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
         claimable_rewards_sum(
@@ -226,25 +234,25 @@ fn reward_activity_one_asset() {
         0
     );
     testing_env!(ctx.block_timestamp(tm(1)).build());
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
     testing_env!(ctx.block_timestamp(tm(2)).build());
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let activity_stats = withdraw_stats
         .activity_as_ref()
         .expect("reward is not activity");
-    assert!(activity_stats.asset_id == reward_asset);
+    assert!(activity_stats.asset_id == reward_asset_id);
     assert_eq!(activity_stats.timestamp_last_withdraw, 0);
     assert_eq!(activity_stats.executed_count, 0);
     assert_eq!(activity_stats.total_withdrawn_count, 0);
     testing_env!(ctx.block_timestamp(tm(1000)).build());
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let activity_stats = withdraw_stats
         .activity_as_ref()
         .expect("reward is not activity");
@@ -252,10 +260,10 @@ fn reward_activity_one_asset() {
     assert_eq!(activity_stats.executed_count, 0);
     assert_eq!(activity_stats.total_withdrawn_count, 0);
     testing_env!(ctx.block_timestamp(tm(2000)).build());
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let activity_stats = withdraw_stats
         .activity_as_ref()
         .expect("reward is not activity");
@@ -268,7 +276,7 @@ fn reward_activity_one_asset() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset)
+        .asset(reward_asset_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
@@ -332,14 +340,14 @@ fn reward_activity_one_asset() {
     let proposal: Proposal = contract.proposals.get(&proposal_id).unwrap().into();
     assert!(proposal.state == ProposalState::Accepted);
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let activity_stats = withdraw_stats
         .activity_as_ref()
         .expect("reward is not activity");
     assert_eq!(activity_stats.timestamp_last_withdraw, 0);
     assert_eq!(activity_stats.executed_count, 2);
     assert_eq!(activity_stats.total_withdrawn_count, 0);
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 200);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
@@ -350,7 +358,7 @@ fn reward_activity_one_asset() {
         0
     );
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let activity_stats = withdraw_stats
         .activity_as_ref()
         .expect("reward is not activity");
@@ -366,7 +374,7 @@ fn reward_activity_one_asset() {
         ),
         0
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
@@ -377,7 +385,7 @@ fn reward_activity_one_asset() {
         0
     );
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let activity_stats = withdraw_stats
         .activity_as_ref()
         .expect("reward is not activity");
@@ -390,7 +398,7 @@ fn reward_activity_one_asset() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset)
+        .asset(reward_asset_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR - 200);
 }
@@ -404,6 +412,7 @@ fn reward_activity_one_asset_for_anyone() {
     tpl_settings.1[0].allowed_voters = ActivityRight::Anyone;
     contract.workflow_template.insert(&1, &tpl_settings);
     let reward_asset = Asset::Near;
+    let reward_asset_id = 0;
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
@@ -416,7 +425,7 @@ fn reward_activity_one_asset_for_anyone() {
         0,
         1,
         RewardType::new_user_activity(vec![0, 1]),
-        vec![(reward_asset.clone(), 100)],
+        vec![(reward_asset_id, 100)],
         0,
         4000,
     );
@@ -466,7 +475,7 @@ fn reward_activity_one_asset_for_anyone() {
     assert!(contract.wallets.get(&founder_2).is_none());
     assert!(contract.wallets.get(&founder_3).is_none());
     let wallet_1 = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet_1, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet_1, reward_id, reward_asset_id);
     let activity_stats = withdraw_stats
         .activity_as_ref()
         .expect("reward is not activity");
@@ -481,7 +490,7 @@ fn reward_activity_one_asset_for_anyone() {
         ),
         200
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 200);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
@@ -492,7 +501,7 @@ fn reward_activity_one_asset_for_anyone() {
         0
     );
     let wallet_2 = get_wallet(&contract, &random_account);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet_2, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet_2, reward_id, reward_asset_id);
     let activity_stats = withdraw_stats
         .activity_as_ref()
         .expect("reward is not activity");
@@ -508,7 +517,7 @@ fn reward_activity_one_asset_for_anyone() {
         100
     );
     let withdraw_amount =
-        contract.internal_withdraw_reward(&random_account, vec![1], &reward_asset);
+        contract.internal_withdraw_reward(&random_account, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 100);
     let claimable_rewards = contract.claimable_rewards(random_account.clone());
     assert_eq!(
@@ -526,6 +535,7 @@ fn reward_wage_one_asset_reward_updated() {
     testing_env!(ctx.build());
     let mut contract = get_default_contract();
     let reward_asset = Asset::Near;
+    let reward_asset_id = 0;
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
@@ -533,13 +543,16 @@ fn reward_wage_one_asset_reward_updated() {
     );
     let partition = TreasuryPartition {
         name: "test".into(),
-        assets: vec![PartitionAsset::try_from(PartitionAssetInput {
-            asset_id: reward_asset.clone(),
-            unlocking: UnlockingInput {
-                amount_init_unlock: 1000,
-                lock: None,
+        assets: vec![PartitionAsset::try_from(
+            PartitionAssetInput {
+                asset_id: reward_asset.clone(),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 1000,
+                    lock: None,
+                },
             },
-        })
+            &mut contract as &mut dyn AssetRegistrar,
+        )
         .unwrap()],
     };
     let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
@@ -550,7 +563,7 @@ fn reward_wage_one_asset_reward_updated() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset)
+        .asset(reward_asset_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR);
     let reward = Reward::new(
@@ -559,7 +572,7 @@ fn reward_wage_one_asset_reward_updated() {
         role_id,
         partition_id,
         RewardType::new_wage(1),
-        vec![(reward_asset.clone(), 1)],
+        vec![(reward_asset_id, 1)],
         0,
         100,
     );
@@ -575,7 +588,7 @@ fn reward_wage_one_asset_reward_updated() {
         ),
         0
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
 
     testing_env!(ctx.block_timestamp(tm(1)).build());
@@ -587,7 +600,7 @@ fn reward_wage_one_asset_reward_updated() {
         ),
         1
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 1);
 
     testing_env!(ctx.block_timestamp(tm(10)).build());
@@ -599,12 +612,12 @@ fn reward_wage_one_asset_reward_updated() {
         ),
         9
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 9);
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let wage_stats = withdraw_stats.wage_as_ref().expect("reward is not wage");
-    assert!(wage_stats.asset_id == reward_asset);
+    assert!(wage_stats.asset_id == reward_asset_id);
     assert_eq!(wage_stats.timestamp_last_withdraw, 10);
     assert_eq!(wage_stats.amount, 10);
 
@@ -626,7 +639,7 @@ fn reward_wage_one_asset_reward_updated() {
         ),
         5
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 5);
 
     testing_env!(ctx.block_timestamp(tm(1000)).build());
@@ -638,12 +651,12 @@ fn reward_wage_one_asset_reward_updated() {
         ),
         0
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let wage_stats = withdraw_stats.wage_as_ref().expect("reward is not wage");
-    assert!(wage_stats.asset_id == reward_asset);
+    assert!(wage_stats.asset_id == reward_asset_id);
     assert_eq!(wage_stats.timestamp_last_withdraw, 20);
     assert_eq!(wage_stats.amount, 15);
     let partition: TreasuryPartition = contract
@@ -652,7 +665,7 @@ fn reward_wage_one_asset_reward_updated() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset)
+        .asset(reward_asset_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR - 15);
 }
@@ -664,6 +677,7 @@ fn reward_wage_one_asset_reward_updated_2() {
     testing_env!(ctx.build());
     let mut contract = get_default_contract();
     let reward_asset = Asset::Near;
+    let reward_asset_id = 0;
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
@@ -671,13 +685,16 @@ fn reward_wage_one_asset_reward_updated_2() {
     );
     let partition = TreasuryPartition {
         name: "test".into(),
-        assets: vec![PartitionAsset::try_from(PartitionAssetInput {
-            asset_id: reward_asset.clone(),
-            unlocking: UnlockingInput {
-                amount_init_unlock: 1000,
-                lock: None,
+        assets: vec![PartitionAsset::try_from(
+            PartitionAssetInput {
+                asset_id: reward_asset.clone(),
+                unlocking: UnlockingInput {
+                    amount_init_unlock: 1000,
+                    lock: None,
+                },
             },
-        })
+            &mut contract as &mut dyn AssetRegistrar,
+        )
         .unwrap()],
     };
     let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
@@ -688,7 +705,7 @@ fn reward_wage_one_asset_reward_updated_2() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset)
+        .asset(reward_asset_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR);
     let reward = Reward::new(
@@ -697,7 +714,7 @@ fn reward_wage_one_asset_reward_updated_2() {
         role_id,
         partition_id,
         RewardType::new_wage(1),
-        vec![(reward_asset.clone(), 1)],
+        vec![(reward_asset_id, 1)],
         0,
         100,
     );
@@ -713,7 +730,7 @@ fn reward_wage_one_asset_reward_updated_2() {
         ),
         0
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
 
     testing_env!(ctx.block_timestamp(tm(1)).build());
@@ -725,7 +742,7 @@ fn reward_wage_one_asset_reward_updated_2() {
         ),
         1
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 1);
 
     testing_env!(ctx.block_timestamp(tm(10)).build());
@@ -737,12 +754,12 @@ fn reward_wage_one_asset_reward_updated_2() {
         ),
         9
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 9);
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let wage_stats = withdraw_stats.wage_as_ref().expect("reward is not wage");
-    assert!(wage_stats.asset_id == reward_asset);
+    assert!(wage_stats.asset_id == reward_asset_id);
     assert_eq!(wage_stats.timestamp_last_withdraw, 10);
     assert_eq!(wage_stats.amount, 10);
 
@@ -755,7 +772,7 @@ fn reward_wage_one_asset_reward_updated_2() {
         ),
         10
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 10);
     contract.reward_update(1, 15);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
@@ -766,7 +783,7 @@ fn reward_wage_one_asset_reward_updated_2() {
         ),
         0
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
 
     testing_env!(ctx.block_timestamp(tm(1000)).build());
@@ -778,12 +795,12 @@ fn reward_wage_one_asset_reward_updated_2() {
         ),
         0
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 0);
     let wallet = get_wallet(&contract, &founder_1);
-    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, &reward_asset);
+    let withdraw_stats = get_wallet_withdraw_stat(&wallet, reward_id, reward_asset_id);
     let wage_stats = withdraw_stats.wage_as_ref().expect("reward is not wage");
-    assert!(wage_stats.asset_id == reward_asset);
+    assert!(wage_stats.asset_id == reward_asset_id);
     assert_eq!(wage_stats.timestamp_last_withdraw, 20);
     assert_eq!(wage_stats.amount, 20);
     let partition: TreasuryPartition = contract
@@ -792,7 +809,7 @@ fn reward_wage_one_asset_reward_updated_2() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset)
+        .asset(reward_asset_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR - 20);
 }
@@ -805,8 +822,11 @@ fn reward_multiple_wage_rewards() {
     let ft_account_id_1 = as_account_id(ACC_1);
     let ft_account_id_2 = as_account_id(ACC_2);
     let reward_asset_1 = Asset::Near;
+    let reward_asset_1_id = 0;
     let reward_asset_2 = Asset::new_ft(ft_account_id_1.clone(), 24);
+    let reward_asset_2_id = 2;
     let reward_asset_3 = Asset::new_ft(ft_account_id_2.clone(), 24);
+    let reward_asset_3_id = 3;
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
@@ -815,32 +835,50 @@ fn reward_multiple_wage_rewards() {
     let partition = TreasuryPartition {
         name: "test".into(),
         assets: vec![
-            PartitionAsset::try_from(PartitionAssetInput {
-                asset_id: reward_asset_1.clone(),
-                unlocking: UnlockingInput {
-                    amount_init_unlock: 1000,
-                    lock: None,
+            PartitionAsset::try_from(
+                PartitionAssetInput {
+                    asset_id: reward_asset_1.clone(),
+                    unlocking: UnlockingInput {
+                        amount_init_unlock: 1000,
+                        lock: None,
+                    },
                 },
-            })
+                &mut contract as &mut dyn AssetRegistrar,
+            )
             .unwrap(),
-            PartitionAsset::try_from(PartitionAssetInput {
-                asset_id: reward_asset_2.clone(),
-                unlocking: UnlockingInput {
-                    amount_init_unlock: 2000,
-                    lock: None,
+            PartitionAsset::try_from(
+                PartitionAssetInput {
+                    asset_id: reward_asset_2.clone(),
+                    unlocking: UnlockingInput {
+                        amount_init_unlock: 2000,
+                        lock: None,
+                    },
                 },
-            })
+                &mut contract as &mut dyn AssetRegistrar,
+            )
             .unwrap(),
-            PartitionAsset::try_from(PartitionAssetInput {
-                asset_id: reward_asset_3.clone(),
-                unlocking: UnlockingInput {
-                    amount_init_unlock: 3000,
-                    lock: None,
+            PartitionAsset::try_from(
+                PartitionAssetInput {
+                    asset_id: reward_asset_3.clone(),
+                    unlocking: UnlockingInput {
+                        amount_init_unlock: 3000,
+                        lock: None,
+                    },
                 },
-            })
+                &mut contract as &mut dyn AssetRegistrar,
+            )
             .unwrap(),
         ],
     };
+    assert_eq!(
+        contract.registered_assets(),
+        vec![
+            (0, Asset::Near),
+            (1, Asset::new_ft(as_account_id(VOTE_TOKEN_ACC), 24)),
+            (2, reward_asset_2.clone()),
+            (3, reward_asset_3.clone())
+        ]
+    );
     let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
     let partition_id = contract.partition_add(partition);
     let partition: TreasuryPartition = contract
@@ -849,13 +887,13 @@ fn reward_multiple_wage_rewards() {
         .expect("partition not found")
         .into();
     let partition_asset_1 = partition
-        .asset(&reward_asset_1)
+        .asset(reward_asset_1_id)
         .expect("partition asset not found");
     let partition_asset_2 = partition
-        .asset(&reward_asset_2)
+        .asset(reward_asset_2_id)
         .expect("partition asset not found");
     let partition_asset_3 = partition
-        .asset(&reward_asset_3)
+        .asset(reward_asset_3_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset_1.available_amount(), 1000 * ONE_NEAR);
     assert_eq!(partition_asset_2.available_amount(), 2000 * ONE_NEAR);
@@ -866,7 +904,7 @@ fn reward_multiple_wage_rewards() {
         role_id,
         partition_id,
         RewardType::new_wage(10),
-        vec![(reward_asset_1.clone(), 100)],
+        vec![(reward_asset_1_id, 100)],
         0,
         1000,
     );
@@ -876,7 +914,7 @@ fn reward_multiple_wage_rewards() {
         role_id,
         partition_id,
         RewardType::new_wage(10),
-        vec![(reward_asset_2.clone(), 100), (reward_asset_3.clone(), 100)],
+        vec![(reward_asset_2_id, 100), (reward_asset_3_id, 100)],
         0,
         1000,
     );
@@ -887,9 +925,9 @@ fn reward_multiple_wage_rewards() {
         partition_id,
         RewardType::new_wage(10),
         vec![
-            (reward_asset_1.clone(), 100),
-            (reward_asset_2.clone(), 100),
-            (reward_asset_3.clone(), 100),
+            (reward_asset_1_id, 100),
+            (reward_asset_2_id, 100),
+            (reward_asset_3_id, 100),
         ],
         0,
         1000,
@@ -967,7 +1005,7 @@ fn reward_multiple_wage_rewards() {
         ),
         400
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_1_id);
     assert_eq!(withdraw_amount, 200);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
@@ -1015,7 +1053,7 @@ fn reward_multiple_wage_rewards() {
         4_000
     );
     let withdraw_amount =
-        contract.internal_withdraw_reward(&founder_1, vec![2, 3], &reward_asset_2);
+        contract.internal_withdraw_reward(&founder_1, vec![2, 3], reward_asset_2_id);
     assert_eq!(withdraw_amount, 4_000);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
@@ -1086,7 +1124,7 @@ fn reward_multiple_wage_rewards() {
         20_000
     );
     let withdraw_amount =
-        contract.internal_withdraw_reward(&founder_1, vec![2, 3], &reward_asset_3);
+        contract.internal_withdraw_reward(&founder_1, vec![2, 3], reward_asset_3_id);
     assert_eq!(withdraw_amount, 20_000);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
@@ -1116,15 +1154,15 @@ fn reward_multiple_wage_rewards() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset_1)
+        .asset(reward_asset_1_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1000 * ONE_NEAR - 200);
     let partition_asset = partition
-        .asset(&reward_asset_2)
+        .asset(reward_asset_2_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 2000 * ONE_NEAR - 4_000);
     let partition_asset = partition
-        .asset(&reward_asset_3)
+        .asset(reward_asset_3_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 3000 * ONE_NEAR - 20_000);
 }
@@ -1141,6 +1179,7 @@ fn reward_one_asset_scenario() {
     testing_env!(ctx.build());
     let mut contract = get_default_contract();
     let reward_asset_1 = Asset::Near;
+    let reward_asset_1_id = 0;
     let (founder_1, founder_2, founder_3) = (
         as_account_id(FOUNDER_1),
         as_account_id(FOUNDER_2),
@@ -1161,10 +1200,13 @@ fn reward_one_asset_scenario() {
     };
     let partition = TreasuryPartition {
         name: "test".into(),
-        assets: vec![PartitionAsset::try_from(PartitionAssetInput {
-            asset_id: reward_asset_1.clone(),
-            unlocking: lock_input,
-        })
+        assets: vec![PartitionAsset::try_from(
+            PartitionAssetInput {
+                asset_id: reward_asset_1.clone(),
+                unlocking: lock_input,
+            },
+            &mut contract as &mut dyn AssetRegistrar,
+        )
         .unwrap()],
     };
     let partition_id = contract.partition_add(partition);
@@ -1174,12 +1216,12 @@ fn reward_one_asset_scenario() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset_1)
+        .asset(reward_asset_1_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1 * ONE_NEAR);
     partition.unlock_all(0);
     let partition_asset = partition
-        .asset(&reward_asset_1)
+        .asset(reward_asset_1_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 1 * ONE_NEAR);
     let role_id = get_role_id(&contract, 1, GROUP_1_ROLE_1);
@@ -1189,7 +1231,7 @@ fn reward_one_asset_scenario() {
         role_id,
         partition_id,
         RewardType::new_wage(1),
-        vec![(reward_asset_1.clone(), 1 * ONE_NEAR)],
+        vec![(reward_asset_1_id, 1 * ONE_NEAR)],
         0,
         10,
     );
@@ -1203,7 +1245,7 @@ fn reward_one_asset_scenario() {
         ),
         0
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_1_id);
     assert_eq!(withdraw_amount, 0);
     testing_env!(ctx.block_timestamp(tm(1)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
@@ -1214,7 +1256,7 @@ fn reward_one_asset_scenario() {
         ),
         1 * ONE_NEAR
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_1_id);
     assert_eq!(withdraw_amount, 1 * ONE_NEAR);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
@@ -1230,7 +1272,7 @@ fn reward_one_asset_scenario() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset_1)
+        .asset(reward_asset_1_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 0);
     testing_env!(ctx.block_timestamp(tm(5)).build());
@@ -1242,7 +1284,7 @@ fn reward_one_asset_scenario() {
         ),
         4 * ONE_NEAR
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_1_id);
     assert_eq!(withdraw_amount, 0);
     testing_env!(ctx.block_timestamp(tm(10)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
@@ -1261,7 +1303,7 @@ fn reward_one_asset_scenario() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset_1)
+        .asset(reward_asset_1_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 0);
     testing_env!(ctx.block_timestamp(tm(20)).build());
@@ -1275,10 +1317,10 @@ fn reward_one_asset_scenario() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset_1)
+        .asset(reward_asset_1_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 5 * ONE_NEAR);
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_1_id);
     assert_eq!(withdraw_amount, 5 * ONE_NEAR);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
@@ -1288,7 +1330,7 @@ fn reward_one_asset_scenario() {
         ),
         4 * ONE_NEAR
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_1_id);
     assert_eq!(withdraw_amount, 0);
     testing_env!(ctx.block_timestamp(tm(420)).build());
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
@@ -1299,7 +1341,7 @@ fn reward_one_asset_scenario() {
         ),
         4 * ONE_NEAR
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_1_id);
     assert_eq!(withdraw_amount, 0);
     testing_env!(ctx.block_timestamp(tm(500)).build());
     let mut partition: TreasuryPartition = contract
@@ -1308,14 +1350,14 @@ fn reward_one_asset_scenario() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset_1)
+        .asset(reward_asset_1_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 0);
 
     // Refill 100 NEARs
-    partition.add_amount(&reward_asset_1, 100 * ONE_NEAR);
+    partition.add_amount(reward_asset_1_id, 100 * ONE_NEAR);
     let partition_asset = partition
-        .asset(&reward_asset_1)
+        .asset(reward_asset_1_id)
         .expect("partition asset not found");
     assert_eq!(partition_asset.available_amount(), 100 * ONE_NEAR);
     contract
@@ -1331,7 +1373,7 @@ fn reward_one_asset_scenario() {
         ),
         4 * ONE_NEAR
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_1_id);
     assert_eq!(withdraw_amount, 4 * ONE_NEAR);
     let claimable_rewards = contract.claimable_rewards(founder_1.clone());
     assert_eq!(
@@ -1347,7 +1389,7 @@ fn reward_one_asset_scenario() {
         .expect("partition not found")
         .into();
     let partition_asset = partition
-        .asset(&reward_asset_1)
+        .asset(reward_asset_1_id)
         .expect("partition asset not found");
     assert_eq!(
         partition_asset.available_amount(),
@@ -1362,7 +1404,7 @@ fn reward_one_asset_scenario() {
         ),
         0
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], &reward_asset_1);
+    let withdraw_amount = contract.internal_withdraw_reward(&founder_1, vec![1], reward_asset_1_id);
     assert_eq!(withdraw_amount, 0);
 }
 
@@ -1388,7 +1430,7 @@ fn cache_reward_activity_management() {
         0,
         1,
         RewardType::new_user_activity(vec![0, 1]),
-        vec![(Asset::new_near(), 100)],
+        vec![(0, 100)],
         0,
         10,
     );
@@ -1418,7 +1460,7 @@ fn cache_reward_activity_management() {
         0,
         1,
         RewardType::new_user_activity(vec![0, 2]),
-        vec![(Asset::new_near(), 100)],
+        vec![(0, 100)],
         0,
         100,
     );

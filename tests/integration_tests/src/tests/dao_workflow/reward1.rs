@@ -1,7 +1,7 @@
 use near_sdk::ONE_NEAR;
 
 use crate::constants::{DAO_TPL_ID_OF_FIRST_ADDED, DAO_TPL_ID_WF_ADD, PROVIDER_TPL_ID_REWARD1};
-use crate::types::{Asset, ProposalState, RewardActivity};
+use crate::types::{ProposalState, RewardActivity};
 use crate::utils::{
     check_instance, check_wf_templates, create_dao_via_factory, create_ft_via_factory, debug_log,
     ft_balance_of, get_timestamp, init_dao_factory, init_ft_factory, init_staking,
@@ -179,9 +179,8 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
             3,
             timestamp,
             timestamp + 7200 + 10,
-            reward_token_account_id.to_string(),
+            2,
             3,
-            24,
             ONE_NEAR / 8,
         ),
         true,
@@ -223,14 +222,7 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
         worker.view_account(&dao_account_id).await?.balance / 10u128.pow(24);
 
     // Withdraw FT reward.
-    withdraw_rewards(
-        &worker,
-        &member,
-        &dao_account_id,
-        vec![1],
-        Asset::new_ft(reward_token_account_id.clone(), 24),
-    )
-    .await?;
+    withdraw_rewards(&worker, &member, &dao_account_id, vec![1], 2).await?;
     worker.wait(10).await?;
     assert!(
         ft_balance_of(&worker, &reward_token_account_id, &member.id())
@@ -242,14 +234,7 @@ async fn workflow_reward1_wage_scenario() -> anyhow::Result<()> {
     debug_log(&worker, &dao_account_id).await?;
 
     // Withdraw NEAR reward.
-    withdraw_rewards(
-        &worker,
-        &member,
-        &dao_account_id,
-        vec![1],
-        Asset::new_near(),
-    )
-    .await?;
+    withdraw_rewards(&worker, &member, &dao_account_id, vec![1], 0).await?;
 
     let dao_account_balance_after =
         worker.view_account(&dao_account_id).await?.balance / 10u128.pow(24);
@@ -418,9 +403,8 @@ async fn workflow_reward1_wage_withdraw_more_near_than_on_dao_account() -> anyho
             3,
             timestamp,
             timestamp + 7200 + 10,
-            reward_token_account_id.to_string(),
+            2,
             3,
-            24,
             10 * ONE_NEAR,
         ),
         true,
@@ -445,15 +429,11 @@ async fn workflow_reward1_wage_withdraw_more_near_than_on_dao_account() -> anyho
     view_user_wallet(&worker, &dao_account_id, &member.id()).await?;
 
     // Withdraw NEAR reward which exceeds available account balance.
-    assert!(withdraw_rewards(
-        &worker,
-        &member,
-        &dao_account_id,
-        vec![1],
-        Asset::new_near(),
-    )
-    .await
-    .is_err());
+    assert!(
+        withdraw_rewards(&worker, &member, &dao_account_id, vec![1], 0)
+            .await
+            .is_err()
+    );
     view_partitions(&worker, &dao_account_id).await?;
     statistics(&worker, &dao_account_id).await?;
     view_user_wallet(&worker, &dao_account_id, &member.id()).await?;
@@ -617,9 +597,8 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
             3,
             timestamp,
             timestamp + 7200 + 10,
-            reward_token_account_id.to_string(),
+            2,
             1 * ONE_NEAR,
-            24,
             1 * ONE_NEAR,
         ),
         true,
@@ -661,14 +640,7 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
         worker.view_account(&dao_account_id).await?.balance / 10u128.pow(24);
 
     // Withdraw FT reward.
-    withdraw_rewards(
-        &worker,
-        &member,
-        &dao_account_id,
-        vec![1],
-        Asset::new_ft(reward_token_account_id.clone(), 24),
-    )
-    .await?;
+    withdraw_rewards(&worker, &member, &dao_account_id, vec![1], 2).await?;
     worker.wait(10).await?;
     debug_log(&worker, &dao_account_id).await?;
     view_user_wallet(&worker, &dao_account_id, &member.id()).await?;
@@ -680,14 +652,7 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
     );
 
     // Withdraw NEAR reward.
-    withdraw_rewards(
-        &worker,
-        &member,
-        &dao_account_id,
-        vec![1],
-        Asset::new_near(),
-    )
-    .await?;
+    withdraw_rewards(&worker, &member, &dao_account_id, vec![1], 0).await?;
     let dao_account_balance_after =
         worker.view_account(&dao_account_id).await?.balance / 10u128.pow(24);
     debug_log(&worker, &dao_account_id).await?;
@@ -736,14 +701,7 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
         worker.view_account(&dao_account_id).await?.balance / 10u128.pow(24);
 
     // Withdraw FT reward.
-    withdraw_rewards(
-        &worker,
-        &member,
-        &dao_account_id,
-        vec![1],
-        Asset::new_ft(reward_token_account_id.clone(), 24),
-    )
-    .await?;
+    withdraw_rewards(&worker, &member, &dao_account_id, vec![1], 2).await?;
     worker.wait(10).await?;
     debug_log(&worker, &dao_account_id).await?;
     view_user_wallet(&worker, &dao_account_id, &member.id()).await?;
@@ -755,14 +713,7 @@ async fn workflow_reward1_user_activity_scenario() -> anyhow::Result<()> {
     );
 
     // Withdraw NEAR reward.
-    withdraw_rewards(
-        &worker,
-        &member,
-        &dao_account_id,
-        vec![1],
-        Asset::new_near(),
-    )
-    .await?;
+    withdraw_rewards(&worker, &member, &dao_account_id, vec![1], 0).await?;
     let dao_account_balance_after =
         worker.view_account(&dao_account_id).await?.balance / 10u128.pow(24);
     debug_log(&worker, &dao_account_id).await?;
@@ -927,14 +878,7 @@ async fn workflow_reward1_skip_partition_creation_wage_scenario() -> anyhow::Res
     worker.wait(10).await?;
 
     // Withdraw NEAR reward.
-    withdraw_rewards(
-        &worker,
-        &member,
-        &dao_account_id,
-        vec![1],
-        Asset::new_near(),
-    )
-    .await?;
+    withdraw_rewards(&worker, &member, &dao_account_id, vec![1], 0).await?;
 
     let dao_account_balance_after =
         worker.view_account(&dao_account_id).await?.balance / 10u128.pow(24);

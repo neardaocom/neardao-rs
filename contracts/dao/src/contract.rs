@@ -6,7 +6,7 @@ use crate::reward::VersionedReward;
 use crate::role::{Roles, UserRoles};
 use crate::settings::{assert_valid_dao_settings, Settings, VersionedSettings};
 use crate::tags::{TagInput, Tags};
-use crate::treasury::{TreasuryPartitionInput, VersionedTreasuryPartition};
+use crate::treasury::{Asset, TreasuryPartitionInput, VersionedTreasuryPartition};
 use crate::wallet::VersionedWallet;
 use library::storage::StorageBucket;
 use library::types::datatype::Value;
@@ -68,6 +68,7 @@ pub enum StorageKeys {
     Rewards,
     Media,
     CacheRewardActivity,
+    CacheAssets,
 }
 
 #[near_bindgen]
@@ -122,6 +123,8 @@ pub struct Contract {
     pub media: LookupMap<u32, Media>,
     /// Cache: activity -> reward ids.
     pub cache_reward_activity: LookupMap<u8, Vec<u16>>,
+    /// Cache: asset_id -> Asset
+    pub cache_assets: LookupMap<u8, Asset>,
 }
 
 #[near_bindgen]
@@ -184,7 +187,9 @@ impl Contract {
             media_last_id: 0,
             media: LookupMap::new(StorageKeys::Media),
             cache_reward_activity: LookupMap::new(StorageKeys::CacheRewardActivity),
+            cache_assets: LookupMap::new(StorageKeys::CacheAssets),
         };
+        contract.init_asset_cache(settings.token_id.clone(), decimals);
         contract.init_dao_settings(settings);
         contract.init_tags(tags);
         contract.init_groups(groups);
@@ -196,6 +201,7 @@ impl Contract {
         contract.init_treasury_partitions(treasury_partitions);
         contract.init_media(media);
         contract.init_reward_cache();
+
         contract
     }
 }

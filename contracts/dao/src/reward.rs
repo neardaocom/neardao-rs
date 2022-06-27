@@ -6,11 +6,8 @@ use near_sdk::AccountId;
 use crate::internal::utils::current_timestamp_sec;
 use crate::wallet::Wallet;
 use crate::workflow::InternalDaoActionError;
-use crate::{contract::*, derive_from_versioned, derive_into_versioned, RewardId, RoleId};
-use crate::{
-    treasury::{Asset, TreasuryPartition},
-    TimestampSec,
-};
+use crate::{contract::*, derive_from_versioned, derive_into_versioned, AssetId, RewardId, RoleId};
+use crate::{treasury::TreasuryPartition, TimestampSec};
 
 derive_into_versioned!(Reward, VersionedReward, V1);
 derive_from_versioned!(VersionedReward, Reward, V1);
@@ -37,7 +34,7 @@ pub struct Reward {
     /// Currently type: `RewardType::UserActivity(_)` is active for anyone regardless role and group.
     r#type: RewardType,
     /// Defines unique asset per unit.
-    reward_amounts: Vec<(Asset, u128)>,
+    reward_amounts: Vec<(AssetId, u128)>,
     /// Timestamp reward is valid from.
     time_valid_from: u64,
     /// Timestamp reward is valid to.
@@ -51,7 +48,7 @@ impl Reward {
         role_id: u16,
         partition_id: u16,
         r#type: RewardType,
-        reward_amounts: Vec<(Asset, u128)>,
+        reward_amounts: Vec<(AssetId, u128)>,
         time_valid_from: TimestampSec,
         time_valid_to: TimestampSec,
     ) -> Self {
@@ -66,23 +63,23 @@ impl Reward {
             time_valid_to,
         }
     }
-    pub fn reward_amounts(&self) -> &[(Asset, u128)] {
+    pub fn reward_amounts(&self) -> &[(AssetId, u128)] {
         self.reward_amounts.as_slice()
     }
     /// Return amount of total available wage asset reward at the current timestamp.
     /// Panics if reward type is not Wage.
     pub fn available_wage_amount(
         &self,
-        asset: &Asset,
+        asset_id: u8,
         timestamp_now: TimestampSec,
         timestamp_from: TimestampSec,
     ) -> u128 {
-        let amount = if let Some((_, amount)) = self.reward_amounts.iter().find(|(r, _)| r == asset)
-        {
-            amount
-        } else {
-            return 0;
-        };
+        let amount =
+            if let Some((_, amount)) = self.reward_amounts.iter().find(|(r, _)| *r == asset_id) {
+                amount
+            } else {
+                return 0;
+            };
         let amount = match self.r#type {
             RewardType::Wage(ref wage) => {
                 let seconds_passed = std::cmp::min(timestamp_now, self.time_valid_to)
@@ -111,14 +108,14 @@ impl Reward {
     /// Panics if:
     /// - reward type is not `RewardType::UserActivity`
     /// - `asset` is not defined in reward
-    pub fn reward_per_one_execution(&self, asset: &Asset) -> u128 {
+    pub fn reward_per_one_execution(&self, asset_id: u8) -> u128 {
         let amount = match self.r#type {
             RewardType::Wage(_) => panic_str("fatal - invalid reward type"),
             RewardType::UserActivity(_) => {
                 let asset = self
                     .reward_amounts
                     .iter()
-                    .find(|(r, _)| r == asset)
+                    .find(|(r, _)| *r == asset_id)
                     .expect("fatal - asset not found");
                 asset.1
             }
@@ -258,7 +255,7 @@ impl Contract {
             } else {
                 self.get_group_members_with_role(reward.group_id, &group, reward.role_id)
             };
-            let mut reward_assets: Vec<Asset> = reward
+            let mut reward_assets: Vec<AssetId> = reward
                 .reward_amounts()
                 .into_iter()
                 .map(|(a, _)| a.to_owned())
@@ -321,9 +318,12 @@ impl Contract {
     /// Validate that defined assets in rewards are defined in treasury partition.
     pub fn validate_reward_assets(&self, reward: &Reward, partition: &TreasuryPartition) -> bool {
         let partition_assets = partition.assets();
-        for (rew, _) in reward.reward_amounts() {
-            if partition_assets.iter().any(|el| el.asset_id() == rew) {
-                break;
+        for (rew_asset, _) in reward.reward_amounts() {
+            if partition_assets
+                .iter()
+                .any(|el| el.asset_id() == *rew_asset)
+            {
+                continue;
             } else {
                 return false;
             }
@@ -337,7 +337,7 @@ impl Contract {
         reward_id: u16,
         reward_type: RewardTypeIdent,
         account_id: &AccountId,
-        assets: Vec<Asset>,
+        assets: Vec<AssetId>,
         current_timestamp: TimestampSec,
     ) {
         let mut wallet = self.get_wallet(account_id);
@@ -353,7 +353,7 @@ impl Contract {
     ) {
         let mut wallet = self.get_wallet(account_id);
         for (reward_id, reward) in rewards {
-            let assets: Vec<Asset> = reward
+            let assets: Vec<AssetId> = reward
                 .reward_amounts()
                 .into_iter()
                 .map(|(a, _)| a.to_owned())

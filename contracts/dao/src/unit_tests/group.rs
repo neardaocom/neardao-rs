@@ -10,49 +10,17 @@ use crate::{
     role::{MemberRoles, Roles, UserRoles},
     treasury::Asset,
     unit_tests::{
-        as_account_id, assert_group_rewards, assert_group_role_members, assert_user_roles,
-        claimable_rewards_sum, decimal_const, default_group_1_roles, default_group_2_roles,
-        founder_1_roles, founder_2_roles, founder_3_roles, get_default_contract, tm, FOUNDER_1,
-        FOUNDER_2, FOUNDER_3, FOUNDER_4, FOUNDER_5, GROUP_1_ROLE_1,
+        as_account_id, assert_group_members, assert_group_rewards, assert_group_role_members,
+        assert_no_wallet_reward, assert_user_roles, assert_wallet, claimable_rewards_sum,
+        decimal_const, default_group_1_roles, default_group_2_roles, founder_1_roles,
+        founder_2_roles, founder_3_roles, get_default_contract, tm, FOUNDER_1, FOUNDER_2,
+        FOUNDER_3, FOUNDER_4, FOUNDER_5, GROUP_1_ROLE_1,
     },
     wallet::Wallet,
+    AssetId,
 };
 
 use super::get_context_builder;
-
-fn assert_group_members(contract: &Contract, group_id: u16, mut expected_members: Vec<AccountId>) {
-    let group = contract.group(group_id).unwrap();
-    let mut actual_members = group.get_members_accounts();
-    actual_members.sort();
-    expected_members.sort();
-    assert_eq!(actual_members, expected_members);
-}
-
-fn assert_wallet(
-    wallet: &Wallet,
-    expected_reward_id: u16,
-    expected_assets: Vec<Asset>,
-    expected_time_added: u64,
-    expected_time_removed: Option<u64>,
-) {
-    let wallet_reward = wallet
-        .wallet_reward(expected_reward_id)
-        .expect("wallet reward id not found");
-    assert_eq!(wallet_reward.time_added(), expected_time_added);
-    assert_eq!(wallet_reward.time_removed(), expected_time_removed);
-    assert_eq!(
-        wallet_reward
-            .withdraw_stats()
-            .into_iter()
-            .map(|s| s.reward_asset().clone())
-            .collect::<Vec<Asset>>(),
-        expected_assets
-    );
-}
-
-fn assert_no_wallet_reward(wallet: &Wallet, expected_reward_id_missing: u16) {
-    assert!(wallet.wallet_reward(expected_reward_id_missing).is_none());
-}
 
 #[test]
 fn group_add() {
@@ -732,13 +700,14 @@ fn group_scenario() {
     assert!(contract.wallet(accounts(2)).is_none());
     assert!(contract.wallet(founder_account.clone()).is_none());
     let reward_asset = Asset::Near;
+    let reward_asset_id = 0;
     let reward = Reward::new(
         "test".into(),
         3,
         0,
         1,
         RewardType::new_wage(1),
-        vec![(reward_asset.clone(), 1)],
+        vec![(reward_asset_id, 1)],
         0,
         1000,
     );
@@ -753,34 +722,10 @@ fn group_scenario() {
     let wallet_acc_2 = contract.wallet(accounts(1)).unwrap();
     let wallet_acc_3 = contract.wallet(accounts(2)).unwrap();
     let wallet_acc_4 = contract.wallet(founder_account.clone()).unwrap();
-    assert_wallet(
-        &wallet_acc_1,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_2,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_3,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_4,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
+    assert_wallet(&wallet_acc_1, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_2, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_3, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_4, reward_id, vec![reward_asset_id], 0, None);
     let expected_role_founder = UserRoles::new()
         .add_group_roles(1, vec![0, 1])
         .add_group_roles(3, vec![0]);
@@ -867,41 +812,11 @@ fn group_scenario() {
     let wallet_acc_3 = contract.wallet(accounts(2)).unwrap();
     let wallet_acc_4 = contract.wallet(founder_account.clone()).unwrap();
     let wallet_acc_5 = contract.wallet(accounts(3)).unwrap();
-    assert_wallet(
-        &wallet_acc_1,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_2,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_3,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_4,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_5,
-        reward_id,
-        vec![reward_asset.clone()],
-        10,
-        None,
-    );
+    assert_wallet(&wallet_acc_1, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_2, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_3, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_4, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_5, reward_id, vec![reward_asset_id], 10, None);
     let expected_group_members = vec![
         accounts(0),
         accounts(1),
@@ -954,41 +869,11 @@ fn group_scenario() {
     let wallet_acc_3 = contract.wallet(accounts(2)).unwrap();
     let wallet_acc_4 = contract.wallet(founder_account.clone()).unwrap();
     let wallet_acc_5 = contract.wallet(accounts(3)).unwrap();
-    assert_wallet(
-        &wallet_acc_1,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_2,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        Some(20),
-    );
-    assert_wallet(
-        &wallet_acc_3,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_4,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_5,
-        reward_id,
-        vec![reward_asset.clone()],
-        10,
-        None,
-    );
+    assert_wallet(&wallet_acc_1, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_2, reward_id, vec![reward_asset_id], 0, Some(20));
+    assert_wallet(&wallet_acc_3, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_4, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_5, reward_id, vec![reward_asset_id], 10, None);
 
     // 5. Add new group roles.
     testing_env!(ctx.block_timestamp(tm(21)).build());
@@ -1104,55 +989,13 @@ fn group_scenario() {
     let wallet_acc_5 = contract.wallet(accounts(3)).unwrap();
     let wallet_acc_6 = contract.wallet(accounts(4)).unwrap();
     let wallet_acc_7 = contract.wallet(accounts(5)).unwrap();
-    assert_wallet(
-        &wallet_acc_1,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_2,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        Some(20),
-    );
-    assert_wallet(
-        &wallet_acc_3,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_4,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_5,
-        reward_id,
-        vec![reward_asset.clone()],
-        10,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_6,
-        reward_id,
-        vec![reward_asset.clone()],
-        22,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_7,
-        reward_id,
-        vec![reward_asset.clone()],
-        22,
-        None,
-    );
+    assert_wallet(&wallet_acc_1, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_2, reward_id, vec![reward_asset_id], 0, Some(20));
+    assert_wallet(&wallet_acc_3, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_4, reward_id, vec![reward_asset_id], 0, None);
+    assert_wallet(&wallet_acc_5, reward_id, vec![reward_asset_id], 10, None);
+    assert_wallet(&wallet_acc_6, reward_id, vec![reward_asset_id], 22, None);
+    assert_wallet(&wallet_acc_7, reward_id, vec![reward_asset_id], 22, None);
 
     // 7. Reward is defined for role "alpha".
     testing_env!(ctx.block_timestamp(tm(25)).build());
@@ -1162,7 +1005,7 @@ fn group_scenario() {
         2,
         1,
         RewardType::new_wage(1),
-        vec![(reward_asset.clone(), 1)],
+        vec![(reward_asset_id, 1)],
         25,
         30,
     );
@@ -1176,67 +1019,19 @@ fn group_scenario() {
     let wallet_acc_5 = contract.wallet(accounts(3)).unwrap();
     let wallet_acc_6 = contract.wallet(accounts(4)).unwrap();
     let wallet_acc_7 = contract.wallet(accounts(5)).unwrap();
-    assert_wallet(
-        &wallet_acc_1,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
+    assert_wallet(&wallet_acc_1, reward_id, vec![reward_asset_id], 0, None);
     assert_no_wallet_reward(&wallet_acc_2, reward_id_2);
-    assert_wallet(
-        &wallet_acc_2,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        Some(20),
-    );
+    assert_wallet(&wallet_acc_2, reward_id, vec![reward_asset_id], 0, Some(20));
     assert_no_wallet_reward(&wallet_acc_3, reward_id_2);
-    assert_wallet(
-        &wallet_acc_3,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
+    assert_wallet(&wallet_acc_3, reward_id, vec![reward_asset_id], 0, None);
     assert_no_wallet_reward(&wallet_acc_4, reward_id_2);
-    assert_wallet(
-        &wallet_acc_4,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
+    assert_wallet(&wallet_acc_4, reward_id, vec![reward_asset_id], 0, None);
     assert_no_wallet_reward(&wallet_acc_5, reward_id_2);
-    assert_wallet(
-        &wallet_acc_5,
-        reward_id,
-        vec![reward_asset.clone()],
-        10,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_6,
-        reward_id,
-        vec![reward_asset.clone()],
-        22,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_6,
-        reward_id_2,
-        vec![reward_asset.clone()],
-        25,
-        None,
-    );
+    assert_wallet(&wallet_acc_5, reward_id, vec![reward_asset_id], 10, None);
+    assert_wallet(&wallet_acc_6, reward_id, vec![reward_asset_id], 22, None);
+    assert_wallet(&wallet_acc_6, reward_id_2, vec![reward_asset_id], 25, None);
     assert_no_wallet_reward(&wallet_acc_7, reward_id_2);
-    assert_wallet(
-        &wallet_acc_7,
-        reward_id,
-        vec![reward_asset.clone()],
-        22,
-        None,
-    );
+    assert_wallet(&wallet_acc_7, reward_id, vec![reward_asset_id], 22, None);
 
     // 8. Role "alpha" is removed.
     testing_env!(ctx.block_timestamp(tm(28)).build());
@@ -1270,67 +1065,25 @@ fn group_scenario() {
     let wallet_acc_5 = contract.wallet(accounts(3)).unwrap();
     let wallet_acc_6 = contract.wallet(accounts(4)).unwrap();
     let wallet_acc_7 = contract.wallet(accounts(5)).unwrap();
-    assert_wallet(
-        &wallet_acc_1,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
+    assert_wallet(&wallet_acc_1, reward_id, vec![reward_asset_id], 0, None);
     assert_no_wallet_reward(&wallet_acc_2, reward_id_2);
-    assert_wallet(
-        &wallet_acc_2,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        Some(20),
-    );
+    assert_wallet(&wallet_acc_2, reward_id, vec![reward_asset_id], 0, Some(20));
     assert_no_wallet_reward(&wallet_acc_3, reward_id_2);
-    assert_wallet(
-        &wallet_acc_3,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
+    assert_wallet(&wallet_acc_3, reward_id, vec![reward_asset_id], 0, None);
     assert_no_wallet_reward(&wallet_acc_4, reward_id_2);
-    assert_wallet(
-        &wallet_acc_4,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
+    assert_wallet(&wallet_acc_4, reward_id, vec![reward_asset_id], 0, None);
     assert_no_wallet_reward(&wallet_acc_5, reward_id_2);
-    assert_wallet(
-        &wallet_acc_5,
-        reward_id,
-        vec![reward_asset.clone()],
-        10,
-        None,
-    );
-    assert_wallet(
-        &wallet_acc_6,
-        reward_id,
-        vec![reward_asset.clone()],
-        22,
-        None,
-    );
+    assert_wallet(&wallet_acc_5, reward_id, vec![reward_asset_id], 10, None);
+    assert_wallet(&wallet_acc_6, reward_id, vec![reward_asset_id], 22, None);
     assert_wallet(
         &wallet_acc_6,
         reward_id_2,
-        vec![reward_asset.clone()],
+        vec![reward_asset_id],
         25,
         Some(28),
     );
     assert_no_wallet_reward(&wallet_acc_7, reward_id_2);
-    assert_wallet(
-        &wallet_acc_7,
-        reward_id,
-        vec![reward_asset.clone()],
-        22,
-        None,
-    );
+    assert_wallet(&wallet_acc_7, reward_id, vec![reward_asset_id], 22, None);
 
     // 9. Remove the "artists" group.
     testing_env!(ctx.block_timestamp(tm(30)).build());
@@ -1361,56 +1114,32 @@ fn group_scenario() {
     let wallet_acc_5 = contract.wallet(accounts(3)).unwrap();
     let wallet_acc_6 = contract.wallet(accounts(4)).unwrap();
     let wallet_acc_7 = contract.wallet(accounts(5)).unwrap();
-    assert_wallet(
-        &wallet_acc_1,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        Some(30),
-    );
+    assert_wallet(&wallet_acc_1, reward_id, vec![reward_asset_id], 0, Some(30));
     assert_no_wallet_reward(&wallet_acc_2, reward_id_2);
-    assert_wallet(
-        &wallet_acc_2,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        Some(20),
-    );
+    assert_wallet(&wallet_acc_2, reward_id, vec![reward_asset_id], 0, Some(20));
     assert_no_wallet_reward(&wallet_acc_3, reward_id_2);
-    assert_wallet(
-        &wallet_acc_3,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        Some(30),
-    );
+    assert_wallet(&wallet_acc_3, reward_id, vec![reward_asset_id], 0, Some(30));
     assert_no_wallet_reward(&wallet_acc_4, reward_id_2);
-    assert_wallet(
-        &wallet_acc_4,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        Some(30),
-    );
+    assert_wallet(&wallet_acc_4, reward_id, vec![reward_asset_id], 0, Some(30));
     assert_no_wallet_reward(&wallet_acc_5, reward_id_2);
     assert_wallet(
         &wallet_acc_5,
         reward_id,
-        vec![reward_asset.clone()],
+        vec![reward_asset_id],
         10,
         Some(30),
     );
     assert_wallet(
         &wallet_acc_6,
         reward_id,
-        vec![reward_asset.clone()],
+        vec![reward_asset_id],
         22,
         Some(30),
     );
     assert_wallet(
         &wallet_acc_6,
         reward_id_2,
-        vec![reward_asset.clone()],
+        vec![reward_asset_id],
         25,
         Some(28),
     );
@@ -1418,7 +1147,7 @@ fn group_scenario() {
     assert_wallet(
         &wallet_acc_7,
         reward_id,
-        vec![reward_asset.clone()],
+        vec![reward_asset_id],
         22,
         Some(30),
     );
@@ -1432,7 +1161,7 @@ fn group_scenario() {
         ),
         30
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&accounts(0), vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&accounts(0), vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 30);
     let claimable_rewards = contract.claimable_rewards(accounts(1));
     assert_eq!(
@@ -1442,7 +1171,7 @@ fn group_scenario() {
         ),
         20
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&accounts(1), vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&accounts(1), vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 20);
     let claimable_rewards = contract.claimable_rewards(accounts(3));
     assert_eq!(
@@ -1452,7 +1181,7 @@ fn group_scenario() {
         ),
         20
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&accounts(3), vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&accounts(3), vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 20);
     let claimable_rewards = contract.claimable_rewards(founder_account.clone());
     assert_eq!(
@@ -1463,7 +1192,7 @@ fn group_scenario() {
         30
     );
     let withdraw_amount =
-        contract.internal_withdraw_reward(&founder_account.clone(), vec![1], &reward_asset);
+        contract.internal_withdraw_reward(&founder_account.clone(), vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 30);
     let claimable_rewards = contract.claimable_rewards(accounts(4));
     assert_eq!(
@@ -1474,7 +1203,7 @@ fn group_scenario() {
         8 + 3
     );
     let withdraw_amount =
-        contract.internal_withdraw_reward(&accounts(4), vec![1, 2], &reward_asset);
+        contract.internal_withdraw_reward(&accounts(4), vec![1, 2], reward_asset_id);
     assert_eq!(withdraw_amount, 8 + 3);
     let claimable_rewards = contract.claimable_rewards(accounts(5));
     assert_eq!(
@@ -1484,7 +1213,7 @@ fn group_scenario() {
         ),
         8
     );
-    let withdraw_amount = contract.internal_withdraw_reward(&accounts(5), vec![1], &reward_asset);
+    let withdraw_amount = contract.internal_withdraw_reward(&accounts(5), vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 8);
 }
 
@@ -1511,13 +1240,14 @@ fn group_add_remove_add_role_with_reward() {
     assert!(contract.wallet(founder_account.clone()).is_none());
     // Add reward.
     let reward_asset = Asset::Near;
+    let reward_asset_id = 0;
     let reward = Reward::new(
         "test".into(),
         1,
         1,
         1,
         RewardType::new_wage(1),
-        vec![(reward_asset.clone(), 1)],
+        vec![(reward_asset_id, 1)],
         0,
         1000,
     );
@@ -1530,13 +1260,7 @@ fn group_add_remove_add_role_with_reward() {
     );
     assert_group_rewards(&contract, 1, vec![(1, 1)]);
     let founder_wallet = contract.get_wallet(&founder_account);
-    assert_wallet(
-        &founder_wallet,
-        reward_id,
-        vec![reward_asset.clone()],
-        0,
-        None,
-    );
+    assert_wallet(&founder_wallet, reward_id, vec![reward_asset_id], 0, None);
     testing_env!(ctx.block_timestamp(tm(10)).build());
     let claimable_rewards = contract.claimable_rewards(founder_account.clone());
     assert_eq!(
@@ -1569,7 +1293,7 @@ fn group_add_remove_add_role_with_reward() {
     assert_wallet(
         &founder_wallet,
         reward_id,
-        vec![reward_asset.clone()],
+        vec![reward_asset_id],
         0,
         Some(10),
     );
@@ -1596,13 +1320,7 @@ fn group_add_remove_add_role_with_reward() {
     );
     assert_group_rewards(&contract, 1, vec![(1, 1)]);
     let founder_wallet = contract.get_wallet(&founder_account);
-    assert_wallet(
-        &founder_wallet,
-        reward_id,
-        vec![reward_asset.clone()],
-        40,
-        None,
-    );
+    assert_wallet(&founder_wallet, reward_id, vec![reward_asset_id], 40, None);
     let claimable_rewards = contract.claimable_rewards(founder_account.clone());
     assert_eq!(
         claimable_rewards_sum(
@@ -1639,7 +1357,7 @@ fn group_add_remove_add_role_with_reward() {
     assert_wallet(
         &founder_wallet,
         reward_id,
-        vec![reward_asset.clone()],
+        vec![reward_asset_id],
         40,
         Some(100),
     );
@@ -1652,7 +1370,7 @@ fn group_add_remove_add_role_with_reward() {
         60
     );
     let withdraw_amount =
-        contract.internal_withdraw_reward(&founder_account, vec![1], &reward_asset);
+        contract.internal_withdraw_reward(&founder_account, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 60);
     // Give founder_1 back his founder role again.
     testing_env!(ctx.block_timestamp(tm(300)).build());
@@ -1669,13 +1387,7 @@ fn group_add_remove_add_role_with_reward() {
     );
     assert_group_rewards(&contract, 1, vec![(1, 1)]);
     let founder_wallet = contract.get_wallet(&founder_account);
-    assert_wallet(
-        &founder_wallet,
-        reward_id,
-        vec![reward_asset.clone()],
-        240,
-        None,
-    );
+    assert_wallet(&founder_wallet, reward_id, vec![reward_asset_id], 240, None);
     let claimable_rewards = contract.claimable_rewards(founder_account.clone());
     assert_eq!(
         claimable_rewards_sum(
@@ -1694,6 +1406,6 @@ fn group_add_remove_add_role_with_reward() {
         700
     );
     let withdraw_amount =
-        contract.internal_withdraw_reward(&founder_account, vec![1], &reward_asset);
+        contract.internal_withdraw_reward(&founder_account, vec![1], reward_asset_id);
     assert_eq!(withdraw_amount, 700);
 }

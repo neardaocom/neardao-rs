@@ -192,7 +192,7 @@ async fn workflow_lock1_scenario() -> anyhow::Result<()> {
         &dao_account_id,
         proposal_id,
         2,
-        ActivityInputLock1::activity_2_add_ft(3, token_account_id.as_str(), 9_999_999),
+        ActivityInputLock1::activity_2_add_ft(3, 2, 9_999_999),
         true,
     )
     .await?;

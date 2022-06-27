@@ -42,6 +42,7 @@ pub(crate) type RewardId = u16;
 pub(crate) type ResourceId = u32;
 pub type TokenId = String;
 pub type ApprovalId = Option<u64>;
+pub type AssetId = u8;
 
 #[macro_export]
 macro_rules! derive_into_versioned {
