@@ -202,9 +202,8 @@ impl Contract {
         }
         let caller = env::predecessor_account_id();
         let (mut proposal, _, wfs) = self.get_workflow_and_proposal(id);
-        assert!(
+        require!(
             env::attached_deposit() >= wfs.deposit_vote.unwrap_or_else(|| 0.into()).0,
-            "{}",
             "Not enough deposit."
         );
         let TemplateSettings {

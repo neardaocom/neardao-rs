@@ -19,7 +19,7 @@ use library::{FnCallId, MethodName};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap};
 use near_sdk::serde::Serialize;
-use near_sdk::{near_bindgen, AccountId, Balance, BorshStorageKey, PanicOnDefault};
+use near_sdk::{near_bindgen, require, AccountId, Balance, BorshStorageKey, PanicOnDefault};
 
 use crate::group::{Group, GroupInput};
 
@@ -145,7 +145,7 @@ impl Contract {
         treasury_partitions: Vec<TreasuryPartitionInput>,
         media: Vec<Media>,
     ) -> Self {
-        assert!(decimals <= 24);
+        require!(decimals <= 24);
         assert_valid_dao_settings(&settings);
 
         let mut contract = Contract {

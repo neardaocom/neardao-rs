@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    require,
     serde::{Deserialize, Serialize},
     AccountId,
 };
@@ -75,11 +76,11 @@ pub struct Group {
 impl Group {
     pub fn new(settings: GroupSettings, members: Vec<GroupMember>) -> Self {
         if let Some(ref leader) = settings.leader {
-            assert!(
+            require!(
                 !leader.as_str().is_empty(),
                 "Leader cannot be empty string."
             );
-            assert!(
+            require!(
                 members.iter().any(|m| *leader == m.account_id),
                 "Leader must be contained in group members."
             );

@@ -1,5 +1,6 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    require,
     serde::{Deserialize, Serialize},
     AccountId,
 };
@@ -40,7 +41,7 @@ derive_from_versioned!(VersionedSettings, Settings, V1);
 derive_into_versioned!(Settings, VersionedSettings, V1);
 
 pub(crate) fn assert_valid_dao_settings(settings: &Settings) {
-    assert!(!settings.name.is_empty());
+    require!(!settings.name.is_empty(), "empty dao name");
 }
 
 impl Contract {

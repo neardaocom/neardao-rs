@@ -16,6 +16,7 @@ use library::workflow::postprocessing::Postprocessing;
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
 use library::workflow::types::{ActivityRight, DaoActionIdent, ObjectMetadata};
+use near_sdk::env::panic_str;
 use near_sdk::{
     env, ext_contract, log, near_bindgen, require, AccountId, Gas, Promise, PromiseResult,
 };
@@ -48,6 +49,7 @@ trait CbActivity {
 #[near_bindgen]
 impl Contract {
     // TODO: Auto-finish WF then there is no other possible transition regardless terminality.
+    /// Workflow execution entry-point function.
     #[payable]
     pub fn workflow_run_activity(
         &mut self,
@@ -86,16 +88,16 @@ impl Contract {
             Some(global_storage),
         ));
 
-        // Check states
-        assert!(
+        // Check states.
+        require!(
             proposal.state == ProposalState::Accepted,
             "Proposal is not accepted."
         );
-        assert!(
+        require!(
             wfi.get_state() == InstanceState::Running,
             "Workflow is not running."
         );
-        assert!(activities.get(activity_id).is_some(), "activity not found");
+        require!(activities.get(activity_id).is_some(), "activity not found");
 
         // Find activity.
         let TemplateActivity {
@@ -117,13 +119,13 @@ impl Contract {
                 .expect("Transition is not possible.");
 
             // Check transition counter.
-            assert!(
+            require!(
                 wfi.update_transition_counter(activity_id as usize),
                 "Reached transition limit."
             );
 
             // Check transition condition.
-            assert!(
+            require!(
                 transition
                     .cond
                     .as_ref()
@@ -196,68 +198,54 @@ impl Contract {
             ),
             "Activity input structure is invalid."
         );
-        let result;
-        if is_sync {
-            result = self.run_sync_activity(
+        let result = if is_sync {
+            // Sync might panic.
+            self.run_sync_activity(
                 &mut ctx,
                 expressions.as_slice(),
                 sources.as_mut(),
                 actions_inputs,
             );
-
-            // In case not a single DaoAction was executed, then consider this call as failed and panic!
-            if result.is_err() && ctx.actions_done() == 0 {
-                panic!(
-                    "Not a single action was executed. error: {:?}, {:?}",
-                    result, ctx
-                );
-            } else {
-                //At least one action was executed.
-                // Save storages.
-                if let Some(storage) = sources.take_storage() {
-                    self.storage.insert(&storage_key.unwrap(), &storage);
-                }
-                self.storage.insert(
-                    &GLOBAL_BUCKET_IDENT.into(),
-                    &sources
-                        .take_global_storage()
-                        .expect("Missing global storage"),
-                );
-                wfi.new_actions_done(ctx.actions_done(), current_timestamp_sec());
+            if let Some(storage) = sources.take_storage() {
+                self.storage.insert(&storage_key.unwrap(), &storage);
             }
+            self.storage.insert(
+                &GLOBAL_BUCKET_IDENT.into(),
+                &sources
+                    .take_global_storage()
+                    .expect("Missing global storage"),
+            );
+            wfi.new_actions_done(ctx.actions_done(), current_timestamp_sec());
+            None
         } else {
-            // In case of fn calls activity storages are mutated in postprocessing as promises resolve.
-            result = self.run_async_activity(
+            // Async cannot panic immediately.
+            let result = self.run_async_activity(
                 &mut ctx,
                 expressions.as_slice(),
                 sources.as_mut(),
                 actions_inputs,
             );
+            // Zero action executed means no promise was dispatched.
             if result.is_err() && ctx.actions_done() == 0 {
-                panic!(
-                    "Not a single action was executed. error: {:?}, {:?}",
-                    result, ctx
-                );
+                panic!("No action was executed. error: {:?}, {:?}", result, ctx);
             } else {
                 wfi.await_promises(
                     ctx.optional_actions_done(),
                     ctx.actions_done() - ctx.optional_actions_done(),
                 );
             }
-        }
-
-        // Decide if is fatal error.
-        let result = if let Err(e) = result {
-            let e = ActivityError::from(e);
-            if e.is_fatal() {
-                wfi.set_fatal_error();
-                log!("WF FATAL ERROR: {:?}", e);
+            if let Err(e) = result {
+                let e = ActivityError::from(e);
+                if e.is_fatal() {
+                    wfi.set_fatal_error();
+                    log!("wf fatal error: {:?}", e);
+                }
+                Some(e)
+            } else {
+                None
             }
-            Some(e)
-        } else {
-            self.register_executed_activity(&ctx.caller, RewardActivity::Activity.into());
-            None
         };
+        self.register_executed_activity(&ctx.caller, RewardActivity::Activity.into());
         self.workflow_instance.insert(&proposal_id, &wfi);
         result
     }
@@ -275,9 +263,8 @@ impl Contract {
         storage_key: Option<String>,
         postprocessing: Option<Postprocessing>,
     ) {
-        assert_eq!(
-            env::promise_results_count(),
-            1,
+        require!(
+            env::promise_results_count() == 1,
             "invalid promise result count"
         );
         match env::promise_result(0) {
@@ -311,7 +298,7 @@ impl Contract {
     pub fn workflow_finish(&mut self, proposal_id: u32) -> bool {
         let caller = env::predecessor_account_id();
         let (proposal, _, wfs) = self.get_workflow_and_proposal(proposal_id);
-        assert!(
+        require!(
             proposal.state == ProposalState::Accepted,
             "proposal is not accepted"
         );
@@ -333,18 +320,20 @@ impl Contract {
 impl Contract {
     /// Tries to run all activity's actions.
     /// Some checks must be done before calling this function.
+    /// Panics if anything goes wrong.
+    /// Panicking is used in order to reduce gas/storage fees.
     pub fn run_sync_activity(
         &mut self,
         ctx: &mut ActivityContext,
         expressions: &[EExpr],
         sources: &mut dyn Source,
         mut input: Vec<Option<ActionInput>>,
-    ) -> Result<(), ActionError> {
+    ) {
         // Loop which tries to execute all actions, starting from the last done. Returns when something goes wrong.
         let last_action_done = ctx.actions_done_before as usize;
         for idx in 0..input.len() {
             // Assuming that structure of inputs was checked above therefore unwraping on indexes is OK.
-            set_action_propose_binds(idx + last_action_done, sources, ctx)?;
+            set_action_propose_binds(idx + last_action_done, sources, ctx).unwrap();
             let tpl_action = ctx.actions.get_mut(idx + last_action_done).unwrap();
             let mut action_input = match tpl_action.input_source {
                 User => match input.get_mut(idx).unwrap().take() {
@@ -356,17 +345,17 @@ impl Contract {
                 },
                 PropSettings => sources
                     .unset_prop_action()
-                    .ok_or(ActionError::InvalidWfStructure(
-                        "missing action inputs".into(),
-                    ))?
+                    .expect("missing action inputs")
                     .into_activity_input(),
             };
             // Check exec condition.
             if let Some(cond) = tpl_action.exec_condition.as_ref() {
-                if !eval(cond, sources, expressions, Some(action_input.as_ref()))?
-                    .try_into_bool()?
+                if !eval(cond, sources, expressions, Some(action_input.as_ref()))
+                    .unwrap()
+                    .try_into_bool()
+                    .unwrap()
                 {
-                    return Err(ActionError::Condition(idx as u8));
+                    panic_str("exec condition was not met")
                 }
             };
 
@@ -374,9 +363,7 @@ impl Contract {
             let user_inputs = action_input.to_vec();
             let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                 .try_into_action_data()
-                .ok_or(ActionError::InvalidWfStructure(
-                    "missing action data".into(),
-                ))?;
+                .expect("missing action data");
 
             // Check input validators.
             if !validate(
@@ -384,29 +371,37 @@ impl Contract {
                 tpl_action.validators.as_slice(),
                 expressions,
                 action_input.as_ref(),
-            )? {
-                return Err(ActionError::Validation);
+            )
+            .unwrap()
+            {
+                panic_str("validation failed")
             }
             // Bind user inputs.
             let binds = action_data.binds.as_slice();
-            bind_input(sources, binds, expressions, action_input.as_mut())?;
+            bind_input(sources, binds, expressions, action_input.as_mut()).unwrap();
 
             let deposit = match &action_data.required_deposit {
-                Some(arg_src) => eval(&arg_src, sources, expressions, None)?.try_into_u128()?,
+                Some(arg_src) => eval(&arg_src, sources, expressions, None)
+                    .unwrap()
+                    .try_into_u128()
+                    .unwrap(),
                 _ => 0,
             };
             ctx.attached_deposit = ctx
                 .attached_deposit
                 .checked_sub(deposit)
-                .ok_or(ActionError::NotEnoughDeposit)?;
+                .expect("not enough attached deposit");
             if action_data.name != DaoActionIdent::Event {
-                self.execute_dao_action(action_data.name, action_input.as_mut())?;
+                self.execute_dao_action(action_data.name, action_input.as_mut())
+                    .unwrap();
             }
             if let Some(mut pp) = tpl_action.postprocessing.take() {
-                pp.bind_instructions(sources, expressions, action_input.as_ref())?;
+                pp.bind_instructions(sources, expressions, action_input.as_ref())
+                    .unwrap();
                 let mut storage = sources.take_storage();
                 let mut global_storage = sources.take_global_storage().unwrap();
-                pp.execute(vec![], storage.as_mut(), &mut global_storage, &mut None)?;
+                pp.execute(vec![], storage.as_mut(), &mut global_storage, &mut None)
+                    .unwrap();
                 sources.replace_global_storage(global_storage);
                 if let Some(storage) = storage {
                     sources.replace_storage(storage);
@@ -423,10 +418,10 @@ impl Contract {
             );
             ctx.set_next_action_done();
         }
-
-        Ok(())
     }
-    /// Async version of `run_sync_activity` function.
+    /// Async version of `run_sync_activity` function with one difference.
+    /// Does not panic but propagate Err to the caller.
+    /// This is important as any promise could already been dispatched.
     pub fn run_async_activity(
         &mut self,
         ctx: &mut ActivityContext,
@@ -765,7 +760,7 @@ impl Contract {
         inputs: &[Option<ActionInput>],
         actions_done: usize,
     ) -> bool {
-        assert!(
+        require!(
             inputs.len() > 0 && inputs.len() + actions_done <= actions.len(),
             "Action input has invalid length."
         );
