@@ -7,9 +7,16 @@
 
 set -e 
 
-CRATES=(dao_factory dao workflow_provider staking ft_factory fungible_token)
+CRATES=(dao dao_factory workflow_provider staking fungible_token ft_factory)
 FEATURES=""
 ABS_BASEDIR=$(dirname $(readlink -f "$0"))
+
+opt_dao_bin () {
+    if [ -x "$(command -v wasm-opt)" -a $1 == "dao" ]; then
+        echo "Optimize: dao"
+        wasm-opt -Oz -o ${ABS_BASEDIR}/res/dao_opt.wasm ${ABS_BASEDIR}/res/dao.wasm
+    fi
+}
 
 if [[ $1 == "dev" || $2 == "dev" ]]; then
     FEATURES='--features testnet';
@@ -26,6 +33,7 @@ if [ ! -z "$1" -a -d "${ABS_BASEDIR}/contracts/${1}" ]; then
         mkdir "${ABS_BASEDIR}/res"
     fi
     cp "${ABS_BASEDIR}/target/wasm32-unknown-unknown/release/${1}.wasm" "${ABS_BASEDIR}/res/"
+    opt_dao_bin $1
 else
     echo "BUILD SCRIPT: Building all contracts into res dir"
 
@@ -35,6 +43,7 @@ else
         echo "Building: $lib"      
         RUSTFLAGS='-C link-arg=-s' cargo build -p $lib --target wasm32-unknown-unknown --release
         cp "${ABS_BASEDIR}/target/wasm32-unknown-unknown/release/${lib}.wasm" "${ABS_BASEDIR}/res/"
+        opt_dao_bin $lib
     done
 fi
 
