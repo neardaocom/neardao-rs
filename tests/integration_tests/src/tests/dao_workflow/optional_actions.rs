@@ -14,7 +14,7 @@ use crate::utils::{
 };
 
 use data::workflow::basic::basic_package::{WfBasicPkg1, WfBasicPkg1ProposeOptions};
-use library::{types::datatype::Value, workflow::instance::InstanceState};
+use library::{types::Value, workflow::instance::InstanceState};
 use workspaces::{network::DevAccountDeployer, AccountId};
 
 const DAO_FT_TOTAL_SUPPLY: u128 = 1_000_000_000;

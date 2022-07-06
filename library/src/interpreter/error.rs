@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::types::error::CastError;
+use crate::error::CastError;
 
 #[derive(Error, Debug)]
 pub enum EvalError {

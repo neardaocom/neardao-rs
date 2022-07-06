@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use near_sdk::serde::{Deserialize, Serialize};
 
-use super::datatype::Value;
+use crate::types::Value;
 /// Trait representing input values for an activity.
 pub trait ActivityInput {
     fn get(&self, key: &str) -> Option<&Value>;

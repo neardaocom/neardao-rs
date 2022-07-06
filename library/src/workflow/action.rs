@@ -4,13 +4,11 @@ use near_sdk::{
     AccountId,
 };
 
-use crate::{
-    types::{activity_input::UserInput, datatype::Datatype},
-    MethodName,
-};
+use crate::{types::Datatype, MethodName};
 
 use super::{
     postprocessing::Postprocessing,
+    runtime::activity_input::UserInput,
     types::{BindDefinition, DaoActionIdent, ValueSrc},
     validator::Validator,
 };
@@ -22,10 +20,6 @@ use super::{
 pub enum InputSource {
     /// User inputs.
     User,
-    ///// Template constants.
-    //Tpl,
-    ///// Template settings constants.
-    //TplSettings,
     /// Action constants.
     PropSettings,
 }
@@ -148,7 +142,6 @@ pub struct ActionInput {
 pub enum ActionInputType {
     DaoAction(DaoActionIdent),
     FnCall(AccountId, MethodName),
-    // TODO: Implement checks on DAO.
     Event(String),
     SendNear,
     Stake,

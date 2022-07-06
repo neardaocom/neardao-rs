@@ -1,5 +1,5 @@
 use crate::core::*;
-use library::types::datatype::Value;
+use library::types::Value;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::non_fungible_token::approval::NonFungibleTokenApprovalReceiver;
 use near_contract_standards::non_fungible_token::core::NonFungibleTokenReceiver;

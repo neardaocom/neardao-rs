@@ -4,7 +4,7 @@ use near_sdk::{
     IntoStorageKey,
 };
 
-use crate::types::datatype::Value;
+use crate::types::Value;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct StorageBucket {
@@ -22,17 +22,14 @@ impl StorageBucket {
         self.data.to_vec()
     }
 
-    #[allow(clippy::ptr_arg)]
     pub fn get_data(&self, key: &String) -> Option<Value> {
         self.data.get(key)
     }
 
-    #[allow(clippy::ptr_arg)]
     pub fn add_data(&mut self, key: &String, data: &Value) {
         self.data.insert(key, data);
     }
 
-    #[allow(clippy::ptr_arg)]
     pub fn remove_data(&mut self, key: &String) -> Option<Value> {
         self.data.remove(key)
     }

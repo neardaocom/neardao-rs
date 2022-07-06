@@ -6,12 +6,13 @@ use near_sdk::{
 use crate::{
     functions::utils::get_value_from_source,
     interpreter::{condition::Condition, expression::EExpr},
-    types::{
-        activity_input::ActivityInput, datatype::Value, error::ProcessingError, source::Source,
-    },
+    types::Value,
 };
 
-use super::types::Src;
+use super::{
+    error::ProcessingError, runtime::activity_input::ActivityInput, runtime::source::Source,
+    types::Src,
+};
 
 // TODO: Remove Debug in production.
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]

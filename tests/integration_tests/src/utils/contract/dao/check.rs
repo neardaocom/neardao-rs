@@ -1,6 +1,6 @@
 //! Check functions for DAO workflows.
 
-use library::{types::datatype::Value, workflow::instance::InstanceState};
+use library::{types::Value, workflow::instance::InstanceState};
 use serde_json::json;
 use workspaces::{AccountId, DevNetwork, Worker};
 

@@ -4,10 +4,9 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-use crate::types::source::SourceDataVariant;
-
 use super::{
     activity::TransitionLimit,
+    template::SourceDataVariant,
     types::{ActivityRight, VoteScenario},
 };
 // TODO: Remove all Debug in production!

@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use library::{
-    types::{activity_input::UserInput, datatype::Value},
+    types::Value,
     workflow::{
         action::{ActionInput, ActionInputType},
+        runtime::activity_input::UserInput,
         types::DaoActionIdent,
     },
 };

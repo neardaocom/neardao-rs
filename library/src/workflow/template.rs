@@ -1,11 +1,16 @@
+use std::collections::HashMap;
+
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
 
-use crate::{interpreter::expression::EExpr, types::source::SourceDataVariant, Version};
+use crate::{interpreter::expression::EExpr, types::Value, Version};
 
-use super::activity::{Activity, Transition};
+use super::{
+    activity::{Activity, Transition},
+    runtime::activity_input::ActivityInput,
+};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Clone, Debug, PartialEq))]
@@ -37,6 +42,23 @@ pub struct ReceiverKeys {
     pub sender_id: String,
     pub token_id: String,
     pub amount: String,
+}
+
+// TODO: Remove Debug in production.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
+#[serde(crate = "near_sdk::serde")]
+#[serde(rename_all = "snake_case")]
+pub enum SourceDataVariant {
+    Map(HashMap<String, Value>),
+}
+
+impl SourceDataVariant {
+    pub fn into_activity_input(self) -> Box<dyn ActivityInput> {
+        match self {
+            SourceDataVariant::Map(m) => Box::new(m),
+        }
+    }
 }
 
 // TODO: Implement.

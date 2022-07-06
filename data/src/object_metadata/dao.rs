@@ -1,7 +1,7 @@
 //! Metadata definition of objects for DAO actions.
 
 use library::{
-    types::datatype::Datatype,
+    types::Datatype,
     workflow::types::{DaoActionIdent, ObjectMetadata},
 };
 

@@ -6,11 +6,11 @@ use data::workflow::integration::skyward::{
     SKYWARD_FNCALL5_NAME,
 };
 use library::{
-    types::{
-        activity_input::{ActivityInput, UserInput},
-        datatype::Value,
+    types::Value,
+    workflow::{
+        action::{ActionInput, ActionInputType},
+        runtime::activity_input::{ActivityInput, UserInput},
     },
-    workflow::action::{ActionInput, ActionInputType},
 };
 use near_sdk::AccountId;
 use std::collections::HashMap;

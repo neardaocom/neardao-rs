@@ -1,4 +1,7 @@
-use library::locking::{UnlockingDB, UnlockingInput};
+use library::{
+    derive_from_versioned, derive_into_versioned,
+    locking::{UnlockingDB, UnlockingInput},
+};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     near_bindgen,
@@ -7,8 +10,7 @@ use near_sdk::{
 };
 
 use crate::{
-    contract::*, derive_from_versioned, derive_into_versioned,
-    internal::utils::current_timestamp_sec, ApprovalId, AssetId, TimestampSec, TokenId,
+    contract::*, internal::utils::current_timestamp_sec, ApprovalId, AssetId, TimestampSec, TokenId,
 };
 
 derive_into_versioned!(TreasuryPartition, VersionedTreasuryPartition, V1);

@@ -1,14 +1,6 @@
-// TODO: Refactoring.
-use std::collections::HashMap;
+use crate::{storage::StorageBucket, types::Value, workflow::template::SourceDataVariant};
 
-use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
-};
-
-use crate::storage::StorageBucket;
-
-use super::{activity_input::ActivityInput, consts::RuntimeConstantProvider, datatype::Value};
+use super::const_provider::RuntimeConstantProvider;
 
 pub trait Source: SourceProvider + MutableSource {}
 /// Trait representing possible `Value` sources for workflow.
@@ -33,22 +25,6 @@ pub trait MutableSource {
     fn set_prop_action(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant>;
     fn take_storage(&mut self) -> Option<StorageBucket>;
     fn take_global_storage(&mut self) -> Option<StorageBucket>;
-}
-// TODO: Remove Debug in production.
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Clone, PartialEq))]
-#[serde(crate = "near_sdk::serde")]
-#[serde(rename_all = "snake_case")]
-pub enum SourceDataVariant {
-    Map(HashMap<String, Value>),
-}
-
-impl SourceDataVariant {
-    pub fn into_activity_input(self) -> Box<dyn ActivityInput> {
-        match self {
-            SourceDataVariant::Map(m) => Box::new(m),
-        }
-    }
 }
 
 impl SourceData for SourceDataVariant {

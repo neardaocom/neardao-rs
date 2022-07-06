@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use library::{
-    types::{activity_input::UserInput, datatype::Value},
+    types::Value,
     workflow::action::{ActionInput, ActionInputType},
+    workflow::runtime::activity_input::UserInput,
 };
 use near_sdk::AccountId;
 use workspaces::AccountId as WorkspaceAccountId;

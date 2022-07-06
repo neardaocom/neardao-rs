@@ -1,6 +1,6 @@
-use library::{
-    types::activity_input::UserInput,
-    workflow::action::{ActionInput, ActionInputType},
+use library::workflow::{
+    action::{ActionInput, ActionInputType},
+    runtime::activity_input::UserInput,
 };
 use std::collections::HashMap;
 

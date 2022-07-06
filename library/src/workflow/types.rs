@@ -6,7 +6,7 @@ use near_sdk::{
 
 use crate::{
     interpreter::{condition::Condition, expression::EExpr},
-    types::datatype::{Datatype, Value},
+    types::{Datatype, Value},
 };
 
 use super::expression::Expression;
@@ -14,7 +14,6 @@ use super::expression::Expression;
 #[derive(
     BorshDeserialize, BorshSerialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq,
 )]
-//#[cfg_attr(not(target_arch = "wasm32"), derive())]
 #[serde(crate = "near_sdk::serde")]
 #[serde(rename_all = "snake_case")]
 pub enum DaoActionIdent {

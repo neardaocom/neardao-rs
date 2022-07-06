@@ -3,16 +3,14 @@ use std::collections::HashMap;
 use crate::TemplateData;
 use library::{
     interpreter::expression::{EExpr, EOp, ExprTerm, LogOp, Op, RelOp, TExpr},
-    types::{
-        datatype::{Datatype, Value},
-        source::SourceDataVariant,
-    },
+    types::{Datatype, Value},
     workflow::{
         action::{ActionData, DaoActionData, InputSource, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         postprocessing::Postprocessing,
         settings::{ProposeSettings, TemplateSettings},
+        template::SourceDataVariant,
         template::Template,
         types::{ActivityRight, DaoActionIdent, Instruction, Src, ValueSrc, VoteScenario},
         validator::{ObjectValidator, Validator},

@@ -1,7 +1,7 @@
 use crate::contract::*;
 use crate::proposal::Proposal;
 use crate::treasury::{Asset, TreasuryPartition};
-use library::types::datatype::Value;
+use library::types::Value;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::json_types::U128;
 use near_sdk::serde::Deserialize;

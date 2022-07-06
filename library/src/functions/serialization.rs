@@ -2,8 +2,10 @@
 //! TODO: Currently invalid metadata still cause panic.
 
 use crate::{
-    types::{activity_input::ActivityInput, datatype::Datatype, error::ProcessingError},
-    workflow::types::ObjectMetadata,
+    types::Datatype,
+    workflow::{
+        error::ProcessingError, runtime::activity_input::ActivityInput, types::ObjectMetadata,
+    },
 };
 
 use super::utils::object_key;

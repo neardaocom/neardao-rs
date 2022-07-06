@@ -1,7 +1,9 @@
 use crate::{
     interpreter::expression::EExpr,
-    types::{activity_input::ActivityInput, error::ProcessingError, source::Source},
-    workflow::validator::Validator,
+    workflow::{
+        error::ProcessingError, runtime::activity_input::ActivityInput, runtime::source::Source,
+        validator::Validator,
+    },
 };
 
 /// Validate `user_input` according to `validators` definition.

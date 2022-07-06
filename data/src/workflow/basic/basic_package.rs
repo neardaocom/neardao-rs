@@ -3,10 +3,7 @@ use std::collections::HashMap;
 use near_sdk::{AccountId, ONE_NEAR, ONE_YOCTO};
 
 use library::{
-    types::{
-        datatype::{Datatype, Value},
-        source::SourceDataVariant,
-    },
+    types::{Datatype, Value},
     workflow::{
         action::{
             ActionData, DaoActionData, FnCallData, FnCallIdType, InputSource, TemplateAction,
@@ -14,6 +11,7 @@ use library::{
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         postprocessing::Postprocessing,
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
+        template::SourceDataVariant,
         template::Template,
         types::{
             ActivityRight, DaoActionIdent, Instruction, ObjectMetadata, Src, ValueSrc, VoteScenario,

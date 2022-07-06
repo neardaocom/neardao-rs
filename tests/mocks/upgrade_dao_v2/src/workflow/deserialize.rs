@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 
 use library::{
     locking::{LockInput, UnlockMethod, UnlockPeriodInput, UnlockingInput},
-    types::activity_input::ActivityInput,
+    workflow::runtime::activity_input::ActivityInput,
 };
 use near_sdk::{env, AccountId};
 

@@ -1,9 +1,10 @@
 #![allow(unused)]
 
 use library::storage::StorageBucket;
-use library::types::consts::RuntimeConstantProvider;
-use library::types::datatype::Value;
-use library::types::source::{MutableSource, Source, SourceDataVariant, SourceProvider};
+use library::types::Value;
+use library::workflow::runtime::const_provider::RuntimeConstantProvider;
+use library::workflow::runtime::source::{MutableSource, Source, SourceProvider};
+use library::workflow::template::SourceDataVariant;
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 

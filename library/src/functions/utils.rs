@@ -1,9 +1,6 @@
 use near_sdk::IntoStorageKey;
 
-use crate::{
-    types::{error::SourceError, source::Source},
-    workflow::types::Src,
-};
+use crate::workflow::{error::SourceError, runtime::source::Source, types::Src};
 
 pub(crate) fn object_key(prefix: &str, mid: &str, suffix: &str) -> String {
     let mut key = String::with_capacity(prefix.len() + mid.len() + suffix.len() + 2);
@@ -48,7 +45,7 @@ impl From<Vec<u8>> for StorageKeyWrapper {
 pub fn get_value_from_source(
     sources: &dyn Source,
     src: &Src,
-) -> Result<crate::types::datatype::Value, SourceError> {
+) -> Result<crate::types::Value, SourceError> {
     match src {
         Src::Tpl(key) => {
             let value = sources

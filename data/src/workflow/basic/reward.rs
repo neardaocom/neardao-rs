@@ -3,15 +3,13 @@ use std::collections::HashMap;
 use near_sdk::{ONE_NEAR, ONE_YOCTO};
 
 use crate::TemplateData;
-use library::{
-    types::source::SourceDataVariant,
-    workflow::{
-        action::{ActionData, DaoActionData, InputSource, TemplateAction},
-        activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
-        settings::{ProposeSettings, TemplateSettings},
-        template::Template,
-        types::{ActivityRight, DaoActionIdent, VoteScenario},
-    },
+use library::workflow::{
+    action::{ActionData, DaoActionData, InputSource, TemplateAction},
+    activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
+    settings::{ProposeSettings, TemplateSettings},
+    template::SourceDataVariant,
+    template::Template,
+    types::{ActivityRight, DaoActionIdent, VoteScenario},
 };
 
 pub const DEFAULT_VOTING_DURATION: u32 = 10;

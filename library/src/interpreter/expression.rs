@@ -5,7 +5,7 @@ use near_sdk::{
 };
 // TODO: Remove all Debug in production!
 
-use crate::types::datatype::Value;
+use crate::types::Value;
 
 use super::{error::EvalError, ArgId};
 
@@ -567,7 +567,7 @@ impl EOp {
 #[cfg(test)]
 mod test {
     use crate::interpreter::expression::{LogOp, Op};
-    use crate::types::datatype::Value;
+    use crate::types::Value;
 
     use super::{EExpr, EOp, ExprTerm, FnName, RelOp, TExpr};
 

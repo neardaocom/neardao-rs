@@ -1,5 +1,5 @@
 use library::{
-    types::datatype::Value,
+    types::Value,
     workflow::{instance::Instance, settings::TemplateSettings, template::Template},
 };
 use near_sdk::json_types::U128;

@@ -6,16 +6,21 @@ use library::interpreter::expression::EExpr;
 use library::MethodName;
 
 use library::storage::StorageBucket;
-use library::types::activity_input::ActivityInput;
-use library::types::source::{DefaultSource, Source};
-use library::workflow::action::InputSource::{PropSettings, User};
-use library::workflow::action::{ActionData, ActionInput, FnCallIdType, TemplateAction};
-use library::workflow::activity::{TemplateActivity, Terminality};
-use library::workflow::instance::InstanceState;
-use library::workflow::postprocessing::Postprocessing;
-use library::workflow::settings::TemplateSettings;
-use library::workflow::template::Template;
-use library::workflow::types::{ActivityRight, DaoActionIdent, ObjectMetadata};
+use library::workflow::{
+    action::{
+        ActionData, ActionInput, FnCallIdType,
+        InputSource::{PropSettings, User},
+        TemplateAction,
+    },
+    activity::{TemplateActivity, Terminality},
+    instance::InstanceState,
+    postprocessing::Postprocessing,
+    runtime::activity_input::ActivityInput,
+    runtime::source::{DefaultSource, Source},
+    settings::TemplateSettings,
+    template::Template,
+    types::{ActivityRight, DaoActionIdent, ObjectMetadata},
+};
 use near_sdk::env::panic_str;
 use near_sdk::{
     env, ext_contract, log, near_bindgen, require, AccountId, Gas, Promise, PromiseResult,

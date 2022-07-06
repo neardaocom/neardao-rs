@@ -4,6 +4,7 @@ use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;
 use library::workflow::types::{ActivityRight, VoteScenario};
+use library::{derive_from_versioned, derive_into_versioned};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::env::panic_str;
 use near_sdk::json_types::U128;
@@ -14,10 +15,7 @@ use std::collections::HashMap;
 use crate::internal::utils::current_timestamp_sec;
 use crate::media::Media;
 use crate::reward::RewardActivity;
-use crate::{
-    contract::*, derive_from_versioned, derive_into_versioned, CalculatedVoteResults,
-    VoteTotalPossible, Votes,
-};
+use crate::{contract::*, CalculatedVoteResults, VoteTotalPossible, Votes};
 use crate::{ResourceId, TimestampSec};
 
 pub const PROPOSAL_DESC_MAX_LENGTH: usize = 256;

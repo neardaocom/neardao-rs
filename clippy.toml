@@ -1,2 +1,1 @@
 too-many-arguments-threshold = 10
-allow = ["result_unit_err"]

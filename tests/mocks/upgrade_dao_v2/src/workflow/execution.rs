@@ -6,12 +6,12 @@ use library::interpreter::expression::EExpr;
 use library::MethodName;
 
 use library::storage::StorageBucket;
-use library::types::activity_input::ActivityInput;
-use library::types::source::{DefaultSource, Source};
 use library::workflow::action::{ActionData, ActionInput, FnCallIdType, TemplateAction};
 use library::workflow::activity::{TemplateActivity, Terminality};
 use library::workflow::instance::InstanceState;
 use library::workflow::postprocessing::Postprocessing;
+use library::workflow::runtime::activity_input::ActivityInput;
+use library::workflow::runtime::source::{DefaultSource, Source};
 use library::workflow::settings::TemplateSettings;
 use library::workflow::template::Template;
 use library::workflow::types::{ActivityRight, DaoActionIdent, ObjectMetadata};

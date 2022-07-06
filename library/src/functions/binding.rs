@@ -1,10 +1,8 @@
-use crate::types::error::{BindingError, ProcessingError};
+use crate::workflow::error::{BindingError, ProcessingError};
+use crate::workflow::runtime::activity_input::ActivityInput;
+use crate::workflow::runtime::source::Source;
 use crate::workflow::types::CollectionBindingStyle::{ForceSame, Overwrite};
-use crate::{
-    interpreter::expression::EExpr,
-    types::{activity_input::ActivityInput, source::Source},
-    workflow::types::BindDefinition,
-};
+use crate::{interpreter::expression::EExpr, workflow::types::BindDefinition};
 
 use super::evaluation::eval;
 use super::utils::object_key;

@@ -1,4 +1,4 @@
-use library::types::error::{CastError, ProcessingError};
+use library::{error::CastError, workflow::error::ProcessingError};
 use near_sdk::{serde::Serialize, ParseAccountIdError};
 use thiserror::Error;
 

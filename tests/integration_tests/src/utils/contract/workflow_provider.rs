@@ -16,7 +16,10 @@ use data::{
     },
     TemplateData,
 };
-use library::{types::source::SourceDataVariant, workflow::template::Template, Version};
+use library::{
+    workflow::{template::SourceDataVariant, template::Template},
+    Version,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use workspaces::{network::DevAccountDeployer, AccountId, Contract, DevNetwork, Worker};

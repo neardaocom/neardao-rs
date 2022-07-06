@@ -1,8 +1,9 @@
 use near_sdk::AccountId;
-use types::datatype::Value;
+use types::Value;
 use workflow::{template::Template, types::ObjectMetadata};
 
 pub mod constants;
+pub mod error;
 pub mod functions;
 pub mod interpreter;
 pub mod locking;
@@ -32,3 +33,28 @@ pub type ObjectValues = Vec<Vec<Value>>;
 
 /// Version string.
 pub type Version = String;
+
+#[macro_export]
+macro_rules! derive_into_versioned {
+    ($from:ident, $for:ident, $version:ident) => {
+        impl From<$from> for $for {
+            fn from(input: $from) -> Self {
+                $for::$version(input)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! derive_from_versioned {
+    ($from:ident, $for:ident, $version:ident) => {
+        impl From<$from> for $for {
+            fn from(input: $from) -> Self {
+                match input {
+                    $from::$version(c) => c,
+                    _ => unreachable!(),
+                }
+            }
+        }
+    };
+}

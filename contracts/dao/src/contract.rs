@@ -9,7 +9,7 @@ use crate::tags::{TagInput, Tags};
 use crate::treasury::{Asset, TreasuryPartitionInput, VersionedTreasuryPartition};
 use crate::wallet::VersionedWallet;
 use library::storage::StorageBucket;
-use library::types::datatype::Value;
+use library::types::Value;
 use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;

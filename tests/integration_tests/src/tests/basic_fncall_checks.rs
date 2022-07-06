@@ -3,12 +3,10 @@ use std::collections::HashMap;
 use anyhow::Result;
 use library::{
     interpreter::expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
-    types::{
-        activity_input::{ActivityInput, UserInput},
-        datatype::{Datatype, Value},
-    },
+    types::{Datatype, Value},
     workflow::{
         expression::Expression,
+        runtime::activity_input::{ActivityInput, UserInput},
         types::{
             BindDefinition, CollectionBindData, CollectionBindingStyle, ObjectMetadata, Src,
             ValueSrc,

@@ -9,16 +9,16 @@ use crate::{
     functions::evaluation::eval,
     interpreter::expression::EExpr,
     storage::StorageBucket,
-    types::{
-        activity_input::ActivityInput,
-        datatype::{Datatype, Value},
-        error::{PostprocessingError, ProcessingError},
-        source::Source,
-    },
+    types::{Datatype, Value},
     ProviderTemplateData,
 };
 
-use super::types::Instruction;
+use super::{
+    error::{PostprocessingError, ProcessingError},
+    runtime::activity_input::ActivityInput,
+    runtime::source::Source,
+    types::Instruction,
+};
 
 // TODO: Remove Debug in production.
 /// Set of instructions executed after action.
@@ -278,13 +278,11 @@ mod test {
             expression::{AriOp, EExpr, EOp, ExprTerm, Op, RelOp, TExpr},
         },
         storage::StorageBucket,
-        types::{
-            activity_input::ActivityInput,
-            datatype::{Datatype, Value},
-            source::SourceMock,
-        },
+        types::{Datatype, Value},
         workflow::{
             postprocessing::Postprocessing,
+            runtime::activity_input::ActivityInput,
+            runtime::source::SourceMock,
             types::{FnCallResultType, Instruction, Src, ValueSrc},
         },
     };

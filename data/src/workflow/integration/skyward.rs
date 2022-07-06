@@ -9,16 +9,14 @@ use crate::{
 
 use library::{
     interpreter::expression::{EExpr, EOp, ExprTerm, FnName, Op, RelOp, TExpr},
-    types::{
-        datatype::{Datatype, Value},
-        source::SourceDataVariant,
-    },
+    types::{Datatype, Value},
     workflow::{
         action::{ActionData, FnCallData, FnCallIdType, InputSource, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         expression::Expression,
         postprocessing::Postprocessing,
         settings::{ActivityBind, ProposeSettings, TemplateSettings},
+        template::SourceDataVariant,
         template::Template,
         types::{
             ActivityRight, BindDefinition, CollectionBindData, CollectionBindingStyle,

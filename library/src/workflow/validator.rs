@@ -6,14 +6,14 @@ use near_sdk::{
 use crate::{
     functions::{evaluation::eval, utils::object_key},
     interpreter::expression::EExpr,
-    types::{
-        activity_input::ActivityInput,
-        error::{ProcessingError, ValidationError},
-        source::Source,
-    },
 };
 
-use super::types::{Src, ValueSrc};
+use super::{
+    error::{ProcessingError, ValidationError},
+    runtime::activity_input::ActivityInput,
+    runtime::source::Source,
+    types::{Src, ValueSrc},
+};
 
 // TODO: Remove all Debug in production!
 

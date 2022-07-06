@@ -4,12 +4,13 @@ use data::TemplateData;
 use near_sdk::{ONE_NEAR, ONE_YOCTO};
 
 use library::{
-    types::{datatype::Value, source::SourceDataVariant},
+    types::Value,
     workflow::{
         action::{ActionData, DaoActionData, InputSource, TemplateAction},
         activity::{Activity, TemplateActivity, Terminality, Transition, TransitionLimit},
         postprocessing::Postprocessing,
         settings::{ProposeSettings, TemplateSettings},
+        template::SourceDataVariant,
         template::Template,
         types::{ActivityRight, DaoActionIdent, Instruction, Src, ValueSrc, VoteScenario},
     },

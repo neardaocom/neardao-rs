@@ -1,15 +1,12 @@
 use std::collections::HashMap;
 
-use library::{
-    types::activity_input::UserInput,
-    workflow::{
-        action::{
-            ActionData, ActionInput, ActionInputType, DaoActionData, InputSource::User,
-            TemplateAction,
-        },
-        postprocessing::Postprocessing,
-        types::DaoActionIdent,
+use library::workflow::{
+    action::{
+        ActionData, ActionInput, ActionInputType, DaoActionData, InputSource::User, TemplateAction,
     },
+    postprocessing::Postprocessing,
+    runtime::activity_input::UserInput,
+    types::DaoActionIdent,
 };
 
 use near_sdk::testing_env;

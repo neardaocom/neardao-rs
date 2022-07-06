@@ -1,23 +1,7 @@
 use near_sdk::serde_json::Error;
 use thiserror::Error;
 
-use crate::interpreter::error::EvalError;
-
-#[derive(Error, Debug)]
-#[error("failed to cast datatype {from} to {to}")]
-pub struct CastError {
-    from: String,
-    to: String,
-}
-
-impl CastError {
-    pub fn new(from: &str, to: &str) -> Self {
-        Self {
-            from: from.into(),
-            to: to.into(),
-        }
-    }
-}
+use crate::{error::CastError, interpreter::error::EvalError};
 
 #[derive(Error, Debug)]
 pub enum SourceError {

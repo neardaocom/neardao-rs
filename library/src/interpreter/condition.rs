@@ -1,4 +1,4 @@
-use crate::types::datatype::Value;
+use crate::types::Value;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},

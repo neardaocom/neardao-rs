@@ -1,4 +1,4 @@
-use super::datatype::Value;
+use crate::Value;
 
 /// Trait for dynamically known values provider.
 pub trait RuntimeConstantProvider {

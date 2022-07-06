@@ -14,11 +14,12 @@ use crate::{
 };
 use library::{
     storage::StorageBucket,
-    types::{consts::RuntimeConstantProvider, datatype::Value},
+    types::Value,
     workflow::{
         action::TemplateAction,
         activity::Terminality,
         postprocessing::Postprocessing,
+        runtime::const_provider::RuntimeConstantProvider,
         settings::{ProposeSettings, TemplateSettings},
         template::Template,
         types::ObjectMetadata,

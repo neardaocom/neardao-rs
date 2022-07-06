@@ -1,4 +1,4 @@
-use library::types::datatype::Value;
+use library::types::Value;
 use library::workflow::instance::Instance;
 use library::workflow::settings::{ProposeSettings, TemplateSettings};
 use library::workflow::template::Template;

@@ -43,28 +43,3 @@ pub(crate) type ResourceId = u32;
 pub type TokenId = String;
 pub type ApprovalId = Option<u64>;
 pub type AssetId = u8;
-
-#[macro_export]
-macro_rules! derive_into_versioned {
-    ($from:ident, $for:ident, $version:ident) => {
-        impl From<$from> for $for {
-            fn from(input: $from) -> Self {
-                $for::$version(input)
-            }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! derive_from_versioned {
-    ($from:ident, $for:ident, $version:ident) => {
-        impl From<$from> for $for {
-            fn from(input: $from) -> Self {
-                match input {
-                    $from::$version(c) => c,
-                    _ => unreachable!(),
-                }
-            }
-        }
-    };
-}

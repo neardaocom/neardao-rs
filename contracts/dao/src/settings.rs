@@ -1,3 +1,4 @@
+use library::{derive_from_versioned, derive_into_versioned};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     require,
@@ -5,7 +6,7 @@ use near_sdk::{
     AccountId,
 };
 
-use crate::{contract::Contract, derive_from_versioned, derive_into_versioned, TagId};
+use crate::{contract::Contract, TagId};
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub enum VersionedSettings {

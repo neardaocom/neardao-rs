@@ -1,10 +1,9 @@
-use crate::types::datatype::Value;
-use crate::types::error::ProcessingError;
+use crate::interpreter::expression::EExpr;
+use crate::types::Value;
+use crate::workflow::error::ProcessingError;
+use crate::workflow::runtime::activity_input::ActivityInput;
+use crate::workflow::runtime::source::Source;
 use crate::workflow::types::{Src, ValueSrc};
-use crate::{
-    interpreter::expression::EExpr,
-    types::{activity_input::ActivityInput, source::Source},
-};
 
 use super::utils::get_value_from_source;
 

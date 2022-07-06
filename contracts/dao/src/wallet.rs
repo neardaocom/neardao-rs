@@ -1,3 +1,4 @@
+use library::{derive_from_versioned, derive_into_versioned};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env, ext_contract,
@@ -10,7 +11,6 @@ use near_sdk::{
 use crate::{
     constants::TGAS,
     contract::*,
-    derive_from_versioned, derive_into_versioned,
     internal::utils::current_timestamp_sec,
     reward::{Reward, RewardTypeIdent},
     treasury::{Asset, TreasuryPartition},

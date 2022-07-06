@@ -1,4 +1,4 @@
-use library::types::datatype::Value;
+use library::types::Value;
 use serde::{Deserialize, Serialize};
 use workspaces::AccountId;
 

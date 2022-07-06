@@ -1,3 +1,4 @@
+use library::{derive_from_versioned, derive_into_versioned};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::env::panic_str;
 use near_sdk::serde::Serialize;
@@ -6,7 +7,7 @@ use near_sdk::AccountId;
 use crate::internal::utils::current_timestamp_sec;
 use crate::wallet::Wallet;
 use crate::workflow::InternalDaoActionError;
-use crate::{contract::*, derive_from_versioned, derive_into_versioned, AssetId, RewardId, RoleId};
+use crate::{contract::*, AssetId, RewardId, RoleId};
 use crate::{treasury::TreasuryPartition, TimestampSec};
 
 derive_into_versioned!(Reward, VersionedReward, V1);

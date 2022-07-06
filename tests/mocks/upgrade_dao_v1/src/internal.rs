@@ -14,7 +14,8 @@ use crate::{
 };
 use library::{
     storage::StorageBucket,
-    types::{consts::RuntimeConstantProvider, datatype::Value},
+    types::Value,
+    workflow::runtime::const_provider::RuntimeConstantProvider,
     workflow::{
         action::TemplateAction,
         activity::Terminality,
