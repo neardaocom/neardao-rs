@@ -4,8 +4,8 @@
 
 <h1>neardao-rs</h1>
 
-[![Build](https://github.com/neardaocom/app-rs/actions/workflows/build.yml/badge.svg?branch=devel%2Fnext)](https://github.com/neardaocom/app-rs/actions/workflows/build.yml)
-[![Tests](https://github.com/neardaocom/app-rs/actions/workflows/tests.yml/badge.svg?branch=devel%2Fnext)](https://github.com/neardaocom/app-rs/actions/workflows/tests.yml)
+[![Build](https://github.com/neardaocom/neardao-rs/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/neardaocom/neardao-rs/actions/workflows/build.yml)
+[![Tests](https://github.com/neardaocom/neardao-rs/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/neardaocom/neardao-rs/actions/workflows/tests.yml)
     
 </div>
 
