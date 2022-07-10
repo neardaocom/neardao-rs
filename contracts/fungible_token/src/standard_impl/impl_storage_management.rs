@@ -34,7 +34,7 @@ impl FungibleToken {
     }
 
     fn internal_storage_balance_of(&self, account_id: &AccountId) -> Option<StorageBalance> {
-        if self.accounts.contains_key(account_id) {
+        if self.accounts.get(account_id).is_some() {
             Some(StorageBalance {
                 total: self.storage_balance_bounds().min,
                 available: 0.into(),
@@ -55,7 +55,7 @@ impl StorageManagement for FungibleToken {
     ) -> StorageBalance {
         let amount: Balance = env::attached_deposit();
         let account_id = account_id.unwrap_or_else(env::predecessor_account_id);
-        if self.accounts.contains_key(&account_id) {
+        if self.accounts.get(&account_id).is_some() {
             log!("The account is already registered, refunding the deposit");
             if amount > 0 {
                 Promise::new(env::predecessor_account_id()).transfer(amount);

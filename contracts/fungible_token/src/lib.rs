@@ -34,6 +34,7 @@ use standard_impl::impl_ft_metadata::{FungibleTokenMetadata, FungibleTokenMetada
 use standard_impl::impl_fungible_token::FungibleToken;
 
 mod standard_impl;
+mod upgrade;
 
 pub const VERSION: u8 = 1;
 pub const GAS_DOWNLOAD_NEW_VERSION: Gas = Gas(200_000_000_000_000);
@@ -73,7 +74,6 @@ pub struct Settings {
     burn_allowed: bool,
     /// Account of contract allowed to provide new version.
     /// If not set then upgrade is not allowed.
-    /// TODO: Implement.
     upgrade_provider: Option<AccountId>,
 }
 
@@ -184,6 +184,15 @@ impl Contract {
         }
         result
     }
+    pub fn account_balances(self, from_id: usize, limit: usize) -> Vec<(AccountId, U128)> {
+        self.token
+            .accounts
+            .into_iter()
+            .skip(from_id)
+            .take(limit)
+            .map(|(k, v)| (k, U128(v)))
+            .collect::<Vec<(AccountId, U128)>>()
+    }
 }
 
 #[near_bindgen]
@@ -275,10 +284,7 @@ impl StorageManagement for Contract {
     }
 }
 
-// TODO: Upgrade methods.
-
-// TODO: Add more tests.
-#[cfg(all(test, not(target_arch = "wasm32")))]
+#[cfg(test)]
 mod tests {
     use near_sdk::test_utils::{accounts, VMContextBuilder};
     #[allow(unused)]

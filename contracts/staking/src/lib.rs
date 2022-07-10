@@ -20,7 +20,7 @@ use near_sdk::{
 pub use user::{User, VersionedUser};
 
 use crate::consts::{
-    GAS_FOR_REGISTER, MIN_REGISTER_DEPOSIT, MIN_STORAGE_FOR_DAO, STANDARD_FT_STORAGE_DEPOSIT,
+    FT_STORAGE_DEPOSIT, GAS_FOR_REGISTER, MIN_REGISTER_DEPOSIT, MIN_STORAGE_FOR_DAO,
 };
 
 mod consts;
@@ -63,12 +63,9 @@ impl Contract {
     /// Registers new dao in contract.
     /// Dao must have done storage_deposit before this call.
     #[payable]
-    pub fn register_new_dao(&mut self, dao_id: AccountId, vote_token_id: AccountId) {
+    pub fn register_new_dao(&mut self, dao_id: AccountId, vote_token_id: AccountId) -> Promise {
         let storage_deposit = env::attached_deposit();
-        assert!(
-            storage_deposit >= STANDARD_FT_STORAGE_DEPOSIT,
-            "not enough deposit"
-        );
+        assert!(storage_deposit >= FT_STORAGE_DEPOSIT, "not enough deposit");
         let storage_before = env::storage_usage();
         let mut account_stats = self.get_account_stats(&dao_id);
 
@@ -102,7 +99,7 @@ impl Contract {
                 ext_self::ext(env::current_account_id())
                     .with_static_gas(Gas(10 * 10u64.pow(12)))
                     .return_deposit(env::predecessor_account_id(), storage_deposit),
-            );
+            )
     }
 
     /// Registers caller in dao

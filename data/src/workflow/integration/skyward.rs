@@ -121,7 +121,7 @@ impl Skyward1 {
         );
         tpl_consts_map.insert(
             "deposit_storage".into(),
-            Value::U128(1_250_000_000_000_000_000_000.into()),
+            Value::U128(3_020_000_000_000_000_000_000.into()),
         );
         tpl_consts_map.insert(
             "deposit_sale_create".into(),

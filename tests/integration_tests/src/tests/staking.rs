@@ -22,7 +22,7 @@ const MIN_STORAGE: u128 = 945;
 const MIN_STORAGE_DEPOSIT: Balance = 2 * 10u128.pow(23);
 pub const MIN_REGISTER_DEPOSIT: Balance = 155 * 10u128.pow(19);
 pub const DECIMALS: u128 = 10u128.pow(24);
-pub const STANDARD_FT_STORAGE_DEPOSIT: Balance = 1_250_000_000_000_000_000_000;
+pub const STANDARD_FT_STORAGE_DEPOSIT: Balance = 3_020_000_000_000_000_000_000;
 
 fn check_ft_balance_of(
     account_id: &workspaces::AccountId,

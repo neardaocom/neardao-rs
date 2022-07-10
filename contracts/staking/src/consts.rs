@@ -16,7 +16,8 @@ pub const GAS_FOR_REGISTER: Gas = Gas(15_000_000_000_000);
 /// Amount of gas for undelegate action.
 pub const GAS_FOR_UNDELEGATE: Gas = Gas(15_000_000_000_000);
 
-pub const STANDARD_FT_STORAGE_DEPOSIT: Balance = 1_250_000_000_000_000_000_000;
+//pub const STANDARD_FT_STORAGE_DEPOSIT: Balance = 1_250_000_000_000_000_000_000;
+pub const FT_STORAGE_DEPOSIT: Balance = 3_020_000_000_000_000_000_000;
 
 /// Measured value for item in LM where K is String.
 pub const LOOKUP_MAP_ITEM_STORAGE: StorageUsage = 45;

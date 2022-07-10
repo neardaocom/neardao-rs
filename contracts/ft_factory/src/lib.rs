@@ -11,7 +11,7 @@ const CREATE_CALL_GAS: Gas = Gas(75_000_000_000_000);
 /// Gas allocated on the callback.
 const ON_CREATE_CALL_GAS: Gas = Gas(10_000_000_000_000);
 
-const FUNGIBLE_TOKEN_WASM: &[u8] = include_bytes!("../../../res/fungible_token.wasm");
+const FUNGIBLE_TOKEN_WASM: &[u8] = include_bytes!("../../../res/fungible_token_opt.wasm");
 
 const DEPOSIT_CREATE: u128 = 2_200_000_000_000_000_000_000_000;
 

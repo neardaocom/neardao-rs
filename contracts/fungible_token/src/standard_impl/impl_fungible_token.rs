@@ -1,7 +1,7 @@
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
 use near_contract_standards::fungible_token::events::{FtBurn, FtTransfer};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::LookupMap;
+use near_sdk::collections::UnorderedMap;
 use near_sdk::json_types::U128;
 use near_sdk::{
     assert_one_yocto, env, ext_contract, log, require, AccountId, Balance, Gas, IntoStorageKey,
@@ -62,7 +62,7 @@ pub trait FungibleTokenContract {
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct FungibleToken {
     /// AccountID -> Account balance.
-    pub accounts: LookupMap<AccountId, Balance>,
+    pub accounts: UnorderedMap<AccountId, Balance>,
 
     /// Total supply of the all token.
     pub total_supply: Balance,
@@ -77,7 +77,7 @@ impl FungibleToken {
         S: IntoStorageKey,
     {
         let mut this = Self {
-            accounts: LookupMap::new(prefix),
+            accounts: UnorderedMap::new(prefix),
             total_supply: 0,
             account_storage_usage: 0,
         };
