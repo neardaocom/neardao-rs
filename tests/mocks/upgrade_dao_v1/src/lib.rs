@@ -1,5 +1,6 @@
 #![allow(unreachable_patterns)]
 #![allow(unused)]
+#![allow(clippy::all)]
 
 use library::workflow::{
     instance::Instance,

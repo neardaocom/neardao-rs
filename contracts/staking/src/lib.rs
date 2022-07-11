@@ -1,5 +1,7 @@
 //! Staking service
 
+#![allow(clippy::new_without_default)]
+
 use consts::{
     ACCOUNT_STATS_STORAGE, DAO_KEY_PREFIX, GAS_FOR_DELEGATE, GAS_FOR_FT_TRANSFER,
     GAS_FOR_UNDELEGATE, MIN_STORAGE,
@@ -174,7 +176,7 @@ impl Contract {
         let storage_before = env::storage_usage();
         let sender_id = env::predecessor_account_id();
         let mut dao = self.get_dao(&dao_id);
-        dao.undelegate(sender_id.clone(), delegate_id.clone(), amount.0);
+        dao.undelegate(sender_id, delegate_id.clone(), amount.0);
         self.save_dao(&dao_id, &dao);
         let storage_after = env::storage_usage();
         let mut account_stats = self.get_account_stats(&dao_id);
@@ -425,7 +427,7 @@ impl Contract {
         self.daos.get(dao_id).expect("dao not found")
     }
     pub fn save_dao(&mut self, dao_id: &AccountId, dao: &Dao) -> Option<Dao> {
-        self.daos.insert(dao_id, &dao)
+        self.daos.insert(dao_id, dao)
     }
     fn register_account(&mut self, account_id: &AccountId, amount: Balance) {
         let storage = AccountStats::new(
@@ -451,7 +453,7 @@ impl Contract {
     ) -> Promise {
         let storage_before = env::storage_usage();
         let mut dao = self.get_dao(&dao_id);
-        dao.delegate_owned(sender_id.clone(), delegate_id.clone(), amount);
+        dao.delegate_owned(sender_id, delegate_id.clone(), amount);
         let mut account_stats = self.get_account_stats(&dao_id);
         self.save_dao(&dao_id, &dao);
         let storage_after = env::storage_usage();

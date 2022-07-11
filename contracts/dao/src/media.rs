@@ -45,7 +45,7 @@ impl Contract {
         self.media_last_id
     }
     pub fn media_update(&mut self, id: u32, media: &Media) {
-        if let Some(_) = self.media.get(&id) {
+        if self.media.get(&id).is_some() {
             self.media.insert(&id, media);
         }
     }

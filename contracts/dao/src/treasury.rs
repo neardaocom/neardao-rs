@@ -119,8 +119,7 @@ impl TreasuryPartition {
             let asset = PartitionAsset::try_from(asset_input, registrar)?;
             if assets
                 .iter()
-                .find(|a: &&PartitionAsset| a.asset_id() == asset.asset_id())
-                .is_some()
+                .any(|a: &PartitionAsset| a.asset_id() == asset.asset_id())
             {
                 return Err("duplicate asset");
             }

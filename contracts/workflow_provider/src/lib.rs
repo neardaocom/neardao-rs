@@ -83,7 +83,6 @@ impl Contract {
     }
 
     /// Returns Workflow with corresponding FnCalls and their metadata.
-    #[allow(clippy::type_complexity)]
     pub fn wf_template(
         self,
         id: u16,
@@ -124,24 +123,24 @@ impl Contract {
         self.workflow_fncalls
             .get(&id)
             .map(|(fns, _)| fns)
-            .unwrap_or_else(Vec::new)
+            .unwrap_or_default()
     }
 
     pub fn wf_template_standard_fncalls(self, id: u16) -> Vec<MethodName> {
         self.workflow_fncalls
             .get(&id)
             .map(|(_, fns)| fns)
-            .unwrap_or_else(Vec::new)
+            .unwrap_or_default()
     }
 
     pub fn standard_fn_call_metadata(self, method: String) -> Vec<ObjectMetadata> {
         self.standard_fncall_metadata
             .get(&method)
-            .unwrap_or_else(Vec::new)
+            .unwrap_or_default()
     }
 
     pub fn fncall_metadata(self, id: FnCallId) -> Vec<ObjectMetadata> {
-        self.fncall_metadata.get(&id).unwrap_or_else(Vec::new)
+        self.fncall_metadata.get(&id).unwrap_or_default()
     }
 
     pub fn standard_fncalls(self) -> Vec<(MethodName, Vec<ObjectMetadata>)> {

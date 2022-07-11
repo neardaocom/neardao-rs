@@ -81,7 +81,7 @@ impl Reward {
             } else {
                 return 0;
             };
-        let amount = match self.r#type {
+        match self.r#type {
             RewardType::Wage(ref wage) => {
                 let seconds_passed = std::cmp::min(timestamp_now, self.time_valid_to)
                     - std::cmp::max(self.time_valid_from, timestamp_from);
@@ -89,8 +89,7 @@ impl Reward {
                 amount.checked_mul(units as u128).unwrap_or(u128::MAX)
             }
             RewardType::UserActivity(_) => panic_str("fatal - invalid reward type"),
-        };
-        amount.into()
+        }
     }
     pub fn is_valid(&self, current_timestamp: TimestampSec) -> bool {
         self.time_valid_from <= current_timestamp && current_timestamp <= self.time_valid_to
@@ -231,7 +230,7 @@ impl Contract {
         let partition = self
             .treasury_partition
             .get(&reward.partition_id)
-            .ok_or(InternalDaoActionError("partition not found".into()))?
+            .ok_or_else(|| InternalDaoActionError("partition not found".into()))?
             .into();
         if !self.validate_reward_assets(&reward, &partition) {
             return Err(InternalDaoActionError(
@@ -250,7 +249,7 @@ impl Contract {
             let mut group = self
                 .groups
                 .get(&reward.group_id)
-                .ok_or(InternalDaoActionError("group not found".into()))?;
+                .ok_or_else(|| InternalDaoActionError("group not found".into()))?;
             let rewarded_users = if reward.role_id == 0 {
                 group.get_members_accounts()
             } else {
@@ -258,10 +257,10 @@ impl Contract {
             };
             let mut reward_assets: Vec<AssetId> = reward
                 .reward_amounts()
-                .into_iter()
+                .iter()
                 .map(|(a, _)| a.to_owned())
                 .collect();
-            reward_assets.sort();
+            reward_assets.sort_unstable();
             let len_before = reward_assets.len();
             reward_assets.dedup();
             if len_before != reward_assets.len() {
@@ -356,7 +355,7 @@ impl Contract {
         for (reward_id, reward) in rewards {
             let assets: Vec<AssetId> = reward
                 .reward_amounts()
-                .into_iter()
+                .iter()
                 .map(|(a, _)| a.to_owned())
                 .collect();
             wallet.add_reward(
@@ -376,7 +375,7 @@ impl Contract {
         rewards: &[(RewardId, RoleId)],
         current_timestamp: TimestampSec,
     ) {
-        if let Some(versioned_wallet) = self.wallets.get(&account_id) {
+        if let Some(versioned_wallet) = self.wallets.get(account_id) {
             let mut wallet: Wallet = versioned_wallet.into();
             for (reward_id, _) in rewards {
                 wallet.set_reward_timestamp_removed(*reward_id, current_timestamp);
@@ -388,7 +387,7 @@ impl Contract {
     /// Register executed activity to `account_id`'s Wallet for each reward.
     /// Also register activity rewards for anyone in the `account_id` wallet.
     pub fn register_executed_activity(&mut self, account_id: &AccountId, activity_id: u8) {
-        let mut wallet: Wallet = self.get_wallet(account_id).into();
+        let mut wallet: Wallet = self.get_wallet(account_id);
         let valid_rewards = self.valid_reward_list_for_activity(activity_id);
         let current_timestamp = current_timestamp_sec();
         for (id, reward) in valid_rewards {
@@ -397,11 +396,7 @@ impl Contract {
                     id,
                     reward.get_reward_type(),
                     current_timestamp,
-                    reward
-                        .reward_amounts()
-                        .into_iter()
-                        .map(|(a, _)| a.clone())
-                        .collect(),
+                    reward.reward_amounts().iter().map(|(a, _)| *a).collect(),
                 );
             }
             wallet.add_executed_activity(id);
@@ -424,7 +419,7 @@ impl Contract {
         for id in rewards.iter() {
             let reward: Reward = self
                 .rewards
-                .get(&id)
+                .get(id)
                 .expect("fatal - reward not defined")
                 .into();
             if reward.is_valid(current_timestamp) {

@@ -1,3 +1,4 @@
+#![allow(clippy::all)]
 use library::{
     workflow::{
         settings::{ProposeSettings, TemplateSettings},

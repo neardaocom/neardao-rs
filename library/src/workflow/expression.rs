@@ -44,7 +44,7 @@ where {
                     if let Some(user_input) = input {
                         user_input
                             .get(key.as_str())
-                            .ok_or(ProcessingError::MissingInputKey(key.into()))?
+                            .ok_or_else(|| ProcessingError::MissingInputKey(key.into()))?
                             .clone()
                     } else {
                         return Err(ProcessingError::InputNotProvided);

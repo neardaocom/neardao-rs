@@ -386,7 +386,7 @@ impl Contract {
             bind_input(sources, binds, expressions, action_input.as_mut()).unwrap();
 
             let deposit = match &action_data.required_deposit {
-                Some(arg_src) => eval(&arg_src, sources, expressions, None)
+                Some(arg_src) => eval(arg_src, sources, expressions, None)
                     .unwrap()
                     .try_into_u128()
                     .unwrap(),
@@ -463,9 +463,7 @@ impl Contract {
                 },
                 PropSettings => sources
                     .unset_prop_action()
-                    .ok_or(ActionError::InvalidWfStructure(
-                        "missing action inputs".into(),
-                    ))?
+                    .ok_or_else(|| ActionError::InvalidWfStructure("missing action inputs".into()))?
                     .into_activity_input(),
             };
             // Check exec condition.
@@ -477,13 +475,12 @@ impl Contract {
                 }
             };
             let user_inputs = action_input.to_vec();
-            let new_promise;
-            if tpl_action.action_data.is_fncall() {
+            let new_promise = if tpl_action.action_data.is_fncall() {
                 let action_data = std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                     .try_into_fncall_data()
-                    .ok_or(ActionError::InvalidWfStructure(
-                        "missing fncall action data".into(),
-                    ))?;
+                    .ok_or_else(|| {
+                        ActionError::InvalidWfStructure("missing fncall action data".into())
+                    })?;
 
                 let (name, method, metadata) = self.load_fncall_id_with_metadata(
                     action_data.id,
@@ -521,7 +518,7 @@ impl Contract {
                     &name, &method, &args
                 ));
                 // Dispatch fncall and its postprocessing.
-                new_promise = Promise::new(name)
+                Promise::new(name)
                     .function_call(
                         method,
                         args.into_bytes(),
@@ -538,14 +535,14 @@ impl Contract {
                                 ctx.proposal_settings.storage_key.clone(),
                                 pp,
                             ),
-                    );
+                    )
             } else {
                 let (sender_src, amount_src) =
                     std::mem::replace(&mut tpl_action.action_data, ActionData::None)
                         .try_into_send_near_sources()
-                        .ok_or(ActionError::InvalidWfStructure(
-                            "expected send near data".into(),
-                        ))?;
+                        .ok_or_else(|| {
+                            ActionError::InvalidWfStructure("expected send near data".into())
+                        })?;
                 let name = eval(
                     &sender_src,
                     sources,
@@ -570,7 +567,7 @@ impl Contract {
                 } else {
                     None
                 };
-                new_promise = Promise::new(
+                Promise::new(
                     AccountId::try_from(name)
                         .map_err(|_| ActionError::ParseAccountId(sender_src.is_user_input()))?,
                 )
@@ -585,8 +582,8 @@ impl Contract {
                             ctx.proposal_settings.storage_key.clone(),
                             pp,
                         ),
-                );
-            }
+                )
+            };
             promise = if let Some(p) = promise {
                 Some(p.and(new_promise))
             } else {
@@ -741,7 +738,7 @@ impl Contract {
                     _ => continue,
                 },
                 ActivityRight::Member => {
-                    if self.user_roles.get(&account_id).is_some() {
+                    if self.user_roles.get(account_id).is_some() {
                         return true;
                     } else {
                         continue;
@@ -766,7 +763,7 @@ impl Contract {
         actions_done: usize,
     ) -> bool {
         require!(
-            inputs.len() > 0 && inputs.len() + actions_done <= actions.len(),
+            !inputs.is_empty() && inputs.len() + actions_done <= actions.len(),
             "Action input has invalid length."
         );
         for (idx, action) in inputs.iter().enumerate() {
@@ -869,10 +866,10 @@ impl Contract {
                 account.clone(),
                 method.clone(),
                 self.function_call_metadata
-                    .get(&(account, method.clone()))
-                    .ok_or(ActionError::InvalidWfStructure(
-                        "missing fn call metadata".into(),
-                    ))?,
+                    .get(&(account, method))
+                    .ok_or_else(|| {
+                        ActionError::InvalidWfStructure("missing fn call metadata".into())
+                    })?,
             ),
             FnCallIdType::Dynamic(arg_src, method) => {
                 let name = eval(&arg_src, sources, expressions, Some(inputs))?.try_into_string()?;
@@ -882,34 +879,38 @@ impl Contract {
                     method.clone(),
                     self.function_call_metadata
                         .get(&(
-                            AccountId::try_from(name.to_string()).map_err(|_| {
+                            AccountId::try_from(name).map_err(|_| {
                                 ActionError::ParseAccountId(arg_src.is_user_input())
                             })?,
-                            method.clone(),
+                            method,
                         ))
-                        .ok_or(ActionError::InvalidWfStructure(
-                            "missing fn call metadata".into(),
-                        ))?,
+                        .ok_or_else(|| {
+                            ActionError::InvalidWfStructure("missing fn call metadata".into())
+                        })?,
                 )
             }
             FnCallIdType::StandardStatic(account, method) => (
-                account.clone(),
+                account,
                 method.clone(),
                 self.standard_function_call_metadata
-                    .get(&method.clone())
-                    .ok_or(ActionError::InvalidWfStructure(
-                        "missing standard fn call metadata".into(),
-                    ))?,
+                    .get(&method)
+                    .ok_or_else(|| {
+                        ActionError::InvalidWfStructure("missing standard fn call metadata".into())
+                    })?,
             ),
             FnCallIdType::StandardDynamic(arg_src, method) => {
                 let name = eval(&arg_src, sources, expressions, Some(inputs))?.try_into_string()?;
                 (
-                    AccountId::try_from(name.to_string())
+                    AccountId::try_from(name)
                         .map_err(|_| ActionError::ParseAccountId(arg_src.is_user_input()))?,
                     method.clone(),
-                    self.standard_function_call_metadata.get(&method).ok_or(
-                        ActionError::InvalidWfStructure("missing standard fn call metadata".into()),
-                    )?,
+                    self.standard_function_call_metadata
+                        .get(&method)
+                        .ok_or_else(|| {
+                            ActionError::InvalidWfStructure(
+                                "missing standard fn call metadata".into(),
+                            )
+                        })?,
                 )
             }
         };
@@ -936,9 +937,7 @@ fn set_action_propose_binds(
         if let Some(prop_binds) = binds
             .actions_constants
             .get_mut(action_id)
-            .ok_or(ActionError::InvalidWfStructure(
-                "missing activity propose bind".into(),
-            ))?
+            .ok_or_else(|| ActionError::InvalidWfStructure("missing activity propose bind".into()))?
             .take()
         {
             sources.set_prop_action(prop_binds);

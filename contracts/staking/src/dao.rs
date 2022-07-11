@@ -56,7 +56,7 @@ impl Dao {
     pub fn delegate(&mut self, sender_id: &AccountId, delegate_id: AccountId) -> u128 {
         let mut sender = self.get_user(sender_id);
         let (amount, delegators) = sender.forward_delegated();
-        self.update_user_delegations(&sender_id, &delegate_id, &delegators);
+        self.update_user_delegations(sender_id, &delegate_id, &delegators);
         self.update_delegate(&delegate_id, amount, delegators);
         self.save_user(sender_id, sender);
         amount
@@ -69,11 +69,11 @@ impl Dao {
         amount: u128,
         delegators: Vec<AccountId>,
     ) {
-        let mut delegate = self.get_user(&delegate_id);
+        let mut delegate = self.get_user(delegate_id);
         for user in delegators {
             delegate.add_delegator(user, amount);
         }
-        self.save_user(&delegate_id, delegate);
+        self.save_user(delegate_id, delegate);
     }
 
     /// Updates delegate of `users`.
@@ -84,25 +84,25 @@ impl Dao {
         users: &[AccountId],
     ) {
         for acc in users {
-            let mut user = self.get_user(&acc);
+            let mut user = self.get_user(acc);
             user.update_delegation(prev_delegate_id, new_delegate_id);
-            self.save_user(&acc, user);
+            self.save_user(acc, user);
         }
     }
 
     /// Deposit voting token.
     pub fn user_deposit(&mut self, sender_id: &AccountId, amount: u128) {
-        let mut sender = self.get_user(&sender_id);
+        let mut sender = self.get_user(sender_id);
         sender.deposit(amount);
-        self.save_user(&sender_id, sender);
+        self.save_user(sender_id, sender);
         self.total_amount += amount;
     }
 
     /// Withdraw owned tokens.
     pub fn user_withdraw(&mut self, sender_id: &AccountId, amount: u128) {
-        let mut sender = self.get_user(&sender_id);
+        let mut sender = self.get_user(sender_id);
         sender.withdraw(amount);
-        self.save_user(&sender_id, sender);
+        self.save_user(sender_id, sender);
         require!(self.total_amount >= amount, "internal user withdraw");
         self.total_amount -= amount;
     }

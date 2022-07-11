@@ -24,7 +24,7 @@ pub fn into_storage_key_wrapper_u16(prefix: &[u8], id: u16) -> StorageKeyWrapper
 }
 
 pub fn into_storage_key_wrapper_str(prefix: &[u8], id: &str) -> StorageKeyWrapper {
-    append(prefix, &id.as_bytes()).into()
+    append(prefix, id.as_bytes()).into()
 }
 
 pub struct StorageKeyWrapper(pub Vec<u8>);
@@ -50,54 +50,53 @@ pub fn get_value_from_source(
         Src::Tpl(key) => {
             let value = sources
                 .tpl(key)
-                .ok_or(SourceError::TplSettingValueMissing(key.into()))?
+                .ok_or_else(|| SourceError::TplSettingValueMissing(key.into()))?
                 .to_owned();
             Ok(value)
         }
         Src::TplSettings(key) => {
             let value = sources
                 .tpl_settings(key)
-                .ok_or(SourceError::TplSettingValueMissing(key.into()))?
+                .ok_or_else(|| SourceError::TplSettingValueMissing(key.into()))?
                 .to_owned();
             Ok(value)
         }
         Src::Action(key) => {
             let value = sources
                 .props_action(key)
-                .ok_or(SourceError::ActionValueMissing(key.into()))?
+                .ok_or_else(|| SourceError::ActionValueMissing(key.into()))?
                 .to_owned();
             Ok(value)
         }
         Src::Activity(key) => {
             let value = sources
                 .props_activity(key)
-                .ok_or(SourceError::ActivityValueMissing(key.into()))?
+                .ok_or_else(|| SourceError::ActivityValueMissing(key.into()))?
                 .to_owned();
             Ok(value)
         }
         Src::Storage(key) => {
             let value = sources
                 .storage(key)
-                .ok_or(SourceError::StorageValueMissing(key.into()))?;
+                .ok_or_else(|| SourceError::StorageValueMissing(key.into()))?;
             Ok(value)
         }
         Src::GlobalStorage(key) => {
             let value = sources
                 .global_storage(key)
-                .ok_or(SourceError::GlobalStorageValueMissing(key.into()))?;
+                .ok_or_else(|| SourceError::GlobalStorageValueMissing(key.into()))?;
             Ok(value)
         }
         Src::Runtime(key) => {
             let value = sources
                 .dao_const(*key)
-                .ok_or(SourceError::RuntimeValueMissing(*key))?
-                .to_owned();
+                .ok_or(SourceError::RuntimeValueMissing(*key))?;
             Ok(value)
         }
         Src::PropSettings(key) => {
             let value = sources
                 .props_global(key)
-                .ok_or(SourceError::ProposeValueMissing(key.into()))?
+                .ok_or_else(|| SourceError::ProposeValueMissing(key.into()))?
                 .to_owned();
             Ok(value)
         }

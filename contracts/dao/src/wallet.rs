@@ -212,7 +212,7 @@ impl WalletReward {
         time_added: TimestampSec,
         assets: Vec<AssetId>,
     ) -> Self {
-        require!(assets.len() > 0, "empty assets as rewards");
+        require!(!assets.is_empty(), "empty assets as rewards");
         let withdraw_stats = assets
             .into_iter()
             .map(|a| WithdrawStats::new(a, reward_type))
@@ -440,8 +440,7 @@ impl Contract {
         self.wallets
             .get(account_id)
             .map(|w| w.into())
-            .unwrap_or_else(|| Wallet::new())
-            .into()
+            .unwrap_or_else(Wallet::new)
     }
     /// Return (claimable amount, amount per activity)
     /// that is possible to be withdrawn from `reward_id` at the moment.
@@ -460,9 +459,7 @@ impl Contract {
                 reward.available_wage_amount(asset_id, timestamp_removed, timestamp_added);
             let amount_already_claimed = wallet.amount_wage_withdrawn(reward_id, asset_id);
             (
-                amount_available_reward
-                    .checked_sub(amount_already_claimed)
-                    .unwrap_or(0),
+                amount_available_reward.saturating_sub(amount_already_claimed),
                 0,
             )
         } else {
@@ -471,7 +468,7 @@ impl Contract {
             (
                 generated_amount
                     .checked_mul(amount_per_activity)
-                    .unwrap_or_else(|| u128::MAX - u128::MAX % amount_per_activity),
+                    .unwrap_or(u128::MAX - u128::MAX % amount_per_activity),
                 amount_per_activity,
             )
         }
@@ -483,7 +480,7 @@ impl Contract {
         asset_id: u8,
     ) -> u128 {
         let current_timestamp = current_timestamp_sec();
-        let mut wallet = self.get_wallet(&account_id);
+        let mut wallet = self.get_wallet(account_id);
         let mut total_withdrawn = 0;
         for reward_id in reward_ids {
             let reward: Reward = self
@@ -536,7 +533,7 @@ impl Contract {
             total_withdrawn += currently_available_amount;
         }
         total_withdrawn += wallet.take_failed_withdraw_amount(asset_id);
-        self.wallets.insert(&account_id, &wallet.into());
+        self.wallets.insert(account_id, &wallet.into());
         total_withdrawn
     }
     pub fn send_reward(&mut self, account_id: AccountId, asset_id: u8, amount: u128) {
@@ -563,7 +560,7 @@ impl Contract {
                     );
             }
             Asset::Nft(nft) => {
-                let approval_id_string = if let Some(approval_id) = nft.approval_id.clone() {
+                let approval_id_string = if let Some(approval_id) = nft.approval_id {
                     approval_id.to_string()
                 } else {
                     "null".to_string()

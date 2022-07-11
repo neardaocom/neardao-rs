@@ -58,7 +58,7 @@ impl Validator {
     ) -> Result<bool, ProcessingError> {
         let expr = expressions
             .get(self.get_expression_id() as usize)
-            .ok_or(ProcessingError::MissingExpression(self.get_expression_id()))?;
+            .ok_or_else(|| ProcessingError::MissingExpression(self.get_expression_id()))?;
         let mut binded_args = Vec::with_capacity(8);
         let result = match self {
             Validator::Object(o) => {

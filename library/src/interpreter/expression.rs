@@ -286,7 +286,7 @@ impl EExpr {
                 }
             }
             FnName::ArrayPop => {
-                if args.len() < 1 {
+                if args.is_empty() {
                     return Err(EvalError::InvalidArgCount(1));
                 }
                 match &args[0] {
@@ -309,7 +309,7 @@ impl EExpr {
                 }
             }
             FnName::ArrayRemove => {
-                if args.len() < 1 {
+                if args.is_empty() {
                     return Err(EvalError::InvalidArgCount(1));
                 }
                 match &args[0] {
@@ -359,7 +359,7 @@ impl EExpr {
                 }
             }
             FnName::ArrayMerge => {
-                if args.len() < 1 {
+                if args.is_empty() {
                     return Err(EvalError::InvalidArgCount(1));
                 }
                 match &args[0] {
@@ -415,7 +415,7 @@ impl EExpr {
                 }
             }
             FnName::ArrayLen => {
-                if args.len() < 1 {
+                if args.is_empty() {
                     return Err(EvalError::InvalidArgCount(1));
                 }
                 match &args[0] {
@@ -427,7 +427,7 @@ impl EExpr {
                 }
             }
             FnName::ValueExists => {
-                if args.len() < 1 {
+                if args.is_empty() {
                     return Err(EvalError::InvalidArgCount(1));
                 }
                 let pos = args[0].try_into_u64()?;
@@ -435,7 +435,7 @@ impl EExpr {
                 Ok(Value::Bool(result))
             }
             FnName::ValueIsNull => {
-                if args.len() < 1 {
+                if args.is_empty() {
                     return Err(EvalError::InvalidArgCount(1));
                 }
                 let pos = args[0].try_into_u64()?;

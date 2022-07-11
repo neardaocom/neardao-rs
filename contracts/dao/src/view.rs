@@ -180,8 +180,7 @@ impl Contract {
     pub fn storage_bucket_data(self, bucket_id: StorageKey, data_id: String) -> Option<Value> {
         self.storage
             .get(&bucket_id)
-            .map(|bucket| bucket.get_data(&data_id))
-            .flatten()
+            .and_then(|bucket| bucket.get_data(&data_id))
     }
 
     pub fn wf_log(self, proposal_id: u32) -> Option<Vec<ActionLog>> {
@@ -200,7 +199,7 @@ impl Contract {
         for wallet_reward in wallet.rewards() {
             if let Some(versioned_reward) = self.rewards.get(&wallet_reward.reward_id()) {
                 let reward: Reward = versioned_reward.into();
-                for (asset_id, _) in reward.reward_amounts().into_iter() {
+                for (asset_id, _) in reward.reward_amounts().iter() {
                     let (amount, _) = Contract::internal_claimable_reward_asset(
                         &wallet,
                         wallet_reward.reward_id(),
@@ -228,8 +227,8 @@ impl Contract {
             claimable_rewards,
             failed_withdraws: wallet
                 .failed_withdraws()
-                .to_vec()
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|(id, v)| {
                     let asset = asset_cache.remove(&id).unwrap_or_else(|| {
                         self.cache_assets.get(&id).expect("fatal - asset not found")
@@ -247,7 +246,7 @@ impl Contract {
         let mut media_list = Vec::with_capacity(self.media_last_id as usize);
         for i in from_id..std::cmp::min(self.media_last_id + 1, limit) {
             if let Some(media) = self.media.get(&i) {
-                media_list.push((i, media.into()));
+                media_list.push((i, media));
             }
         }
         media_list

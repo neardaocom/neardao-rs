@@ -121,7 +121,7 @@ impl Contract {
         template_settings_id: u8,
         propose_settings: ProposeSettings,
         template_settings: Option<Vec<TemplateSettings>>,
-        scheduler_msg: Option<String>,
+        _scheduler_msg: Option<String>,
     ) -> u32 {
         let caller = env::predecessor_account_id();
         let (wft, wfs) = self
@@ -185,10 +185,6 @@ impl Contract {
         if let Some(mut media) = description {
             media.proposal_id = Some(self.proposal_last_id);
             self.media_add(&media);
-        }
-        if let Some(_) = scheduler_msg {
-            // TODO: Croncat registration to finish proposal.
-            todo!();
         }
         self.proposal_last_id
     }
@@ -339,7 +335,7 @@ impl Contract {
                     max_possible_amount = self.total_delegation_amount;
                     for (voter, vote_value) in votes.iter() {
                         vote_result[*vote_value as usize] +=
-                            self.delegations.get(&voter).unwrap_or(0);
+                            self.delegations.get(voter).unwrap_or(0);
                     }
                 }
                 ActivityRight::Member => {
@@ -385,9 +381,9 @@ impl Contract {
                         Some(group) => {
                             if group.is_member(account_id) {
                                 let member_vote_weight =
-                                    self.delegations.get(&account_id).unwrap_or(0);
+                                    self.delegations.get(account_id).unwrap_or(0);
                                 max_possible_amount += member_vote_weight;
-                                if let Some(vote_value) = votes.get(&account_id) {
+                                if let Some(vote_value) = votes.get(account_id) {
                                     vote_result[*vote_value as usize] += member_vote_weight;
                                 }
                             }
@@ -396,9 +392,9 @@ impl Contract {
                     };
                 }
                 ActivityRight::Account(account_id) => {
-                    let member_vote_weight = self.delegations.get(&account_id).unwrap_or(0);
+                    let member_vote_weight = self.delegations.get(account_id).unwrap_or(0);
                     max_possible_amount += member_vote_weight;
-                    if let Some(vote_value) = votes.get(&account_id) {
+                    if let Some(vote_value) = votes.get(account_id) {
                         vote_result[*vote_value as usize] += member_vote_weight;
                     }
                 }
@@ -408,7 +404,7 @@ impl Contract {
                             if let Some(leader) = group.group_leader() {
                                 let member_vote_weight = self.delegations.get(leader).unwrap_or(0);
                                 max_possible_amount += member_vote_weight;
-                                if let Some(vote_value) = votes.get(&leader) {
+                                if let Some(vote_value) = votes.get(leader) {
                                     vote_result[*vote_value as usize] += member_vote_weight;
                                 }
                             }
@@ -460,7 +456,7 @@ impl Contract {
         } else {
             ProposalState::Accepted
         };
-        return (state, (max_possible_amount, vote_results));
+        (state, (max_possible_amount, vote_results))
     }
 }
 
@@ -474,7 +470,7 @@ fn is_wf_add_scenario(template: &Template, propose_settings: &ProposeSettings) -
     for (idx, a) in template.activities.iter().enumerate().skip(1) {
         let activity = a.activity_as_ref().unwrap();
         if activity.code.as_str() == "wf_add" {
-            if matches!(
+            return !(matches!(
                 activity
                     .actions
                     .get(0)
@@ -485,12 +481,7 @@ fn is_wf_add_scenario(template: &Template, propose_settings: &ProposeSettings) -
                 .activity_constants
                 .get(idx)
                 .expect("Invalid ProposeSettings - missing constants for action")
-                .is_none()
-            {
-                return false;
-            } else {
-                return true;
-            }
+                .is_none());
         }
     }
     false

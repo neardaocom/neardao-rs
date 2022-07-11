@@ -232,7 +232,7 @@ fn collection_to_json(
             counter.to_string().as_str(),
             metadata[meta_pos].arg_names[0].as_str(),
         );
-        while let Some(_) = input.get(key.as_str()) {
+        while input.get(key.as_str()).is_some() {
             key.clear();
             key.push_str(obj_prefix);
             key.push('.');
@@ -265,7 +265,7 @@ fn collection_tuple_to_json(
     if input.get(obj_prefix).is_none() {
         let mut counter: u8 = 0;
         let mut key = object_key(obj_prefix, counter.to_string().as_str(), "0");
-        while let Some(_) = input.get(key.as_str()) {
+        while input.get(key.as_str()).is_some() {
             key.clear();
             key.push_str(obj_prefix);
             key.push('.');
@@ -334,7 +334,7 @@ fn enum_to_json(
         if input.get(&key).is_some() {
             let dot_pos = enum_first_key
                 .find(|c| c == '.')
-                .unwrap_or_else(|| enum_first_key.len());
+                .unwrap_or(enum_first_key.len());
             if dot_pos == enum_first_key.len() {
                 buf.pop();
                 buf.push('"');
@@ -352,7 +352,7 @@ fn enum_to_json(
                     input,
                     metadata,
                     *id as usize,
-                    &obj_prefix,
+                    obj_prefix,
                     enum_variant.len() + 1,
                 )?;
             }
@@ -427,7 +427,7 @@ fn exist_next_variant(
         tmp_key.push_str(prefix);
         tmp_key.push('.');
         tmp_key.push_str(first_key);
-        if input.get(&tmp_key).is_some() {
+        if input.get(tmp_key).is_some() {
             return true;
         }
     }

@@ -132,8 +132,8 @@ where
     T: RuntimeConstantProvider + Sized,
 {
     fn replace_storage(&mut self, new: StorageBucket) -> Option<StorageBucket> {
-        if let Some(mut storage) = self.storage.as_mut() {
-            Some(std::mem::replace(&mut storage, new))
+        if let Some(storage) = self.storage.as_mut() {
+            Some(std::mem::replace(storage, new))
         } else {
             self.storage = Some(new);
             None
@@ -141,8 +141,8 @@ where
     }
 
     fn set_prop_action(&mut self, new: SourceDataVariant) -> Option<SourceDataVariant> {
-        if let Some(mut prop) = self.prop_action.as_mut() {
-            Some(std::mem::replace(&mut prop, new))
+        if let Some(prop) = self.prop_action.as_mut() {
+            Some(std::mem::replace(prop, new))
         } else {
             self.prop_action = Some(new);
             None
@@ -166,8 +166,8 @@ where
     }
 
     fn replace_global_storage(&mut self, new: StorageBucket) -> Option<StorageBucket> {
-        if let Some(mut storage) = self.global_storage.as_mut() {
-            Some(std::mem::replace(&mut storage, new))
+        if let Some(storage) = self.global_storage.as_mut() {
+            Some(std::mem::replace(storage, new))
         } else {
             self.global_storage = Some(new);
             None

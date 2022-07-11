@@ -64,10 +64,7 @@ impl ActionData {
         }
     }
     pub fn is_fncall(&self) -> bool {
-        match self {
-            Self::FnCall(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::FnCall(_))
     }
 
     pub fn try_into_send_near_sources(self) -> Option<(ValueSrc, ValueSrc)> {

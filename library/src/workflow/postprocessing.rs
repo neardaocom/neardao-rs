@@ -120,11 +120,11 @@ impl Postprocessing {
                 Instruction::StoreValueGlobal(key, value) => global_storage.add_data(key, value),
                 Instruction::StoreFnCallResult(key, type_def) => {
                     let result = self.deser_datatype_from_slice(
-                        type_def.into_datatype_ref().ok_or(
+                        type_def.into_datatype_ref().ok_or_else(|| {
                             PostprocessingError::UnsupportedFnCallResult(
                                 "custom types are not suported yet".into(),
-                            ),
-                        )?,
+                            )
+                        })?,
                         &fn_result_val,
                     )?;
                     storage
@@ -134,11 +134,11 @@ impl Postprocessing {
                 }
                 Instruction::StoreFnCallResultGlobal(key, type_def) => {
                     let result = self.deser_datatype_from_slice(
-                        type_def.into_datatype_ref().ok_or(
+                        type_def.into_datatype_ref().ok_or_else(|| {
                             PostprocessingError::UnsupportedFnCallResult(
                                 "custom types are not suported yet".into(),
-                            ),
-                        )?,
+                            )
+                        })?,
                         &fn_result_val,
                     )?;
                     global_storage.add_data(key, &result);
@@ -153,11 +153,11 @@ impl Postprocessing {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
                         let result = self.deser_datatype_from_slice(
-                            type_def.into_datatype_ref().ok_or(
+                            type_def.into_datatype_ref().ok_or_else(|| {
                                 PostprocessingError::UnsupportedFnCallResult(
                                     "custom types are not suported yet".into(),
-                                ),
-                            )?,
+                                )
+                            })?,
                             &fn_result_val,
                         )?;
                         values.push(result);
@@ -180,11 +180,11 @@ impl Postprocessing {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
                         let result = self.deser_datatype_from_slice(
-                            type_def.into_datatype_ref().ok_or(
+                            type_def.into_datatype_ref().ok_or_else(|| {
                                 PostprocessingError::UnsupportedFnCallResult(
                                     "custom types are not suported yet".into(),
-                                ),
-                            )?,
+                                )
+                            })?,
                             &fn_result_val,
                         )?;
                         values.push(result);
@@ -202,11 +202,11 @@ impl Postprocessing {
                     // Bind FnCall result to values in condition.
                     if let Some(type_def) = required_fncall_result {
                         let result = self.deser_datatype_from_slice(
-                            type_def.into_datatype_ref().ok_or(
+                            type_def.into_datatype_ref().ok_or_else(|| {
                                 PostprocessingError::UnsupportedFnCallResult(
                                     "custom types are not suported yet".into(),
-                                ),
-                            )?,
+                                )
+                            })?,
                             &fn_result_val,
                         )?;
                         values.push(result);

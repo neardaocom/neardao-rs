@@ -1,5 +1,3 @@
-#![allow(clippy::too_many_arguments)]
-
 use crate::constants::GLOBAL_BUCKET_IDENT;
 use crate::media::Media;
 use crate::reward::VersionedReward;

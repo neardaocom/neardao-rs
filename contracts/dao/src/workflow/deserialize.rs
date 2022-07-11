@@ -28,7 +28,7 @@ pub fn deser_asset(
     let mut key = String::with_capacity(prefix.len() + 16);
     key.push_str(prefix);
     key.push_str(".near");
-    if let Some(_) = action_input.take(&key) {
+    if action_input.take(&key).is_some() {
         let asset = Asset::new_near();
         Ok(Some(asset))
     } else {
@@ -43,7 +43,7 @@ pub fn deser_asset(
             key.push_str(".ft.decimals");
             let decimals = action_input
                 .take(&key)
-                .ok_or(DeserializeError::MissingInputKey("decimals".into()))?
+                .ok_or_else(|| DeserializeError::MissingInputKey("decimals".into()))?
                 .try_into_u64()? as u8;
             let asset = Asset::new_ft(account_id, decimals);
             Ok(Some(asset))
@@ -58,8 +58,8 @@ pub fn deser_partition(
     asset_registrar: &mut dyn AssetRegistrar,
 ) -> Result<TreasuryPartition, DeserializeError> {
     let name = action_input
-        .take(&"name")
-        .ok_or(DeserializeError::MissingInputKey("name".into()))?
+        .take("name")
+        .ok_or_else(|| DeserializeError::MissingInputKey("name".into()))?
         .try_into_string()?;
     let assets = deser_partition_assets("assets", action_input)?;
     let partition =
@@ -80,9 +80,7 @@ pub fn deser_partition_assets(
             let key_init_amount = format!("{}.{}.unlocking.amount_init_unlock", prefix, i);
             let amount_init_unlock = action_input
                 .take(&key_init_amount)
-                .ok_or(DeserializeError::MissingInputKey(
-                    "amount_init_unlock".into(),
-                ))?
+                .ok_or_else(|| DeserializeError::MissingInputKey("amount_init_unlock".into()))?
                 .try_into_u64()? as u32;
             let key_lock = format!("{}.{}.unlocking.lock", prefix, i);
             let lock_input = deser_lock_input(&key_lock, action_input)?;
@@ -104,37 +102,37 @@ pub fn deser_partition_assets(
 
 pub fn deser_reward(action_input: &mut dyn ActivityInput) -> Result<Reward, DeserializeError> {
     let name = action_input
-        .take(&"name")
-        .ok_or(DeserializeError::MissingInputKey("name".into()))?
+        .take("name")
+        .ok_or_else(|| DeserializeError::MissingInputKey("name".into()))?
         .try_into_string()?;
     let group_id = action_input
-        .take(&"group_id")
-        .ok_or(DeserializeError::MissingInputKey("group_id".into()))?
+        .take("group_id")
+        .ok_or_else(|| DeserializeError::MissingInputKey("group_id".into()))?
         .try_into_u64()? as u16;
     let role_id = action_input
-        .take(&"role_id")
-        .ok_or(DeserializeError::MissingInputKey("role_id".into()))?
+        .take("role_id")
+        .ok_or_else(|| DeserializeError::MissingInputKey("role_id".into()))?
         .try_into_u64()? as u16;
     let partition_id = action_input
-        .take(&"partition_id")
-        .ok_or(DeserializeError::MissingInputKey("partition_id".into()))?
+        .take("partition_id")
+        .ok_or_else(|| DeserializeError::MissingInputKey("partition_id".into()))?
         .try_into_u64()? as u16;
-    let reward_object = if let Some(v) = action_input.take(&"type.wage.unit_seconds") {
+    let reward_object = if let Some(v) = action_input.take("type.wage.unit_seconds") {
         let unit_seconds = v.try_into_u64()? as u16;
         RewardType::Wage(RewardWage { unit_seconds })
-    } else if let Some(v) = action_input.take(&"type.user_activity.activity_ids") {
+    } else if let Some(v) = action_input.take("type.user_activity.activity_ids") {
         let activity_ids = v.try_into_vec_u64()?.into_iter().map(|e| e as u8).collect();
         RewardType::UserActivity(RewardUserActivity { activity_ids })
     } else {
         env::panic_str("try_bind_reward - invalid reward type");
     };
     let time_valid_from = action_input
-        .take(&"time_valid_from")
-        .ok_or(DeserializeError::MissingInputKey("time_valid_from".into()))?
+        .take("time_valid_from")
+        .ok_or_else(|| DeserializeError::MissingInputKey("time_valid_from".into()))?
         .try_into_u64()? as u64;
     let time_valid_to = action_input
-        .take(&"time_valid_to")
-        .ok_or(DeserializeError::MissingInputKey("time_valid_to".into()))?
+        .take("time_valid_to")
+        .ok_or_else(|| DeserializeError::MissingInputKey("time_valid_to".into()))?
         .try_into_u64()? as u64;
     let reward_amounts = deser_reward_amounts("reward_amounts", action_input)?;
     let reward = Reward::new(
@@ -161,9 +159,7 @@ fn deser_reward_amounts(
             let key_amount = format!("{}.{}.1", prefix, i);
             let amount = action_input
                 .take(&key_amount)
-                .ok_or(DeserializeError::MissingInputKey(
-                    "reward_amounts.amount".into(),
-                ))?
+                .ok_or_else(|| DeserializeError::MissingInputKey("reward_amounts.amount".into()))?
                 .try_into_u128()?;
             reward_assets.push((asset_id as u8, amount));
             i += 1;
@@ -184,12 +180,12 @@ fn deser_lock_input(
         let key_start_from = format!("{}.start_from", prefix);
         let start_from = action_input
             .take(&key_start_from)
-            .ok_or(DeserializeError::MissingInputKey("start_from".into()))?
+            .ok_or_else(|| DeserializeError::MissingInputKey("start_from".into()))?
             .try_into_u128()? as u64;
         let key_duration = format!("{}.duration", prefix);
         let duration = action_input
             .take(&key_duration)
-            .ok_or(DeserializeError::MissingInputKey("duration".into()))?
+            .ok_or_else(|| DeserializeError::MissingInputKey("duration".into()))?
             .try_into_u128()? as u64;
         let prefix = format!("{}.periods", prefix);
         let periods = deser_periods(prefix.as_str(), action_input)?;
@@ -216,12 +212,12 @@ fn deser_periods(
             let key_duration = format!("{}.{}.duration", prefix, i);
             let duration = action_input
                 .take(&key_duration)
-                .ok_or(DeserializeError::MissingInputKey("duration".into()))?
+                .ok_or_else(|| DeserializeError::MissingInputKey("duration".into()))?
                 .try_into_u64()?;
             let key_amount = format!("{}.{}.amount", prefix, i);
             let amount = action_input
                 .take(&key_amount)
-                .ok_or(DeserializeError::MissingInputKey("amount".into()))?
+                .ok_or_else(|| DeserializeError::MissingInputKey("amount".into()))?
                 .try_into_u64()? as u32;
             periods.push(UnlockPeriodInput {
                 r#type,
@@ -257,7 +253,7 @@ fn deser_group_settins(
     let key_name = format!("{}.name", prefix);
     let name = action_input
         .take(&key_name)
-        .ok_or(DeserializeError::MissingInputKey("duration".into()))?
+        .ok_or_else(|| DeserializeError::MissingInputKey("duration".into()))?
         .try_into_string()?;
     let key_leader = format!("{}.leader", prefix);
     let leader = if let Some(v) = action_input.take(&key_leader) {
@@ -365,7 +361,7 @@ pub fn deser_roles_ids(
     prefix: &str,
     action_input: &mut dyn ActivityInput,
 ) -> Result<Vec<RoleId>, DeserializeError> {
-    if let Some(v) = action_input.take(&prefix) {
+    if let Some(v) = action_input.take(prefix) {
         let roles = v
             .try_into_vec_u64()?
             .into_iter()
@@ -383,7 +379,7 @@ pub fn deser_u64(
 ) -> Result<u64, DeserializeError> {
     let id = action_input
         .get(prefix)
-        .ok_or(DeserializeError::MissingInputKey(prefix.into()))?
+        .ok_or_else(|| DeserializeError::MissingInputKey(prefix.into()))?
         .try_into_u64()?;
     Ok(id)
 }
@@ -394,7 +390,7 @@ pub fn deser_u128(
 ) -> Result<u128, DeserializeError> {
     let u128 = action_input
         .get(prefix)
-        .ok_or(DeserializeError::MissingInputKey(prefix.into()))?
+        .ok_or_else(|| DeserializeError::MissingInputKey(prefix.into()))?
         .try_into_u128()?;
     Ok(u128)
 }
@@ -405,63 +401,63 @@ pub fn deser_media(
 ) -> Result<Media, DeserializeError> {
     let mut key = String::with_capacity(prefix.len() + 16);
     key.push_str(prefix);
-    if prefix.len() > 0 {
+    if !prefix.is_empty() {
         key.push('.');
     }
     key.push_str("name");
     let name = action_input
         .take(&key)
-        .ok_or(DeserializeError::MissingInputKey(key.to_string()))?
+        .ok_or_else(|| DeserializeError::MissingInputKey(key.to_string()))?
         .try_into_string()?;
     key.clear();
     key.push_str(prefix);
-    if prefix.len() > 0 {
+    if !prefix.is_empty() {
         key.push('.');
     }
     key.push_str("category");
     let category = action_input
         .take(&key)
-        .ok_or(DeserializeError::MissingInputKey(key.to_string()))?
+        .ok_or_else(|| DeserializeError::MissingInputKey(key.to_string()))?
         .try_into_string()?;
     key.clear();
     key.push_str(prefix);
-    if prefix.len() > 0 {
+    if !prefix.is_empty() {
         key.push('.');
     }
     key.push_str("type");
     let r#type = deser_media_type(key.as_str(), action_input)?;
     key.clear();
     key.push_str(prefix);
-    if prefix.len() > 0 {
+    if !prefix.is_empty() {
         key.push('.');
     }
     key.push_str("tags");
     let tags = action_input
         .take(&key)
-        .ok_or(DeserializeError::MissingInputKey(key.to_string()))?
+        .ok_or_else(|| DeserializeError::MissingInputKey(key.to_string()))?
         .try_into_vec_u64()?
         .into_iter()
         .map(|e| e as u16)
         .collect();
     key.clear();
     key.push_str(prefix);
-    if prefix.len() > 0 {
+    if !prefix.is_empty() {
         key.push('.');
     }
     key.push_str("version");
     let version = action_input
         .take(&key)
-        .ok_or(DeserializeError::MissingInputKey(key.to_string()))?
+        .ok_or_else(|| DeserializeError::MissingInputKey(key.to_string()))?
         .try_into_string()?;
     key.clear();
     key.push_str(prefix);
-    if prefix.len() > 0 {
+    if !prefix.is_empty() {
         key.push('.');
     }
     key.push_str("valid");
     let valid = action_input
         .take(&key)
-        .ok_or(DeserializeError::MissingInputKey(key.to_string()))?
+        .ok_or_else(|| DeserializeError::MissingInputKey(key.to_string()))?
         .try_into_bool()?;
     Ok(Media {
         proposal_id: None,
@@ -504,14 +500,14 @@ pub fn deser_media_type(
         key.push_str(".cid.cid");
         let cid = action_input
             .take(&key)
-            .ok_or(DeserializeError::MissingInputKey("cid.cid".into()))?
+            .ok_or_else(|| DeserializeError::MissingInputKey("cid.cid".into()))?
             .try_into_string()?;
         key.clear();
         key.push_str(prefix);
         key.push_str(".cid.mimetype");
         let mimetype = action_input
             .take(&key)
-            .ok_or(DeserializeError::MissingInputKey("cid.mimetype".into()))?
+            .ok_or_else(|| DeserializeError::MissingInputKey("cid.mimetype".into()))?
             .try_into_string()?;
         let resource_type = ResourceType::Cid(CIDInfo {
             ipfs,
@@ -520,5 +516,5 @@ pub fn deser_media_type(
         });
         return Ok(resource_type);
     }
-    return Err(DeserializeError::MissingInputKey("media type".into()));
+    Err(DeserializeError::MissingInputKey("media type".into()))
 }

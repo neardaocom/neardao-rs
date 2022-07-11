@@ -222,7 +222,7 @@ impl Contract {
                 <= 1,
             "load next upgrade bin first"
         );
-        let key = if upgrade {
+        if upgrade {
             match self.latest_upgrade_version_idx % 5 {
                 1 => StorageKeys::V1Upgrade,
                 2 => StorageKeys::V2Upgrade,
@@ -240,8 +240,7 @@ impl Contract {
                 0 => StorageKeys::V5Migration,
                 _ => unreachable!(),
             }
-        };
-        key
+        }
     }
 }
 

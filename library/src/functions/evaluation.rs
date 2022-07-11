@@ -20,10 +20,10 @@ pub fn eval(
                 if let Some(input) = input {
                     Ok(input
                         .get(key)
-                        .ok_or(ProcessingError::MissingInputKey(key.into()))?
+                        .ok_or_else(|| ProcessingError::MissingInputKey(key.into()))?
                         .clone())
                 } else {
-                    return Err(ProcessingError::InputNotProvided);
+                    Err(ProcessingError::InputNotProvided)
                 }
             }
             _ => Ok(get_value_from_source(sources, arg_src)?),

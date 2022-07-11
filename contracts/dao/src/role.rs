@@ -163,7 +163,7 @@ impl Contract {
     /// Save if not empty.
     /// Remove it from the contract othewise.
     pub fn remove_user_role_group(&mut self, account_id: &AccountId, group_id: u16) {
-        if let Some(mut roles) = self.user_roles.get(&account_id) {
+        if let Some(mut roles) = self.user_roles.get(account_id) {
             roles.remove_all_group_roles(group_id);
             self.save_user_roles(account_id, &roles);
         }

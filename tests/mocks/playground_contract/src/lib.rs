@@ -1,4 +1,5 @@
 #![allow(unused)]
+#![allow(clippy::all)]
 
 use std::collections::HashMap;
 use std::hash::Hash;

@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use near_contract_standards::storage_management::{
     StorageBalance, StorageBalanceBounds, StorageManagement,
 };
@@ -34,16 +32,13 @@ impl StorageManagement for Contract {
             } else {
                 Promise::new(env::predecessor_account_id()).transfer(deposit_amount);
             }
+        } else if let Some(mut stats) = stats {
+            stats.add_balance(deposit_amount);
+            self.save_account_stats(&account_id, &stats);
         } else {
-            if let Some(mut stats) = stats {
-                stats.add_balance(deposit_amount);
-                self.save_account_stats(&account_id, &stats);
-            } else {
-                self.register_account(&account_id, deposit_amount);
-            }
+            self.register_account(&account_id, deposit_amount);
         }
-        self.storage_balance_of(account_id.try_into().unwrap())
-            .unwrap()
+        self.storage_balance_of(account_id).unwrap()
     }
 
     #[payable]
@@ -76,7 +71,7 @@ impl StorageManagement for Contract {
         }
         let account_id = env::predecessor_account_id();
         let account_stats = self.dao_storage_balance.get(&account_id);
-        let result = if let Some(stats) = account_stats {
+        if let Some(stats) = account_stats {
             require!(
                 stats.users_registered() == 0,
                 "non-zero amount of registered users"
@@ -87,8 +82,7 @@ impl StorageManagement for Contract {
             true
         } else {
             false
-        };
-        result
+        }
     }
 
     fn storage_balance_bounds(&self) -> StorageBalanceBounds {

@@ -237,10 +237,7 @@ impl Contract {
                 .map(|(r, _)| (r, self.rewards.get(&r).unwrap().into()))
                 .collect();
             for member in members.into_iter() {
-                let mut user_roles = self
-                    .user_roles
-                    .get(&member.account_id)
-                    .unwrap_or_else(UserRoles::default);
+                let mut user_roles = self.user_roles.get(&member.account_id).unwrap_or_default();
                 user_roles.add_group_role(id, 0);
                 if let Some(roles) = account_roles_cache.remove(&member.account_id) {
                     for role_id in roles {
@@ -398,7 +395,7 @@ impl Contract {
             let rewards: Vec<(u16, u16)> = group.group_reward_ids();
             let current_timestamp = current_timestamp_sec();
             for account_id in group.get_members_accounts_refs() {
-                self.remove_user_role_group(&account_id, id);
+                self.remove_user_role_group(account_id, id);
                 self.remove_wallet_reward(account_id, rewards.as_slice(), current_timestamp);
             }
             self.group_roles.remove(&id);
@@ -415,10 +412,7 @@ impl Contract {
     ) {
         let mut cache = HashMap::with_capacity(group_members.len());
         for member in group_members.iter() {
-            let user_roles = self
-                .user_roles
-                .get(&member.account_id)
-                .unwrap_or_else(UserRoles::default);
+            let user_roles = self.user_roles.get(&member.account_id).unwrap_or_default();
             cache.insert(&member.account_id, user_roles);
         }
         let mut group_roles = Roles::new();

@@ -1,4 +1,5 @@
 #![allow(unreachable_patterns)]
+#![allow(clippy::new_without_default)]
 
 use library::workflow::{settings::TemplateSettings, template::Template};
 use proposal::Proposal;

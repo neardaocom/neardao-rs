@@ -1,3 +1,5 @@
+#![allow(clippy::new_without_default)]
+
 use near_sdk::AccountId;
 use types::Value;
 use workflow::{template::Template, types::ObjectMetadata};

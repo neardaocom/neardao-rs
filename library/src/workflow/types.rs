@@ -125,13 +125,7 @@ pub enum ValueSrc {
 
 impl ValueSrc {
     pub fn is_user_input(&self) -> bool {
-        match self {
-            ValueSrc::Src(src) => match src {
-                Src::Input(_) => true,
-                _ => false,
-            },
-            _ => false,
-        }
+        matches!(self, ValueSrc::Src(src) if matches!(src, Src::Input(_)))
     }
 }
 

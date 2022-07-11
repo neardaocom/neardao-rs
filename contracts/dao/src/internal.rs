@@ -87,7 +87,7 @@ impl Contract {
         mut workflows: Vec<Template>,
         mut workflow_template_settings: Vec<Vec<TemplateSettings>>,
     ) {
-        require!(workflows.len() > 0);
+        require!(!workflows.is_empty());
         require!(
             workflows.get(0).unwrap().code.contains("basic_pkg"),
             "First workflow must be Wf Basic Package (code: basic_pkg*)"
