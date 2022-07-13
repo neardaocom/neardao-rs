@@ -11,9 +11,6 @@ use library::{
 pub mod object_metadata;
 pub mod workflow;
 
-#[cfg(test)]
-pub mod output;
-
 pub type TemplateData = (
     Template,
     Vec<FnCallId>,

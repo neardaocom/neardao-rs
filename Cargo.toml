@@ -5,7 +5,8 @@ members = [
     "data",
     "tests/integration_tests",
     "tests/unit_tests",
-    "tests/mocks/*"
+    "tests/mocks/*",
+    "wf_data_generator"
 ]
 
 [profile.release]
