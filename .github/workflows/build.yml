@@ -1,6 +1,6 @@
 name: Build
-on: 
-  push: 
+on:
+  push:
     branches:
       - 'main'
       - 'devel/next'
@@ -13,8 +13,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Cross-compile to Wasm
+  build_contracts:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -24,6 +23,5 @@ jobs:
           target: wasm32-unknown-unknown
           override: true
       - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --workspace --target wasm32-unknown-unknown --release
+      - name: Run build script for all contracts.
+        run: sh build.sh

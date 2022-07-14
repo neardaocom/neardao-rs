@@ -90,7 +90,7 @@ WF10STDFNS='[]'
 
 # ------------ LOAD ------------ #
 
-echo "\n\n------ Loading workflow templates to provider: ${GREEN} $WID ${NC} ------\n\n"
+echo -e "\n\n------ Loading workflow templates to provider: ${GREEN} $WID ${NC} ------\n\n"
 for ((i=$WFSTART;i<$WFSTART+$WFCOUNT;i++))
   do 
     wf_val="WF$i"
@@ -98,7 +98,7 @@ for ((i=$WFSTART;i<$WFSTART+$WFCOUNT;i++))
     wf_std_fns="WF"$i"STDFNS"
     wf_fnmeta="WF"$i"FNMETA"
     if [ ! -z "${!wf_val}" ]; then
-      echo "${GREEN}------ Adding WF $i ------${NC}\n"
+      echo -e "${GREEN}------ Adding WF $i ------${NC}\n"
       near call $WID workflow_add '{"workflow": '${!wf_val}', "fncalls": '${!wf_fns}',"standard_fncalls": '${!wf_std_fns}', "fncall_metadata": '${!wf_fnmeta}'}' --accountId=$WID
     fi
  done
