@@ -24,4 +24,4 @@ jobs:
           override: true
       - uses: actions-rs/cargo@v1
       - name: Run build script for all contracts.
-        run: sh build.sh
+        run: ./build.sh
